@@ -318,3 +318,399 @@ fn test_complex_conditionals() {
         true
     );
 }
+
+// New standard library functions
+#[test]
+fn test_length() {
+    assert_eq!(eval("(length (list 1 2 3 4 5))").unwrap(), Value::Int(5));
+    assert_eq!(eval("(length nil)").unwrap(), Value::Int(0));
+}
+
+#[test]
+fn test_append() {
+    let result = eval("(append (list 1 2) (list 3 4) (list 5))").unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(
+        vec,
+        vec![
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+            Value::Int(4),
+            Value::Int(5)
+        ]
+    );
+}
+
+#[test]
+fn test_reverse() {
+    let result = eval("(reverse (list 1 2 3))").unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec, vec![Value::Int(3), Value::Int(2), Value::Int(1)]);
+}
+
+#[test]
+fn test_min_max() {
+    assert_eq!(eval("(min 5 3 7 2)").unwrap(), Value::Int(2));
+    assert_eq!(eval("(max 5 3 7 2)").unwrap(), Value::Int(7));
+
+    match eval("(min 1.5 2 0.5)").unwrap() {
+        Value::Float(f) => assert!((f - 0.5).abs() < 1e-10),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_abs() {
+    assert_eq!(eval("(abs -5)").unwrap(), Value::Int(5));
+    assert_eq!(eval("(abs 5)").unwrap(), Value::Int(5));
+
+    match eval("(abs -3.5)").unwrap() {
+        Value::Float(f) => assert!((f - 3.5).abs() < 1e-10),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_type_conversions() {
+    assert_eq!(eval("(int 3.14)").unwrap(), Value::Int(3));
+
+    match eval("(float 5)").unwrap() {
+        Value::Float(f) => assert!((f - 5.0).abs() < 1e-10),
+        _ => panic!("Expected float"),
+    }
+}
+
+// String operations
+#[test]
+fn test_string_length() {
+    assert_eq!(eval("(string-length \"hello\")").unwrap(), Value::Int(5));
+    assert_eq!(eval("(string-length \"\")").unwrap(), Value::Int(0));
+}
+
+#[test]
+fn test_string_append() {
+    match eval("(string-append \"hello\" \" \" \"world\")").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "hello world"),
+        _ => panic!("Expected string"),
+    }
+}
+
+#[test]
+fn test_string_case() {
+    match eval("(string-upcase \"hello\")").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "HELLO"),
+        _ => panic!("Expected string"),
+    }
+
+    match eval("(string-downcase \"WORLD\")").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "world"),
+        _ => panic!("Expected string"),
+    }
+}
+
+// List utilities
+#[test]
+fn test_nth() {
+    assert_eq!(eval("(nth 0 (list 10 20 30))").unwrap(), Value::Int(10));
+    assert_eq!(eval("(nth 1 (list 10 20 30))").unwrap(), Value::Int(20));
+    assert_eq!(eval("(nth 2 (list 10 20 30))").unwrap(), Value::Int(30));
+}
+
+#[test]
+fn test_last() {
+    assert_eq!(eval("(last (list 1 2 3 4 5))").unwrap(), Value::Int(5));
+}
+
+#[test]
+fn test_take_drop() {
+    let take_result = eval("(take 2 (list 1 2 3 4 5))").unwrap();
+    let take_vec = take_result.list_to_vec().unwrap();
+    assert_eq!(take_vec, vec![Value::Int(1), Value::Int(2)]);
+
+    let drop_result = eval("(drop 2 (list 1 2 3 4 5))").unwrap();
+    let drop_vec = drop_result.list_to_vec().unwrap();
+    assert_eq!(drop_vec, vec![Value::Int(3), Value::Int(4), Value::Int(5)]);
+}
+
+#[test]
+fn test_type() {
+    match eval("(type 42)").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "integer"),
+        _ => panic!("Expected string"),
+    }
+
+    match eval("(type 3.14)").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "float"),
+        _ => panic!("Expected string"),
+    }
+
+    match eval("(type \"hello\")").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "string"),
+        _ => panic!("Expected string"),
+    }
+}
+
+// Math functions
+#[test]
+fn test_sqrt() {
+    assert_eq!(eval("(sqrt 4)").unwrap(), Value::Float(2.0));
+    assert_eq!(eval("(sqrt 9)").unwrap(), Value::Float(3.0));
+    // Test with float input
+    match eval("(sqrt 16.0)").unwrap() {
+        Value::Float(f) => assert!((f - 4.0).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_trigonometric() {
+    // sin(0) = 0
+    match eval("(sin 0)").unwrap() {
+        Value::Float(f) => assert!(f.abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+
+    // cos(0) = 1
+    match eval("(cos 0)").unwrap() {
+        Value::Float(f) => assert!((f - 1.0).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+
+    // tan(0) = 0
+    match eval("(tan 0)").unwrap() {
+        Value::Float(f) => assert!(f.abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_log_functions() {
+    // ln(1) = 0
+    match eval("(log 1)").unwrap() {
+        Value::Float(f) => assert!(f.abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+
+    // log base 2 of 8 = 3
+    match eval("(log 8 2)").unwrap() {
+        Value::Float(f) => assert!((f - 3.0).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_exp() {
+    // exp(0) = 1
+    match eval("(exp 0)").unwrap() {
+        Value::Float(f) => assert!((f - 1.0).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+
+    // exp(1) ≈ 2.71828
+    match eval("(exp 1)").unwrap() {
+        Value::Float(f) => assert!((f - 2.71828).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_pow() {
+    // 2^3 = 8
+    assert_eq!(eval("(pow 2 3)").unwrap(), Value::Int(8));
+
+    // 2^-1 = 0.5
+    match eval("(pow 2 -1)").unwrap() {
+        Value::Float(f) => assert!((f - 0.5).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+
+    // 2.0^3.0 = 8.0
+    match eval("(pow 2.0 3.0)").unwrap() {
+        Value::Float(f) => assert!((f - 8.0).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_floor_ceil_round() {
+    // floor
+    assert_eq!(eval("(floor 3)").unwrap(), Value::Int(3));
+    assert_eq!(eval("(floor 3.7)").unwrap(), Value::Int(3));
+
+    // ceil
+    assert_eq!(eval("(ceil 3)").unwrap(), Value::Int(3));
+    assert_eq!(eval("(ceil 3.2)").unwrap(), Value::Int(4));
+
+    // round
+    assert_eq!(eval("(round 3)").unwrap(), Value::Int(3));
+    assert_eq!(eval("(round 3.4)").unwrap(), Value::Int(3));
+    assert_eq!(eval("(round 3.6)").unwrap(), Value::Int(4));
+}
+
+// String functions
+#[test]
+fn test_substring() {
+    match eval("(substring \"hello\" 1 4)").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "ell"),
+        _ => panic!("Expected string"),
+    }
+
+    // Test with just start index (to end)
+    match eval("(substring \"hello\" 2)").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "llo"),
+        _ => panic!("Expected string"),
+    }
+
+    // Test from start
+    match eval("(substring \"hello\" 0 2)").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "he"),
+        _ => panic!("Expected string"),
+    }
+}
+
+#[test]
+fn test_string_index() {
+    // Find character in string
+    assert_eq!(
+        eval("(string-index \"hello\" \"l\")").unwrap(),
+        Value::Int(2)
+    );
+
+    // Character not found
+    assert_eq!(eval("(string-index \"hello\" \"x\")").unwrap(), Value::Nil);
+
+    // First occurrence
+    assert_eq!(
+        eval("(string-index \"hello\" \"l\")").unwrap(),
+        Value::Int(2)
+    );
+}
+
+#[test]
+fn test_char_at() {
+    match eval("(char-at \"hello\" 0)").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "h"),
+        _ => panic!("Expected string"),
+    }
+
+    match eval("(char-at \"hello\" 1)").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "e"),
+        _ => panic!("Expected string"),
+    }
+
+    match eval("(char-at \"hello\" 4)").unwrap() {
+        Value::String(s) => assert_eq!(&*s, "o"),
+        _ => panic!("Expected string"),
+    }
+}
+
+// Vector operations
+#[test]
+fn test_vector_creation() {
+    match eval("(vector 1 2 3)").unwrap() {
+        Value::Vector(v) => {
+            assert_eq!(v.len(), 3);
+            assert_eq!(v[0], Value::Int(1));
+            assert_eq!(v[1], Value::Int(2));
+            assert_eq!(v[2], Value::Int(3));
+        }
+        _ => panic!("Expected vector"),
+    }
+
+    // Empty vector
+    match eval("(vector)").unwrap() {
+        Value::Vector(v) => assert_eq!(v.len(), 0),
+        _ => panic!("Expected vector"),
+    }
+}
+
+#[test]
+fn test_vector_length() {
+    assert_eq!(
+        eval("(vector-length (vector 1 2 3))").unwrap(),
+        Value::Int(3)
+    );
+    assert_eq!(eval("(vector-length (vector))").unwrap(), Value::Int(0));
+    assert_eq!(
+        eval("(vector-length (vector 10 20 30 40 50))").unwrap(),
+        Value::Int(5)
+    );
+}
+
+#[test]
+fn test_vector_ref() {
+    assert_eq!(
+        eval("(vector-ref (vector 10 20 30) 0)").unwrap(),
+        Value::Int(10)
+    );
+    assert_eq!(
+        eval("(vector-ref (vector 10 20 30) 1)").unwrap(),
+        Value::Int(20)
+    );
+    assert_eq!(
+        eval("(vector-ref (vector 10 20 30) 2)").unwrap(),
+        Value::Int(30)
+    );
+}
+
+#[test]
+fn test_vector_set() {
+    match eval("(vector-set! (vector 1 2 3) 1 99)").unwrap() {
+        Value::Vector(v) => {
+            assert_eq!(v[0], Value::Int(1));
+            assert_eq!(v[1], Value::Int(99));
+            assert_eq!(v[2], Value::Int(3));
+        }
+        _ => panic!("Expected vector"),
+    }
+
+    // Set at beginning
+    match eval("(vector-set! (vector 1 2 3) 0 100)").unwrap() {
+        Value::Vector(v) => assert_eq!(v[0], Value::Int(100)),
+        _ => panic!("Expected vector"),
+    }
+
+    // Set at end
+    match eval("(vector-set! (vector 1 2 3) 2 200)").unwrap() {
+        Value::Vector(v) => assert_eq!(v[2], Value::Int(200)),
+        _ => panic!("Expected vector"),
+    }
+}
+
+// Math constants and utilities
+#[test]
+fn test_math_constants() {
+    // Test pi
+    match eval("(pi)").unwrap() {
+        Value::Float(f) => assert!((f - std::f64::consts::PI).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+
+    // Test e
+    match eval("(e)").unwrap() {
+        Value::Float(f) => assert!((f - std::f64::consts::E).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_mod_and_remainder() {
+    // Modulo
+    assert_eq!(eval("(mod 17 5)").unwrap(), Value::Int(2));
+    assert_eq!(eval("(mod 20 4)").unwrap(), Value::Int(0));
+    assert_eq!(eval("(mod -17 5)").unwrap(), Value::Int(3));
+
+    // Remainder
+    assert_eq!(eval("(remainder 17 5)").unwrap(), Value::Int(2));
+    assert_eq!(eval("(remainder 20 4)").unwrap(), Value::Int(0));
+}
+
+#[test]
+fn test_even_odd() {
+    assert_eq!(eval("(even? 2)").unwrap(), Value::Bool(true));
+    assert_eq!(eval("(even? 3)").unwrap(), Value::Bool(false));
+    assert_eq!(eval("(odd? 2)").unwrap(), Value::Bool(false));
+    assert_eq!(eval("(odd? 3)").unwrap(), Value::Bool(true));
+    assert_eq!(eval("(even? 0)").unwrap(), Value::Bool(true));
+}

@@ -1,4 +1,5 @@
 use crate::compiler::bytecode::{Bytecode, Instruction};
+use crate::ffi::FFISubsystem;
 use crate::value::{cons, Value};
 use smallvec::SmallVec;
 use std::collections::HashMap;
@@ -6,10 +7,18 @@ use std::rc::Rc;
 
 type StackVec = SmallVec<[Value; 256]>;
 
+#[derive(Debug, Clone)]
+pub struct CallFrame {
+    pub name: String,
+    pub ip: usize,
+}
+
 pub struct VM {
     stack: StackVec,
     globals: HashMap<u32, Value>,
     call_depth: usize,
+    call_stack: Vec<CallFrame>,
+    ffi: FFISubsystem,
 }
 
 impl VM {
@@ -18,6 +27,8 @@ impl VM {
             stack: SmallVec::new(),
             globals: HashMap::new(),
             call_depth: 0,
+            call_stack: Vec::new(),
+            ffi: FFISubsystem::new(),
         }
     }
 
@@ -29,12 +40,41 @@ impl VM {
         self.globals.get(&sym_id)
     }
 
+    /// Get the FFI subsystem.
+    pub fn ffi(&self) -> &FFISubsystem {
+        &self.ffi
+    }
+
+    /// Get a mutable reference to the FFI subsystem.
+    pub fn ffi_mut(&mut self) -> &mut FFISubsystem {
+        &mut self.ffi
+    }
+
+    pub fn format_stack_trace(&self) -> String {
+        if self.call_stack.is_empty() {
+            "  (no call stack)".to_string()
+        } else {
+            let mut trace = String::new();
+            for (i, frame) in self.call_stack.iter().rev().enumerate() {
+                trace.push_str(&format!("  #{}: {} (ip={})\n", i, frame.name, frame.ip));
+            }
+            trace
+        }
+    }
+
+    fn with_stack_trace(&self, msg: String) -> String {
+        let trace = self.format_stack_trace();
+        format!("{}\nStack trace:\n{}", msg, trace)
+    }
+
+    #[inline(always)]
     fn read_u8(&self, bytecode: &[u8], ip: &mut usize) -> u8 {
         let val = bytecode[*ip];
         *ip += 1;
         val
     }
 
+    #[inline(always)]
     fn read_u16(&self, bytecode: &[u8], ip: &mut usize) -> u16 {
         let high = bytecode[*ip] as u16;
         let low = bytecode[*ip + 1] as u16;
@@ -42,6 +82,7 @@ impl VM {
         (high << 8) | low
     }
 
+    #[inline(always)]
     fn read_i16(&self, bytecode: &[u8], ip: &mut usize) -> i16 {
         self.read_u16(bytecode, ip) as i16
     }

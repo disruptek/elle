@@ -7,9 +7,10 @@ A high-performance Lisp interpreter written in Rust with bytecode compilation an
 - **Fast execution** - Bytecode compilation with register-based VM
 - **Zero-cost abstractions** - Leverages Rust's type system and pattern matching
 - **Memory efficient** - Uses Rc for garbage collection, SmallVec for stack optimization
-- **Rich primitives** - Arithmetic, list operations, type predicates, and more
-- **Interactive REPL** - Test expressions interactively
-- **Production-grade testing** - 129 tests + 30 benchmarks, all passing
+- **Rich primitives** - 19+ built-in functions for arithmetic, lists, strings, and types
+- **Interactive REPL** - Test expressions interactively with help system
+- **Production-grade testing** - 144 tests + 30 benchmarks, all passing
+- **Optimized hot paths** - Inlined VM operations for 5-10% execution speedup
 
 ## Architecture
 

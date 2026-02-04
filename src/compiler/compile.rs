@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 struct Compiler {
     bytecode: Bytecode,
+    #[allow(dead_code)]
     symbols: HashMap<SymbolId, usize>,
 }
 

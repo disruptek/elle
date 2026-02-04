@@ -1,15 +1,31 @@
 use std::fmt;
 use std::rc::Rc;
 
-/// Symbol ID for interned symbols
+/// Symbol ID for interned symbols.
+///
+/// Symbols are interned for fast comparison (O(1) via ID comparison
+/// instead of O(n) string comparison).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SymbolId(pub u32);
 
-/// Function arity specification
+/// Function arity specification.
+///
+/// Specifies how many arguments a function accepts.
+///
+/// # Examples
+///
+/// ```
+/// use elle::value::Arity;
+/// assert!(Arity::Exact(2).matches(2));
+/// assert!(!Arity::Exact(2).matches(1));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Arity {
+    /// Exact number of arguments required
     Exact(usize),
+    /// At least this many arguments
     AtLeast(usize),
+    /// Between min and max arguments (inclusive)
     Range(usize, usize),
 }
 
@@ -48,8 +64,12 @@ pub struct Closure {
     pub num_locals: usize,
 }
 
+/// FFI library handle
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LibHandle(pub u32);
+
 /// Core Lisp value type
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub enum Value {
     Nil,
     Bool(bool),
@@ -61,6 +81,27 @@ pub enum Value {
     Vector(Rc<Vec<Value>>),
     Closure(Rc<Closure>),
     NativeFn(NativeFn),
+    // FFI types
+    LibHandle(LibHandle),
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Nil, Value::Nil) => true,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Symbol(a), Value::Symbol(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Cons(a), Value::Cons(b)) => a == b,
+            (Value::Vector(a), Value::Vector(b)) => a == b,
+            (Value::Closure(_), Value::Closure(_)) => false, // Closures are never equal
+            (Value::NativeFn(_), Value::NativeFn(_)) => false, // Functions are never equal
+            (Value::LibHandle(a), Value::LibHandle(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl Value {
@@ -191,6 +232,7 @@ impl fmt::Debug for Value {
             }
             Value::Closure(_) => write!(f, "<closure>"),
             Value::NativeFn(_) => write!(f, "<native-fn>"),
+            Value::LibHandle(h) => write!(f, "<library-handle:{}>", h.0),
         }
     }
 }

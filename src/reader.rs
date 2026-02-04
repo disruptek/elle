@@ -2,6 +2,24 @@ use crate::symbol::SymbolTable;
 use crate::value::{cons, Value};
 use std::rc::Rc;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SourceLoc {
+    pub line: usize,
+    pub col: usize,
+}
+
+impl SourceLoc {
+    pub fn new(line: usize, col: usize) -> Self {
+        SourceLoc { line, col }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TokenWithLoc {
+    pub token: Token,
+    pub loc: SourceLoc,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     LeftParen,
@@ -23,6 +41,8 @@ pub enum Token {
 pub struct Lexer {
     input: Vec<char>,
     pos: usize,
+    line: usize,
+    col: usize,
 }
 
 impl Lexer {
@@ -30,7 +50,13 @@ impl Lexer {
         Lexer {
             input: input.chars().collect(),
             pos: 0,
+            line: 1,
+            col: 1,
         }
+    }
+
+    fn get_loc(&self) -> SourceLoc {
+        SourceLoc::new(self.line, self.col)
     }
 
     fn current(&self) -> Option<char> {
@@ -39,6 +65,14 @@ impl Lexer {
 
     fn advance(&mut self) -> Option<char> {
         let c = self.current();
+        if let Some(ch) = c {
+            if ch == '\n' {
+                self.line += 1;
+                self.col = 1;
+            } else {
+                self.col += 1;
+            }
+        }
         self.pos += 1;
         c
     }
@@ -135,57 +169,95 @@ impl Lexer {
         sym
     }
 
-    pub fn next_token(&mut self) -> Result<Option<Token>, String> {
+    pub fn next_token_with_loc(&mut self) -> Result<Option<TokenWithLoc>, String> {
         self.skip_whitespace();
+        let loc = self.get_loc();
 
         match self.current() {
             None => Ok(None),
             Some('(') => {
                 self.advance();
-                Ok(Some(Token::LeftParen))
+                Ok(Some(TokenWithLoc {
+                    token: Token::LeftParen,
+                    loc,
+                }))
             }
             Some(')') => {
                 self.advance();
-                Ok(Some(Token::RightParen))
+                Ok(Some(TokenWithLoc {
+                    token: Token::RightParen,
+                    loc,
+                }))
             }
             Some('[') => {
                 self.advance();
-                Ok(Some(Token::LeftBracket))
+                Ok(Some(TokenWithLoc {
+                    token: Token::LeftBracket,
+                    loc,
+                }))
             }
             Some(']') => {
                 self.advance();
-                Ok(Some(Token::RightBracket))
+                Ok(Some(TokenWithLoc {
+                    token: Token::RightBracket,
+                    loc,
+                }))
             }
             Some('\'') => {
                 self.advance();
-                Ok(Some(Token::Quote))
+                Ok(Some(TokenWithLoc {
+                    token: Token::Quote,
+                    loc,
+                }))
             }
             Some('`') => {
                 self.advance();
-                Ok(Some(Token::Quasiquote))
+                Ok(Some(TokenWithLoc {
+                    token: Token::Quasiquote,
+                    loc,
+                }))
             }
             Some(',') => {
                 self.advance();
                 if self.current() == Some('@') {
                     self.advance();
-                    Ok(Some(Token::UnquoteSplicing))
+                    Ok(Some(TokenWithLoc {
+                        token: Token::UnquoteSplicing,
+                        loc,
+                    }))
                 } else {
-                    Ok(Some(Token::Unquote))
+                    Ok(Some(TokenWithLoc {
+                        token: Token::Unquote,
+                        loc,
+                    }))
                 }
             }
-            Some('"') => self.read_string().map(|s| Some(Token::String(s))),
+            Some('"') => self.read_string().map(|s| {
+                Some(TokenWithLoc {
+                    token: Token::String(s),
+                    loc,
+                })
+            }),
             Some(c) if c.is_ascii_digit() || c == '-' || c == '+' => {
                 // Check if it's a number or symbol
                 if let Some(next) = self.peek(1) {
                     if (c == '-' || c == '+') && !next.is_ascii_digit() {
-                        Ok(Some(Token::Symbol(self.read_symbol())))
+                        Ok(Some(TokenWithLoc {
+                            token: Token::Symbol(self.read_symbol()),
+                            loc,
+                        }))
                     } else {
-                        self.read_number().map(Some)
+                        self.read_number()
+                            .map(|t| Some(TokenWithLoc { token: t, loc }))
                     }
                 } else if c == '-' || c == '+' {
-                    Ok(Some(Token::Symbol(self.read_symbol())))
+                    Ok(Some(TokenWithLoc {
+                        token: Token::Symbol(self.read_symbol()),
+                        loc,
+                    }))
                 } else {
-                    self.read_number().map(Some)
+                    self.read_number()
+                        .map(|t| Some(TokenWithLoc { token: t, loc }))
                 }
             }
             Some('#') => {
@@ -193,11 +265,17 @@ impl Lexer {
                 match self.current() {
                     Some('t') => {
                         self.advance();
-                        Ok(Some(Token::Bool(true)))
+                        Ok(Some(TokenWithLoc {
+                            token: Token::Bool(true),
+                            loc,
+                        }))
                     }
                     Some('f') => {
                         self.advance();
-                        Ok(Some(Token::Bool(false)))
+                        Ok(Some(TokenWithLoc {
+                            token: Token::Bool(false),
+                            loc,
+                        }))
                     }
                     _ => Err("Invalid # syntax".to_string()),
                 }
@@ -205,12 +283,23 @@ impl Lexer {
             Some(_) => {
                 let sym = self.read_symbol();
                 if sym == "nil" {
-                    Ok(Some(Token::Nil))
+                    Ok(Some(TokenWithLoc {
+                        token: Token::Nil,
+                        loc,
+                    }))
                 } else {
-                    Ok(Some(Token::Symbol(sym)))
+                    Ok(Some(TokenWithLoc {
+                        token: Token::Symbol(sym),
+                        loc,
+                    }))
                 }
             }
         }
+    }
+
+    pub fn next_token(&mut self) -> Result<Option<Token>, String> {
+        self.next_token_with_loc()
+            .map(|opt| opt.map(|twl| twl.token))
     }
 }
 

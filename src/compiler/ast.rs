@@ -1,4 +1,25 @@
+use crate::reader::SourceLoc;
 use crate::value::{SymbolId, Value};
+
+/// AST representation after macro expansion and analysis
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprWithLoc {
+    pub expr: Expr,
+    pub loc: Option<SourceLoc>,
+}
+
+impl ExprWithLoc {
+    pub fn new(expr: Expr, loc: Option<SourceLoc>) -> Self {
+        ExprWithLoc { expr, loc }
+    }
+
+    pub fn format_loc(&self) -> String {
+        match self.loc {
+            Some(loc) => format!("{}:{}", loc.line, loc.col),
+            None => "unknown".to_string(),
+        }
+    }
+}
 
 /// AST representation after macro expansion and analysis
 #[derive(Debug, Clone, PartialEq)]
