@@ -11,6 +11,7 @@
 
 pub mod call;
 pub mod loader;
+pub mod marshal;
 pub mod symbol;
 pub mod types;
 

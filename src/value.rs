@@ -68,6 +68,22 @@ pub struct Closure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LibHandle(pub u32);
 
+/// FFI C object handle (opaque pointer to C data)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CHandle {
+    /// Raw C pointer
+    pub ptr: *const std::ffi::c_void,
+    /// Unique ID for this handle
+    pub id: u32,
+}
+
+impl CHandle {
+    /// Create a new C handle
+    pub fn new(ptr: *const std::ffi::c_void, id: u32) -> Self {
+        CHandle { ptr, id }
+    }
+}
+
 /// Core Lisp value type
 #[derive(Clone)]
 pub enum Value {
@@ -83,6 +99,7 @@ pub enum Value {
     NativeFn(NativeFn),
     // FFI types
     LibHandle(LibHandle),
+    CHandle(CHandle),
 }
 
 impl PartialEq for Value {
@@ -99,6 +116,7 @@ impl PartialEq for Value {
             (Value::Closure(_), Value::Closure(_)) => false, // Closures are never equal
             (Value::NativeFn(_), Value::NativeFn(_)) => false, // Functions are never equal
             (Value::LibHandle(a), Value::LibHandle(b)) => a == b,
+            (Value::CHandle(a), Value::CHandle(b)) => a == b,
             _ => false,
         }
     }
@@ -233,6 +251,7 @@ impl fmt::Debug for Value {
             Value::Closure(_) => write!(f, "<closure>"),
             Value::NativeFn(_) => write!(f, "<native-fn>"),
             Value::LibHandle(h) => write!(f, "<library-handle:{}>", h.0),
+            Value::CHandle(h) => write!(f, "<c-handle:{}>", h.id),
         }
     }
 }

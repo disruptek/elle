@@ -786,6 +786,7 @@ fn prim_type(args: &[Value]) -> Result<Value, String> {
         Value::Closure(_) => "closure",
         Value::NativeFn(_) => "native-function",
         Value::LibHandle(_) => "library-handle",
+        Value::CHandle(_) => "c-handle",
     };
 
     Ok(Value::String(Rc::from(type_name)))

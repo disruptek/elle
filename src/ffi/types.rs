@@ -5,6 +5,16 @@
 
 use std::fmt;
 
+/// Unique identifier for a C struct type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StructId(pub u32);
+
+impl StructId {
+    pub fn new(id: u32) -> Self {
+        StructId(id)
+    }
+}
+
 /// A C type that can be marshaled to/from Elle values.
 ///
 /// # Supported Types
@@ -12,9 +22,10 @@ use std::fmt;
 /// - Bool
 /// - Char, Short, Int, Long, LongLong
 /// - Float, Double
-/// - Pointer types (future)
-/// - Struct types (future - Phase 2)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// - Pointer types (including opaque pointers)
+/// - Struct types
+/// - Array types
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CType {
     Void,
     Bool,
@@ -31,11 +42,17 @@ pub enum CType {
     ULongLong,
     Float,
     Double,
+    /// Opaque pointer - used for function pointers and C object handles
+    Pointer(Box<CType>),
+    /// C struct type identified by StructId
+    Struct(StructId),
+    /// C array type
+    Array(Box<CType>, usize),
 }
 
 impl CType {
     /// Get the size of this type in bytes (x86-64 Linux ABI).
-    pub fn size(self) -> usize {
+    pub fn size(&self) -> usize {
         match self {
             CType::Void => 0,
             CType::Bool => 1,
@@ -46,17 +63,25 @@ impl CType {
             CType::LongLong | CType::ULongLong => 8,
             CType::Float => 4,
             CType::Double => 8,
+            CType::Pointer(_) => 8, // x86-64: pointers are 8 bytes
+            CType::Struct(_) => panic!("Struct size must be queried from layout"),
+            CType::Array(elem_type, count) => elem_type.size() * count,
         }
     }
 
     /// Get the alignment of this type in bytes (x86-64 Linux ABI).
-    pub fn alignment(self) -> usize {
-        // x86-64 ABI: alignment matches size for scalar types
-        self.size()
+    pub fn alignment(&self) -> usize {
+        match self {
+            CType::Void => 0,
+            CType::Pointer(_) => 8,
+            CType::Struct(_) => panic!("Struct alignment must be queried from layout"),
+            CType::Array(elem_type, _) => elem_type.alignment(),
+            _ => self.size(),
+        }
     }
 
     /// Check if this is an integer type.
-    pub fn is_integer(self) -> bool {
+    pub fn is_integer(&self) -> bool {
         matches!(
             self,
             CType::Bool
@@ -75,8 +100,23 @@ impl CType {
     }
 
     /// Check if this is a floating-point type.
-    pub fn is_float(self) -> bool {
+    pub fn is_float(&self) -> bool {
         matches!(self, CType::Float | CType::Double)
+    }
+
+    /// Check if this is a pointer type.
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, CType::Pointer(_))
+    }
+
+    /// Check if this is a struct type.
+    pub fn is_struct(&self) -> bool {
+        matches!(self, CType::Struct(_))
+    }
+
+    /// Check if this is an array type.
+    pub fn is_array(&self) -> bool {
+        matches!(self, CType::Array(_, _))
     }
 }
 
@@ -98,7 +138,60 @@ impl fmt::Display for CType {
             CType::ULongLong => write!(f, "unsigned long long"),
             CType::Float => write!(f, "float"),
             CType::Double => write!(f, "double"),
+            CType::Pointer(inner) => write!(f, "{}*", inner),
+            CType::Struct(id) => write!(f, "struct_{:?}", id),
+            CType::Array(elem, count) => write!(f, "{}[{}]", elem, count),
         }
+    }
+}
+
+/// A single field within a C struct.
+#[derive(Debug, Clone)]
+pub struct StructField {
+    pub name: String,
+    pub ctype: CType,
+    pub offset: usize,
+}
+
+/// Layout information for a C struct type.
+#[derive(Debug, Clone)]
+pub struct StructLayout {
+    pub id: StructId,
+    pub name: String,
+    pub fields: Vec<StructField>,
+    pub size: usize,
+    pub align: usize,
+}
+
+impl StructLayout {
+    /// Create a new struct layout.
+    pub fn new(
+        id: StructId,
+        name: String,
+        fields: Vec<StructField>,
+        size: usize,
+        align: usize,
+    ) -> Self {
+        StructLayout {
+            id,
+            name,
+            fields,
+            size,
+            align,
+        }
+    }
+
+    /// Get the offset of a field by name.
+    pub fn field_offset(&self, name: &str) -> Option<usize> {
+        self.fields
+            .iter()
+            .find(|f| f.name == name)
+            .map(|f| f.offset)
+    }
+
+    /// Get a field by name.
+    pub fn get_field(&self, name: &str) -> Option<&StructField> {
+        self.fields.iter().find(|f| f.name == name)
     }
 }
 
@@ -142,6 +235,7 @@ mod tests {
         assert_eq!(CType::LongLong.size(), 8);
         assert_eq!(CType::Float.size(), 4);
         assert_eq!(CType::Double.size(), 8);
+        assert_eq!(CType::Pointer(Box::new(CType::Int)).size(), 8);
     }
 
     #[test]
@@ -151,6 +245,7 @@ mod tests {
         assert_eq!(CType::Int.alignment(), 4);
         assert_eq!(CType::Long.alignment(), 8);
         assert_eq!(CType::Double.alignment(), 8);
+        assert_eq!(CType::Pointer(Box::new(CType::Int)).alignment(), 8);
     }
 
     #[test]
@@ -161,5 +256,35 @@ mod tests {
         assert!(CType::Float.is_float());
         assert!(CType::Double.is_float());
         assert!(!CType::Int.is_float());
+        assert!(CType::Pointer(Box::new(CType::Int)).is_pointer());
+        assert!(CType::Array(Box::new(CType::Int), 10).is_array());
+    }
+
+    #[test]
+    fn test_array_size() {
+        let array_type = CType::Array(Box::new(CType::Int), 10);
+        assert_eq!(array_type.size(), 40); // 4 bytes * 10
+    }
+
+    #[test]
+    fn test_struct_layout() {
+        let fields = vec![
+            StructField {
+                name: "x".to_string(),
+                ctype: CType::Int,
+                offset: 0,
+            },
+            StructField {
+                name: "y".to_string(),
+                ctype: CType::Int,
+                offset: 4,
+            },
+        ];
+        let layout = StructLayout::new(StructId::new(1), "Point".to_string(), fields, 8, 4);
+
+        assert_eq!(layout.size, 8);
+        assert_eq!(layout.field_offset("x"), Some(0));
+        assert_eq!(layout.field_offset("y"), Some(4));
+        assert_eq!(layout.field_offset("z"), None);
     }
 }
