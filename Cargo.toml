@@ -1,0 +1,25 @@
+[package]
+name = "elle"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rustc-hash = "2.0"
+smallvec = "1.11"
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1.4"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+strip = true
+
+[profile.bench]
+inherits = "release"
+
+[[bench]]
+name = "benchmarks"
+harness = false

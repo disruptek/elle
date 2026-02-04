@@ -1,0 +1,379 @@
+use crate::symbol::SymbolTable;
+use crate::value::{cons, Value};
+use std::rc::Rc;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Token {
+    LeftParen,
+    RightParen,
+    LeftBracket,
+    RightBracket,
+    Quote,
+    Quasiquote,
+    Unquote,
+    UnquoteSplicing,
+    Symbol(String),
+    Integer(i64),
+    Float(f64),
+    String(String),
+    Bool(bool),
+    Nil,
+}
+
+pub struct Lexer {
+    input: Vec<char>,
+    pos: usize,
+}
+
+impl Lexer {
+    pub fn new(input: &str) -> Self {
+        Lexer {
+            input: input.chars().collect(),
+            pos: 0,
+        }
+    }
+
+    fn current(&self) -> Option<char> {
+        self.input.get(self.pos).copied()
+    }
+
+    fn advance(&mut self) -> Option<char> {
+        let c = self.current();
+        self.pos += 1;
+        c
+    }
+
+    fn peek(&self, offset: usize) -> Option<char> {
+        self.input.get(self.pos + offset).copied()
+    }
+
+    fn skip_whitespace(&mut self) {
+        while let Some(c) = self.current() {
+            if c.is_whitespace() {
+                self.advance();
+            } else if c == ';' {
+                // Skip comment until newline
+                while let Some(c) = self.advance() {
+                    if c == '\n' {
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn read_string(&mut self) -> Result<String, String> {
+        self.advance(); // skip opening quote
+        let mut s = String::new();
+        loop {
+            match self.current() {
+                None => return Err("Unterminated string".to_string()),
+                Some('"') => {
+                    self.advance();
+                    return Ok(s);
+                }
+                Some('\\') => {
+                    self.advance();
+                    match self.current() {
+                        Some('n') => s.push('\n'),
+                        Some('t') => s.push('\t'),
+                        Some('r') => s.push('\r'),
+                        Some('\\') => s.push('\\'),
+                        Some('"') => s.push('"'),
+                        Some(c) => s.push(c),
+                        None => return Err("Unterminated string escape".to_string()),
+                    }
+                    self.advance();
+                }
+                Some(c) => {
+                    s.push(c);
+                    self.advance();
+                }
+            }
+        }
+    }
+
+    fn read_number(&mut self) -> Result<Token, String> {
+        let mut num = String::new();
+        let mut has_dot = false;
+
+        while let Some(c) = self.current() {
+            if c.is_ascii_digit() || c == '-' || c == '+' {
+                num.push(c);
+                self.advance();
+            } else if c == '.' && !has_dot {
+                has_dot = true;
+                num.push(c);
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        if has_dot {
+            num.parse::<f64>()
+                .map(Token::Float)
+                .map_err(|_| format!("Invalid float: {}", num))
+        } else {
+            num.parse::<i64>()
+                .map(Token::Integer)
+                .map_err(|_| format!("Invalid integer: {}", num))
+        }
+    }
+
+    fn read_symbol(&mut self) -> String {
+        let mut sym = String::new();
+        while let Some(c) = self.current() {
+            if c.is_whitespace() || "()[]'`,".contains(c) {
+                break;
+            }
+            sym.push(c);
+            self.advance();
+        }
+        sym
+    }
+
+    pub fn next_token(&mut self) -> Result<Option<Token>, String> {
+        self.skip_whitespace();
+
+        match self.current() {
+            None => Ok(None),
+            Some('(') => {
+                self.advance();
+                Ok(Some(Token::LeftParen))
+            }
+            Some(')') => {
+                self.advance();
+                Ok(Some(Token::RightParen))
+            }
+            Some('[') => {
+                self.advance();
+                Ok(Some(Token::LeftBracket))
+            }
+            Some(']') => {
+                self.advance();
+                Ok(Some(Token::RightBracket))
+            }
+            Some('\'') => {
+                self.advance();
+                Ok(Some(Token::Quote))
+            }
+            Some('`') => {
+                self.advance();
+                Ok(Some(Token::Quasiquote))
+            }
+            Some(',') => {
+                self.advance();
+                if self.current() == Some('@') {
+                    self.advance();
+                    Ok(Some(Token::UnquoteSplicing))
+                } else {
+                    Ok(Some(Token::Unquote))
+                }
+            }
+            Some('"') => self.read_string().map(|s| Some(Token::String(s))),
+            Some(c) if c.is_ascii_digit() || c == '-' || c == '+' => {
+                // Check if it's a number or symbol
+                if let Some(next) = self.peek(1) {
+                    if (c == '-' || c == '+') && !next.is_ascii_digit() {
+                        Ok(Some(Token::Symbol(self.read_symbol())))
+                    } else {
+                        self.read_number().map(Some)
+                    }
+                } else if c == '-' || c == '+' {
+                    Ok(Some(Token::Symbol(self.read_symbol())))
+                } else {
+                    self.read_number().map(Some)
+                }
+            }
+            Some('#') => {
+                self.advance();
+                match self.current() {
+                    Some('t') => {
+                        self.advance();
+                        Ok(Some(Token::Bool(true)))
+                    }
+                    Some('f') => {
+                        self.advance();
+                        Ok(Some(Token::Bool(false)))
+                    }
+                    _ => Err("Invalid # syntax".to_string()),
+                }
+            }
+            Some(_) => {
+                let sym = self.read_symbol();
+                if sym == "nil" {
+                    Ok(Some(Token::Nil))
+                } else {
+                    Ok(Some(Token::Symbol(sym)))
+                }
+            }
+        }
+    }
+}
+
+pub struct Reader {
+    tokens: Vec<Token>,
+    pos: usize,
+}
+
+impl Reader {
+    pub fn new(tokens: Vec<Token>) -> Self {
+        Reader { tokens, pos: 0 }
+    }
+
+    fn current(&self) -> Option<&Token> {
+        self.tokens.get(self.pos)
+    }
+
+    fn advance(&mut self) -> Option<Token> {
+        let token = self.current().cloned();
+        self.pos += 1;
+        token
+    }
+
+    pub fn read(&mut self, symbols: &mut SymbolTable) -> Result<Value, String> {
+        match self.current() {
+            None => Err("Unexpected EOF".to_string()),
+            Some(Token::LeftParen) => self.read_list(symbols),
+            Some(Token::LeftBracket) => self.read_vector(symbols),
+            Some(Token::Quote) => {
+                self.advance();
+                let val = self.read(symbols)?;
+                let quote_sym = Value::Symbol(symbols.intern("quote"));
+                Ok(cons(quote_sym, cons(val, Value::Nil)))
+            }
+            Some(Token::Quasiquote) => {
+                self.advance();
+                let val = self.read(symbols)?;
+                let qq_sym = Value::Symbol(symbols.intern("quasiquote"));
+                Ok(cons(qq_sym, cons(val, Value::Nil)))
+            }
+            Some(Token::Unquote) => {
+                self.advance();
+                let val = self.read(symbols)?;
+                let uq_sym = Value::Symbol(symbols.intern("unquote"));
+                Ok(cons(uq_sym, cons(val, Value::Nil)))
+            }
+            Some(Token::UnquoteSplicing) => {
+                self.advance();
+                let val = self.read(symbols)?;
+                let uqs_sym = Value::Symbol(symbols.intern("unquote-splicing"));
+                Ok(cons(uqs_sym, cons(val, Value::Nil)))
+            }
+            Some(Token::Integer(n)) => {
+                let val = Value::Int(*n);
+                self.advance();
+                Ok(val)
+            }
+            Some(Token::Float(f)) => {
+                let val = Value::Float(*f);
+                self.advance();
+                Ok(val)
+            }
+            Some(Token::String(s)) => {
+                let val = Value::String(Rc::from(s.as_str()));
+                self.advance();
+                Ok(val)
+            }
+            Some(Token::Bool(b)) => {
+                let val = Value::Bool(*b);
+                self.advance();
+                Ok(val)
+            }
+            Some(Token::Nil) => {
+                self.advance();
+                Ok(Value::Nil)
+            }
+            Some(Token::Symbol(s)) => {
+                let id = symbols.intern(s);
+                self.advance();
+                Ok(Value::Symbol(id))
+            }
+            Some(Token::RightParen) => Err("Unexpected )".to_string()),
+            Some(Token::RightBracket) => Err("Unexpected ]".to_string()),
+        }
+    }
+
+    fn read_list(&mut self, symbols: &mut SymbolTable) -> Result<Value, String> {
+        self.advance(); // skip (
+        let mut elements = Vec::new();
+
+        loop {
+            match self.current() {
+                None => return Err("Unterminated list".to_string()),
+                Some(Token::RightParen) => {
+                    self.advance();
+                    return Ok(elements
+                        .into_iter()
+                        .rev()
+                        .fold(Value::Nil, |acc, v| cons(v, acc)));
+                }
+                _ => elements.push(self.read(symbols)?),
+            }
+        }
+    }
+
+    fn read_vector(&mut self, symbols: &mut SymbolTable) -> Result<Value, String> {
+        self.advance(); // skip [
+        let mut elements = Vec::new();
+
+        loop {
+            match self.current() {
+                None => return Err("Unterminated vector".to_string()),
+                Some(Token::RightBracket) => {
+                    self.advance();
+                    return Ok(Value::Vector(Rc::new(elements)));
+                }
+                _ => elements.push(self.read(symbols)?),
+            }
+        }
+    }
+}
+
+pub fn read_str(input: &str, symbols: &mut SymbolTable) -> Result<Value, String> {
+    let mut lexer = Lexer::new(input);
+    let mut tokens = Vec::new();
+
+    while let Some(token) = lexer.next_token()? {
+        tokens.push(token);
+    }
+
+    if tokens.is_empty() {
+        return Err("No input".to_string());
+    }
+
+    let mut reader = Reader::new(tokens);
+    reader.read(symbols)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_read_number() {
+        let mut symbols = SymbolTable::new();
+        assert_eq!(read_str("42", &mut symbols).unwrap(), Value::Int(42));
+        assert_eq!(read_str("3.14", &mut symbols).unwrap(), Value::Float(3.14));
+    }
+
+    #[test]
+    fn test_read_list() {
+        let mut symbols = SymbolTable::new();
+        let result = read_str("(1 2 3)", &mut symbols).unwrap();
+        assert!(result.is_list());
+        let vec = result.list_to_vec().unwrap();
+        assert_eq!(vec.len(), 3);
+    }
+
+    #[test]
+    fn test_read_quote() {
+        let mut symbols = SymbolTable::new();
+        let result = read_str("'foo", &mut symbols).unwrap();
+        let vec = result.list_to_vec().unwrap();
+        assert_eq!(vec.len(), 2);
+    }
+}
