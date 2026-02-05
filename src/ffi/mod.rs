@@ -11,11 +11,15 @@
 
 pub mod bindings;
 pub mod call;
+pub mod callback;
 pub mod header;
 pub mod loader;
 pub mod marshal;
+pub mod memory;
+pub mod safety;
 pub mod symbol;
 pub mod types;
+pub mod wasm;
 
 use loader::LibraryHandle;
 use std::collections::HashMap;

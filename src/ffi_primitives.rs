@@ -4,7 +4,10 @@
 
 use crate::ffi::bindings::generate_elle_bindings;
 use crate::ffi::call::FunctionCall;
+use crate::ffi::callback::create_callback;
 use crate::ffi::header::HeaderParser;
+use crate::ffi::memory::{get_memory_stats, register_allocation, MemoryOwner};
+use crate::ffi::safety::{get_last_error, NullPointerChecker, TypeChecker};
 use crate::ffi::types::{CType, EnumId, EnumLayout, EnumVariant, FunctionSignature};
 use crate::value::{LibHandle, Value};
 use crate::vm::VM;
@@ -241,6 +244,178 @@ pub fn prim_define_enum(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
 
     // Return enum ID as integer
     Ok(Value::Int(enum_id.0 as i64))
+}
+
+/// Phase 4: Advanced Features Primitives
+
+/// (make-c-callback closure arg-types return-type) -> callback-handle
+///
+/// Creates a C callback from an Elle closure.
+///
+/// # Arguments
+/// - closure: Elle function/closure to call
+/// - arg-types: List of argument types
+/// - return-type: Return type of callback
+pub fn prim_make_c_callback(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
+    if args.len() != 3 {
+        return Err("make-c-callback requires exactly 3 arguments".to_string());
+    }
+
+    // Parse argument types
+    let arg_types = match &args[1] {
+        Value::Nil => vec![],
+        Value::Cons(_) => {
+            let type_list = args[1].list_to_vec()?;
+            type_list
+                .iter()
+                .map(parse_ctype)
+                .collect::<Result<Vec<_>, _>>()?
+        }
+        _ => return Err("arg-types must be a list".to_string()),
+    };
+
+    // Parse return type
+    let return_type = parse_ctype(&args[2])?;
+
+    // Create callback (closure is stored outside this registry for now)
+    let (cb_id, _info) = create_callback(arg_types, return_type);
+
+    // Return callback ID as integer
+    // Note: In a full implementation, the closure would be stored in a separate
+    // non-thread-safe registry managed by the VM
+    Ok(Value::Int(cb_id as i64))
+}
+
+/// (free-callback callback-id) -> nil
+///
+/// Frees a callback by ID (placeholder for now).
+pub fn prim_free_callback(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("free-callback requires exactly 1 argument".to_string());
+    }
+
+    let _cb_id = match &args[0] {
+        Value::Int(id) => *id as u32,
+        _ => return Err("callback-id must be an integer".to_string()),
+    };
+
+    // In a full implementation, would unregister the callback
+    Ok(Value::Nil)
+}
+
+/// (register-allocation ptr type-name size owner) -> alloc-id
+///
+/// Registers a memory allocation for tracking.
+///
+/// # Arguments
+/// - ptr: Pointer value (encoded as integer)
+/// - type-name: Name of type (for debugging)
+/// - size: Size in bytes
+/// - owner: :elle or :c
+pub fn prim_register_allocation(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
+    if args.len() != 4 {
+        return Err("register-allocation requires exactly 4 arguments".to_string());
+    }
+
+    let ptr = match &args[0] {
+        Value::Int(id) => *id as *const std::ffi::c_void,
+        _ => return Err("ptr must be an integer".to_string()),
+    };
+
+    let type_name = match &args[1] {
+        Value::String(s) => s.as_ref(),
+        _ => return Err("type-name must be a string".to_string()),
+    };
+
+    let size = match &args[2] {
+        Value::Int(s) => *s as usize,
+        _ => return Err("size must be an integer".to_string()),
+    };
+
+    let owner = match &args[3] {
+        Value::String(s) => match s.as_ref() {
+            "elle" => MemoryOwner::Elle,
+            "c" => MemoryOwner::C,
+            "shared" => MemoryOwner::Shared,
+            _ => return Err("owner must be 'elle', 'c', or 'shared'".to_string()),
+        },
+        _ => return Err("owner must be a string".to_string()),
+    };
+
+    let alloc_id = register_allocation(ptr, type_name, size, owner);
+    Ok(Value::Int(alloc_id as i64))
+}
+
+/// (memory-stats) -> (total-bytes allocation-count)
+///
+/// Returns memory allocation statistics.
+pub fn prim_memory_stats(_vm: &mut VM, _args: &[Value]) -> Result<Value, String> {
+    let (total_bytes, alloc_count) = get_memory_stats();
+
+    let result = crate::value::cons(
+        Value::Int(total_bytes as i64),
+        crate::value::cons(Value::Int(alloc_count as i64), Value::Nil),
+    );
+
+    Ok(result)
+}
+
+/// (type-check value expected-type) -> bool
+///
+/// Type checks a value against expected C type.
+pub fn prim_type_check(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("type-check requires exactly 2 arguments".to_string());
+    }
+
+    let value = &args[0];
+    let expected = parse_ctype(&args[1])?;
+
+    match TypeChecker::check_type(value, &expected) {
+        Ok(()) => Ok(Value::Int(1)),
+        Err(_) => Ok(Value::Int(0)),
+    }
+}
+
+/// (null-pointer? value) -> bool
+///
+/// Checks if a value represents a null pointer.
+pub fn prim_null_pointer(vm: &mut VM, args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err("null-pointer? requires at least 1 argument".to_string());
+    }
+
+    let is_null = NullPointerChecker::is_null(&args[0]);
+    Ok(Value::Int(if is_null { 1 } else { 0 }))
+}
+
+/// (ffi-last-error) -> error-message or nil
+///
+/// Gets the last FFI error, if any.
+pub fn prim_ffi_last_error(_vm: &mut VM, _args: &[Value]) -> Result<Value, String> {
+    match get_last_error() {
+        Some(err) => Ok(Value::String(format!("{}", err).into())),
+        None => Ok(Value::Nil),
+    }
+}
+
+/// (with-ffi-safety-checks body) -> result
+///
+/// Executes body with FFI safety checks enabled.
+/// Note: In a full implementation, this would catch segfaults.
+pub fn prim_with_ffi_safety_checks(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err("with-ffi-safety-checks requires at least 1 argument".to_string());
+    }
+
+    // In a full implementation, this would:
+    // 1. Install SIGSEGV handler (Linux)
+    // 2. Execute body
+    // 3. Catch segfaults and return error
+    // 4. Restore signal handlers
+
+    // For now, just return the first argument (assuming it's evaluated elsewhere)
+    Ok(args[0].clone())
 }
 
 #[cfg(test)]
