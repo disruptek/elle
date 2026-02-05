@@ -94,10 +94,9 @@ jobs:
               echo "Running: $example"
               echo "---"
               if timeout 10s "$ELLE_BIN" "examples/$example" > /tmp/output.txt 2>&1; then
-                # Filter out the EOF parse error which is expected
-                output=$(cat /tmp/output.txt | grep -v "Parse error: Unexpected EOF" || true)
+                output=$(cat /tmp/output.txt)
                 if [ -z "$output" ]; then
-                  echo "✓ $example executed successfully (no output expected)"
+                  echo "✓ $example executed successfully (no output)"
                 else
                   echo "✓ $example executed successfully"
                   echo "Output:"
