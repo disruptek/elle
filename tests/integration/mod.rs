@@ -26,3 +26,6 @@ mod types {
 mod property {
     include!("property.rs");
 }
+mod exception_handling {
+    include!("exception_handling.rs");
+}
