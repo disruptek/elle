@@ -1,186 +1,21 @@
+pub mod arithmetic;
+pub mod closure;
+pub mod comparison;
+pub mod control;
+pub mod core;
+pub mod data;
+pub mod literals;
+pub mod stack;
+pub mod types;
+pub mod variables;
+
+pub use core::{CallFrame, VM};
+
 use crate::compiler::bytecode::{Bytecode, Instruction};
-use crate::ffi::FFISubsystem;
-use crate::value::{cons, Closure, Value};
-use smallvec::SmallVec;
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use crate::value::Value;
 use std::rc::Rc;
 
-type StackVec = SmallVec<[Value; 256]>;
-
-#[derive(Debug, Clone)]
-pub struct CallFrame {
-    pub name: String,
-    pub ip: usize,
-}
-
-pub struct VM {
-    stack: StackVec,
-    globals: HashMap<u32, Value>,
-    call_depth: usize,
-    call_stack: Vec<CallFrame>,
-    ffi: FFISubsystem,
-    modules: HashMap<String, HashMap<u32, Value>>, // Module name → exported symbols
-    current_module: Option<String>,
-    loaded_modules: HashSet<String>, // Track loaded module paths to prevent circular deps
-    module_search_paths: Vec<PathBuf>, // Directories to search for modules
-}
-
 impl VM {
-    pub fn new() -> Self {
-        VM {
-            stack: SmallVec::new(),
-            globals: HashMap::new(),
-            call_depth: 0,
-            call_stack: Vec::new(),
-            ffi: FFISubsystem::new(),
-            modules: HashMap::new(),
-            current_module: None,
-            loaded_modules: HashSet::new(),
-            module_search_paths: vec![PathBuf::from(".")],
-        }
-    }
-
-    pub fn set_global(&mut self, sym_id: u32, value: Value) {
-        self.globals.insert(sym_id, value);
-    }
-
-    pub fn get_global(&self, sym_id: u32) -> Option<&Value> {
-        self.globals.get(&sym_id)
-    }
-
-    /// Define a module with exported symbols
-    pub fn define_module(&mut self, name: String, exports: HashMap<u32, Value>) {
-        self.modules.insert(name, exports);
-    }
-
-    /// Get a symbol from a module
-    pub fn get_module_symbol(&self, module: &str, sym_id: u32) -> Option<&Value> {
-        self.modules.get(module).and_then(|m| m.get(&sym_id))
-    }
-
-    /// Import a module (make it available)
-    pub fn import_module(&mut self, name: String) {
-        if self.modules.contains_key(&name) {
-            // Module is now available for module:symbol references
-        }
-    }
-
-    /// Set current module context
-    pub fn set_current_module(&mut self, module: Option<String>) {
-        self.current_module = module;
-    }
-
-    /// Get current module context
-    pub fn current_module(&self) -> Option<&str> {
-        self.current_module.as_deref()
-    }
-
-    /// Add a module search path
-    pub fn add_module_search_path(&mut self, path: PathBuf) {
-        if !self.module_search_paths.contains(&path) {
-            self.module_search_paths.push(path);
-        }
-    }
-
-    /// Resolve a module path by searching in module search paths
-    pub fn resolve_module_path(&self, module_name: &str) -> Option<PathBuf> {
-        let module_file = format!("{}.elle", module_name);
-        for search_path in &self.module_search_paths {
-            let full_path = search_path.join(&module_file);
-            if full_path.exists() {
-                return Some(full_path);
-            }
-        }
-        None
-    }
-
-    /// Load a module from source code (file-based)
-    pub fn load_module(&mut self, name: String, _source: &str) -> Result<(), String> {
-        // Prevent circular dependencies
-        if self.loaded_modules.contains(&name) {
-            return Ok(()); // Already loaded
-        }
-        self.loaded_modules.insert(name.clone());
-
-        // Parse and compile the module source
-        // For now, this is a placeholder that requires integration with the compiler
-        // In production, we would:
-        // 1. Parse the source code
-        // 2. Extract (module ...) and (import ...) forms
-        // 3. Compile and execute module definitions
-        // 4. Register exported symbols in self.modules
-
-        Ok(())
-    }
-
-    /// Load a module from a file path
-    pub fn load_module_from_file(&mut self, path: &Path) -> Result<(), String> {
-        let module_path = path.to_string_lossy().to_string();
-
-        // Check for circular dependencies
-        if self.loaded_modules.contains(&module_path) {
-            return Ok(());
-        }
-        self.loaded_modules.insert(module_path);
-
-        // Read file
-        let _source = std::fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read module file: {}", e))?;
-
-        // Load the module (parsing/compilation would happen here)
-        // For now, just mark as loaded
-        Ok(())
-    }
-
-    /// Get the FFI subsystem.
-    pub fn ffi(&self) -> &FFISubsystem {
-        &self.ffi
-    }
-
-    /// Get a mutable reference to the FFI subsystem.
-    pub fn ffi_mut(&mut self) -> &mut FFISubsystem {
-        &mut self.ffi
-    }
-
-    pub fn format_stack_trace(&self) -> String {
-        if self.call_stack.is_empty() {
-            "  (no call stack)".to_string()
-        } else {
-            let mut trace = String::new();
-            for (i, frame) in self.call_stack.iter().rev().enumerate() {
-                trace.push_str(&format!("  #{}: {} (ip={})\n", i, frame.name, frame.ip));
-            }
-            trace
-        }
-    }
-
-    #[allow(dead_code)]
-    fn with_stack_trace(&self, msg: String) -> String {
-        let trace = self.format_stack_trace();
-        format!("{}\nStack trace:\n{}", msg, trace)
-    }
-
-    #[inline(always)]
-    fn read_u8(&self, bytecode: &[u8], ip: &mut usize) -> u8 {
-        let val = bytecode[*ip];
-        *ip += 1;
-        val
-    }
-
-    #[inline(always)]
-    fn read_u16(&self, bytecode: &[u8], ip: &mut usize) -> u16 {
-        let high = bytecode[*ip] as u16;
-        let low = bytecode[*ip + 1] as u16;
-        *ip += 2;
-        (high << 8) | low
-    }
-
-    #[inline(always)]
-    fn read_i16(&self, bytecode: &[u8], ip: &mut usize) -> i16 {
-        self.read_u16(bytecode, ip) as i16
-    }
-
     pub fn execute(&mut self, bytecode: &Bytecode) -> Result<Value, String> {
         self.execute_bytecode(&bytecode.instructions, &bytecode.constants, None)
     }
@@ -204,87 +39,58 @@ impl VM {
             let instr: Instruction = unsafe { std::mem::transmute(instr_byte) };
 
             match instr {
+                // Stack operations
                 Instruction::LoadConst => {
-                    let idx = self.read_u16(bytecode, &mut ip) as usize;
-                    self.stack.push(constants[idx].clone());
+                    stack::handle_load_const(self, bytecode, &mut ip, constants);
                 }
 
                 Instruction::LoadLocal => {
-                    let idx = self.read_u8(bytecode, &mut ip) as usize;
-                    if idx >= self.stack.len() {
-                        return Err("Local variable index out of bounds".to_string());
-                    }
-                    let val = self.stack[idx].clone();
-                    self.stack.push(val);
-                }
-
-                Instruction::LoadGlobal => {
-                    let idx = self.read_u16(bytecode, &mut ip) as usize;
-                    if let Value::Symbol(sym_id) = constants[idx] {
-                        if let Some(val) = self.globals.get(&sym_id.0) {
-                            self.stack.push(val.clone());
-                        } else {
-                            return Err(format!("Undefined global variable: {:?}", sym_id));
-                        }
-                    } else {
-                        return Err("LoadGlobal expects symbol constant".to_string());
-                    }
-                }
-
-                Instruction::StoreLocal => {
-                    let idx = self.read_u8(bytecode, &mut ip) as usize;
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    if idx >= self.stack.len() {
-                        return Err("Local variable index out of bounds".to_string());
-                    }
-                    self.stack[idx] = val;
-                }
-
-                Instruction::StoreGlobal => {
-                    let idx = self.read_u16(bytecode, &mut ip) as usize;
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    if let Value::Symbol(sym_id) = constants[idx] {
-                        self.globals.insert(sym_id.0, val.clone());
-                        self.stack.push(val);
-                    } else {
-                        return Err("StoreGlobal expects symbol constant".to_string());
-                    }
-                }
-
-                Instruction::LoadUpvalue => {
-                    let _depth = self.read_u8(bytecode, &mut ip);
-                    let idx = self.read_u8(bytecode, &mut ip) as usize;
-
-                    // Load from closure environment
-                    if let Some(env) = closure_env {
-                        if idx < env.len() {
-                            self.stack.push(env[idx].clone());
-                        } else {
-                            return Err(format!(
-                                "Upvalue index {} out of bounds (env size: {})",
-                                idx,
-                                env.len()
-                            ));
-                        }
-                    } else {
-                        return Err("LoadUpvalue used outside of closure".to_string());
-                    }
+                    stack::handle_load_local(self, bytecode, &mut ip)?;
                 }
 
                 Instruction::Pop => {
-                    self.stack.pop().ok_or("Stack underflow")?;
+                    stack::handle_pop(self)?;
                 }
 
                 Instruction::Dup => {
-                    let val = self.stack.last().ok_or("Stack underflow")?.clone();
-                    self.stack.push(val);
+                    stack::handle_dup(self)?;
                 }
 
+                // Variable access
+                Instruction::LoadGlobal => {
+                    variables::handle_load_global(self, bytecode, &mut ip, constants)?;
+                }
+
+                Instruction::StoreGlobal => {
+                    variables::handle_store_global(self, bytecode, &mut ip, constants)?;
+                }
+
+                Instruction::StoreLocal => {
+                    variables::handle_store_local(self, bytecode, &mut ip)?;
+                }
+
+                Instruction::LoadUpvalue => {
+                    variables::handle_load_upvalue(self, bytecode, &mut ip, closure_env)?;
+                }
+
+                // Control flow
+                Instruction::Jump => {
+                    control::handle_jump(bytecode, &mut ip, self);
+                }
+
+                Instruction::JumpIfFalse => {
+                    control::handle_jump_if_false(bytecode, &mut ip, self)?;
+                }
+
+                Instruction::Return => {
+                    return control::handle_return(self);
+                }
+
+                // Call instructions (complex, handled inline)
                 Instruction::Call => {
                     let arg_count = self.read_u8(bytecode, &mut ip) as usize;
                     let func = self.stack.pop().ok_or("Stack underflow")?;
 
-                    // Collect arguments
                     let mut args = Vec::with_capacity(arg_count);
                     for _ in 0..arg_count {
                         args.push(self.stack.pop().ok_or("Stack underflow")?);
@@ -299,8 +105,6 @@ impl VM {
                                 return Err("Stack overflow".to_string());
                             }
 
-                            // Execute closure bytecode with its captured environment
-                            // Use the closure's own constants array, not the parent's
                             let result = self.execute_bytecode(
                                 &closure.bytecode,
                                 &closure.constants,
@@ -317,7 +121,6 @@ impl VM {
                 }
 
                 Instruction::TailCall => {
-                    // Tail call optimization: return result directly to avoid stack growth
                     let arg_count = self.read_u8(bytecode, &mut ip) as usize;
                     let func = self.stack.pop().ok_or("Stack underflow")?;
 
@@ -329,12 +132,9 @@ impl VM {
 
                     match func {
                         Value::NativeFn(f) => {
-                            // Return native function result directly
                             return f(&args);
                         }
                         Value::Closure(closure) => {
-                            // For closure tail calls, execute without incrementing call_depth
-                            // This prevents stack overflow on deep recursion
                             return self.execute_bytecode(
                                 &closure.bytecode,
                                 constants,
@@ -345,287 +145,125 @@ impl VM {
                     };
                 }
 
-                Instruction::Return => {
-                    return self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| "Stack underflow on return".to_string());
-                }
-
-                Instruction::Jump => {
-                    let offset = self.read_i16(bytecode, &mut ip);
-                    ip = ((ip as i32) + (offset as i32)) as usize;
-                }
-
-                Instruction::JumpIfFalse => {
-                    let offset = self.read_i16(bytecode, &mut ip);
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    if !val.is_truthy() {
-                        ip = ((ip as i32) + (offset as i32)) as usize;
-                    }
-                }
-
+                // Closures
                 Instruction::MakeClosure => {
-                    let idx = self.read_u16(bytecode, &mut ip) as usize;
-                    let num_upvalues = self.read_u8(bytecode, &mut ip) as usize;
-
-                    // Get the closure template from constants
-                    if let Value::Closure(template) = &constants[idx] {
-                        // Collect captured values from stack
-                        let mut captured = Vec::with_capacity(num_upvalues);
-                        for _ in 0..num_upvalues {
-                            captured.push(self.stack.pop().ok_or("Stack underflow")?);
-                        }
-                        captured.reverse();
-
-                        // Create closure with captured values in environment
-                        let closure = Closure {
-                            bytecode: template.bytecode.clone(),
-                            arity: template.arity.clone(),
-                            env: Rc::new(captured),
-                            num_locals: template.num_locals,
-                            constants: template.constants.clone(),
-                        };
-
-                        self.stack.push(Value::Closure(Rc::new(closure)));
-                    } else {
-                        return Err("MakeClosure expects closure constant".to_string());
-                    }
+                    closure::handle_make_closure(self, bytecode, &mut ip, constants)?;
                 }
 
+                // Data structures
                 Instruction::Cons => {
-                    let rest = self.stack.pop().ok_or("Stack underflow")?;
-                    let first = self.stack.pop().ok_or("Stack underflow")?;
-                    self.stack.push(cons(first, rest));
+                    data::handle_cons(self)?;
                 }
 
                 Instruction::Car => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    let cons = val.as_cons()?;
-                    self.stack.push(cons.first.clone());
+                    data::handle_car(self)?;
                 }
 
                 Instruction::Cdr => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    let cons = val.as_cons()?;
-                    self.stack.push(cons.rest.clone());
+                    data::handle_cdr(self)?;
                 }
 
                 Instruction::MakeVector => {
-                    let size = self.read_u8(bytecode, &mut ip) as usize;
-                    let mut vec = Vec::with_capacity(size);
-                    for _ in 0..size {
-                        vec.push(self.stack.pop().ok_or("Stack underflow")?);
-                    }
-                    vec.reverse();
-                    self.stack.push(Value::Vector(Rc::new(vec)));
+                    data::handle_make_vector(self, bytecode, &mut ip)?;
                 }
 
                 Instruction::VectorRef => {
-                    let idx = self.stack.pop().ok_or("Stack underflow")?;
-                    let vec = self.stack.pop().ok_or("Stack underflow")?;
-                    let idx = idx.as_int()? as usize;
-                    let vec = vec.as_vector()?;
-                    self.stack
-                        .push(vec.get(idx).ok_or("Vector index out of bounds")?.clone());
+                    data::handle_vector_ref(self)?;
                 }
 
                 Instruction::VectorSet => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    let idx = self.stack.pop().ok_or("Stack underflow")?;
-                    let _vec = self.stack.pop().ok_or("Stack underflow")?;
-                    let _idx = idx.as_int()? as usize;
-                    // Note: Vectors are immutable in this implementation
-                    self.stack.push(val);
+                    data::handle_vector_set(self)?;
                 }
 
+                // Arithmetic (integer)
                 Instruction::AddInt => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?.as_int()?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?.as_int()?;
-                    self.stack.push(Value::Int(a + b));
+                    arithmetic::handle_add_int(self)?;
                 }
 
                 Instruction::SubInt => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?.as_int()?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?.as_int()?;
-                    self.stack.push(Value::Int(a - b));
+                    arithmetic::handle_sub_int(self)?;
                 }
 
                 Instruction::MulInt => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?.as_int()?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?.as_int()?;
-                    self.stack.push(Value::Int(a * b));
+                    arithmetic::handle_mul_int(self)?;
                 }
 
                 Instruction::DivInt => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?.as_int()?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?.as_int()?;
-                    if b == 0 {
-                        return Err("Division by zero".to_string());
-                    }
-                    self.stack.push(Value::Int(a / b));
+                    arithmetic::handle_div_int(self)?;
                 }
 
+                // Arithmetic (polymorphic)
                 Instruction::Add => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Int(x + y),
-                        (Value::Float(x), Value::Float(y)) => Value::Float(x + y),
-                        (Value::Int(x), Value::Float(y)) => Value::Float(x as f64 + y),
-                        (Value::Float(x), Value::Int(y)) => Value::Float(x + y as f64),
-                        _ => return Err("Type error in addition".to_string()),
-                    };
-                    self.stack.push(result);
+                    arithmetic::handle_add(self)?;
                 }
 
                 Instruction::Sub => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Int(x - y),
-                        (Value::Float(x), Value::Float(y)) => Value::Float(x - y),
-                        (Value::Int(x), Value::Float(y)) => Value::Float(x as f64 - y),
-                        (Value::Float(x), Value::Int(y)) => Value::Float(x - y as f64),
-                        _ => return Err("Type error in subtraction".to_string()),
-                    };
-                    self.stack.push(result);
+                    arithmetic::handle_sub(self)?;
                 }
 
                 Instruction::Mul => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Int(x * y),
-                        (Value::Float(x), Value::Float(y)) => Value::Float(x * y),
-                        (Value::Int(x), Value::Float(y)) => Value::Float(x as f64 * y),
-                        (Value::Float(x), Value::Int(y)) => Value::Float(x * y as f64),
-                        _ => return Err("Type error in multiplication".to_string()),
-                    };
-                    self.stack.push(result);
+                    arithmetic::handle_mul(self)?;
                 }
 
                 Instruction::Div => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => {
-                            if y == 0 {
-                                return Err("Division by zero".to_string());
-                            }
-                            Value::Int(x / y)
-                        }
-                        (Value::Float(x), Value::Float(y)) => Value::Float(x / y),
-                        (Value::Int(x), Value::Float(y)) => Value::Float(x as f64 / y),
-                        (Value::Float(x), Value::Int(y)) => Value::Float(x / y as f64),
-                        _ => return Err("Type error in division".to_string()),
-                    };
-                    self.stack.push(result);
+                    arithmetic::handle_div(self)?;
                 }
 
+                // Comparisons
                 Instruction::Eq => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    self.stack.push(Value::Bool(a == b));
+                    comparison::handle_eq(self)?;
                 }
 
                 Instruction::Lt => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Bool(x < y),
-                        (Value::Float(x), Value::Float(y)) => Value::Bool(x < y),
-                        (Value::Int(x), Value::Float(y)) => Value::Bool((x as f64) < y),
-                        (Value::Float(x), Value::Int(y)) => Value::Bool(x < (y as f64)),
-                        _ => return Err("Type error in comparison".to_string()),
-                    };
-                    self.stack.push(result);
+                    comparison::handle_lt(self)?;
                 }
 
                 Instruction::Gt => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Bool(x > y),
-                        (Value::Float(x), Value::Float(y)) => Value::Bool(x > y),
-                        (Value::Int(x), Value::Float(y)) => Value::Bool((x as f64) > y),
-                        (Value::Float(x), Value::Int(y)) => Value::Bool(x > (y as f64)),
-                        _ => return Err("Type error in comparison".to_string()),
-                    };
-                    self.stack.push(result);
+                    comparison::handle_gt(self)?;
                 }
 
                 Instruction::Le => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Bool(x <= y),
-                        (Value::Float(x), Value::Float(y)) => Value::Bool(x <= y),
-                        (Value::Int(x), Value::Float(y)) => Value::Bool((x as f64) <= y),
-                        (Value::Float(x), Value::Int(y)) => Value::Bool(x <= (y as f64)),
-                        _ => return Err("Type error in comparison".to_string()),
-                    };
-                    self.stack.push(result);
+                    comparison::handle_le(self)?;
                 }
 
                 Instruction::Ge => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Bool(x >= y),
-                        (Value::Float(x), Value::Float(y)) => Value::Bool(x >= y),
-                        (Value::Int(x), Value::Float(y)) => Value::Bool((x as f64) >= y),
-                        (Value::Float(x), Value::Int(y)) => Value::Bool(x >= (y as f64)),
-                        _ => return Err("Type error in comparison".to_string()),
-                    };
-                    self.stack.push(result);
+                    comparison::handle_ge(self)?;
                 }
 
+                // Type checks
                 Instruction::IsNil => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    self.stack.push(Value::Bool(val.is_nil()));
+                    types::handle_is_nil(self)?;
                 }
 
                 Instruction::IsPair => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    self.stack.push(Value::Bool(matches!(val, Value::Cons(_))));
+                    types::handle_is_pair(self)?;
                 }
 
                 Instruction::IsNumber => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    self.stack
-                        .push(Value::Bool(matches!(val, Value::Int(_) | Value::Float(_))));
+                    types::handle_is_number(self)?;
                 }
 
                 Instruction::IsSymbol => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    self.stack
-                        .push(Value::Bool(matches!(val, Value::Symbol(_))));
+                    types::handle_is_symbol(self)?;
                 }
 
                 Instruction::Not => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    self.stack.push(Value::Bool(!val.is_truthy()));
+                    types::handle_not(self)?;
                 }
 
+                // Literals
                 Instruction::Nil => {
-                    self.stack.push(Value::Nil);
+                    literals::handle_nil(self);
                 }
 
                 Instruction::True => {
-                    self.stack.push(Value::Bool(true));
+                    literals::handle_true(self);
                 }
 
                 Instruction::False => {
-                    self.stack.push(Value::Bool(false));
+                    literals::handle_false(self);
                 }
             }
         }
-    }
-}
-
-impl Default for VM {
-    fn default() -> Self {
-        Self::new()
     }
 }
