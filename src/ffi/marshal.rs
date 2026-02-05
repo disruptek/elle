@@ -65,7 +65,7 @@ fn pack_field(bytes: &mut [u8], value: &Value, offset: usize, ctype: &CType) -> 
                 Value::Nil => 0,
                 _ => return Err(format!("Cannot convert {:?} to bool", value)),
             };
-            if offset + 1 <= bytes.len() {
+            if offset < bytes.len() {
                 bytes[offset] = b;
                 Ok(())
             } else {
@@ -77,7 +77,7 @@ fn pack_field(bytes: &mut [u8], value: &Value, offset: usize, ctype: &CType) -> 
                 Value::Int(n) => *n as u8,
                 _ => return Err(format!("Cannot convert {:?} to char", value)),
             };
-            if offset + 1 <= bytes.len() {
+            if offset < bytes.len() {
                 bytes[offset] = n;
                 Ok(())
             } else {
@@ -154,14 +154,14 @@ fn pack_field(bytes: &mut [u8], value: &Value, offset: usize, ctype: &CType) -> 
 fn unpack_field(bytes: &[u8], offset: usize, ctype: &CType) -> Result<Value, String> {
     match ctype {
         CType::Bool => {
-            if offset + 1 <= bytes.len() {
+            if offset < bytes.len() {
                 Ok(Value::Bool(bytes[offset] != 0))
             } else {
                 Err(format!("Field offset {} out of bounds", offset))
             }
         }
         CType::Char | CType::SChar | CType::UChar => {
-            if offset + 1 <= bytes.len() {
+            if offset < bytes.len() {
                 Ok(Value::Int(bytes[offset] as i8 as i64))
             } else {
                 Err(format!("Field offset {} out of bounds", offset))

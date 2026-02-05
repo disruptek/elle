@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_multiple_struct_layouts() {
-        use crate::ffi::types::{StructField, StructId, StructLayout};
+        use crate::ffi::types::{StructId, StructLayout};
 
         let mut ffi = FFISubsystem::new();
 
