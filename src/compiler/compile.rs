@@ -287,7 +287,7 @@ impl Compiler {
 
                 // Try each pattern in sequence
                 for (pattern, body_expr) in patterns {
-                    let next_pattern_jump = self.compile_pattern_check(pattern);
+                    let next_pattern_jumps = self.compile_pattern_check(pattern);
 
                     // Pattern matched - pop the value and execute body
                     self.bytecode.emit(Instruction::Pop);
@@ -298,13 +298,11 @@ impl Compiler {
                     exit_jumps.push(self.bytecode.instructions.len());
                     self.bytecode.emit_i16(0);
 
-                    // Patch the next_pattern_jump to skip to here if pattern doesn't match
+                    // Patch the next_pattern_jumps to skip to here if pattern doesn't match
                     let skip_to = self.bytecode.instructions.len();
-                    for jump_idx in next_pattern_jump {
+                    for jump_idx in next_pattern_jumps {
                         let offset = (skip_to as i32) - (jump_idx as i32 + 2);
-                        let offset_bytes = (offset as i16).to_le_bytes();
-                        self.bytecode.instructions[jump_idx] = offset_bytes[0];
-                        self.bytecode.instructions[jump_idx + 1] = offset_bytes[1];
+                        self.bytecode.patch_jump(jump_idx, offset as i16);
                     }
                 }
 
@@ -319,9 +317,7 @@ impl Compiler {
                 let end_pos = self.bytecode.instructions.len();
                 for jump_idx in exit_jumps {
                     let offset = (end_pos as i32) - (jump_idx as i32 + 2);
-                    let offset_bytes = (offset as i16).to_le_bytes();
-                    self.bytecode.instructions[jump_idx] = offset_bytes[0];
-                    self.bytecode.instructions[jump_idx + 1] = offset_bytes[1];
+                    self.bytecode.patch_jump(jump_idx, offset as i16);
                 }
             }
 
@@ -578,7 +574,7 @@ fn analyze_free_vars(
         Expr::For { var: _, iter, body } => {
             free_vars.extend(analyze_free_vars(iter, local_bindings));
             // Body can reference the loop variable
-            let mut new_bindings = local_bindings.clone();
+            let new_bindings = local_bindings.clone();
             free_vars.extend(analyze_free_vars(body, &new_bindings));
         }
 
@@ -618,6 +614,44 @@ fn analyze_free_vars(
     }
 
     free_vars
+}
+
+/// Convert a value to a pattern for pattern matching
+fn value_to_pattern(value: &Value, symbols: &SymbolTable) -> Result<super::ast::Pattern, String> {
+    use super::ast::Pattern;
+
+    match value {
+        Value::Nil => Ok(Pattern::Nil),
+        Value::Symbol(id) => {
+            // Check if it's a wildcard
+            if let Some(name) = symbols.name(*id) {
+                if name == "_" {
+                    return Ok(Pattern::Wildcard);
+                }
+            }
+            // Otherwise it's a variable binding
+            Ok(Pattern::Var(*id))
+        }
+        _ if matches!(
+            value,
+            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::String(_)
+        ) =>
+        {
+            Ok(Pattern::Literal(value.clone()))
+        }
+        Value::Cons(_) => {
+            let vec = value.list_to_vec()?;
+            if vec.is_empty() {
+                Ok(Pattern::Nil)
+            } else {
+                // Convert to List pattern
+                let patterns: Result<Vec<_>, _> =
+                    vec.iter().map(|v| value_to_pattern(v, symbols)).collect();
+                Ok(Pattern::List(patterns?))
+            }
+        }
+        _ => Err(format!("Cannot convert {:?} to pattern", value)),
+    }
 }
 
 /// Simple value-to-expr conversion for bootstrap
@@ -793,6 +827,51 @@ pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, Strin
                             body,
                             catch: catch_clause,
                             finally: finally_clause,
+                        })
+                    }
+
+                    "match" => {
+                        // Syntax: (match value (pattern1 result1) (pattern2 result2) ... [default])
+                        if list.len() < 2 {
+                            return Err("match requires at least a value".to_string());
+                        }
+
+                        let value = Box::new(value_to_expr(&list[1], symbols)?);
+                        let mut patterns = Vec::new();
+                        let mut default = None;
+
+                        // Parse pattern clauses
+                        for clause in &list[2..] {
+                            if let Ok(clause_vec) = clause.list_to_vec() {
+                                if clause_vec.is_empty() {
+                                    return Err("Empty pattern clause".to_string());
+                                }
+
+                                // Check if this is a default clause (symbol, not a list)
+                                if clause_vec.len() == 1 {
+                                    // Single value - treat as default
+                                    default =
+                                        Some(Box::new(value_to_expr(&clause_vec[0], symbols)?));
+                                } else if clause_vec.len() == 2 {
+                                    // Pattern and result
+                                    let pattern = value_to_pattern(&clause_vec[0], symbols)?;
+                                    let result = value_to_expr(&clause_vec[1], symbols)?;
+                                    patterns.push((pattern, result));
+                                } else {
+                                    return Err(
+                                        "Pattern clause must have pattern and result".to_string()
+                                    );
+                                }
+                            } else {
+                                // Not a list - treat as default
+                                default = Some(Box::new(value_to_expr(clause, symbols)?));
+                            }
+                        }
+
+                        Ok(Expr::Match {
+                            value,
+                            patterns,
+                            default,
                         })
                     }
 

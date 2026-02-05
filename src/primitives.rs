@@ -14,7 +14,7 @@ pub mod vector;
 
 use crate::ffi_primitives;
 use crate::symbol::SymbolTable;
-use crate::value::{list, Value};
+use crate::value::Value;
 use crate::vm::VM;
 
 use self::arithmetic::{
