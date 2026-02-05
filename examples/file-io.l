@@ -1,6 +1,9 @@
 #!/usr/bin/elle
 ;; File I/O Example - Comprehensive Demonstration
 ;; This example showcases all file I/O primitives available in Elle
+;; 
+;; Note: Uses relative paths (./elle_example_*) to work in any environment,
+;; including CI systems.
 
 (begin
   (display "=== File I/O Operations in Elle ===")
@@ -13,7 +16,7 @@
   (display "---")
   (newline)
 
-  (define temp-file "/var/run/user/1000/elle_example_basic.txt")
+  (define temp-file "./elle_example_basic.txt")
   (write-file temp-file "Hello, Elle!")
   (display "Wrote to file: ")
   (display temp-file)
@@ -36,7 +39,7 @@
   (newline)
 
   (display "Does nonexistent file exist? ")
-  (display (file-exists? "/this/does/not/exist/12345.txt"))
+  (display (file-exists? "./this_does_not_exist_12345.txt"))
   (newline)
   (newline)
 
@@ -56,7 +59,7 @@
   (newline)
 
   (display "Is directory? ")
-  (display (directory? "/tmp"))
+  (display (directory? "."))
   (newline)
   (newline)
 
@@ -79,7 +82,7 @@
   (display "---")
   (newline)
 
-  (define copied-file "/var/run/user/1000/elle_example_copy.txt")
+  (define copied-file "./elle_example_copy.txt")
   (copy-file temp-file copied-file)
   (display "Copied file to: ")
   (display copied-file)
@@ -95,7 +98,7 @@
   (display "---")
   (newline)
 
-  (define renamed-file "/var/run/user/1000/elle_example_renamed.txt")
+  (define renamed-file "./elle_example_renamed.txt")
   (rename-file copied-file renamed-file)
   (display "Renamed to: ")
   (display renamed-file)
@@ -132,7 +135,7 @@
   (display (parent-directory full-path))
   (newline)
 
-  (define composed-path (join-path "/var" "run" "user" "1000" "test.txt"))
+  (define composed-path (join-path "." "test" "nested" "file.txt"))
   (display "Composed path: ")
   (display composed-path)
   (newline)
@@ -144,8 +147,8 @@
   (display "---")
   (newline)
 
-  (define test-dir "/var/run/user/1000/elle_example_dir")
-  (define sub-dir "/var/run/user/1000/elle_example_dir/subdir")
+  (define test-dir "./elle_example_dir")
+  (define sub-dir "./elle_example_dir/subdir")
 
   (create-directory test-dir)
   (display "Created directory: ")
@@ -168,7 +171,7 @@
   (display "---")
   (newline)
 
-  (define lines-file "/var/run/user/1000/elle_example_lines.txt")
+  (define lines-file "./elle_example_lines.txt")
   (write-file lines-file "Line 1: First line of text\nLine 2: Second line of text\nLine 3: Third line of text\n")
 
   (display "Lines in file:")
@@ -212,7 +215,7 @@
   (display "---")
   (newline)
 
-  (define config-file "/var/run/user/1000/elle_example_config.txt")
+  (define config-file "./elle_example_config.txt")
 
   ;; Write initial config
   (write-file config-file "# Elle Configuration File\nversion=1.0\nauthor=Elle Users\n")
@@ -243,8 +246,8 @@
   (display "---")
   (newline)
 
-  (define data-dir "/var/run/user/1000/elle_example_data")
-  (define archive-dir "/var/run/user/1000/elle_example_archive")
+  (define data-dir "./elle_example_data")
+  (define archive-dir "./elle_example_archive")
 
   (create-directory-all data-dir)
   (create-directory-all archive-dir)
