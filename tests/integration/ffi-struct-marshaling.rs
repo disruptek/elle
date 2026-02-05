@@ -212,7 +212,7 @@ fn test_struct_all_basic_types() {
         Value::Int(100000),
         Value::Int(10000000),
         Value::Float(1.5),
-        Value::Float(2.718),
+        Value::Float(std::f64::consts::E),
     ]));
 
     let cval = Marshal::marshal_struct_with_layout(&value, &layout).unwrap();
@@ -231,7 +231,7 @@ fn test_struct_all_basic_types() {
                 _ => panic!("Expected float"),
             }
             match &vec[6] {
-                Value::Float(f) => assert!((f - 2.718).abs() < 0.01),
+                Value::Float(f) => assert!((f - std::f64::consts::E).abs() < 0.01),
                 _ => panic!("Expected float"),
             }
         }

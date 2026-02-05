@@ -893,7 +893,7 @@ mod tests {
         let original = Value::Vector(std::rc::Rc::new(vec![
             Value::Int(100),
             Value::Int(5000),
-            Value::Float(3.14),
+            Value::Float(std::f64::consts::PI),
         ]));
 
         // Marshal
@@ -909,7 +909,7 @@ mod tests {
                 assert_eq!(vec[0], Value::Int(100));
                 assert_eq!(vec[1], Value::Int(5000));
                 match &vec[2] {
-                    Value::Float(f) => assert!((f - 3.14).abs() < 0.01),
+                    Value::Float(f) => assert!((f - std::f64::consts::PI).abs() < 0.01),
                     _ => panic!("Expected float"),
                 }
             }
@@ -955,7 +955,7 @@ mod tests {
             Value::Bool(true),
             Value::Int(65), // 'A'
             Value::Int(42),
-            Value::Float(2.718),
+            Value::Float(std::f64::consts::E),
         ]));
 
         let cval = Marshal::marshal_struct_with_layout(&value, &layout).unwrap();
@@ -967,7 +967,7 @@ mod tests {
                 assert_eq!(vec[1], Value::Int(65));
                 assert_eq!(vec[2], Value::Int(42));
                 match &vec[3] {
-                    Value::Float(f) => assert!((f - 2.718).abs() < 0.01),
+                    Value::Float(f) => assert!((f - std::f64::consts::E).abs() < 0.01),
                     _ => panic!("Expected float"),
                 }
             }
