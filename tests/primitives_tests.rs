@@ -368,3 +368,78 @@ fn test_arity_errors() {
     let eq = get_primitive(&vm, &mut symbols, "=");
     assert!(call_primitive(&eq, &[Value::Int(1)]).is_err());
 }
+
+// Exception handling tests
+#[test]
+fn test_exception_creation() {
+    let (vm, mut symbols) = setup();
+    let exception_fn = get_primitive(&vm, &mut symbols, "exception");
+
+    // Create exception with message
+    let exc = call_primitive(&exception_fn, &[Value::String("Error message".into())]).unwrap();
+    assert_eq!(exc.type_name(), "exception");
+}
+
+#[test]
+fn test_exception_message() {
+    let (vm, mut symbols) = setup();
+    let exception_fn = get_primitive(&vm, &mut symbols, "exception");
+    let message_fn = get_primitive(&vm, &mut symbols, "exception-message");
+
+    // Create exception and extract message
+    let exc = call_primitive(&exception_fn, &[Value::String("Test error".into())]).unwrap();
+    let msg = call_primitive(&message_fn, &[exc]).unwrap();
+
+    match msg {
+        Value::String(s) => assert_eq!(s.as_ref(), "Test error"),
+        _ => panic!("Expected string"),
+    }
+}
+
+#[test]
+fn test_exception_data() {
+    let (vm, mut symbols) = setup();
+    let exception_fn = get_primitive(&vm, &mut symbols, "exception");
+    let data_fn = get_primitive(&vm, &mut symbols, "exception-data");
+
+    // Exception without data
+    let exc1 = call_primitive(&exception_fn, &[Value::String("Error".into())]).unwrap();
+    let data1 = call_primitive(&data_fn, &[exc1]).unwrap();
+    assert_eq!(data1, Value::Nil);
+
+    // Exception with data
+    let exc2 = call_primitive(
+        &exception_fn,
+        &[Value::String("Error".into()), Value::Int(42)],
+    )
+    .unwrap();
+    let data2 = call_primitive(&data_fn, &[exc2]).unwrap();
+    assert_eq!(data2, Value::Int(42));
+}
+
+#[test]
+fn test_throw() {
+    let (vm, mut symbols) = setup();
+    let throw_fn = get_primitive(&vm, &mut symbols, "throw");
+
+    // throw with string message should produce error
+    let result = call_primitive(&throw_fn, &[Value::String("Test error".into())]);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "Test error");
+}
+
+#[test]
+fn test_exception_is_value() {
+    let (vm, mut symbols) = setup();
+    let exception_fn = get_primitive(&vm, &mut symbols, "exception");
+    let type_fn = get_primitive(&vm, &mut symbols, "type");
+
+    // Exception should be a value with type "exception"
+    let exc = call_primitive(&exception_fn, &[Value::String("Error".into())]).unwrap();
+    let type_val = call_primitive(&type_fn, &[exc]).unwrap();
+
+    match type_val {
+        Value::String(s) => assert_eq!(s.as_ref(), "exception"),
+        _ => panic!("Expected string type name"),
+    }
+}

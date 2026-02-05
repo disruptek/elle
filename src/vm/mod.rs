@@ -1,6 +1,6 @@
 use crate::compiler::bytecode::{Bytecode, Instruction};
 use crate::ffi::FFISubsystem;
-use crate::value::{cons, Value};
+use crate::value::{cons, Closure, Value};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -62,6 +62,7 @@ impl VM {
         }
     }
 
+    #[allow(dead_code)]
     fn with_stack_trace(&self, msg: String) -> String {
         let trace = self.format_stack_trace();
         format!("{}\nStack trace:\n{}", msg, trace)
@@ -88,10 +89,15 @@ impl VM {
     }
 
     pub fn execute(&mut self, bytecode: &Bytecode) -> Result<Value, String> {
-        self.execute_bytecode(&bytecode.instructions, &bytecode.constants)
+        self.execute_bytecode(&bytecode.instructions, &bytecode.constants, None)
     }
 
-    fn execute_bytecode(&mut self, bytecode: &[u8], constants: &[Value]) -> Result<Value, String> {
+    fn execute_bytecode(
+        &mut self,
+        bytecode: &[u8],
+        constants: &[Value],
+        closure_env: Option<&Rc<Vec<Value>>>,
+    ) -> Result<Value, String> {
         let mut ip = 0;
 
         loop {
@@ -154,9 +160,22 @@ impl VM {
 
                 Instruction::LoadUpvalue => {
                     let _depth = self.read_u8(bytecode, &mut ip);
-                    let _idx = self.read_u8(bytecode, &mut ip);
-                    // TODO: Implement proper upvalue handling
-                    return Err("Upvalues not yet implemented".to_string());
+                    let idx = self.read_u8(bytecode, &mut ip) as usize;
+
+                    // Load from closure environment
+                    if let Some(env) = closure_env {
+                        if idx < env.len() {
+                            self.stack.push(env[idx].clone());
+                        } else {
+                            return Err(format!(
+                                "Upvalue index {} out of bounds (env size: {})",
+                                idx,
+                                env.len()
+                            ));
+                        }
+                    } else {
+                        return Err("LoadUpvalue used outside of closure".to_string());
+                    }
                 }
 
                 Instruction::Pop => {
@@ -187,8 +206,12 @@ impl VM {
                                 return Err("Stack overflow".to_string());
                             }
 
-                            // Execute closure bytecode
-                            let result = self.execute_bytecode(&closure.bytecode, constants)?;
+                            // Execute closure bytecode with its captured environment
+                            let result = self.execute_bytecode(
+                                &closure.bytecode,
+                                constants,
+                                Some(&closure.env),
+                            )?;
 
                             self.call_depth -= 1;
                             result
@@ -200,8 +223,7 @@ impl VM {
                 }
 
                 Instruction::TailCall => {
-                    // For now, just do a regular call
-                    // TODO: Implement proper tail call optimization
+                    // Tail call optimization: return result directly to avoid stack growth
                     let arg_count = self.read_u8(bytecode, &mut ip) as usize;
                     let func = self.stack.pop().ok_or("Stack underflow")?;
 
@@ -211,15 +233,22 @@ impl VM {
                     }
                     args.reverse();
 
-                    let result = match func {
-                        Value::NativeFn(f) => f(&args)?,
+                    match func {
+                        Value::NativeFn(f) => {
+                            // Return native function result directly
+                            return f(&args);
+                        }
                         Value::Closure(closure) => {
-                            self.execute_bytecode(&closure.bytecode, constants)?
+                            // For closure tail calls, execute without incrementing call_depth
+                            // This prevents stack overflow on deep recursion
+                            return self.execute_bytecode(
+                                &closure.bytecode,
+                                constants,
+                                Some(&closure.env),
+                            );
                         }
                         _ => return Err(format!("Cannot call {:?}", func)),
                     };
-
-                    self.stack.push(result);
                 }
 
                 Instruction::Return => {
@@ -243,10 +272,30 @@ impl VM {
                 }
 
                 Instruction::MakeClosure => {
-                    let _idx = self.read_u16(bytecode, &mut ip);
-                    let _num_upvalues = self.read_u8(bytecode, &mut ip);
-                    // TODO: Implement proper closure creation
-                    return Err("Closures not yet fully implemented".to_string());
+                    let idx = self.read_u16(bytecode, &mut ip) as usize;
+                    let num_upvalues = self.read_u8(bytecode, &mut ip) as usize;
+
+                    // Get the closure template from constants
+                    if let Value::Closure(template) = &constants[idx] {
+                        // Collect captured values from stack
+                        let mut captured = Vec::with_capacity(num_upvalues);
+                        for _ in 0..num_upvalues {
+                            captured.push(self.stack.pop().ok_or("Stack underflow")?);
+                        }
+                        captured.reverse();
+
+                        // Create closure with captured values in environment
+                        let closure = Closure {
+                            bytecode: template.bytecode.clone(),
+                            arity: template.arity.clone(),
+                            env: Rc::new(captured),
+                            num_locals: template.num_locals,
+                        };
+
+                        self.stack.push(Value::Closure(Rc::new(closure)));
+                    } else {
+                        return Err("MakeClosure expects closure constant".to_string());
+                    }
                 }
 
                 Instruction::Cons => {

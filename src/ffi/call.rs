@@ -137,6 +137,7 @@ unsafe fn call_c_function(
 }
 
 // Extract i64 from CValue for integer arguments
+#[allow(dead_code)]
 trait ToI64 {
     fn to_i64(&self) -> i64;
 }

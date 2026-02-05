@@ -148,7 +148,7 @@ impl TypeChecker {
     pub fn validate_signature(
         arg_values: &[Value],
         arg_types: &[CType],
-        return_type: &CType,
+        _return_type: &CType,
     ) -> Result<(), FFIError> {
         if arg_values.len() != arg_types.len() {
             return Err(FFIError::new(

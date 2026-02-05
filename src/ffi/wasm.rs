@@ -89,7 +89,7 @@ pub mod native_impl {
 
     impl NativeFFILoader {
         /// Load .so file using libloading
-        pub fn load_library(path: &str) -> Result<u32, String> {
+        pub fn load_library(_path: &str) -> Result<u32, String> {
             // Actual implementation in ffi/loader.rs
             // This is just a stub for the wasm module structure
             Ok(1)

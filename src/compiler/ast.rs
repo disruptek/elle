@@ -73,13 +73,72 @@ pub enum Expr {
 
     /// Define (top-level only)
     Define { name: SymbolId, value: Box<Expr> },
+
+    /// While loop
+    While { cond: Box<Expr>, body: Box<Expr> },
+
+    /// For loop (for element in list, execute body)
+    For {
+        var: SymbolId,
+        iter: Box<Expr>,
+        body: Box<Expr>,
+    },
+
+    /// Pattern matching expression
+    Match {
+        value: Box<Expr>,
+        patterns: Vec<(Pattern, Expr)>,
+        default: Option<Box<Expr>>,
+    },
+
+    /// Try-catch exception handling
+    Try {
+        body: Box<Expr>,
+        catch: Option<(SymbolId, Box<Expr>)>, // variable name and handler
+        finally: Option<Box<Expr>>,
+    },
+
+    /// Throw exception
+    Throw { value: Box<Expr> },
+}
+
+/// Pattern for pattern matching
+#[derive(Debug, Clone, PartialEq)]
+pub enum Pattern {
+    /// Match any value (wildcard)
+    Wildcard,
+    /// Match specific literal
+    Literal(Value),
+    /// Match variable and bind it
+    Var(SymbolId),
+    /// Match nil
+    Nil,
+    /// Match list with head and tail: (h . t)
+    Cons {
+        head: Box<Pattern>,
+        tail: Box<Pattern>,
+    },
+    /// Match list with specific elements
+    List(Vec<Pattern>),
+    /// Guard pattern: pattern with condition
+    Guard {
+        pattern: Box<Pattern>,
+        condition: Box<Expr>,
+    },
 }
 
 impl Expr {
     pub fn is_tail_position(&self) -> bool {
         matches!(
             self,
-            Expr::Call { tail: true, .. } | Expr::If { .. } | Expr::Begin(_) | Expr::Let { .. }
+            Expr::Call { tail: true, .. }
+                | Expr::If { .. }
+                | Expr::Begin(_)
+                | Expr::Let { .. }
+                | Expr::While { .. }
+                | Expr::For { .. }
+                | Expr::Match { .. }
+                | Expr::Try { .. }
         )
     }
 }

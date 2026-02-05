@@ -167,6 +167,259 @@ impl Compiler {
                 self.bytecode.emit(Instruction::StoreGlobal);
                 self.bytecode.emit_u16(idx);
             }
+
+            Expr::While { cond, body } => {
+                // Implement while loop using conditional jumps
+                // Loop label - start of condition check
+                let loop_label = self.bytecode.instructions.len();
+
+                // Compile condition
+                self.compile_expr(cond, false);
+
+                // Jump to end if condition is false
+                self.bytecode.emit(Instruction::JumpIfFalse);
+                let exit_jump = self.bytecode.instructions.len();
+                self.bytecode.emit_i16(0); // Placeholder for exit offset
+
+                // Compile body
+                self.compile_expr(body, false);
+
+                // Pop the body result (we don't care about it)
+                self.bytecode.emit(Instruction::Pop);
+
+                // Jump back to loop condition
+                self.bytecode.emit(Instruction::Jump);
+                let loop_offset =
+                    (loop_label as i32) - (self.bytecode.instructions.len() as i32 + 2);
+                self.bytecode.emit_i16(loop_offset as i16);
+
+                // Patch the exit jump
+                let exit_offset =
+                    (self.bytecode.instructions.len() as i32) - (exit_jump as i32 + 2);
+                let offset_bytes = (exit_offset as i16).to_le_bytes();
+                self.bytecode.instructions[exit_jump] = offset_bytes[0];
+                self.bytecode.instructions[exit_jump + 1] = offset_bytes[1];
+
+                // Return nil after loop
+                self.bytecode.emit(Instruction::Nil);
+            }
+
+            Expr::For { var, iter, body } => {
+                // Implement for loop: (for x in lst (do-something-with x))
+                // Compile the iterable (list)
+                self.compile_expr(iter, false);
+
+                // Store the list in a temporary location and iterate through it
+                // We'll use the stack to track: car of list | rest of list | original list
+                let loop_label = self.bytecode.instructions.len();
+
+                // Check if list is nil (end of iteration)
+                self.bytecode.emit(Instruction::Dup); // Duplicate the list
+                self.bytecode.emit(Instruction::IsNil);
+                self.bytecode.emit(Instruction::JumpIfFalse);
+                let body_jump = self.bytecode.instructions.len();
+                self.bytecode.emit_i16(0); // Placeholder for jump to body
+
+                // If nil, exit loop
+                self.bytecode.emit(Instruction::Pop);
+                self.bytecode.emit(Instruction::Nil);
+                self.bytecode.emit(Instruction::Jump);
+                let exit_jump = self.bytecode.instructions.len();
+                self.bytecode.emit_i16(0); // Placeholder for exit
+
+                // Patch body jump
+                let body_offset =
+                    (self.bytecode.instructions.len() as i32) - (body_jump as i32 + 2);
+                let offset_bytes = (body_offset as i16).to_le_bytes();
+                self.bytecode.instructions[body_jump] = offset_bytes[0];
+                self.bytecode.instructions[body_jump + 1] = offset_bytes[1];
+
+                // Extract car (current element) and cdr (rest)
+                self.bytecode.emit(Instruction::Dup); // Duplicate list
+                self.bytecode.emit(Instruction::Car); // Get current element
+                                                      // Store in variable for body
+                let var_idx = self.bytecode.add_constant(Value::Symbol(*var));
+                self.bytecode.emit(Instruction::StoreGlobal);
+                self.bytecode.emit_u16(var_idx);
+
+                // Get rest for next iteration
+                self.bytecode.emit(Instruction::Cdr);
+
+                // Compile body
+                self.compile_expr(body, false);
+                self.bytecode.emit(Instruction::Pop); // Pop body result
+
+                // Loop back
+                self.bytecode.emit(Instruction::Jump);
+                let loop_offset =
+                    (loop_label as i32) - (self.bytecode.instructions.len() as i32 + 2);
+                self.bytecode.emit_i16(loop_offset as i16);
+
+                // Patch exit jump
+                let exit_offset =
+                    (self.bytecode.instructions.len() as i32) - (exit_jump as i32 + 2);
+                let offset_bytes = (exit_offset as i16).to_le_bytes();
+                self.bytecode.instructions[exit_jump] = offset_bytes[0];
+                self.bytecode.instructions[exit_jump + 1] = offset_bytes[1];
+            }
+
+            Expr::Match {
+                value,
+                patterns,
+                default,
+            } => {
+                // Compile the value to match against
+                self.compile_expr(value, false);
+                let mut exit_jumps = Vec::new();
+
+                // Try each pattern in sequence
+                for (pattern, body_expr) in patterns {
+                    let next_pattern_jump = self.compile_pattern_check(pattern);
+
+                    // Pattern matched - pop the value and execute body
+                    self.bytecode.emit(Instruction::Pop);
+                    self.compile_expr(body_expr, tail);
+
+                    // Jump to end of match
+                    self.bytecode.emit(Instruction::Jump);
+                    exit_jumps.push(self.bytecode.instructions.len());
+                    self.bytecode.emit_i16(0);
+
+                    // Patch the next_pattern_jump to skip to here if pattern doesn't match
+                    let skip_to = self.bytecode.instructions.len();
+                    for jump_idx in next_pattern_jump {
+                        let offset = (skip_to as i32) - (jump_idx as i32 + 2);
+                        let offset_bytes = (offset as i16).to_le_bytes();
+                        self.bytecode.instructions[jump_idx] = offset_bytes[0];
+                        self.bytecode.instructions[jump_idx + 1] = offset_bytes[1];
+                    }
+                }
+
+                // Default/fallback case
+                if let Some(default_expr) = default {
+                    self.compile_expr(default_expr, tail);
+                } else {
+                    self.bytecode.emit(Instruction::Nil);
+                }
+
+                // Patch all exit jumps to the end
+                let end_pos = self.bytecode.instructions.len();
+                for jump_idx in exit_jumps {
+                    let offset = (end_pos as i32) - (jump_idx as i32 + 2);
+                    let offset_bytes = (offset as i16).to_le_bytes();
+                    self.bytecode.instructions[jump_idx] = offset_bytes[0];
+                    self.bytecode.instructions[jump_idx + 1] = offset_bytes[1];
+                }
+            }
+
+            Expr::Try {
+                body,
+                catch,
+                finally,
+            } => {
+                // Try-catch implementation
+                // For Phase 2, this is a simplified version that compiles the body
+                // Full exception unwinding requires VM-level support
+
+                // Compile the body expression
+                self.compile_expr(body, false);
+
+                // If there's a catch handler
+                if let Some((_var_name, handler_expr)) = catch {
+                    // In a full implementation:
+                    // - Check if body returned an Exception
+                    // - If yes, bind the exception to var_name and execute handler
+                    // - If no, skip the handler
+                    // For Phase 2, we just note this needs exception frame setup in VM
+
+                    // Skip handler for now (would be conditional based on exception)
+                    self.compile_expr(handler_expr, tail);
+                } else {
+                    // No catch handler, just keep the value
+                }
+
+                // Finally block: always executed after try/catch
+                if let Some(finally_expr) = finally {
+                    // Save the result
+                    self.bytecode.emit(Instruction::Dup);
+                    self.compile_expr(finally_expr, false);
+                    self.bytecode.emit(Instruction::Pop);
+                    // The original result stays on stack
+                }
+            }
+
+            Expr::Throw { value } => {
+                // Throw implementation: create and return an exception value
+                // In a full implementation, this would unwind the stack to the nearest handler
+                // For Phase 2, we compile the value that will become the exception
+                self.compile_expr(value, false);
+            }
+        }
+    }
+
+    /// Compile pattern matching check. Returns list of jump positions to patch if pattern fails.
+    fn compile_pattern_check(&mut self, pattern: &super::ast::Pattern) -> Vec<usize> {
+        use super::ast::Pattern;
+
+        match pattern {
+            Pattern::Wildcard => {
+                // Wildcard matches anything, no check needed
+                Vec::new()
+            }
+            Pattern::Nil => {
+                // Check if value is nil
+                self.bytecode.emit(Instruction::Dup);
+                self.bytecode.emit(Instruction::Nil);
+                self.bytecode.emit(Instruction::Eq);
+                self.bytecode.emit(Instruction::JumpIfFalse);
+                let fail_jump = self.bytecode.instructions.len();
+                self.bytecode.emit_i16(0);
+                vec![fail_jump]
+            }
+            Pattern::Literal(val) => {
+                // Check if value equals literal
+                self.bytecode.emit(Instruction::Dup);
+                let const_idx = self.bytecode.add_constant(val.clone());
+                self.bytecode.emit(Instruction::LoadConst);
+                self.bytecode.emit_u16(const_idx);
+                self.bytecode.emit(Instruction::Eq);
+                self.bytecode.emit(Instruction::JumpIfFalse);
+                let fail_jump = self.bytecode.instructions.len();
+                self.bytecode.emit_i16(0);
+                vec![fail_jump]
+            }
+            Pattern::Var(_var_id) => {
+                // Variable pattern always matches - store the value
+                // In Phase 2, we'll just accept any value (binding handled later)
+                Vec::new()
+            }
+            Pattern::Cons { head: _, tail: _ } => {
+                // Cons pattern: check if it's a pair/cons cell
+                self.bytecode.emit(Instruction::Dup);
+                self.bytecode.emit(Instruction::IsPair);
+                self.bytecode.emit(Instruction::JumpIfFalse);
+                let fail_jump = self.bytecode.instructions.len();
+                self.bytecode.emit_i16(0);
+                // Full cons pattern matching would recursively compile head/tail patterns
+                // For Phase 2, just check if it's a pair
+                vec![fail_jump]
+            }
+            Pattern::List(_patterns) => {
+                // List pattern: for Phase 2, just check if it's a list
+                // Full implementation would check length and match elements
+                // For now, accept any value
+                Vec::new()
+            }
+            Pattern::Guard {
+                pattern: inner,
+                condition: _,
+            } => {
+                // Guard pattern: check inner pattern first, then condition
+                let fails = self.compile_pattern_check(inner);
+                // Full guard implementation would evaluate the condition
+                // For Phase 2, just check the pattern
+                fails
+            }
         }
     }
 

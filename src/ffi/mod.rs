@@ -4,7 +4,8 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```lisp
+//! ; Load a C library and call functions from Elle
 //! (load-library "/lib/x86_64-linux-gnu/libc.so.6")
 //! (strlen "hello")  ; => 5
 //! ```

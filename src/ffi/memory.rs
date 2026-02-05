@@ -130,10 +130,10 @@ pub struct MemoryStats {
 
 /// Register a memory allocation
 pub fn register_allocation(
-    ptr: *const c_void,
-    type_name: &str,
-    size: usize,
-    owner: MemoryOwner,
+    _ptr: *const c_void,
+    _type_name: &str,
+    _size: usize,
+    _owner: MemoryOwner,
 ) -> u32 {
     // In a full implementation, this would update a tracker in the VM
     // For now, just assign a unique ID

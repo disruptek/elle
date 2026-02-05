@@ -42,6 +42,9 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
     register_fn(vm, symbols, "length", prim_length);
     register_fn(vm, symbols, "append", prim_append);
     register_fn(vm, symbols, "reverse", prim_reverse);
+    register_fn(vm, symbols, "map", prim_map);
+    register_fn(vm, symbols, "filter", prim_filter);
+    register_fn(vm, symbols, "fold", prim_fold);
 
     // Type conversions
     register_fn(vm, symbols, "int", prim_to_int);
@@ -180,6 +183,12 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
         "with-ffi-safety-checks",
         ffi_primitives::prim_with_ffi_safety_checks_wrapper,
     );
+
+    // Exception handling
+    register_fn(vm, symbols, "throw", prim_throw);
+    register_fn(vm, symbols, "exception", prim_exception);
+    register_fn(vm, symbols, "exception-message", prim_exception_message);
+    register_fn(vm, symbols, "exception-data", prim_exception_data);
 }
 
 fn register_fn(
@@ -868,6 +877,7 @@ fn prim_type(args: &[Value]) -> Result<Value, String> {
         Value::NativeFn(_) => "native-function",
         Value::LibHandle(_) => "library-handle",
         Value::CHandle(_) => "c-handle",
+        Value::Exception(_) => "exception",
     };
 
     Ok(Value::String(Rc::from(type_name)))
@@ -1148,5 +1158,136 @@ fn prim_odd(args: &[Value]) -> Result<Value, String> {
     match &args[0] {
         Value::Int(n) => Ok(Value::Bool(n % 2 != 0)),
         _ => Err("odd? requires an integer".to_string()),
+    }
+}
+
+// Higher-order functions with native functions (work without VM access)
+fn prim_map(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("map requires exactly 2 arguments (function list)".to_string());
+    }
+
+    match &args[0] {
+        Value::NativeFn(f) => {
+            let vec = args[1].list_to_vec()?;
+            let results: Result<Vec<Value>, String> = vec.iter().map(|v| f(&[v.clone()])).collect();
+            Ok(list(results?))
+        }
+        Value::Closure(_) => {
+            Err("map with closures not yet supported (use native functions or ffi_map)".to_string())
+        }
+        _ => Err("map requires a function as first argument".to_string()),
+    }
+}
+
+fn prim_filter(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("filter requires exactly 2 arguments (predicate list)".to_string());
+    }
+
+    match &args[0] {
+        Value::NativeFn(f) => {
+            let vec = args[1].list_to_vec()?;
+            let mut results = Vec::new();
+            for v in vec {
+                let result = f(&[v.clone()])?;
+                if result != Value::Nil && result != Value::Bool(false) {
+                    results.push(v);
+                }
+            }
+            Ok(list(results))
+        }
+        Value::Closure(_) => Err(
+            "filter with closures not yet supported (use native functions or ffi_filter)"
+                .to_string(),
+        ),
+        _ => Err("filter requires a predicate function as first argument".to_string()),
+    }
+}
+
+fn prim_fold(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 3 {
+        return Err("fold requires exactly 3 arguments (function initial list)".to_string());
+    }
+
+    match &args[0] {
+        Value::NativeFn(f) => {
+            let mut accumulator = args[1].clone();
+            let vec = args[2].list_to_vec()?;
+            for v in vec {
+                accumulator = f(&[accumulator, v])?;
+            }
+            Ok(accumulator)
+        }
+        Value::Closure(_) => Err(
+            "fold with closures not yet supported (use native functions or ffi_fold)".to_string(),
+        ),
+        _ => Err("fold requires a function as first argument".to_string()),
+    }
+}
+
+// Exception handling primitives
+fn prim_throw(args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err("throw requires at least 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::String(msg) => Err(msg.to_string()),
+        Value::Exception(exc) => Err(exc.message.to_string()),
+        other => Err(format!(
+            "throw requires a string or exception, got {}",
+            other.type_name()
+        )),
+    }
+}
+
+fn prim_exception(args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err("exception requires at least 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::String(msg) => {
+            use crate::value::Exception;
+            let exc = if args.len() > 1 {
+                Exception::with_data(msg.to_string(), args[1].clone())
+            } else {
+                Exception::new(msg.to_string())
+            };
+            Ok(Value::Exception(Rc::new(exc)))
+        }
+        _ => Err("exception requires a string as first argument".to_string()),
+    }
+}
+
+fn prim_exception_message(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("exception-message requires exactly 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::Exception(exc) => Ok(Value::String(exc.message.clone())),
+        _ => Err(format!(
+            "exception-message requires an exception, got {}",
+            args[0].type_name()
+        )),
+    }
+}
+
+fn prim_exception_data(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("exception-data requires exactly 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::Exception(exc) => match &exc.data {
+            Some(data) => Ok((**data).clone()),
+            None => Ok(Value::Nil),
+        },
+        _ => Err(format!(
+            "exception-data requires an exception, got {}",
+            args[0].type_name()
+        )),
     }
 }

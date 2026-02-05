@@ -3,7 +3,7 @@
 //! This module parses C header files and extracts type information,
 //! function signatures, constants, and enums for auto-binding generation.
 
-use super::types::{CType, EnumId, EnumLayout, EnumVariant, FunctionSignature, StructId};
+use super::types::{CType, FunctionSignature};
 use std::collections::HashMap;
 use std::path::PathBuf;
 

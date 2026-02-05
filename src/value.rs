@@ -84,6 +84,33 @@ impl CHandle {
     }
 }
 
+/// Exception value for error handling
+#[derive(Debug, Clone, PartialEq)]
+pub struct Exception {
+    /// Error message
+    pub message: Rc<str>,
+    /// Optional error data
+    pub data: Option<Rc<Value>>,
+}
+
+impl Exception {
+    /// Create a new exception with a message
+    pub fn new(message: impl Into<String>) -> Self {
+        Exception {
+            message: message.into().into(),
+            data: None,
+        }
+    }
+
+    /// Create a new exception with message and data
+    pub fn with_data(message: impl Into<String>, data: Value) -> Self {
+        Exception {
+            message: message.into().into(),
+            data: Some(Rc::new(data)),
+        }
+    }
+}
+
 /// Core Lisp value type
 #[derive(Clone)]
 pub enum Value {
@@ -100,6 +127,8 @@ pub enum Value {
     // FFI types
     LibHandle(LibHandle),
     CHandle(CHandle),
+    // Exception handling
+    Exception(Rc<Exception>),
 }
 
 impl PartialEq for Value {
@@ -117,6 +146,7 @@ impl PartialEq for Value {
             (Value::NativeFn(_), Value::NativeFn(_)) => false, // Functions are never equal
             (Value::LibHandle(a), Value::LibHandle(b)) => a == b,
             (Value::CHandle(a), Value::CHandle(b)) => a == b,
+            (Value::Exception(a), Value::Exception(b)) => a == b,
             _ => false,
         }
     }
@@ -136,7 +166,10 @@ impl Value {
     pub fn as_int(&self) -> Result<i64, String> {
         match self {
             Value::Int(n) => Ok(*n),
-            _ => Err(format!("Expected integer, got {:?}", self)),
+            _ => Err(format!(
+                "Type error: expected integer, got {}",
+                self.type_name()
+            )),
         }
     }
 
@@ -144,35 +177,50 @@ impl Value {
         match self {
             Value::Float(f) => Ok(*f),
             Value::Int(n) => Ok(*n as f64),
-            _ => Err(format!("Expected number, got {:?}", self)),
+            _ => Err(format!(
+                "Type error: expected number, got {}",
+                self.type_name()
+            )),
         }
     }
 
     pub fn as_symbol(&self) -> Result<SymbolId, String> {
         match self {
             Value::Symbol(id) => Ok(*id),
-            _ => Err(format!("Expected symbol, got {:?}", self)),
+            _ => Err(format!(
+                "Type error: expected symbol, got {}",
+                self.type_name()
+            )),
         }
     }
 
     pub fn as_cons(&self) -> Result<&Rc<Cons>, String> {
         match self {
             Value::Cons(cons) => Ok(cons),
-            _ => Err(format!("Expected cons, got {:?}", self)),
+            _ => Err(format!(
+                "Type error: expected list, got {}",
+                self.type_name()
+            )),
         }
     }
 
     pub fn as_vector(&self) -> Result<&Rc<Vec<Value>>, String> {
         match self {
             Value::Vector(vec) => Ok(vec),
-            _ => Err(format!("Expected vector, got {:?}", self)),
+            _ => Err(format!(
+                "Type error: expected vector, got {}",
+                self.type_name()
+            )),
         }
     }
 
     pub fn as_closure(&self) -> Result<&Rc<Closure>, String> {
         match self {
             Value::Closure(closure) => Ok(closure),
-            _ => Err(format!("Expected closure, got {:?}", self)),
+            _ => Err(format!(
+                "Type error: expected closure, got {}",
+                self.type_name()
+            )),
         }
     }
 
@@ -201,6 +249,25 @@ impl Value {
                 }
                 _ => return Err("Not a proper list".to_string()),
             }
+        }
+    }
+
+    /// Get a human-readable type name
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Value::Nil => "nil",
+            Value::Bool(_) => "boolean",
+            Value::Int(_) => "integer",
+            Value::Float(_) => "float",
+            Value::Symbol(_) => "symbol",
+            Value::String(_) => "string",
+            Value::Cons(_) => "list",
+            Value::Vector(_) => "vector",
+            Value::Closure(_) => "closure",
+            Value::NativeFn(_) => "native-function",
+            Value::LibHandle(_) => "library-handle",
+            Value::CHandle(_) => "c-handle",
+            Value::Exception(_) => "exception",
         }
     }
 }
@@ -252,6 +319,7 @@ impl fmt::Debug for Value {
             Value::NativeFn(_) => write!(f, "<native-fn>"),
             Value::LibHandle(h) => write!(f, "<library-handle:{}>", h.0),
             Value::CHandle(h) => write!(f, "<c-handle:{}>", h.id),
+            Value::Exception(exc) => write!(f, "<exception: {}>", exc.message),
         }
     }
 }
@@ -260,6 +328,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::String(s) => write!(f, "{}", s),
+            Value::Exception(exc) => write!(f, "Exception: {}", exc.message),
             _ => write!(f, "{:?}", self),
         }
     }

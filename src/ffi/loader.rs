@@ -2,7 +2,6 @@
 //!
 //! Supports loading .so files on Linux and provides stubs for other platforms.
 
-use std::ffi::OsStr;
 use std::path::Path;
 
 /// Handle to a loaded shared library.
@@ -58,7 +57,8 @@ impl LibraryHandle {
 /// * `Err(message)` - If file not found or not a valid library
 ///
 /// # Example
-/// ```ignore
+/// ```text
+/// Load a library and get a symbol:
 /// let lib = load_library("/lib/x86_64-linux-gnu/libc.so.6")?;
 /// let strlen_ptr = lib.get_symbol("strlen")?;
 /// ```

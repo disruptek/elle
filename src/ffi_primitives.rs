@@ -12,8 +12,6 @@ use crate::ffi::types::{CType, EnumId, EnumLayout, EnumVariant, FunctionSignatur
 use crate::value::{LibHandle, Value};
 use crate::vm::VM;
 use std::cell::RefCell;
-
-/// Thread-local VM reference for FFI primitives
 thread_local! {
     static VM_CONTEXT: RefCell<Option<*mut VM>> = RefCell::new(None);
 }
@@ -401,7 +399,7 @@ pub fn prim_type_check(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
 /// (null-pointer? value) -> bool
 ///
 /// Checks if a value represents a null pointer.
-pub fn prim_null_pointer(vm: &mut VM, args: &[Value]) -> Result<Value, String> {
+pub fn prim_null_pointer(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
     if args.is_empty() {
         return Err("null-pointer? requires at least 1 argument".to_string());
     }
