@@ -225,6 +225,62 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                         })
                     }
 
+                    "throw" => {
+                        // Syntax: (throw <exception>)
+                        // Throw is a special form that compiles to a function call
+                        // The throw primitive will convert the exception to a Rust error
+                        if list.len() != 2 {
+                            return Err("throw requires exactly 1 argument".to_string());
+                        }
+                        // Compile as a regular function call to the throw primitive
+                        let func = Box::new(Expr::GlobalVar(first.as_symbol()?));
+                        let args = vec![value_to_expr(&list[1], symbols)?];
+                        Ok(Expr::Call {
+                            func,
+                            args,
+                            tail: false,
+                        })
+                    }
+
+                    "defmacro" | "define-macro" => {
+                        // Syntax: (defmacro name (params...) body)
+                        //      or (define-macro name (params...) body)
+                        if list.len() != 4 {
+                            return Err(
+                                "defmacro requires exactly 3 arguments (name, parameters, body)"
+                                    .to_string(),
+                            );
+                        }
+                        let name = list[1].as_symbol()?;
+                        let params_val = &list[2];
+
+                        // Parse parameter list
+                        let params = if params_val.is_list() {
+                            let param_vec = params_val.list_to_vec()?;
+                            param_vec
+                                .iter()
+                                .map(|v| v.as_symbol())
+                                .collect::<Result<Vec<_>, _>>()?
+                        } else {
+                            return Err("Macro parameters must be a list".to_string());
+                        };
+
+                        // Store macro body as source code for later expansion
+                        let body_str = format!("{}", list[3]);
+
+                        // Register the macro in the symbol table
+                        use crate::symbol::MacroDef;
+                        symbols.define_macro(MacroDef {
+                            name,
+                            params: params.clone(),
+                            body: body_str,
+                        });
+
+                        let body = Box::new(value_to_expr(&list[3], symbols)?);
+
+                        Ok(Expr::DefMacro { name, params, body })
+                    }
+
                     _ => {
                         // Check if it's a macro call
                         if let Value::Symbol(sym_id) = first {
