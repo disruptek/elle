@@ -228,12 +228,13 @@ fn test_handler_marshal_float_without_handler() {
     let registry = HandlerRegistry::new();
 
     // Test with float type
+    let pi = std::f64::consts::PI;
     let result =
-        HandlerMarshal::elle_to_c_with_handlers(&Value::Float(3.14), &CType::Float, &registry);
+        HandlerMarshal::elle_to_c_with_handlers(&Value::Float(pi), &CType::Float, &registry);
     assert!(result.is_ok());
     let cval = result.unwrap();
     match cval {
-        CValue::Float(f) => assert!((f - 3.14).abs() < 0.0001),
+        CValue::Float(f) => assert!((f - pi).abs() < 0.0001),
         _ => panic!("Expected float CValue"),
     }
 }
