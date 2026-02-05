@@ -14,6 +14,9 @@ mod reader {
 mod primitives {
     include!("primitives.rs");
 }
+mod shebang {
+    include!("shebang.rs");
+}
 mod exception_handling {
     include!("exception_handling.rs");
 }
@@ -25,4 +28,7 @@ mod loops {
 }
 mod exception_filtering {
     include!("exception_filtering.rs");
+}
+mod closures_and_lambdas {
+    include!("closures_and_lambdas.rs");
 }
