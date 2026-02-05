@@ -300,9 +300,10 @@ impl VM {
                             }
 
                             // Execute closure bytecode with its captured environment
+                            // Use the closure's own constants array, not the parent's
                             let result = self.execute_bytecode(
                                 &closure.bytecode,
-                                constants,
+                                &closure.constants,
                                 Some(&closure.env),
                             )?;
 
@@ -383,6 +384,7 @@ impl VM {
                             arity: template.arity.clone(),
                             env: Rc::new(captured),
                             num_locals: template.num_locals,
+                            constants: template.constants.clone(),
                         };
 
                         self.stack.push(Value::Closure(Rc::new(closure)));

@@ -118,21 +118,65 @@ pub fn prim_mul(args: &[Value]) -> Result<Value, String> {
 }
 
 pub fn prim_div(args: &[Value]) -> Result<Value, String> {
-    if args.len() != 2 {
-        return Err("/ requires exactly 2 arguments".to_string());
+    if args.is_empty() {
+        return Err("/ requires at least 1 argument".to_string());
     }
 
-    match (&args[0], &args[1]) {
-        (Value::Int(a), Value::Int(b)) => {
-            if *b == 0 {
-                return Err("Division by zero".to_string());
+    if args.len() == 1 {
+        // Reciprocal
+        return match &args[0] {
+            Value::Int(n) => {
+                if *n == 0 {
+                    Err("Division by zero".to_string())
+                } else {
+                    Ok(Value::Float(1.0 / (*n as f64)))
+                }
             }
-            Ok(Value::Int(a / b))
+            Value::Float(f) => Ok(Value::Float(1.0 / f)),
+            _ => Err("Type error: / requires numbers".to_string()),
+        };
+    }
+
+    let mut is_float = false;
+    let (result, float_result) = match &args[0] {
+        Value::Int(n) => (*n, 0.0),
+        Value::Float(f) => {
+            is_float = true;
+            (0, *f)
         }
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
-        (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 / b)),
-        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a / *b as f64)),
-        _ => Err("Type error: / requires numbers".to_string()),
+        _ => Err("Type error: / requires numbers".to_string())?,
+    };
+
+    let mut result = result;
+    let mut float_result = float_result;
+
+    for arg in &args[1..] {
+        match arg {
+            Value::Int(n) => {
+                if *n == 0 {
+                    return Err("Division by zero".to_string());
+                }
+                if is_float {
+                    float_result /= *n as f64;
+                } else {
+                    result /= n;
+                }
+            }
+            Value::Float(f) => {
+                if !is_float {
+                    is_float = true;
+                    float_result = result as f64;
+                }
+                float_result /= f;
+            }
+            _ => return Err("Type error: / requires numbers".to_string()),
+        }
+    }
+
+    if is_float {
+        Ok(Value::Float(float_result))
+    } else {
+        Ok(Value::Int(result))
     }
 }
 

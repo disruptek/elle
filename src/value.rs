@@ -62,6 +62,7 @@ pub struct Closure {
     pub arity: Arity,
     pub env: Rc<Vec<Value>>,
     pub num_locals: usize,
+    pub constants: Rc<Vec<Value>>,
 }
 
 /// FFI library handle

@@ -1,20 +1,12 @@
 use elle::compiler::compile::value_to_expr;
 use elle::ffi_primitives;
 use elle::{compile, init_stdlib, read_str, register_primitives, SymbolTable, VM};
+use std::env;
+use std::fs;
 use std::io::{self, Write};
 
 fn print_welcome() {
-    println!("╔═══════════════════════════════════════╗");
-    println!("║        Elle v0.1.0 - Lisp Interpreter║");
-    println!("╚═══════════════════════════════════════╝");
-    println!();
-    println!("Quick commands:");
-    println!("  (exit)          - Exit the REPL");
-    println!("  (help)          - Show this help");
-    println!("  (+ 1 2)         - Simple arithmetic");
-    println!("  (list 1 2 3)    - Create a list");
-    println!("  (type 42)       - Get type name");
-    println!();
+    println!("Elle v0.1.0 - Lisp Interpreter (type (help) for commands)");
 }
 
 fn print_error_context(input: &str, _msg: &str, line: usize, col: usize) {
@@ -59,19 +51,96 @@ fn print_help() {
     println!();
 }
 
-fn main() {
-    let mut vm = VM::new();
-    let mut symbols = SymbolTable::new();
+fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<(), String> {
+    let contents =
+        fs::read_to_string(filename).map_err(|e| format!("Failed to read file: {}", e))?;
 
-    // Register primitive functions
-    register_primitives(&mut vm, &mut symbols);
+    // First pass: collect all top-level definitions to pre-register them
+    // This allows recursive functions to reference themselves
+    {
+        let mut lexer = elle::reader::Lexer::new(&contents);
+        let mut temp_tokens = Vec::new();
+        loop {
+            match lexer.next_token() {
+                Ok(Some(token)) => temp_tokens.push(token),
+                Ok(None) => break,
+                Err(_) => break,
+            }
+        }
 
-    // Initialize standard library modules
-    init_stdlib(&mut vm, &mut symbols);
+        let mut temp_reader = elle::reader::Reader::new(temp_tokens);
+        loop {
+            match temp_reader.read(symbols) {
+                Ok(value) => {
+                    // Check if this is a define
+                    if let Ok(list) = value.list_to_vec() {
+                        if list.len() >= 3 {
+                            if let elle::value::Value::Symbol(sym) = &list[0] {
+                                let name = symbols.name(*sym).unwrap_or("");
+                                if name == "define" {
+                                    if let Ok(def_name) = list[1].as_symbol() {
+                                        // Pre-register the symbol as nil so forward references work
+                                        vm.set_global(def_name.0, elle::value::Value::Nil);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    }
 
-    // Set VM context for FFI primitives
-    ffi_primitives::set_vm_context(&mut vm as *mut VM);
+    // Second pass: execute all expressions
+    let mut lexer = elle::reader::Lexer::new(&contents);
+    let mut tokens = Vec::new();
+    loop {
+        match lexer.next_token() {
+            Ok(Some(token)) => tokens.push(token),
+            Ok(None) => break,
+            Err(e) => return Err(format!("Lexer error: {}", e)),
+        }
+    }
 
+    let mut reader = elle::reader::Reader::new(tokens);
+    loop {
+        match reader.read(symbols) {
+            Ok(value) => {
+                // Compile
+                let expr = match value_to_expr(&value, symbols) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        eprintln!("✗ Compilation error: {}", e);
+                        continue;
+                    }
+                };
+
+                let bytecode = compile(&expr);
+
+                // Execute
+                match vm.execute(&bytecode) {
+                    Ok(result) => {
+                        if !result.is_nil() {
+                            println!("⟹ {:?}", result);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("✗ Runtime error: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("✗ Parse error: {}", e);
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn run_repl(vm: &mut VM, symbols: &mut SymbolTable) {
     print_welcome();
 
     loop {
@@ -101,7 +170,7 @@ fn main() {
         }
 
         // Read
-        let value = match read_str(input, &mut symbols) {
+        let value = match read_str(input, symbols) {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("✗ Parse error: {}", e);
@@ -111,7 +180,7 @@ fn main() {
         };
 
         // Compile
-        let expr = match value_to_expr(&value, &symbols) {
+        let expr = match value_to_expr(&value, symbols) {
             Ok(e) => e,
             Err(e) => {
                 eprintln!("✗ Compilation error: {}", e);
@@ -133,10 +202,40 @@ fn main() {
             }
         }
     }
+}
+
+fn main() {
+    let mut vm = VM::new();
+    let mut symbols = SymbolTable::new();
+
+    // Register primitive functions
+    register_primitives(&mut vm, &mut symbols);
+
+    // Initialize standard library modules
+    init_stdlib(&mut vm, &mut symbols);
+
+    // Set VM context for FFI primitives
+    ffi_primitives::set_vm_context(&mut vm as *mut VM);
+
+    // Check for command-line arguments
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 {
+        // Run file(s)
+        for filename in &args[1..] {
+            if let Err(e) = run_file(filename, &mut vm, &mut symbols) {
+                eprintln!("Error: {}", e);
+            }
+        }
+    } else {
+        // Run REPL
+        run_repl(&mut vm, &mut symbols);
+    }
 
     // Clear VM context
     ffi_primitives::clear_vm_context();
 
-    println!();
-    println!("Goodbye!");
+    if args.len() == 1 {
+        println!();
+        println!("Goodbye!");
+    }
 }

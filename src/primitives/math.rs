@@ -50,14 +50,27 @@ pub fn prim_tan(args: &[Value]) -> Result<Value, String> {
 }
 
 pub fn prim_log(args: &[Value]) -> Result<Value, String> {
-    if args.len() != 1 {
-        return Err("log requires exactly 1 argument".to_string());
+    if args.len() < 1 || args.len() > 2 {
+        return Err("log requires 1 or 2 arguments".to_string());
     }
 
-    match &args[0] {
-        Value::Int(n) => Ok(Value::Float((*n as f64).ln())),
-        Value::Float(f) => Ok(Value::Float(f.ln())),
-        _ => Err("Type error: log requires a number".to_string()),
+    let value = match &args[0] {
+        Value::Int(n) => *n as f64,
+        Value::Float(f) => *f,
+        _ => return Err("log requires numbers".to_string()),
+    };
+
+    if args.len() == 1 {
+        // Natural logarithm
+        Ok(Value::Float(value.ln()))
+    } else {
+        // Logarithm with specified base
+        let base = match &args[1] {
+            Value::Int(n) => *n as f64,
+            Value::Float(f) => *f,
+            _ => return Err("log requires numbers".to_string()),
+        };
+        Ok(Value::Float(value.log(base)))
     }
 }
 

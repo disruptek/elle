@@ -115,15 +115,28 @@ impl Compiler {
                 lambda_compiler.compile_expr(body, true);
                 lambda_compiler.bytecode.emit(Instruction::Return);
 
-                // Create closure value
+                // Create closure value with environment
+                // Note: env is empty here, actual capturing happens at runtime via MakeClosure instruction
                 let closure = Closure {
                     bytecode: Rc::new(lambda_compiler.bytecode.instructions),
                     arity: crate::value::Arity::Exact(params.len()),
-                    env: Rc::new(Vec::new()),
-                    num_locals: params.len(),
+                    env: Rc::new(Vec::new()), // Will be populated by VM when closure is created
+                    num_locals: params.len() + captures.len(),
+                    constants: Rc::new(lambda_compiler.bytecode.constants),
                 };
 
                 let idx = self.bytecode.add_constant(Value::Closure(Rc::new(closure)));
+
+                // Emit captured values onto the stack (in order)
+                // These will be stored in the closure's environment by the VM
+                for (sym, _depth, _index) in captures {
+                    // Load the captured variable
+                    let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                    self.bytecode.emit(Instruction::LoadGlobal);
+                    self.bytecode.emit_u16(sym_idx);
+                }
+
+                // Create closure with captured values
                 self.bytecode.emit(Instruction::MakeClosure);
                 self.bytecode.emit_u16(idx);
                 self.bytecode.emit_byte(captures.len() as u8);
@@ -314,29 +327,14 @@ impl Compiler {
 
             Expr::Try {
                 body,
-                catch,
+                catch: _,
                 finally,
             } => {
                 // Try-catch implementation
-                // For Phase 2, this is a simplified version that compiles the body
-                // Full exception unwinding requires VM-level support
+                // For now: compile body, then optionally execute finally
+                // Full exception handling requires VM-level support for stack unwinding
 
-                // Compile the body expression
                 self.compile_expr(body, false);
-
-                // If there's a catch handler
-                if let Some((_var_name, handler_expr)) = catch {
-                    // In a full implementation:
-                    // - Check if body returned an Exception
-                    // - If yes, bind the exception to var_name and execute handler
-                    // - If no, skip the handler
-                    // For Phase 2, we just note this needs exception frame setup in VM
-
-                    // Skip handler for now (would be conditional based on exception)
-                    self.compile_expr(handler_expr, tail);
-                } else {
-                    // No catch handler, just keep the value
-                }
 
                 // Finally block: always executed after try/catch
                 if let Some(finally_expr) = finally {
@@ -346,13 +344,13 @@ impl Compiler {
                     self.bytecode.emit(Instruction::Pop);
                     // The original result stays on stack
                 }
-            }
 
-            Expr::Throw { value } => {
-                // Throw implementation: create and return an exception value
-                // In a full implementation, this would unwind the stack to the nearest handler
-                // For Phase 2, we compile the value that will become the exception
-                self.compile_expr(value, false);
+                // NOTE: Catch handlers will need VM support to:
+                // 1. Check if body produced an exception
+                // 2. Unwind stack to try frame
+                // 3. Bind exception to catch variable
+                // 4. Execute handler
+                // For now, parsing works but catch is not yet functional
             }
 
             Expr::Quote(expr) => {
@@ -401,6 +399,12 @@ impl Compiler {
             Expr::ModuleRef { module: _, name: _ } => {
                 // Module-qualified reference: resolved during compilation
                 // For Phase 2, treat as regular global variable lookup
+                self.bytecode.emit(Instruction::Nil);
+            }
+
+            Expr::Throw { value: _ } => {
+                // Throw is compiled as a function call during value_to_expr
+                // This case should never be reached, but we handle it for exhaustiveness
                 self.bytecode.emit(Instruction::Nil);
             }
         }
@@ -485,6 +489,137 @@ pub fn compile(expr: &Expr) -> Bytecode {
     compiler.finish()
 }
 
+/// Analyze free variables in an expression
+/// Returns the set of variable symbols that are referenced but not bound locally
+fn analyze_free_vars(
+    expr: &Expr,
+    local_bindings: &std::collections::HashSet<SymbolId>,
+) -> std::collections::HashSet<SymbolId> {
+    use std::collections::HashSet;
+
+    let mut free_vars = HashSet::new();
+
+    match expr {
+        Expr::Literal(_) => {
+            // No variables in literals
+        }
+
+        Expr::Var(sym, _, _) => {
+            // Variable reference - include if not locally bound
+            if !local_bindings.contains(sym) {
+                free_vars.insert(*sym);
+            }
+        }
+
+        Expr::GlobalVar(sym) => {
+            // Global variable - check if it's not a local binding
+            if !local_bindings.contains(sym) {
+                free_vars.insert(*sym);
+            }
+        }
+
+        Expr::If { cond, then, else_ } => {
+            free_vars.extend(analyze_free_vars(cond, local_bindings));
+            free_vars.extend(analyze_free_vars(then, local_bindings));
+            free_vars.extend(analyze_free_vars(else_, local_bindings));
+        }
+
+        Expr::Begin(exprs) => {
+            for e in exprs {
+                free_vars.extend(analyze_free_vars(e, local_bindings));
+            }
+        }
+
+        Expr::Call { func, args, .. } => {
+            free_vars.extend(analyze_free_vars(func, local_bindings));
+            for arg in args {
+                free_vars.extend(analyze_free_vars(arg, local_bindings));
+            }
+        }
+
+        Expr::Lambda { params, body, .. } => {
+            // Create new local bindings that include lambda parameters
+            let mut new_bindings = local_bindings.clone();
+            for param in params {
+                new_bindings.insert(*param);
+            }
+            free_vars.extend(analyze_free_vars(body, &new_bindings));
+        }
+
+        Expr::Let { bindings, body } => {
+            // First, variables in the binding expressions can reference outer scope
+            for (_, expr) in bindings {
+                free_vars.extend(analyze_free_vars(expr, local_bindings));
+            }
+            // Then, body can reference let-bound variables
+            let mut new_bindings = local_bindings.clone();
+            for (name, _) in bindings {
+                new_bindings.insert(*name);
+            }
+            free_vars.extend(analyze_free_vars(body, &new_bindings));
+        }
+
+        Expr::Set { var, value, .. } => {
+            if !local_bindings.contains(var) {
+                free_vars.insert(*var);
+            }
+            free_vars.extend(analyze_free_vars(value, local_bindings));
+        }
+
+        Expr::Define { name: _, value } => {
+            free_vars.extend(analyze_free_vars(value, local_bindings));
+        }
+
+        Expr::While { cond, body } => {
+            free_vars.extend(analyze_free_vars(cond, local_bindings));
+            free_vars.extend(analyze_free_vars(body, local_bindings));
+        }
+
+        Expr::For { var: _, iter, body } => {
+            free_vars.extend(analyze_free_vars(iter, local_bindings));
+            // Body can reference the loop variable
+            let mut new_bindings = local_bindings.clone();
+            free_vars.extend(analyze_free_vars(body, &new_bindings));
+        }
+
+        Expr::Match {
+            value,
+            patterns,
+            default,
+        } => {
+            free_vars.extend(analyze_free_vars(value, local_bindings));
+            for (_, expr) in patterns {
+                free_vars.extend(analyze_free_vars(expr, local_bindings));
+            }
+            if let Some(default_expr) = default {
+                free_vars.extend(analyze_free_vars(default_expr, local_bindings));
+            }
+        }
+
+        Expr::Try {
+            body,
+            catch,
+            finally,
+        } => {
+            free_vars.extend(analyze_free_vars(body, local_bindings));
+            if let Some((var, handler)) = catch {
+                let mut new_bindings = local_bindings.clone();
+                new_bindings.insert(*var);
+                free_vars.extend(analyze_free_vars(handler, &new_bindings));
+            }
+            if let Some(finally_expr) = finally {
+                free_vars.extend(analyze_free_vars(finally_expr, local_bindings));
+            }
+        }
+
+        _ => {
+            // Other expression types (Quote, Quasiquote, Module, etc.) don't affect free vars
+        }
+    }
+
+    free_vars
+}
+
 /// Simple value-to-expr conversion for bootstrap
 /// This is a simple tree-walking approach before full macro expansion
 pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, String> {
@@ -559,10 +694,24 @@ pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, Strin
                             Box::new(Expr::Begin(body_exprs))
                         };
 
+                        // Analyze free variables that need to be captured
+                        let mut local_bindings = std::collections::HashSet::new();
+                        for param in &param_syms {
+                            local_bindings.insert(*param);
+                        }
+                        let free_vars = analyze_free_vars(&body, &local_bindings);
+
+                        // Convert free vars to captures (with placeholder depth/index)
+                        // These will be resolved at runtime
+                        let captures: Vec<_> = free_vars
+                            .iter()
+                            .map(|sym| (*sym, 0, 0)) // Depth and index will be resolved later
+                            .collect();
+
                         Ok(Expr::Lambda {
                             params: param_syms,
                             body,
-                            captures: Vec::new(),
+                            captures,
                         })
                     }
 
@@ -601,13 +750,14 @@ pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, Strin
 
                         // Parse catch and finally clauses
                         for item in &list[2..] {
-                            if let Value::List(v) = item {
+                            if item.is_list() {
+                                let v = item.list_to_vec()?;
                                 if v.is_empty() {
                                     return Err("Empty clause in try expression".to_string());
                                 }
                                 if let Value::Symbol(keyword) = &v[0] {
-                                    let keyword_str = symbols.get_name(*keyword);
-                                    match keyword_str.as_str() {
+                                    let keyword_str = symbols.name(*keyword).unwrap_or("unknown");
+                                    match keyword_str {
                                         "catch" => {
                                             if v.len() != 3 {
                                                 return Err("catch requires exactly 2 arguments (variable and handler)".to_string());
@@ -643,6 +793,23 @@ pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, Strin
                             body,
                             catch: catch_clause,
                             finally: finally_clause,
+                        })
+                    }
+
+                    "throw" => {
+                        // Syntax: (throw <exception>)
+                        // Throw is a special form that compiles to a function call
+                        // The throw primitive will convert the exception to a Rust error
+                        if list.len() != 2 {
+                            return Err("throw requires exactly 1 argument".to_string());
+                        }
+                        // Compile as a regular function call to the throw primitive
+                        let func = Box::new(Expr::GlobalVar(first.as_symbol()?));
+                        let args = vec![value_to_expr(&list[1], symbols)?];
+                        Ok(Expr::Call {
+                            func,
+                            args,
+                            tail: false,
                         })
                     }
 
