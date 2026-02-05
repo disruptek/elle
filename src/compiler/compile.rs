@@ -32,12 +32,19 @@ impl Compiler {
             },
 
             Expr::Var(_sym, depth, index) => {
+                // Note: Variables with depth=0 refer to the current scope.
+                // When compiling lambdas, this scope is in the closure environment,
+                // not on the local stack, so we need to use depth=1 for LoadUpvalue.
+                // LoadLocal is only used for top-level code.
                 if *depth == 0 {
-                    self.bytecode.emit(Instruction::LoadLocal);
+                    // Variables in current scope - use LoadUpvalue with depth=1
+                    // which works for both top-level and lambda scopes
+                    self.bytecode.emit(Instruction::LoadUpvalue);
+                    self.bytecode.emit_byte(1); // depth=1 to access closure environment
                     self.bytecode.emit_byte(*index as u8);
                 } else {
                     self.bytecode.emit(Instruction::LoadUpvalue);
-                    self.bytecode.emit_byte(*depth as u8);
+                    self.bytecode.emit_byte((*depth + 1) as u8); // Adjust depth for closure environment
                     self.bytecode.emit_byte(*index as u8);
                 }
             }
