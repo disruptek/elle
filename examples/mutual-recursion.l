@@ -1,6 +1,8 @@
 ;; Mutual Recursion Patterns
 ;; Demonstrates functions that call each other in cycles
-;; Elle supports mutual recursion through top-level define pre-declaration
+;; Elle supports mutual recursion through top-level define pre-declaration within begin blocks
+
+(begin
 
 (display "=== Mutual Recursion Patterns ===")
 (newline)
@@ -85,50 +87,12 @@
 (newline)
 
 ;; ============================================================================
-;; Part 3: Tree Traversal with Multiple Functions
+;; Part 3: String Processing with Mutual Recursion
 ;; ============================================================================
 
-(display "Part 3: Tree Traversal")
+(display "Part 3: String Processing")
 (newline)
-(display "Process different node types with mutual recursion")
-(newline)
-(newline)
-
-;; Helper to check if something is a list
-(define is-list? (lambda (x) (not (= 0 0))))  ; Always true for lists in this example
-
-(define process-tree
-  (lambda (tree)
-    (if (= tree 0)
-      0
-      (+ (process-value tree) (process-children (rest tree))))))
-
-(define process-value
-  (lambda (tree)
-    (if (= tree 0)
-      0
-      (first tree))))
-
-(define process-children
-  (lambda (children)
-    (if (= (length children) 0)
-      0
-      (+ (process-tree (first children))
-         (process-children (rest children))))))
-
-;; Test with a simple structure: (1 (2 (3)))
-(display "Simple tree sum: ")
-(display (process-tree (list 1 (list 2 (list 3)))))
-(newline)
-(newline)
-
-;; ============================================================================
-;; Part 4: String Processing with Mutual Recursion
-;; ============================================================================
-
-(display "Part 4: String Processing")
-(newline)
-(display "Process words and phrases with mutual recursion")
+(display "Process words with mutual recursion")
 (newline)
 (newline)
 
@@ -155,10 +119,10 @@
 (newline)
 
 ;; ============================================================================
-;; Part 5: Factorial with Helper - Mutual Style
+;; Part 4: Factorial with Helper - Mutual Style
 ;; ============================================================================
 
-(display "Part 5: Factorial with Helper Function")
+(display "Part 4: Factorial with Helper Function")
 (newline)
 (display "Mutual recursion pattern for factorial computation")
 (newline)
@@ -183,10 +147,10 @@
 (newline)
 
 ;; ============================================================================
-;; Part 6: Three-Way Mutual Recursion
+;; Part 5: Three-Way Mutual Recursion
 ;; ============================================================================
 
-(display "Part 6: Three-Way Mutual Recursion")
+(display "Part 5: Three-Way Mutual Recursion")
 (newline)
 (display "Three functions calling each other")
 (newline)
@@ -216,10 +180,10 @@
 (newline)
 
 ;; ============================================================================
-;; Part 7: Listing Functions (Even/Odd List)
+;; Part 6: Listing Functions (Even/Odd List)
 ;; ============================================================================
 
-(display "Part 7: Filtering with Mutual Recursion")
+(display "Part 6: Filtering with Mutual Recursion")
 (newline)
 (display "Separate even and odd numbers from a list")
 (newline)
@@ -233,7 +197,7 @@
   (lambda (nums evens odds)
     (if (= (length nums) 0)
       (list evens odds)
-      (if (is-even (first nums))
+      (if (= (mod (first nums) 2) 0)
         (separate-helper (rest nums) (append evens (list (first nums))) odds)
         (separate-helper (rest nums) evens (append odds (list (first nums))))))))
 
@@ -249,29 +213,32 @@
 (newline)
 
 ;; ============================================================================
-;; Part 8: Mutual Reference with Counting
+;; Part 7: Alternating Pattern with Limited Depth
 ;; ============================================================================
 
-(display "Part 8: Counting Pattern")
+(display "Part 7: Alternating Pattern")
 (newline)
-(display "Mutual recursion with accumulated results")
+(display "Simple mutual recursion with limited depth")
 (newline)
 (newline)
 
-(define count-up
-  (lambda (n max)
-    (if (> n max)
-      0
-      (+ 1 (count-down (- n 1) max)))))
+(define step-x
+  (lambda (n)
+    (if (= n 0)
+      "X"
+      (step-y (- n 1)))))
 
-(define count-down
-  (lambda (n max)
-    (if (> n max)
-      0
-      (+ 1 (count-up (+ n 1) max)))))
+(define step-y
+  (lambda (n)
+    (if (= n 0)
+      "Y"
+      (step-x (- n 1)))))
 
-(display "count-up(1, 5): ")
-(display (count-up 1 5))
+(display "step-x(3): ")
+(display (step-x 3))
+(newline)
+(display "step-y(4): ")
+(display (step-y 4))
 (newline)
 (newline)
 
@@ -287,19 +254,19 @@
 (newline)
 (display "2. Alternating countdown - back and forth calls")
 (newline)
-(display "3. Tree traversal - processing nested structures")
+(display "3. String processing - manipulating text data")
 (newline)
-(display "4. String processing - manipulating text data")
+(display "4. Factorial with helper - accumulation pattern")
 (newline)
-(display "5. Factorial with helper - accumulation pattern")
+(display "5. Three-way recursion - circular function groups")
 (newline)
-(display "6. Three-way recursion - circular function groups")
+(display "6. List filtering - conditional logic in recursion")
 (newline)
-(display "7. List filtering - conditional logic in recursion")
-(newline)
-(display "8. Counting patterns - mutual accumulation")
+(display "7. Counting patterns - mutual accumulation")
 (newline)
 (newline)
 
 (display "=== Mutual Recursion Patterns Complete ===")
 (newline)
+
+) ;; End of begin block
