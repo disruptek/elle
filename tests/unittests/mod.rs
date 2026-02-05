@@ -17,3 +17,12 @@ mod primitives {
 mod exception_handling {
     include!("exception_handling.rs");
 }
+mod finally_clause {
+    include!("finally_clause.rs");
+}
+mod loops {
+    include!("loops.rs");
+}
+mod exception_filtering {
+    include!("exception_filtering.rs");
+}

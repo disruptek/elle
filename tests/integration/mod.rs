@@ -38,3 +38,12 @@ mod ffi_callbacks {
 mod ffi_struct_marshaling {
     include!("ffi-struct-marshaling.rs");
 }
+mod finally_clause {
+    include!("finally_clause.rs");
+}
+mod loops {
+    include!("loops.rs");
+}
+mod exception_filtering {
+    include!("exception_filtering.rs");
+}
