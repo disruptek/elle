@@ -9,7 +9,9 @@
 //! (strlen "hello")  ; => 5
 //! ```
 
+pub mod bindings;
 pub mod call;
+pub mod header;
 pub mod loader;
 pub mod marshal;
 pub mod symbol;

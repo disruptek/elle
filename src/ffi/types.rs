@@ -15,6 +15,16 @@ impl StructId {
     }
 }
 
+/// Unique identifier for a C enum type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EnumId(pub u32);
+
+impl EnumId {
+    pub fn new(id: u32) -> Self {
+        EnumId(id)
+    }
+}
+
 /// A C type that can be marshaled to/from Elle values.
 ///
 /// # Supported Types
@@ -24,6 +34,7 @@ impl StructId {
 /// - Float, Double
 /// - Pointer types (including opaque pointers)
 /// - Struct types
+/// - Enum types
 /// - Array types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CType {
@@ -46,6 +57,8 @@ pub enum CType {
     Pointer(Box<CType>),
     /// C struct type identified by StructId
     Struct(StructId),
+    /// C enum type identified by EnumId
+    Enum(EnumId),
     /// C array type
     Array(Box<CType>, usize),
 }
@@ -65,6 +78,7 @@ impl CType {
             CType::Double => 8,
             CType::Pointer(_) => 8, // x86-64: pointers are 8 bytes
             CType::Struct(_) => panic!("Struct size must be queried from layout"),
+            CType::Enum(_) => 4, // enums are typically int-sized
             CType::Array(elem_type, count) => elem_type.size() * count,
         }
     }
@@ -118,6 +132,11 @@ impl CType {
     pub fn is_array(&self) -> bool {
         matches!(self, CType::Array(_, _))
     }
+
+    /// Check if this is an enum type.
+    pub fn is_enum(&self) -> bool {
+        matches!(self, CType::Enum(_))
+    }
 }
 
 impl fmt::Display for CType {
@@ -140,6 +159,7 @@ impl fmt::Display for CType {
             CType::Double => write!(f, "double"),
             CType::Pointer(inner) => write!(f, "{}*", inner),
             CType::Struct(id) => write!(f, "struct_{:?}", id),
+            CType::Enum(id) => write!(f, "enum_{:?}", id),
             CType::Array(elem, count) => write!(f, "{}[{}]", elem, count),
         }
     }
@@ -192,6 +212,47 @@ impl StructLayout {
     /// Get a field by name.
     pub fn get_field(&self, name: &str) -> Option<&StructField> {
         self.fields.iter().find(|f| f.name == name)
+    }
+}
+
+/// An enum variant in a C enum.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumVariant {
+    pub name: String,
+    pub value: i64,
+}
+
+/// Layout information for a C enum type.
+#[derive(Debug, Clone)]
+pub struct EnumLayout {
+    pub id: EnumId,
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+    pub base_type: CType,
+}
+
+impl EnumLayout {
+    /// Create a new enum layout.
+    pub fn new(id: EnumId, name: String, variants: Vec<EnumVariant>, base_type: CType) -> Self {
+        EnumLayout {
+            id,
+            name,
+            variants,
+            base_type,
+        }
+    }
+
+    /// Get the value of a variant by name.
+    pub fn variant_value(&self, name: &str) -> Option<i64> {
+        self.variants
+            .iter()
+            .find(|v| v.name == name)
+            .map(|v| v.value)
+    }
+
+    /// Get a variant by name.
+    pub fn get_variant(&self, name: &str) -> Option<&EnumVariant> {
+        self.variants.iter().find(|v| v.name == name)
     }
 }
 

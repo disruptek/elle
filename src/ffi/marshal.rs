@@ -77,6 +77,10 @@ impl Marshal {
                 Value::Nil => Ok(CValue::Pointer(std::ptr::null())),
                 _ => Err(format!("Cannot convert {:?} to pointer", value)),
             },
+            CType::Enum(_) => match value {
+                Value::Int(n) => Ok(CValue::Int(*n)),
+                _ => Err(format!("Cannot convert {:?} to enum", value)),
+            },
             CType::Void => Err("Cannot marshal void as argument".to_string()),
             CType::Struct(_) => Err("Struct marshaling not yet implemented".to_string()),
             CType::Array(_, _) => Err("Array marshaling not yet implemented".to_string()),
@@ -126,6 +130,10 @@ impl Marshal {
                         Ok(Value::CHandle(CHandle::new(*p, id)))
                     }
                 }
+                _ => Err("Type mismatch in unmarshal".to_string()),
+            },
+            CType::Enum(_) => match cvalue {
+                CValue::Int(n) => Ok(Value::Int(*n)),
                 _ => Err("Type mismatch in unmarshal".to_string()),
             },
             CType::Struct(_) => Err("Struct unmarshaling not yet implemented".to_string()),
@@ -204,5 +212,26 @@ mod tests {
             Value::Float(f) => assert!((f - 2.71828).abs() < 0.0001),
             _ => panic!("Wrong type"),
         }
+    }
+
+    #[test]
+    fn test_marshal_enum() {
+        use super::super::types::EnumId;
+        let val = Value::Int(5);
+        let enum_type = CType::Enum(EnumId::new(1));
+        let cval = Marshal::elle_to_c(&val, &enum_type).unwrap();
+        match cval {
+            CValue::Int(n) => assert_eq!(n, 5),
+            _ => panic!("Wrong type"),
+        }
+    }
+
+    #[test]
+    fn test_unmarshal_enum() {
+        use super::super::types::EnumId;
+        let cval = CValue::Int(10);
+        let enum_type = CType::Enum(EnumId::new(1));
+        let val = Marshal::c_to_elle(&cval, &enum_type).unwrap();
+        assert_eq!(val, Value::Int(10));
     }
 }
