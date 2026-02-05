@@ -1237,7 +1237,6 @@ fn test_match_string_literals() {
     );
 }
 
-#[test]
 // Integration scenarios
 #[test]
 fn test_error_in_trace_argument() {

@@ -729,12 +729,10 @@ fn test_module_qualified_access() {
     assert!(result.is_some());
 }
 #[ignore]
-
 #[test]
 fn test_module_import() {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
-
 
     // Import a module
     vm.import_module("list".to_string());
@@ -956,7 +954,7 @@ fn test_memory_usage_primitive() {
 #[test]
 #[ignore]
 fn test_module_loading_path_tracking() {
-    let mut vm = VM::new();
+    let _vm = VM::new();
 
     // Add search paths
     // vm.add_module_search_path(std::path::PathBuf::from("./lib"));
@@ -969,7 +967,7 @@ fn test_module_loading_path_tracking() {
 #[test]
 #[ignore]
 fn test_module_circular_dependency_prevention() {
-    let mut vm = VM::new();
+    let _vm = VM::new();
 
     // Try to load the same module twice
     // let result1 = vm.load_module("test-module".to_string(), "");
