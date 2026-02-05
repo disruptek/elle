@@ -534,7 +534,7 @@ impl Marshal {
 
     /// Marshal a union value to C representation with layout information.
     ///
-    /// The union value should be a vector with a single element: [field_index_or_value].
+    /// The union value should be a vector with a single element: \[field_index_or_value\].
     /// The field is packed at offset 0 (all union fields overlap at offset 0).
     pub fn marshal_union_with_layout(
         value: &Value,
