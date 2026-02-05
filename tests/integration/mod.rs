@@ -35,3 +35,6 @@ mod ffi_marshaling {
 mod ffi_callbacks {
     include!("ffi-callbacks.rs");
 }
+mod ffi_struct_marshaling {
+    include!("ffi-struct-marshaling.rs");
+}
