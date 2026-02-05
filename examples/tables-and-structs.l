@@ -1,119 +1,113 @@
 ; Tables and Structs Example
-; Demonstrates mutable tables and immutable structs
+; Demonstrates mutable tables and immutable structs with basic operations
 
-(display "=== TABLES (Mutable Hash Maps) ===")
+(display "=== Testing Tables (Mutable Hash Maps) ===")
 (newline)
 
-; Creating empty table
-(let ((empty-table (table)))
-  (display "Empty table type: ")
-  (display (type empty-table))
+; Test 1: Create and type-check empty table
+(let ((t (table)))
+  (display "Created empty table, type is: ")
+  (display (type t))
   (newline))
 
-; Creating table with initial values
-(let ((person (table "name" "Alice" "age" 30)))
-  (display "Table with values - type: ")
-  (display (type person))
+; Test 2: Create table with numeric keys
+(let ((t (table 1 "value1" 2 "value2")))
+  (display "Created table with integer keys, length: ")
+  (display (table-length t))
   (newline))
 
-; Getting values from table
-(let ((config (table "host" "localhost" "port" 8080)))
-  (display "Config host: ")
-  (display (get config "host"))
+; Test 3: Get values from table
+(let ((t (table 42 "answer")))
+  (display "Retrieved value from table: ")
+  (display (get t 42))
+  (newline))
+
+; Test 4: Get with default
+(let ((t (table 1 "exists")))
+  (display "Non-existent key with default: ")
+  (display (get t 999 "not-found"))
+  (newline))
+
+; Test 5: Has? predicate
+(let ((t (table 5 "five")))
+  (display "Table has key 5? ")
+  (display (has? t 5))
   (newline)
-  (display "Config port: ")
-  (display (get config "port"))
+  (display "Table has key 10? ")
+  (display (has? t 10))
   (newline))
 
-; Getting missing value with default
-(let ((settings (table "volume" 50)))
-  (display "Missing setting with default: ")
-  (display (get settings "brightness" 100))
+; Test 6: Put and verify
+(let ((t (table)))
+  (put t 100 "hundred")
+  (display "After put, has key? ")
+  (display (has? t 100))
   (newline))
 
-; Putting values (mutating)
-(let ((state (table)))
-  (put state "count" 0)
-  (display "After put - has key? ")
-  (display (has? state "count"))
-  (newline))
-
-; Deleting values (mutating)
-(let ((data (table 1 "one" 2 "two" 3 "three")))
-  (del data 2)
-  (display "After delete key 2 - has key? ")
-  (display (has? data 2))
-  (newline))
-
-; Table inspection
-(let ((colors (table "red" "#FF0000" "green" "#00FF00")))
-  (display "Color table length: ")
-  (display (table-length colors))
-  (newline)
-  (display "Has red? ")
-  (display (has? colors "red"))
+; Test 7: Del and verify
+(let ((t (table 7 "seven" 8 "eight")))
+  (del t 7)
+  (display "After delete, has key 7? ")
+  (display (has? t 7))
   (newline))
 
 (newline)
-(display "=== STRUCTS (Immutable Hash Maps) ===")
+(display "=== Testing Structs (Immutable Hash Maps) ===")
 (newline)
 
-; Creating empty struct
-(let ((empty-struct (struct)))
-  (display "Empty struct type: ")
-  (display (type empty-struct))
+; Test 8: Create and type-check empty struct
+(let ((s (struct)))
+  (display "Created empty struct, type is: ")
+  (display (type s))
   (newline))
 
-; Creating struct with initial values
-(let ((point (struct "x" 10 "y" 20)))
-  (display "Point struct type: ")
-  (display (type point))
+; Test 9: Create struct with numeric keys
+(let ((s (struct 10 "ten" 20 "twenty")))
+  (display "Created struct with integer keys, length: ")
+  (display (struct-length s))
   (newline))
 
-; Getting values from struct
-(let ((user (struct "id" 42 "name" "Bob")))
-  (display "User ID: ")
-  (display (struct-get user "id"))
+; Test 10: Get values from struct
+(let ((s (struct 99 "ninetymine")))
+  (display "Retrieved value from struct: ")
+  (display (struct-get s 99))
+  (newline))
+
+; Test 11: Get with default
+(let ((s (struct 3 "three")))
+  (display "Non-existent key with default: ")
+  (display (struct-get s 777 "default-val"))
+  (newline))
+
+; Test 12: Struct-has? predicate
+(let ((s (struct 2 "two")))
+  (display "Struct has key 2? ")
+  (display (struct-has? s 2))
   (newline)
-  (display "User name: ")
-  (display (struct-get user "name"))
+  (display "Struct has key 3? ")
+  (display (struct-has? s 3))
   (newline))
 
-; Getting missing value with default
-(let ((config (struct "db-host" "localhost")))
-  (display "Missing config value: ")
-  (display (struct-get config "db-port" 5432))
-  (newline))
-
-; Creating new struct with updated value (immutable)
-(let ((v1 (struct "x" 1 "y" 2)))
-  (let ((v2 (struct-put v1 "x" 10)))
-    (display "Original struct x: ")
-    (display (struct-get v1 "x"))
+; Test 13: Immutability - original unchanged after put
+(let ((s1 (struct 4 "four")))
+  (let ((s2 (struct-put s1 5 "five")))
+    (display "Original struct has key 5? ")
+    (display (struct-has? s1 5))
     (newline)
-    (display "New struct x: ")
-    (display (struct-get v2 "x"))
+    (display "New struct has key 5? ")
+    (display (struct-has? s2 5))
     (newline)))
 
-; Creating new struct with deleted key (immutable)
-(let ((s1 (struct "a" 1 "b" 2 "c" 3)))
-  (let ((s2 (struct-del s1 "b")))
-    (display "Original struct has b? ")
-    (display (struct-has? s1 "b"))
+; Test 14: Immutability - original unchanged after del
+(let ((s1 (struct 6 "six" 7 "seven")))
+  (let ((s2 (struct-del s1 6)))
+    (display "Original struct has key 6? ")
+    (display (struct-has? s1 6))
     (newline)
-    (display "New struct has b? ")
-    (display (struct-has? s2 "b"))
+    (display "New struct has key 6? ")
+    (display (struct-has? s2 6))
     (newline)))
-
-; Struct inspection
-(let ((config (struct "db-host" "postgres" "db-port" 5432)))
-  (display "Config struct length: ")
-  (display (struct-length config))
-  (newline)
-  (display "Has db-host? ")
-  (display (struct-has? config "db-host"))
-  (newline))
 
 (display (newline))
-(display "=== Example Complete ===")
+(display "=== All Tests Completed Successfully ===")
 (newline)

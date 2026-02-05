@@ -21,7 +21,7 @@ pub fn prim_struct(args: &[Value]) -> Result<Value, String> {
 }
 
 /// Get a value from a struct by key
-/// (struct-get struct key [default])
+/// `(struct-get struct key [default])`
 pub fn prim_struct_get(args: &[Value]) -> Result<Value, String> {
     if args.len() < 2 || args.len() > 3 {
         return Err("struct-get requires 2 or 3 arguments (struct, key, [default])".to_string());

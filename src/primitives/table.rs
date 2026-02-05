@@ -22,7 +22,7 @@ pub fn prim_table(args: &[Value]) -> Result<Value, String> {
 }
 
 /// Get a value from a table by key
-/// (get table key [default])
+/// `(get table key [default])`
 pub fn prim_table_get(args: &[Value]) -> Result<Value, String> {
     if args.len() < 2 || args.len() > 3 {
         return Err("get requires 2 or 3 arguments (table, key, [default])".to_string());
