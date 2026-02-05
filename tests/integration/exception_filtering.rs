@@ -55,7 +55,7 @@ fn test_filtering_network_errors() {
 #[test]
 fn test_filtering_with_comparison_operators() {
     // Use comparison operators for filtering
-    let code_500 = eval(r#"(exception-data (exception "http" 500))"#).unwrap();
+    let _code_500 = eval(r#"(exception-data (exception "http" 500))"#).unwrap();
 
     // Filter: is this a server error (>= 500)?
     let is_server_error = eval("(>= 500 500)").unwrap();
