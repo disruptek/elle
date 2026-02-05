@@ -10,7 +10,8 @@ pub fn prim_map(args: &[Value]) -> Result<Value, String> {
     match &args[0] {
         Value::NativeFn(f) => {
             let vec = args[1].list_to_vec()?;
-            let results: Result<Vec<Value>, String> = vec.iter().map(|v| f(&[v.clone()])).collect();
+            let results: Result<Vec<Value>, String> =
+                vec.iter().map(|v| f(std::slice::from_ref(v))).collect();
             Ok(list(results?))
         }
         Value::Closure(_) => {
@@ -31,7 +32,7 @@ pub fn prim_filter(args: &[Value]) -> Result<Value, String> {
             let vec = args[1].list_to_vec()?;
             let mut results = Vec::new();
             for v in vec {
-                let result = f(&[v.clone()])?;
+                let result = f(std::slice::from_ref(&v))?;
                 if result != Value::Nil && result != Value::Bool(false) {
                     results.push(v);
                 }

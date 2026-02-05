@@ -364,7 +364,7 @@ fn test_string_operations_chain() {
 #[test]
 fn test_math_operations_chain() {
     // Chain math operations
-    assert_eq!(eval("(+ (sqrt 16) 1)").is_ok(), true);
+    assert!(eval("(+ (sqrt 16) 1)").is_ok());
 }
 
 #[test]
@@ -374,4 +374,3 @@ fn test_all_stdlib_modules_available() {
     assert!(eval("(string-length \"x\")").is_ok());
     assert!(eval("(+ 1 2)").is_ok());
 }
-

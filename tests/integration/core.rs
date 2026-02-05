@@ -310,13 +310,10 @@ fn test_not() {
 fn test_complex_conditionals() {
     assert_eq!(eval("(if (not (< 5 3)) 100 200)").unwrap(), Value::Int(100));
 
-    assert_eq!(
-        eval("(if (= (+ 2 3) 5) 'yes 'no)")
-            .unwrap()
-            .as_symbol()
-            .is_ok(),
-        true
-    );
+    assert!(eval("(if (= (+ 2 3) 5) 'yes 'no)")
+        .unwrap()
+        .as_symbol()
+        .is_ok());
 }
 
 // New standard library functions
@@ -507,9 +504,9 @@ fn test_exp() {
         _ => panic!("Expected float"),
     }
 
-    // exp(1) ≈ 2.71828
+    // exp(1) ≈ e
     match eval("(exp 1)").unwrap() {
-        Value::Float(f) => assert!((f - 2.71828).abs() < 0.0001),
+        Value::Float(f) => assert!((f - std::f64::consts::E).abs() < 0.0001),
         _ => panic!("Expected float"),
     }
 }

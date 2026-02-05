@@ -9,8 +9,14 @@ fn test_value_equality() {
     assert_ne!(Value::Int(42), Value::Int(43));
 
     // Floats
-    assert_eq!(Value::Float(3.14), Value::Float(3.14));
-    assert_ne!(Value::Float(3.14), Value::Float(2.71));
+    assert_eq!(
+        Value::Float(std::f64::consts::PI),
+        Value::Float(std::f64::consts::PI)
+    );
+    assert_ne!(
+        Value::Float(std::f64::consts::PI),
+        Value::Float(std::f64::consts::E)
+    );
 
     // Booleans
     assert_eq!(Value::Bool(true), Value::Bool(true));
@@ -49,10 +55,13 @@ fn test_nil_check() {
 fn test_type_conversions() {
     // Int conversion
     assert_eq!(Value::Int(42).as_int().unwrap(), 42);
-    assert!(Value::Float(3.14).as_int().is_err());
+    assert!(Value::Float(std::f64::consts::PI).as_int().is_err());
 
     // Float conversion
-    assert_eq!(Value::Float(3.14).as_float().unwrap(), 3.14);
+    assert_eq!(
+        Value::Float(std::f64::consts::PI).as_float().unwrap(),
+        std::f64::consts::PI
+    );
     assert_eq!(Value::Int(42).as_float().unwrap(), 42.0); // Coercion
 }
 

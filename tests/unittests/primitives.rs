@@ -135,7 +135,14 @@ fn test_equality() {
 
     // Float equality
     assert_eq!(
-        call_primitive(&eq, &[Value::Float(3.14), Value::Float(3.14)]).unwrap(),
+        call_primitive(
+            &eq,
+            &[
+                Value::Float(std::f64::consts::PI),
+                Value::Float(std::f64::consts::PI)
+            ]
+        )
+        .unwrap(),
         Value::Bool(true)
     );
 }
@@ -270,7 +277,7 @@ fn test_number_predicate() {
     );
 
     assert_eq!(
-        call_primitive(&num_pred, &[Value::Float(3.14)]).unwrap(),
+        call_primitive(&num_pred, &[Value::Float(std::f64::consts::PI)]).unwrap(),
         Value::Bool(true)
     );
 
@@ -646,14 +653,14 @@ fn test_math_module_functions() {
     // Test pi
     let pi_fn = get_primitive(&vm, &mut symbols, "pi");
     match call_primitive(&pi_fn, &[]).unwrap() {
-        Value::Float(f) => assert!((f - 3.14159).abs() < 0.001),
+        Value::Float(f) => assert!((f - std::f64::consts::PI).abs() < 0.001),
         _ => panic!("Expected float"),
     }
 
     // Test e
     let e_fn = get_primitive(&vm, &mut symbols, "e");
     match call_primitive(&e_fn, &[]).unwrap() {
-        Value::Float(f) => assert!((f - 2.71828).abs() < 0.001),
+        Value::Float(f) => assert!((f - std::f64::consts::E).abs() < 0.001),
         _ => panic!("Expected float"),
     }
 }
@@ -782,7 +789,7 @@ fn test_expand_macro_primitive() {
     let expand = get_primitive(&vm, &mut symbols, "expand-macro");
 
     let test_val = Value::String("test-macro".into());
-    let result = call_primitive(&expand, &[test_val.clone()]);
+    let result = call_primitive(&expand, std::slice::from_ref(&test_val));
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), test_val);
 }
@@ -885,7 +892,7 @@ fn test_debug_print_primitive() {
     let debug_print = get_primitive(&vm, &mut symbols, "debug-print");
 
     let test_val = Value::Int(42);
-    let result = call_primitive(&debug_print, &[test_val.clone()]);
+    let result = call_primitive(&debug_print, std::slice::from_ref(&test_val));
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), test_val);
 }

@@ -14,6 +14,7 @@ fn test_read_integers() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)]
 fn test_read_floats() {
     let mut symbols = SymbolTable::new();
 

@@ -443,6 +443,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn test_read_number() {
         let mut symbols = SymbolTable::new();
         assert_eq!(read_str("42", &mut symbols).unwrap(), Value::Int(42));

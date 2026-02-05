@@ -215,11 +215,11 @@ fn test_marshal_bool_to_c() {
 fn test_marshal_float_to_c() {
     use elle::ffi::marshal::{CValue, Marshal};
 
-    let val = Value::Float(3.14);
+    let val = Value::Float(std::f64::consts::PI);
     let c_val = Marshal::elle_to_c(&val, &CType::Double).unwrap();
 
     match c_val {
-        CValue::Float(f) => assert!((f - 3.14).abs() < 0.001),
+        CValue::Float(f) => assert!((f - std::f64::consts::PI).abs() < 0.001),
         _ => panic!("Expected Float"),
     }
 }
@@ -250,11 +250,11 @@ fn test_unmarshal_bool_from_c() {
 fn test_unmarshal_float_from_c() {
     use elle::ffi::marshal::{CValue, Marshal};
 
-    let c_val = CValue::Float(2.71828);
+    let c_val = CValue::Float(std::f64::consts::E);
     let val = Marshal::c_to_elle(&c_val, &CType::Double).unwrap();
 
     match val {
-        Value::Float(f) => assert!((f - 2.71828).abs() < 0.00001),
+        Value::Float(f) => assert!((f - std::f64::consts::E).abs() < 0.00001),
         _ => panic!("Expected Float"),
     }
 }

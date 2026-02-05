@@ -49,7 +49,7 @@ fn bench_symbol_interning(c: &mut Criterion) {
     // First intern (hash + insert)
     group.bench_function("first_intern", |b| {
         b.iter_batched(
-            || SymbolTable::new(),
+            SymbolTable::new,
             |mut symbols| black_box(symbols.intern("unique-symbol")),
             criterion::BatchSize::SmallInput,
         );
@@ -65,7 +65,7 @@ fn bench_symbol_interning(c: &mut Criterion) {
     // Many unique symbols
     group.bench_function("many_unique", |b| {
         b.iter_batched(
-            || SymbolTable::new(),
+            SymbolTable::new,
             |mut symbols| {
                 for i in 0..100 {
                     black_box(symbols.intern(&format!("symbol-{}", i)));
@@ -87,7 +87,7 @@ fn bench_compilation(c: &mut Criterion) {
     let simple = read_str("(+ 1 2)", &mut symbols).unwrap();
     group.bench_function("simple_arithmetic", |b| {
         b.iter(|| {
-            let expr = value_to_expr(&simple, &symbols).unwrap();
+            let expr = value_to_expr(&simple, &mut symbols).unwrap();
             black_box(compile(&expr))
         });
     });
@@ -96,7 +96,7 @@ fn bench_compilation(c: &mut Criterion) {
     let conditional = read_str("(if (> 5 3) 100 200)", &mut symbols).unwrap();
     group.bench_function("conditional", |b| {
         b.iter(|| {
-            let expr = value_to_expr(&conditional, &symbols).unwrap();
+            let expr = value_to_expr(&conditional, &mut symbols).unwrap();
             black_box(compile(&expr))
         });
     });
@@ -105,7 +105,7 @@ fn bench_compilation(c: &mut Criterion) {
     let nested = read_str("(+ (* 2 3) (- 10 (/ 8 2)))", &mut symbols).unwrap();
     group.bench_function("nested_arithmetic", |b| {
         b.iter(|| {
-            let expr = value_to_expr(&nested, &symbols).unwrap();
+            let expr = value_to_expr(&nested, &mut symbols).unwrap();
             black_box(compile(&expr))
         });
     });
@@ -123,7 +123,7 @@ fn bench_vm_execution(c: &mut Criterion) {
         let mut symbols = SymbolTable::new();
         register_primitives(&mut vm, &mut symbols);
         let value = read_str("(+ 1 2 3 4 5)", &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         b.iter(|| black_box(vm.execute(&bytecode).unwrap()));
     });
@@ -134,7 +134,7 @@ fn bench_vm_execution(c: &mut Criterion) {
         let mut symbols = SymbolTable::new();
         register_primitives(&mut vm, &mut symbols);
         let value = read_str("(+ 1 2.5 3)", &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         b.iter(|| black_box(vm.execute(&bytecode).unwrap()));
     });
@@ -145,7 +145,7 @@ fn bench_vm_execution(c: &mut Criterion) {
         let mut symbols = SymbolTable::new();
         register_primitives(&mut vm, &mut symbols);
         let value = read_str("(< 5 10)", &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         b.iter(|| black_box(vm.execute(&bytecode).unwrap()));
     });
@@ -156,7 +156,7 @@ fn bench_vm_execution(c: &mut Criterion) {
         let mut symbols = SymbolTable::new();
         register_primitives(&mut vm, &mut symbols);
         let value = read_str("(cons 1 (cons 2 (cons 3 nil)))", &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         b.iter(|| black_box(vm.execute(&bytecode).unwrap()));
     });
@@ -167,7 +167,7 @@ fn bench_vm_execution(c: &mut Criterion) {
         let mut symbols = SymbolTable::new();
         register_primitives(&mut vm, &mut symbols);
         let value = read_str("(first (list 1 2 3))", &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         b.iter(|| black_box(vm.execute(&bytecode).unwrap()));
     });
@@ -185,7 +185,7 @@ fn bench_conditionals(c: &mut Criterion) {
         let mut symbols = SymbolTable::new();
         register_primitives(&mut vm, &mut symbols);
         let value = read_str("(if (> 5 3) 100 200)", &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         b.iter(|| black_box(vm.execute(&bytecode).unwrap()));
     });
@@ -196,7 +196,7 @@ fn bench_conditionals(c: &mut Criterion) {
         let mut symbols = SymbolTable::new();
         register_primitives(&mut vm, &mut symbols);
         let value = read_str("(if (> 5 3) (if (< 2 4) 1 2) 3)", &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         b.iter(|| black_box(vm.execute(&bytecode).unwrap()));
     });
@@ -219,7 +219,7 @@ fn bench_end_to_end(c: &mut Criterion) {
             },
             |(mut vm, mut symbols)| {
                 let value = read_str("(+ 1 2 3)", &mut symbols).unwrap();
-                let expr = value_to_expr(&value, &symbols).unwrap();
+                let expr = value_to_expr(&value, &mut symbols).unwrap();
                 let bytecode = compile(&expr);
                 black_box(vm.execute(&bytecode).unwrap())
             },
@@ -238,7 +238,7 @@ fn bench_end_to_end(c: &mut Criterion) {
             },
             |(mut vm, mut symbols)| {
                 let value = read_str("(+ (* 2 3) (- 10 (/ 8 2)))", &mut symbols).unwrap();
-                let expr = value_to_expr(&value, &symbols).unwrap();
+                let expr = value_to_expr(&value, &mut symbols).unwrap();
                 let bytecode = compile(&expr);
                 black_box(vm.execute(&bytecode).unwrap())
             },
@@ -271,7 +271,7 @@ fn bench_scalability(c: &mut Criterion) {
                         .join(" ")
                 );
                 let value = read_str(&expr_str, &mut symbols).unwrap();
-                let expr = value_to_expr(&value, &symbols).unwrap();
+                let expr = value_to_expr(&value, &mut symbols).unwrap();
                 let bytecode = compile(&expr);
 
                 b.iter(|| black_box(vm.execute(&bytecode).unwrap()));
@@ -295,7 +295,7 @@ fn bench_scalability(c: &mut Criterion) {
                         .join(" ")
                 );
                 let value = read_str(&expr_str, &mut symbols).unwrap();
-                let expr = value_to_expr(&value, &symbols).unwrap();
+                let expr = value_to_expr(&value, &mut symbols).unwrap();
                 let bytecode = compile(&expr);
 
                 b.iter(|| black_box(vm.execute(&bytecode).unwrap()));

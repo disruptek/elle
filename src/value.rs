@@ -285,23 +285,18 @@ impl fmt::Debug for Value {
             Value::Cons(cons) => {
                 write!(f, "(")?;
                 let mut current = Value::Cons(cons.clone());
-                loop {
-                    match current {
-                        Value::Cons(ref c) => {
-                            write!(f, "{:?}", c.first)?;
-                            match &c.rest {
-                                Value::Nil => break,
-                                Value::Cons(_) => {
-                                    write!(f, " ")?;
-                                    current = c.rest.clone();
-                                }
-                                other => {
-                                    write!(f, " . {:?}", other)?;
-                                    break;
-                                }
-                            }
+                while let Value::Cons(ref c) = current {
+                    write!(f, "{:?}", c.first)?;
+                    match &c.rest {
+                        Value::Nil => break,
+                        Value::Cons(_) => {
+                            write!(f, " ")?;
+                            current = c.rest.clone();
                         }
-                        _ => break,
+                        other => {
+                            write!(f, " . {:?}", other)?;
+                            break;
+                        }
                     }
                 }
                 write!(f, ")")

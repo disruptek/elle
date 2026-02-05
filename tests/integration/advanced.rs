@@ -447,8 +447,8 @@ fn test_match_returns_result_expression() {
     // Using literals to avoid variable binding complexity
     match eval("(match 5 ((5) 42) ((10) 0))") {
         Ok(Value::Int(n)) => assert!(n > 0, "Should return a positive number"),
-        Ok(v) => assert!(false, "Expected Int, got {:?}", v),
-        Err(e) => assert!(false, "Unexpected error: {}", e),
+        Ok(v) => panic!("Expected Int, got {:?}", v),
+        Err(e) => panic!("Unexpected error: {}", e),
     }
 }
 
@@ -567,4 +567,3 @@ fn test_add_module_path_returns_nil() {
     // add-module-path should return nil
     assert_eq!(eval("(add-module-path \".\")").unwrap(), Value::Nil);
 }
-

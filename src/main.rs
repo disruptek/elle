@@ -18,7 +18,7 @@ fn print_error_context(input: &str, _msg: &str, line: usize, col: usize) {
 
         // Print caret pointing to error location
         if col > 0 {
-            eprintln!("  {}{}", " ".repeat(col - 1), "^");
+            eprintln!("  {}^", " ".repeat(col - 1));
         }
     }
 }
@@ -69,25 +69,20 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
         }
 
         let mut temp_reader = elle::reader::Reader::new(temp_tokens);
-        loop {
-            match temp_reader.read(symbols) {
-                Ok(value) => {
-                    // Check if this is a define
-                    if let Ok(list) = value.list_to_vec() {
-                        if list.len() >= 3 {
-                            if let elle::value::Value::Symbol(sym) = &list[0] {
-                                let name = symbols.name(*sym).unwrap_or("");
-                                if name == "define" {
-                                    if let Ok(def_name) = list[1].as_symbol() {
-                                        // Pre-register the symbol as nil so forward references work
-                                        vm.set_global(def_name.0, elle::value::Value::Nil);
-                                    }
-                                }
+        while let Ok(value) = temp_reader.read(symbols) {
+            // Check if this is a define
+            if let Ok(list) = value.list_to_vec() {
+                if list.len() >= 3 {
+                    if let elle::value::Value::Symbol(sym) = &list[0] {
+                        let name = symbols.name(*sym).unwrap_or("");
+                        if name == "define" {
+                            if let Ok(def_name) = list[1].as_symbol() {
+                                // Pre-register the symbol as nil so forward references work
+                                vm.set_global(def_name.0, elle::value::Value::Nil);
                             }
                         }
                     }
                 }
-                Err(_) => break,
             }
         }
     }

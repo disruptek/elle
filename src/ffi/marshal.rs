@@ -178,10 +178,10 @@ mod tests {
 
     #[test]
     fn test_marshal_float() {
-        let val = Value::Float(3.14);
+        let val = Value::Float(std::f64::consts::PI);
         let cval = Marshal::elle_to_c(&val, &CType::Float).unwrap();
         match cval {
-            CValue::Float(f) => assert!((f - 3.14).abs() < 0.01),
+            CValue::Float(f) => assert!((f - std::f64::consts::PI).abs() < 0.01),
             _ => panic!("Wrong type"),
         }
     }
@@ -206,10 +206,10 @@ mod tests {
 
     #[test]
     fn test_unmarshal_float() {
-        let cval = CValue::Float(2.71828);
+        let cval = CValue::Float(std::f64::consts::E);
         let val = Marshal::c_to_elle(&cval, &CType::Double).unwrap();
         match val {
-            Value::Float(f) => assert!((f - 2.71828).abs() < 0.0001),
+            Value::Float(f) => assert!((f - std::f64::consts::E).abs() < 0.0001),
             _ => panic!("Wrong type"),
         }
     }

@@ -235,6 +235,7 @@ unsafe fn call_c_5_args(
     extract_result(result, 0.0, ret_type)
 }
 
+#[allow(clippy::too_many_arguments)]
 unsafe fn call_c_6_args(
     func: *const c_void,
     arg1: &CValue,
@@ -316,7 +317,7 @@ mod tests {
         let func_ptr = 0x1234 as *const c_void;
         let call = FunctionCall::new(sig, func_ptr).unwrap();
 
-        let args: Vec<Value> = (0..7).map(|i| Value::Int(i)).collect();
+        let args: Vec<Value> = (0..7).map(Value::Int).collect();
         let result = call.call(&args);
         assert!(result.is_err());
     }

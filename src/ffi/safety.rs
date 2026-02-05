@@ -246,7 +246,9 @@ mod tests {
     #[test]
     fn test_type_checker() {
         assert!(TypeChecker::check_type(&Value::Int(42), &CType::Int).is_ok());
-        assert!(TypeChecker::check_type(&Value::Float(3.14), &CType::Float).is_ok());
+        assert!(
+            TypeChecker::check_type(&Value::Float(std::f64::consts::PI), &CType::Float).is_ok()
+        );
         assert!(TypeChecker::check_type(
             &Value::String("hello".into()),
             &CType::Pointer(Box::new(CType::Char))
@@ -257,12 +259,12 @@ mod tests {
     #[test]
     fn test_type_mismatch() {
         assert!(TypeChecker::check_type(&Value::Int(42), &CType::Float).is_err());
-        assert!(TypeChecker::check_type(&Value::Float(3.14), &CType::Int).is_err());
+        assert!(TypeChecker::check_type(&Value::Float(std::f64::consts::PI), &CType::Int).is_err());
     }
 
     #[test]
     fn test_signature_validation() {
-        let args = vec![Value::Int(42), Value::Float(3.14)];
+        let args = vec![Value::Int(42), Value::Float(std::f64::consts::PI)];
         let types = vec![CType::Int, CType::Float];
         let return_type = CType::Void;
 

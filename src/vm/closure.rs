@@ -23,7 +23,7 @@ pub fn handle_make_closure(
         // Create closure with captured values in environment
         let closure = Closure {
             bytecode: template.bytecode.clone(),
-            arity: template.arity.clone(),
+            arity: template.arity,
             env: Rc::new(captured),
             num_locals: template.num_locals,
             constants: template.constants.clone(),

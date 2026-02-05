@@ -104,8 +104,7 @@ mod tests {
             .or_else(|_| load_library("libc.so.6"));
 
         // If libc is findable, test loading succeeds
-        if lib.is_ok() {
-            let lib = lib.unwrap();
+        if let Ok(lib) = lib {
             assert!(!lib.path.is_empty());
         }
     }
@@ -126,8 +125,8 @@ mod tests {
         if let Ok(lib) = lib {
             let result = lib.get_symbol("strlen");
             // strlen should exist in libc
-            if result.is_ok() {
-                assert!(!result.unwrap().is_null());
+            if let Ok(sym) = result {
+                assert!(!sym.is_null());
             }
         }
     }

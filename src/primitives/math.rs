@@ -50,7 +50,7 @@ pub fn prim_tan(args: &[Value]) -> Result<Value, String> {
 }
 
 pub fn prim_log(args: &[Value]) -> Result<Value, String> {
-    if args.len() < 1 || args.len() > 2 {
+    if args.is_empty() || args.len() > 2 {
         return Err("log requires 1 or 2 arguments".to_string());
     }
 

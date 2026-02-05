@@ -25,7 +25,7 @@ fn test_quote_basic() {
 #[test]
 fn test_quote_symbol_evaluation() {
     // Quoted symbols should not be evaluated
-    assert!(eval("(define x 42)").is_ok() || true); // Variable scope issue
+    let _ = eval("(define x 42)"); // Variable scope issue - may fail in test environment
     assert!(eval("'x").is_ok());
 }
 
@@ -397,4 +397,3 @@ fn test_all_phase2_features_available() {
     // Pattern matching and try/catch are in AST (parser may be limited)
     let _ = eval("(match 5 ((5) 1))");
 }
-

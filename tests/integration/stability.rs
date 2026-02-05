@@ -211,8 +211,7 @@ fn test_core_stability_repeated_operations() {
         eval("(list 1 2 3)").unwrap();
         eval("(lambda (x) x)").unwrap();
     }
-    // All succeeded
-    assert!(true);
+    // All succeeded - no assertion needed
 }
 
 #[test]
