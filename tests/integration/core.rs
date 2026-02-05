@@ -1,13 +1,42 @@
 // DEFENSE: Integration tests ensure the full pipeline works end-to-end
 use elle::compiler::converters::value_to_expr;
-use elle::{compile, read_str, register_primitives, SymbolTable, Value, VM};
+use elle::{compile, list, read_str, register_primitives, Lexer, Reader, SymbolTable, Value, VM};
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
     register_primitives(&mut vm, &mut symbols);
 
-    let value = read_str(input, &mut symbols)?;
+    // Tokenize the input
+    let mut lexer = Lexer::new(input);
+    let mut tokens = Vec::new();
+    while let Some(token) = lexer.next_token()? {
+        tokens.push(token);
+    }
+
+    if tokens.is_empty() {
+        return Err("No input".to_string());
+    }
+
+    // Read all expressions
+    let mut reader = Reader::new(tokens);
+    let mut values = Vec::new();
+    while let Some(result) = reader.try_read(&mut symbols) {
+        values.push(result?);
+    }
+
+    // If we have multiple expressions, wrap them in a begin
+    let value = if values.len() == 1 {
+        values.into_iter().next().unwrap()
+    } else if values.is_empty() {
+        return Err("No input".to_string());
+    } else {
+        // Wrap multiple expressions in a begin
+        let mut begin_args = vec![Value::Symbol(symbols.intern("begin"))];
+        begin_args.extend(values);
+        list(begin_args)
+    };
+
     let expr = value_to_expr(&value, &mut symbols)?;
     let bytecode = compile(&expr);
     vm.execute(&bytecode)
