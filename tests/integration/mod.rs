@@ -26,3 +26,6 @@ mod types {
 mod property {
     include!("property.rs");
 }
+mod loops {
+    include!("loops.rs");
+}
