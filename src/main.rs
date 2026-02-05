@@ -1,4 +1,5 @@
 use elle::compiler::compile::value_to_expr;
+use elle::ffi_primitives;
 use elle::{compile, read_str, register_primitives, SymbolTable, VM};
 use std::io::{self, Write};
 
@@ -65,6 +66,9 @@ fn main() {
     // Register primitive functions
     register_primitives(&mut vm, &mut symbols);
 
+    // Set VM context for FFI primitives
+    ffi_primitives::set_vm_context(&mut vm as *mut VM);
+
     print_welcome();
 
     loop {
@@ -126,6 +130,9 @@ fn main() {
             }
         }
     }
+
+    // Clear VM context
+    ffi_primitives::clear_vm_context();
 
     println!();
     println!("Goodbye!");

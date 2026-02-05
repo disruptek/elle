@@ -1,3 +1,4 @@
+use crate::ffi_primitives;
 use crate::symbol::SymbolTable;
 use crate::value::{cons, list, Value};
 use crate::vm::VM;
@@ -99,6 +100,86 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
     register_fn(vm, symbols, "remainder", prim_remainder);
     register_fn(vm, symbols, "even?", prim_even);
     register_fn(vm, symbols, "odd?", prim_odd);
+
+    // FFI primitives
+    register_fn(
+        vm,
+        symbols,
+        "load-library",
+        ffi_primitives::prim_load_library_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "list-libraries",
+        ffi_primitives::prim_list_libraries_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "call-c-function",
+        ffi_primitives::prim_call_c_function_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "load-header-with-lib",
+        ffi_primitives::prim_load_header_with_lib_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "define-enum",
+        ffi_primitives::prim_define_enum_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "make-c-callback",
+        ffi_primitives::prim_make_c_callback_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "free-callback",
+        ffi_primitives::prim_free_callback_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "register-allocation",
+        ffi_primitives::prim_register_allocation_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "memory-stats",
+        ffi_primitives::prim_memory_stats_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "type-check",
+        ffi_primitives::prim_type_check_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "null-pointer?",
+        ffi_primitives::prim_null_pointer_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "ffi-last-error",
+        ffi_primitives::prim_ffi_last_error_wrapper,
+    );
+    register_fn(
+        vm,
+        symbols,
+        "with-ffi-safety-checks",
+        ffi_primitives::prim_with_ffi_safety_checks_wrapper,
+    );
 }
 
 fn register_fn(

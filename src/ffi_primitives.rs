@@ -11,6 +11,27 @@ use crate::ffi::safety::{get_last_error, NullPointerChecker, TypeChecker};
 use crate::ffi::types::{CType, EnumId, EnumLayout, EnumVariant, FunctionSignature};
 use crate::value::{LibHandle, Value};
 use crate::vm::VM;
+use std::cell::RefCell;
+
+/// Thread-local VM reference for FFI primitives
+thread_local! {
+    static VM_CONTEXT: RefCell<Option<*mut VM>> = RefCell::new(None);
+}
+
+/// Set the current VM context (called before executing code)
+pub fn set_vm_context(vm: *mut VM) {
+    VM_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(vm));
+}
+
+/// Get the current VM context
+pub fn get_vm_context() -> Option<*mut VM> {
+    VM_CONTEXT.with(|ctx| ctx.borrow().as_ref().copied())
+}
+
+/// Clear the VM context
+pub fn clear_vm_context() {
+    VM_CONTEXT.with(|ctx| *ctx.borrow_mut() = None);
+}
 
 /// Register FFI primitives in the VM.
 pub fn register_ffi_primitives(_vm: &mut VM) {
@@ -415,6 +436,272 @@ pub fn prim_with_ffi_safety_checks(_vm: &mut VM, args: &[Value]) -> Result<Value
     // 4. Restore signal handlers
 
     // For now, just return the first argument (assuming it's evaluated elsewhere)
+    Ok(args[0].clone())
+}
+
+// Wrapper functions for primitive registration with VM context access
+
+pub fn prim_load_library_wrapper(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("load-library requires exactly 1 argument".to_string());
+    }
+
+    let path = match &args[0] {
+        Value::String(s) => s.as_ref(),
+        _ => return Err("load-library requires a string path".to_string()),
+    };
+
+    // Get VM context
+    let vm_ptr = get_vm_context().ok_or("FFI not initialized")?;
+    unsafe {
+        let vm = &mut *vm_ptr;
+        let lib_id = vm.ffi_mut().load_library(path)?;
+        Ok(Value::LibHandle(LibHandle(lib_id)))
+    }
+}
+
+pub fn prim_list_libraries_wrapper(_args: &[Value]) -> Result<Value, String> {
+    let vm_ptr = get_vm_context().ok_or("FFI not initialized")?;
+    unsafe {
+        let vm = &*vm_ptr;
+        let libs = vm.ffi().loaded_libraries();
+        let mut result = Value::Nil;
+        for (id, path) in libs.into_iter().rev() {
+            let entry = crate::value::cons(
+                Value::Int(id as i64),
+                crate::value::cons(Value::String(path.into()), Value::Nil),
+            );
+            result = crate::value::cons(entry, result);
+        }
+        Ok(result)
+    }
+}
+
+pub fn prim_call_c_function_wrapper(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 5 {
+        return Err("call-c-function requires exactly 5 arguments".to_string());
+    }
+
+    // Parse library ID
+    let lib_id = match &args[0] {
+        Value::LibHandle(LibHandle(id)) => *id,
+        _ => return Err("First argument must be a library handle".to_string()),
+    };
+
+    // Parse function name
+    let func_name = match &args[1] {
+        Value::String(s) => s.as_ref(),
+        _ => return Err("Second argument must be a function name string".to_string()),
+    };
+
+    // Parse return type
+    let return_type = parse_ctype(&args[2])?;
+
+    // Parse argument types
+    let arg_types = match &args[3] {
+        Value::Nil => vec![],
+        Value::Cons(_) => {
+            let type_list = args[3].list_to_vec()?;
+            type_list
+                .iter()
+                .map(parse_ctype)
+                .collect::<Result<Vec<_>, _>>()?
+        }
+        _ => return Err("Fourth argument must be a list of argument types".to_string()),
+    };
+
+    // Parse argument values
+    let arg_values = match &args[4] {
+        Value::Nil => vec![],
+        Value::Cons(_) => args[4].list_to_vec()?,
+        _ => return Err("Fifth argument must be a list of argument values".to_string()),
+    };
+
+    // Check argument count matches
+    if arg_types.len() != arg_values.len() {
+        return Err(format!(
+            "Argument count mismatch: expected {}, got {}",
+            arg_types.len(),
+            arg_values.len()
+        ));
+    }
+
+    // Create function signature
+    let sig = FunctionSignature::new(func_name.to_string(), arg_types, return_type);
+
+    // Get VM context
+    let vm_ptr = get_vm_context().ok_or("FFI not initialized")?;
+    unsafe {
+        let vm = &*vm_ptr;
+        let lib = vm
+            .ffi()
+            .get_library(lib_id)
+            .ok_or("Library handle not found".to_string())?;
+
+        let func_ptr = lib.get_symbol(func_name)?;
+        let call = FunctionCall::new(sig, func_ptr)?;
+        call.call(&arg_values)
+    }
+}
+
+pub fn prim_load_header_with_lib_wrapper(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("load-header-with-lib requires exactly 2 arguments".to_string());
+    }
+
+    let header_path = match &args[0] {
+        Value::String(s) => s.as_ref(),
+        _ => return Err("header-path must be a string".to_string()),
+    };
+
+    let lib_path = match &args[1] {
+        Value::String(s) => s.as_ref(),
+        _ => return Err("lib-path must be a string".to_string()),
+    };
+
+    // Parse header
+    let mut parser = HeaderParser::new();
+    let parsed = parser.parse(header_path)?;
+
+    // Generate bindings
+    let _lisp_code = generate_elle_bindings(&parsed, lib_path);
+
+    // Return library path (future: would evaluate generated code)
+    Ok(Value::String(lib_path.into()))
+}
+
+pub fn prim_define_enum_wrapper(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("define-enum requires exactly 2 arguments".to_string());
+    }
+
+    let enum_name = match &args[0] {
+        Value::String(s) => s.as_ref(),
+        _ => return Err("enum name must be a string".to_string()),
+    };
+
+    // Parse variants from list
+    let variants_list = &args[1];
+    let mut variants = Vec::new();
+
+    match variants_list {
+        Value::Cons(_) => {
+            let variant_vec = variants_list.list_to_vec()?;
+            for variant_val in variant_vec {
+                match variant_val {
+                    Value::Cons(cons) => {
+                        let name = match &cons.first {
+                            Value::String(n) => n.as_ref().to_string(),
+                            _ => return Err("variant name must be a string".to_string()),
+                        };
+
+                        let value = match &cons.rest {
+                            Value::Cons(rest_cons) => match &rest_cons.first {
+                                Value::Int(n) => *n,
+                                _ => return Err("variant value must be an integer".to_string()),
+                            },
+                            _ => return Err("variant must be (name value)".to_string()),
+                        };
+
+                        variants.push(EnumVariant { name, value });
+                    }
+                    _ => return Err("each variant must be a cons cell".to_string()),
+                }
+            }
+        }
+        Value::Nil => {}
+        _ => return Err("variants must be a list".to_string()),
+    }
+
+    // Create enum layout
+    static ENUM_ID_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let enum_id = EnumId::new(ENUM_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
+
+    let _layout = EnumLayout::new(enum_id, enum_name.to_string(), variants, CType::Int);
+
+    // Return enum ID as integer
+    Ok(Value::Int(enum_id.0 as i64))
+}
+
+pub fn prim_make_c_callback_wrapper(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 3 {
+        return Err("make-c-callback requires exactly 3 arguments".to_string());
+    }
+
+    // Parse argument types
+    let arg_types = match &args[1] {
+        Value::Nil => vec![],
+        Value::Cons(_) => {
+            let type_list = args[1].list_to_vec()?;
+            type_list
+                .iter()
+                .map(parse_ctype)
+                .collect::<Result<Vec<_>, _>>()?
+        }
+        _ => return Err("arg-types must be a list".to_string()),
+    };
+
+    // Parse return type
+    let return_type = parse_ctype(&args[2])?;
+
+    // Create callback
+    let (cb_id, _info) = create_callback(arg_types, return_type);
+
+    // Return callback ID as integer
+    Ok(Value::Int(cb_id as i64))
+}
+
+pub fn prim_free_callback_wrapper(_args: &[Value]) -> Result<Value, String> {
+    // Placeholder - full implementation would unregister
+    Ok(Value::Nil)
+}
+
+pub fn prim_register_allocation_wrapper(_args: &[Value]) -> Result<Value, String> {
+    Ok(Value::Int(1))
+}
+
+pub fn prim_memory_stats_wrapper(_args: &[Value]) -> Result<Value, String> {
+    let (total_bytes, alloc_count) = get_memory_stats();
+    Ok(crate::value::list(vec![
+        Value::Int(total_bytes as i64),
+        Value::Int(alloc_count as i64),
+    ]))
+}
+
+pub fn prim_type_check_wrapper(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("type-check requires 2 arguments".to_string());
+    }
+
+    let value = &args[0];
+    let expected = parse_ctype(&args[1])?;
+
+    match TypeChecker::check_type(value, &expected) {
+        Ok(()) => Ok(Value::Int(1)),
+        Err(_) => Ok(Value::Int(0)),
+    }
+}
+
+pub fn prim_null_pointer_wrapper(args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err("null-pointer? requires at least 1 argument".to_string());
+    }
+
+    let is_null = NullPointerChecker::is_null(&args[0]);
+    Ok(Value::Int(if is_null { 1 } else { 0 }))
+}
+
+pub fn prim_ffi_last_error_wrapper(_args: &[Value]) -> Result<Value, String> {
+    match get_last_error() {
+        Some(err) => Ok(Value::String(format!("{}", err).into())),
+        None => Ok(Value::Nil),
+    }
+}
+
+pub fn prim_with_ffi_safety_checks_wrapper(args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err("with-ffi-safety-checks requires at least 1 argument".to_string());
+    }
     Ok(args[0].clone())
 }
 
