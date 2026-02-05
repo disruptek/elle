@@ -1,8 +1,7 @@
-// DEFENSE: Integration tests for closure optimization (Issue #20)  
+// DEFENSE: Integration tests for closure optimization (Issue #20)
 // These tests verify closure correctness and provide baseline for optimization work
 
-use elle::{compile, list, read_str, register_primitives, Lexer, Reader, SymbolTable, Value, VM};
-use std::rc::Rc;
+use elle::{compile, list, register_primitives, Lexer, Reader, SymbolTable, Value, VM};
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
@@ -98,9 +97,6 @@ fn test_closure_captures_and_uses_global() {
     "#;
     assert_eq!(eval(code).unwrap(), Value::Bool(true));
 }
-
-#[test]
-
 #[test]
 fn test_closure_shadowing_parameter() {
     let code = r#"
