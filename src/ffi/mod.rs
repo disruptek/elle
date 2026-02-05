@@ -13,6 +13,8 @@
 pub mod bindings;
 pub mod call;
 pub mod callback;
+pub mod handler_marshal;
+pub mod handlers;
 pub mod header;
 pub mod loader;
 pub mod marshal;
@@ -23,6 +25,7 @@ pub mod symbol;
 pub mod types;
 pub mod wasm;
 
+use handlers::HandlerRegistry;
 use loader::LibraryHandle;
 use std::collections::HashMap;
 use symbol::SymbolResolver;
@@ -40,6 +43,8 @@ pub struct FFISubsystem {
     struct_layouts: HashMap<u32, StructLayout>,
     /// Next struct ID to assign
     next_struct_id: u32,
+    /// Custom type handler registry
+    handler_registry: HandlerRegistry,
 }
 
 impl FFISubsystem {
@@ -51,6 +56,7 @@ impl FFISubsystem {
             symbol_resolver: SymbolResolver::new(),
             struct_layouts: HashMap::new(),
             next_struct_id: 1,
+            handler_registry: HandlerRegistry::new(),
         }
     }
 
@@ -123,6 +129,43 @@ impl FFISubsystem {
             .iter()
             .map(|(id, layout)| (StructId(*id), layout))
             .collect()
+    }
+
+    /// Get the custom type handler registry.
+    pub fn handler_registry(&self) -> &HandlerRegistry {
+        &self.handler_registry
+    }
+
+    /// Marshal an Elle value to C with handler support.
+    ///
+    /// This method checks for registered custom handlers before falling back
+    /// to default marshaling.
+    pub fn marshall_elle_to_c(
+        &self,
+        value: &crate::value::Value,
+        ctype: &types::CType,
+    ) -> Result<marshal::CValue, String> {
+        handler_marshal::HandlerMarshal::elle_to_c_with_handlers(
+            value,
+            ctype,
+            &self.handler_registry,
+        )
+    }
+
+    /// Unmarshal a C value to Elle with handler support.
+    ///
+    /// This method checks for registered custom handlers before falling back
+    /// to default unmarshaling.
+    pub fn marshall_c_to_elle(
+        &self,
+        cval: &marshal::CValue,
+        ctype: &types::CType,
+    ) -> Result<crate::value::Value, String> {
+        handler_marshal::HandlerMarshal::c_to_elle_with_handlers(
+            cval,
+            ctype,
+            &self.handler_registry,
+        )
     }
 }
 

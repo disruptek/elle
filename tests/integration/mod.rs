@@ -35,6 +35,12 @@ mod ffi_callbacks {
 mod ffi_struct_marshaling {
     include!("ffi-struct-marshaling.rs");
 }
+mod ffi_custom_handlers {
+    include!("ffi-custom-handlers.rs");
+}
+mod ffi_handler_integration {
+    include!("ffi-handler-integration.rs");
+}
 mod shebang {
     include!("shebang.rs");
 }
@@ -58,4 +64,10 @@ mod mutual_recursion {
 }
 mod closure_capture_optimization {
     include!("closure_capture_optimization.rs");
+}
+mod closure_optimization {
+    include!("closure_optimization.rs");
+}
+mod pattern_matching {
+    include!("pattern_matching.rs");
 }
