@@ -26,6 +26,9 @@ mod types {
 mod property {
     include!("property.rs");
 }
+mod exception_handling {
+    include!("exception_handling.rs");
+}
 mod ffi_marshaling {
     include!("ffi-marshaling.rs");
 }
@@ -34,4 +37,13 @@ mod ffi_callbacks {
 }
 mod shebang {
     include!("shebang.rs");
+}
+mod finally_clause {
+    include!("finally_clause.rs");
+}
+mod loops {
+    include!("loops.rs");
+}
+mod exception_filtering {
+    include!("exception_filtering.rs");
 }

@@ -61,6 +61,8 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
     }
 
     let mut had_parse_error = false;
+    let mut had_runtime_error = false;
+    let mut had_compilation_error = false;
 
     // First pass: collect all top-level definitions to pre-register them
     // This allows recursive functions to reference themselves
@@ -122,6 +124,7 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
                     Ok(e) => e,
                     Err(e) => {
                         eprintln!("✗ Compilation error: {}", e);
+                        had_compilation_error = true;
                         continue;
                     }
                 };
@@ -137,6 +140,7 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
                     }
                     Err(e) => {
                         eprintln!("✗ Runtime error: {}", e);
+                        had_runtime_error = true;
                     }
                 }
             }
@@ -147,9 +151,9 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
         }
     }
 
-    // Return error if any parse errors occurred (will exit with status 1)
-    if had_parse_error {
-        Err("Parse errors encountered".to_string())
+    // Return error if any errors occurred (will exit with status 1)
+    if had_parse_error || had_runtime_error || had_compilation_error {
+        Err("Errors encountered during execution".to_string())
     } else {
         Ok(())
     }
