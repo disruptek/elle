@@ -318,9 +318,12 @@
   (delete-file (join-path data-dir "data2.txt"))
   (delete-file (join-path data-dir "data3.txt"))
   (delete-file (join-path archive-dir "data1_archived.txt"))
+  (delete-file (join-path test-dir "file1.txt"))
+  (delete-file (join-path test-dir "file2.txt"))
+  (delete-file (join-path test-dir "file3.txt"))
+  (delete-directory (join-path test-dir "subdir"))
   (delete-directory data-dir)
   (delete-directory archive-dir)
-  (delete-directory sub-dir)
   (delete-directory test-dir)
 
   (display "Cleanup complete")
