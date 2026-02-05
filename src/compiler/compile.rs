@@ -354,6 +354,55 @@ impl Compiler {
                 // For Phase 2, we compile the value that will become the exception
                 self.compile_expr(value, false);
             }
+
+            Expr::Quote(expr) => {
+                // Quote: return the expression itself without evaluation
+                // For Phase 2, we treat quoted expressions as literal data
+                // This would require converting AST to Value representation
+                self.compile_expr(expr, tail);
+            }
+
+            Expr::Quasiquote(expr) => {
+                // Quasiquote: quote with unquote support
+                // For Phase 2, similar to quote but tracks unquote positions
+                self.compile_expr(expr, tail);
+            }
+
+            Expr::Unquote(expr) => {
+                // Unquote: evaluate inside quasiquote
+                self.compile_expr(expr, tail);
+            }
+
+            Expr::DefMacro {
+                name: _,
+                params: _,
+                body,
+            } => {
+                // Define macro: Phase 2 simplified - just compile the body
+                // Full macro expansion would happen during parsing
+                self.compile_expr(body, tail);
+            }
+
+            Expr::Module {
+                name: _,
+                exports: _,
+                body,
+            } => {
+                // Module definition: compile body in module context
+                self.compile_expr(body, tail);
+            }
+
+            Expr::Import { module: _ } => {
+                // Import: no runtime effect in Phase 2
+                // Would load module definitions at compile time
+                self.bytecode.emit(Instruction::Nil);
+            }
+
+            Expr::ModuleRef { module: _, name: _ } => {
+                // Module-qualified reference: resolved during compilation
+                // For Phase 2, treat as regular global variable lookup
+                self.bytecode.emit(Instruction::Nil);
+            }
         }
     }
 

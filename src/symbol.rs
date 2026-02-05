@@ -1,11 +1,30 @@
 use crate::value::SymbolId;
 use rustc_hash::FxHashMap;
+use std::rc::Rc;
+
+/// Macro definition
+#[derive(Debug, Clone)]
+pub struct MacroDef {
+    pub name: SymbolId,
+    pub params: Vec<SymbolId>,
+    pub body: String, // Lisp source for macro body
+}
+
+/// Module definition
+#[derive(Debug, Clone)]
+pub struct ModuleDef {
+    pub name: SymbolId,
+    pub exports: Vec<SymbolId>,
+}
 
 /// Symbol interning table for fast symbol comparison
 #[derive(Debug)]
 pub struct SymbolTable {
     map: FxHashMap<String, SymbolId>,
     names: Vec<String>,
+    macros: FxHashMap<SymbolId, Rc<MacroDef>>,
+    modules: FxHashMap<SymbolId, Rc<ModuleDef>>,
+    current_module: Option<SymbolId>,
 }
 
 impl SymbolTable {
@@ -13,6 +32,9 @@ impl SymbolTable {
         SymbolTable {
             map: FxHashMap::default(),
             names: Vec::new(),
+            macros: FxHashMap::default(),
+            modules: FxHashMap::default(),
+            current_module: None,
         }
     }
 
@@ -36,6 +58,48 @@ impl SymbolTable {
     /// Check if a symbol exists
     pub fn get(&self, name: &str) -> Option<SymbolId> {
         self.map.get(name).copied()
+    }
+
+    /// Register a macro definition
+    pub fn define_macro(&mut self, macro_def: MacroDef) {
+        let id = macro_def.name;
+        self.macros.insert(id, Rc::new(macro_def));
+    }
+
+    /// Get a macro definition by symbol ID
+    pub fn get_macro(&self, id: SymbolId) -> Option<Rc<MacroDef>> {
+        self.macros.get(&id).cloned()
+    }
+
+    /// Check if a symbol is a macro
+    pub fn is_macro(&self, id: SymbolId) -> bool {
+        self.macros.contains_key(&id)
+    }
+
+    /// Define a module
+    pub fn define_module(&mut self, module_def: ModuleDef) {
+        let id = module_def.name;
+        self.modules.insert(id, Rc::new(module_def));
+    }
+
+    /// Get a module definition by symbol ID
+    pub fn get_module(&self, id: SymbolId) -> Option<Rc<ModuleDef>> {
+        self.modules.get(&id).cloned()
+    }
+
+    /// Check if a symbol is a module
+    pub fn is_module(&self, id: SymbolId) -> bool {
+        self.modules.contains_key(&id)
+    }
+
+    /// Set the current module
+    pub fn set_current_module(&mut self, module: Option<SymbolId>) {
+        self.current_module = module;
+    }
+
+    /// Get the current module
+    pub fn current_module(&self) -> Option<SymbolId> {
+        self.current_module
     }
 }
 

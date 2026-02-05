@@ -443,3 +443,115 @@ fn test_exception_is_value() {
         _ => panic!("Expected string type name"),
     }
 }
+
+// Macro and meta-programming tests
+#[test]
+fn test_gensym_generation() {
+    let (vm, mut symbols) = setup();
+    let gensym = get_primitive(&vm, &mut symbols, "gensym");
+
+    // Generate unique symbols
+    let sym1 = call_primitive(&gensym, &[]).unwrap();
+    let sym2 = call_primitive(&gensym, &[]).unwrap();
+
+    // Should generate strings (symbol names)
+    match (&sym1, &sym2) {
+        (Value::String(s1), Value::String(s2)) => {
+            // Symbols should be unique
+            assert_ne!(s1.as_ref(), s2.as_ref());
+            // Should start with G (default prefix)
+            assert!(s1.starts_with('G'));
+            assert!(s2.starts_with('G'));
+        }
+        _ => panic!("gensym should return strings"),
+    }
+}
+
+#[test]
+fn test_gensym_with_prefix() {
+    let (vm, mut symbols) = setup();
+    let gensym = get_primitive(&vm, &mut symbols, "gensym");
+
+    // Generate symbol with custom prefix
+    let sym = call_primitive(&gensym, &[Value::String("VAR".into())]).unwrap();
+
+    match sym {
+        Value::String(s) => {
+            assert!(s.starts_with("VAR"));
+        }
+        _ => panic!("gensym should return string"),
+    }
+}
+
+// Module system tests
+#[test]
+fn test_symbol_table_macro_support() {
+    use elle::symbol::{MacroDef, SymbolTable};
+    use elle::value::SymbolId;
+
+    let mut table = SymbolTable::new();
+    let name = table.intern("when");
+    let cond = table.intern("cond");
+    let body = table.intern("body");
+
+    // Define a macro
+    let macro_def = MacroDef {
+        name,
+        params: vec![cond, body],
+        body: "(if cond body nil)".to_string(),
+    };
+
+    table.define_macro(macro_def);
+
+    // Check macro exists
+    assert!(table.is_macro(name));
+    assert!(table.get_macro(name).is_some());
+}
+
+#[test]
+fn test_symbol_table_module_support() {
+    use elle::symbol::{ModuleDef, SymbolTable};
+
+    let mut table = SymbolTable::new();
+    let math = table.intern("math");
+    let add = table.intern("add");
+    let sub = table.intern("sub");
+
+    // Define a module
+    let module_def = ModuleDef {
+        name: math,
+        exports: vec![add, sub],
+    };
+
+    table.define_module(module_def);
+
+    // Check module exists
+    assert!(table.is_module(math));
+    assert!(table.get_module(math).is_some());
+
+    // Check exports
+    if let Some(module) = table.get_module(math) {
+        assert_eq!(module.exports.len(), 2);
+        assert!(module.exports.contains(&add));
+        assert!(module.exports.contains(&sub));
+    }
+}
+
+#[test]
+fn test_module_tracking() {
+    use elle::symbol::SymbolTable;
+
+    let mut table = SymbolTable::new();
+    let math = table.intern("math");
+
+    // Initially no current module
+    assert_eq!(table.current_module(), None);
+
+    // Set current module
+    table.set_current_module(Some(math));
+    assert_eq!(table.current_module(), Some(math));
+
+    // Clear current module
+    table.set_current_module(None);
+    assert_eq!(table.current_module(), None);
+}

@@ -189,6 +189,9 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
     register_fn(vm, symbols, "exception", prim_exception);
     register_fn(vm, symbols, "exception-message", prim_exception_message);
     register_fn(vm, symbols, "exception-data", prim_exception_data);
+
+    // Quoting and meta-programming
+    register_fn(vm, symbols, "gensym", prim_gensym);
 }
 
 fn register_fn(
@@ -1290,4 +1293,25 @@ fn prim_exception_data(args: &[Value]) -> Result<Value, String> {
             args[0].type_name()
         )),
     }
+}
+
+// Macro and meta-programming primitives
+use std::sync::atomic::{AtomicU32, Ordering};
+
+static GENSYM_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+fn prim_gensym(args: &[Value]) -> Result<Value, String> {
+    let prefix = if args.is_empty() {
+        "G".to_string()
+    } else {
+        match &args[0] {
+            Value::String(s) => s.to_string(),
+            Value::Symbol(id) => format!("G{}", id.0),
+            _ => "G".to_string(),
+        }
+    };
+
+    let counter = GENSYM_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let sym_name = format!("{}{}", prefix, counter);
+    Ok(Value::String(sym_name.into()))
 }

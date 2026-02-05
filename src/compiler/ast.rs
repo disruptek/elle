@@ -100,6 +100,35 @@ pub enum Expr {
 
     /// Throw exception
     Throw { value: Box<Expr> },
+
+    /// Quote expression (prevents evaluation)
+    Quote(Box<Expr>),
+
+    /// Quasiquote expression (quote with unquote support)
+    Quasiquote(Box<Expr>),
+
+    /// Unquote expression (inside quasiquote)
+    Unquote(Box<Expr>),
+
+    /// Define macro
+    DefMacro {
+        name: SymbolId,
+        params: Vec<SymbolId>,
+        body: Box<Expr>,
+    },
+
+    /// Module definition
+    Module {
+        name: SymbolId,
+        exports: Vec<SymbolId>,
+        body: Box<Expr>,
+    },
+
+    /// Import module
+    Import { module: SymbolId },
+
+    /// Module-qualified name (e.g., math:add)
+    ModuleRef { module: SymbolId, name: SymbolId },
 }
 
 /// Pattern for pattern matching
