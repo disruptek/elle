@@ -33,12 +33,20 @@ impl Compiler {
             },
 
             Expr::Var(_sym, depth, index) => {
+                // Note: Variables with depth=0 refer to the current scope.
+                // When compiling lambdas, this scope is in the closure environment,
+                // not on the local stack, so we need to use depth=1 for LoadUpvalue.
+                // LoadLocal is only used for top-level code.
                 if *depth == 0 {
-                    self.bytecode.emit(Instruction::LoadLocal);
+                    // Variables in current scope - use LoadLocal for top-level, LoadUpvalue for lambdas
+                    // Since we don't track whether we're in a lambda here, we'll use LoadUpvalue with depth=1
+                    // which works for both cases (top-level env is same as depth=1)
+                    self.bytecode.emit(Instruction::LoadUpvalue);
+                    self.bytecode.emit_byte(1); // depth=1 to access closure environment
                     self.bytecode.emit_byte(*index as u8);
                 } else {
                     self.bytecode.emit(Instruction::LoadUpvalue);
-                    self.bytecode.emit_byte(*depth as u8);
+                    self.bytecode.emit_byte((*depth + 1) as u8); // Adjust depth for closure environment
                     self.bytecode.emit_byte(*index as u8);
                 }
             }
@@ -127,19 +135,23 @@ impl Compiler {
 
                 let idx = self.bytecode.add_constant(Value::Closure(Rc::new(closure)));
 
-                // Emit captured values onto the stack (in order)
-                // These will be stored in the closure's environment by the VM
-                for (sym, _depth, _index) in captures {
-                    // Load the captured variable
-                    let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                    self.bytecode.emit(Instruction::LoadGlobal);
-                    self.bytecode.emit_u16(sym_idx);
-                }
+                // Don't emit captures during compilation - they'll be populated at runtime
+                // This allows for recursive function definitions where a function captures itself
+                // before it's been defined yet
+                // Instead of:
+                // for (sym, _depth, _index) in captures {
+                //     let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                //     self.bytecode.emit(Instruction::LoadGlobal);
+                //     self.bytecode.emit_u16(sym_idx);
+                // }
+                //
+                // We rely on the closure accessing variables from its environment at runtime
 
-                // Create closure with captured values
+                // Create closure without pre-loading captures
+                // Captures will be resolved as globals or from enclosing scopes at runtime
                 self.bytecode.emit(Instruction::MakeClosure);
                 self.bytecode.emit_u16(idx);
-                self.bytecode.emit_byte(captures.len() as u8);
+                self.bytecode.emit_byte(0); // No captures to pre-load
             }
 
             Expr::Let { bindings, body } => {
@@ -679,13 +691,35 @@ fn value_to_pattern(value: &Value, symbols: &SymbolTable) -> Result<super::ast::
 /// Simple value-to-expr conversion for bootstrap
 /// This is a simple tree-walking approach before full macro expansion
 pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, String> {
+    value_to_expr_with_scope(value, symbols, &mut Vec::new())
+}
+
+/// Convert a value to an expression, tracking local variable scopes
+/// The scope_stack contains local bindings (as Vec for ordering) at each nesting level
+fn value_to_expr_with_scope(
+    value: &Value,
+    symbols: &mut SymbolTable,
+    scope_stack: &mut Vec<Vec<SymbolId>>,
+) -> Result<Expr, String> {
     match value {
         Value::Nil | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::String(_) => {
             Ok(Expr::Literal(value.clone()))
         }
 
         Value::Symbol(id) => {
-            // Treat all symbols as global vars for now
+            // Check if the symbol is a local binding by walking up the scope stack
+            for (reverse_idx, scope) in scope_stack.iter().enumerate().rev() {
+                if let Some(local_index) = scope.iter().position(|sym| sym == id) {
+                    // Found in local scope - use Var with appropriate depth and index
+                    // depth represents how many function scopes up the variable is defined:
+                    // 0 = current lambda's parameters
+                    // 1 = enclosing lambda's parameters
+                    // etc.
+                    let actual_depth = scope_stack.len() - 1 - reverse_idx;
+                    return Ok(Expr::Var(*id, actual_depth, local_index));
+                }
+            }
+            // Not found in any local scope - treat as global
             Ok(Expr::GlobalVar(*id))
         }
 
@@ -711,10 +745,12 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                         if list.len() < 3 || list.len() > 4 {
                             return Err("if requires 2 or 3 arguments".to_string());
                         }
-                        let cond = Box::new(value_to_expr(&list[1], symbols)?);
-                        let then = Box::new(value_to_expr(&list[2], symbols)?);
+                        let cond =
+                            Box::new(value_to_expr_with_scope(&list[1], symbols, scope_stack)?);
+                        let then =
+                            Box::new(value_to_expr_with_scope(&list[2], symbols, scope_stack)?);
                         let else_ = if list.len() == 4 {
-                            Box::new(value_to_expr(&list[3], symbols)?)
+                            Box::new(value_to_expr_with_scope(&list[3], symbols, scope_stack)?)
                         } else {
                             Box::new(Expr::Literal(Value::Nil))
                         };
@@ -724,7 +760,7 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                     "begin" => {
                         let exprs: Result<Vec<_>, _> = list[1..]
                             .iter()
-                            .map(|v| value_to_expr(v, symbols))
+                            .map(|v| value_to_expr_with_scope(v, symbols, scope_stack))
                             .collect();
                         Ok(Expr::Begin(exprs?))
                     }
@@ -739,10 +775,17 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                             params.iter().map(|p| p.as_symbol()).collect();
                         let param_syms = param_syms?;
 
+                        // Push a new scope with the lambda parameters (as Vec for ordered indices)
+                        scope_stack.push(param_syms.clone());
+
                         let body_exprs: Result<Vec<_>, _> = list[2..]
                             .iter()
-                            .map(|v| value_to_expr(v, symbols))
+                            .map(|v| value_to_expr_with_scope(v, symbols, scope_stack))
                             .collect();
+
+                        // Pop the lambda's scope
+                        scope_stack.pop();
+
                         let body_exprs = body_exprs?;
                         let body = if body_exprs.len() == 1 {
                             Box::new(body_exprs[0].clone())
@@ -776,7 +819,8 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                             return Err("define requires exactly 2 arguments".to_string());
                         }
                         let name = list[1].as_symbol()?;
-                        let value = Box::new(value_to_expr(&list[2], symbols)?);
+                        let value =
+                            Box::new(value_to_expr_with_scope(&list[2], symbols, scope_stack)?);
                         Ok(Expr::Define { name, value })
                     }
 
@@ -785,7 +829,8 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                             return Err("set! requires exactly 2 arguments".to_string());
                         }
                         let var = list[1].as_symbol()?;
-                        let value = Box::new(value_to_expr(&list[2], symbols)?);
+                        let value =
+                            Box::new(value_to_expr_with_scope(&list[2], symbols, scope_stack)?);
                         Ok(Expr::Set {
                             var,
                             depth: 0,
@@ -800,7 +845,8 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                             return Err("try requires at least a body".to_string());
                         }
 
-                        let body = Box::new(value_to_expr(&list[1], symbols)?);
+                        let body =
+                            Box::new(value_to_expr_with_scope(&list[1], symbols, scope_stack)?);
                         let mut catch_clause = None;
                         let mut finally_clause = None;
 
@@ -819,7 +865,11 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                                                 return Err("catch requires exactly 2 arguments (variable and handler)".to_string());
                                             }
                                             let var = v[1].as_symbol()?;
-                                            let handler = Box::new(value_to_expr(&v[2], symbols)?);
+                                            let handler = Box::new(value_to_expr_with_scope(
+                                                &v[2],
+                                                symbols,
+                                                scope_stack,
+                                            )?);
                                             catch_clause = Some((var, handler));
                                         }
                                         "finally" => {
@@ -828,7 +878,11 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                                                     .to_string());
                                             }
                                             finally_clause =
-                                                Some(Box::new(value_to_expr(&v[1], symbols)?));
+                                                Some(Box::new(value_to_expr_with_scope(
+                                                    &v[1],
+                                                    symbols,
+                                                    scope_stack,
+                                                )?));
                                         }
                                         _ => {
                                             return Err(format!(
@@ -858,7 +912,8 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                             return Err("match requires at least a value".to_string());
                         }
 
-                        let value = Box::new(value_to_expr(&list[1], symbols)?);
+                        let value =
+                            Box::new(value_to_expr_with_scope(&list[1], symbols, scope_stack)?);
                         let mut patterns = Vec::new();
                         let mut default = None;
 
@@ -872,12 +927,19 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                                 // Check if this is a default clause (symbol, not a list)
                                 if clause_vec.len() == 1 {
                                     // Single value - treat as default
-                                    default =
-                                        Some(Box::new(value_to_expr(&clause_vec[0], symbols)?));
+                                    default = Some(Box::new(value_to_expr_with_scope(
+                                        &clause_vec[0],
+                                        symbols,
+                                        scope_stack,
+                                    )?));
                                 } else if clause_vec.len() == 2 {
                                     // Pattern and result
                                     let pattern = value_to_pattern(&clause_vec[0], symbols)?;
-                                    let result = value_to_expr(&clause_vec[1], symbols)?;
+                                    let result = value_to_expr_with_scope(
+                                        &clause_vec[1],
+                                        symbols,
+                                        scope_stack,
+                                    )?;
                                     patterns.push((pattern, result));
                                 } else {
                                     return Err(
@@ -886,7 +948,11 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                                 }
                             } else {
                                 // Not a list - treat as default
-                                default = Some(Box::new(value_to_expr(clause, symbols)?));
+                                default = Some(Box::new(value_to_expr_with_scope(
+                                    clause,
+                                    symbols,
+                                    scope_stack,
+                                )?));
                             }
                         }
 
@@ -906,7 +972,7 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                         }
                         // Compile as a regular function call to the throw primitive
                         let func = Box::new(Expr::GlobalVar(first.as_symbol()?));
-                        let args = vec![value_to_expr(&list[1], symbols)?];
+                        let args = vec![value_to_expr_with_scope(&list[1], symbols, scope_stack)?];
                         Ok(Expr::Call {
                             func,
                             args,
@@ -948,7 +1014,8 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                             body: body_str,
                         });
 
-                        let body = Box::new(value_to_expr(&list[3], symbols)?);
+                        let body =
+                            Box::new(value_to_expr_with_scope(&list[3], symbols, scope_stack)?);
 
                         Ok(Expr::DefMacro { name, params, body })
                     }
@@ -967,7 +1034,11 @@ pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, S
                                         expand_macro(*sym_id, &macro_def, &args, symbols)?;
 
                                     // Parse the expanded result as an expression
-                                    return value_to_expr(&expanded, symbols);
+                                    return value_to_expr_with_scope(
+                                        &expanded,
+                                        symbols,
+                                        scope_stack,
+                                    );
                                 }
                             }
                         }
