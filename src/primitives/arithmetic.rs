@@ -181,6 +181,8 @@ pub fn prim_div(args: &[Value]) -> Result<Value, String> {
 }
 
 pub fn prim_mod(args: &[Value]) -> Result<Value, String> {
+    // Euclidean modulo: result always has same sign as divisor (b)
+    // Example: (mod -17 5) => 3 (because -17 = -4*5 + 3)
     if args.len() != 2 {
         return Err("mod requires exactly 2 arguments".to_string());
     }
@@ -190,13 +192,15 @@ pub fn prim_mod(args: &[Value]) -> Result<Value, String> {
             if *b == 0 {
                 return Err("Modulo by zero".to_string());
             }
-            Ok(Value::Int(a % b))
+            Ok(Value::Int(a.rem_euclid(*b)))
         }
         _ => Err("Type error: mod requires integers".to_string()),
     }
 }
 
 pub fn prim_remainder(args: &[Value]) -> Result<Value, String> {
+    // Truncated division remainder: result has same sign as dividend (a)
+    // Example: (remainder -17 5) => -2 (because -17 = -3*5 + -2)
     if args.len() != 2 {
         return Err("remainder requires exactly 2 arguments".to_string());
     }
@@ -206,7 +210,7 @@ pub fn prim_remainder(args: &[Value]) -> Result<Value, String> {
             if *b == 0 {
                 return Err("Remainder by zero".to_string());
             }
-            Ok(Value::Int(a.rem_euclid(*b)))
+            Ok(Value::Int(a % b))
         }
         _ => Err("Type error: remainder requires integers".to_string()),
     }

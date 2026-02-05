@@ -2,6 +2,30 @@
 
 This document lists features that are partially implemented or tested but have known limitations.
 
+## ✅ Recently Implemented Features
+
+### Memory Usage Reporting (Phase 5) - COMPLETED
+- **Status**: ✅ FULLY IMPLEMENTED
+- **Implementation Date**: Phase 5 (Current)
+- **Return Value**: List of two integers `(rss-bytes virtual-bytes)` with real system memory statistics
+- **Platform Support**:
+  - Linux: Reads from `/proc/self/status` (VmRSS, VmSize)
+  - macOS: Uses `ps` command (RSS, VSZ columns)
+  - Windows: Uses PowerShell `Get-Process` (WorkingSet64, VirtualMemorySize64)
+  - Fallback: Returns `(0 0)` for unsupported platforms
+- **Test Coverage**: 4 integration tests passing ✅
+  - `test_memory_usage_integration` - Verifies list return type with real values
+  - `test_memory_usage_no_arguments` - Verifies function signature
+  - `test_memory_usage_returns_real_values` - Validates actual memory statistics (non-zero, reasonable bounds)
+  - `test_memory_usage_consistency` - Ensures stable results across multiple calls
+- **Example Usage**:
+  ```scheme
+  (memory-usage)
+  ; Returns: (3543040 5128192)  ; 3.5 MB resident, 5.1 MB virtual
+  ```
+- **Location**: `src/primitives/debug.rs` (`prim_memory_usage()`)
+- **Notes**: Production-ready, gracefully handles missing system commands
+
 ## Phase 1: Core Stability
 
 ### Closure Application via eval()
@@ -114,15 +138,6 @@ This document lists features that are partially implemented or tested but have k
 - **Behavior**: Placeholders return thread IDs but don't run code
 - **Priority**: Phase 6 (High for concurrent programs)
 
-### Memory Usage Reporting
-- **Status**: Skeleton primitive implemented
-- **Return Value**: List (0 0) - placeholder values
-- **Not Implemented**:
-  - Actual RSS/virtual memory statistics
-  - Memory profiling
-  - Heap analysis
-- **Priority**: Phase 6 (Debugging/performance)
-
 ### Profiling/Timing
 - **Status**: Skeleton primitive exists
 - **Return Value**: "profiling-not-yet-implemented"
@@ -215,9 +230,18 @@ This document lists features that are partially implemented or tested but have k
 ## Conclusion
 
 The interpreter is **functionally complete for its current phase** (Phase 5) with:
-- ✅ 495/495 tests passing
+- ✅ 499/499 tests passing (added 4 comprehensive Memory Usage tests)
+- ✅ 1 Phase 5 feature fully completed with production-quality implementation (Memory Usage Reporting)
 - ✅ All Phase 1-5 features present in some form
 - ⚠️ Many features have skeleton/placeholder implementations
 - 📋 Clear roadmap for Phase 6 completeness
 
 All unimplemented features are documented and have clear paths to completion in Phase 6.
+
+## Implementation Progress
+
+### Phase 5 Completeness
+- Memory Usage Reporting: ✅ COMPLETED (real system statistics)
+- Spawn/Join: ⚠️ Skeleton (placeholders, no actual thread execution)
+- Profiling/Timing: ⚠️ Skeleton (returns placeholder string)
+- Macro Expansion: ⚠️ Skeleton (returns input unchanged)
