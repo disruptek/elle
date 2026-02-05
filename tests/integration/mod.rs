@@ -32,3 +32,6 @@ mod ffi_marshaling {
 mod ffi_callbacks {
     include!("ffi-callbacks.rs");
 }
+mod shebang {
+    include!("shebang.rs");
+}
