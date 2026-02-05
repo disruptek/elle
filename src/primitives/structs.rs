@@ -6,7 +6,7 @@ use std::rc::Rc;
 /// Create an immutable struct from key-value pairs
 /// (struct key1 val1 key2 val2 ...)
 pub fn prim_struct(args: &[Value]) -> Result<Value, String> {
-    if args.len() % 2 != 0 {
+    if !args.len().is_multiple_of(2) {
         return Err("struct requires an even number of arguments (key-value pairs)".to_string());
     }
 

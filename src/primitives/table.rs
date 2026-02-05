@@ -7,7 +7,7 @@ use std::rc::Rc;
 /// Create a mutable table from key-value pairs
 /// (table key1 val1 key2 val2 ...)
 pub fn prim_table(args: &[Value]) -> Result<Value, String> {
-    if args.len() % 2 != 0 {
+    if !args.len().is_multiple_of(2) {
         return Err("table requires an even number of arguments (key-value pairs)".to_string());
     }
 
