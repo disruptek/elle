@@ -56,3 +56,6 @@ mod closures_and_lambdas {
 mod mutual_recursion {
     include!("mutual_recursion.rs");
 }
+mod closure_capture_optimization {
+    include!("closure_capture_optimization.rs");
+}
