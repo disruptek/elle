@@ -230,7 +230,7 @@ fn test_handler_error_handling() {
     let handler = Arc::new(IntHandler);
 
     // Try to convert wrong type
-    let result = handler.elle_to_c(&Value::Float(3.14), &CType::Int);
+    let result = handler.elle_to_c(&Value::Float(std::f64::consts::PI), &CType::Int);
     assert!(result.is_err());
 
     let error = result.unwrap_err();
