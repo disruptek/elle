@@ -813,3 +813,33 @@ fn test_nested_recursive_functions() {
     "#;
     assert_eq!(eval(code).unwrap(), Value::Int(15)); // 5 + 4 + 3 + 2 + 1
 }
+
+#[test]
+fn test_simple_lambda_call() {
+    // Simple lambda that takes a parameter and returns it
+    let code = r#"
+        (define identity (lambda (x) x))
+        (identity 42)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::Int(42));
+}
+
+#[test]
+fn test_lambda_with_arithmetic() {
+    // Lambda that does arithmetic on its parameter
+    let code = r#"
+        (define double (lambda (x) (* x 2)))
+        (double 21)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::Int(42));
+}
+
+#[test]
+fn test_lambda_with_comparison() {
+    // Lambda that uses comparison on its parameter
+    let code = r#"
+        (define is-positive (lambda (x) (> x 0)))
+        (is-positive 5)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::Bool(true));
+}
