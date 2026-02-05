@@ -77,6 +77,8 @@ jobs:
       - name: Test all Lisp examples with release build
         run: |
           ELLE_BIN="./target/release/elle"
+          TEMP_DIR="/tmp/elle-examples-$$"
+          mkdir -p "$TEMP_DIR"
           
           echo "Testing all Lisp examples with release build:"
           echo "=============================================="
@@ -97,19 +99,23 @@ jobs:
             echo "Running: $EXAMPLE_NAME"
             echo "---"
             
-            if timeout 10s "$ELLE_BIN" "$example" > /var/run/user/1000/output.txt 2>&1; then
+            OUTPUT_FILE="$TEMP_DIR/output_$EXAMPLE_NAME.txt"
+            if timeout 10s "$ELLE_BIN" "$example" > "$OUTPUT_FILE" 2>&1; then
               PASSED=$((PASSED + 1))
               echo "✓ $EXAMPLE_NAME PASSED"
               # Show first few lines of output
-              head -5 /var/run/user/1000/output.txt | sed 's/^/  /'
+              head -5 "$OUTPUT_FILE" | sed 's/^/  /'
             else
               FAILED=$((FAILED + 1))
               echo "✗ $EXAMPLE_NAME FAILED"
               # Show error details
-              head -10 /var/run/user/1000/output.txt | sed 's/^/  /'
+              head -10 "$OUTPUT_FILE" | sed 's/^/  /'
               # Don't exit on failure - continue testing all examples
             fi
           done
+          
+          # Cleanup
+          rm -rf "$TEMP_DIR"
           
           echo ""
           echo "=============================================="
