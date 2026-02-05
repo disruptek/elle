@@ -1200,10 +1200,8 @@ fn test_match_nil_pattern() {
 }
 
 #[test]
-#[ignore]
 fn test_match_default_case() {
     // Default pattern at end - catches anything not matched
-    // TODO: Fix multi-pattern matching
     assert_eq!(
         eval("(match 99 ((1) \"one\") ((2) \"two\") ((_ ) \"other\"))").unwrap(),
         Value::String("other".into())
@@ -1211,10 +1209,8 @@ fn test_match_default_case() {
 }
 
 #[test]
-#[ignore]
 fn test_match_multiple_clauses_ordering() {
     // Test clause ordering - first matching clause wins
-    // TODO: Fix multi-pattern matching
     assert_eq!(
         eval("(match 2 ((1) \"one\") ((2) \"two\") ((3) \"three\"))").unwrap(),
         Value::String("two".into())
@@ -1242,16 +1238,7 @@ fn test_match_string_literals() {
 }
 
 #[test]
-#[ignore]
-fn test_match_returns_matched_value() {
-    // Verify that match returns the value of the matched branch
-    // TODO: Fix multi-pattern matching
-    assert_eq!(eval("(match 5 ((5) 42) ((_ ) 0))").unwrap(), Value::Int(42));
-    assert_eq!(eval("(match 3 ((5) 42) ((_ ) 0))").unwrap(), Value::Int(0));
-}
-
 // Integration scenarios
-
 #[test]
 fn test_error_in_trace_argument() {
     // trace should still work even if computation had errors

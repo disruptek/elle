@@ -284,10 +284,26 @@ impl Compiler {
                 // Compile the value to match against
                 self.compile_expr(value, false);
                 let mut exit_jumps = Vec::new();
+                let mut pending_jumps: Vec<Vec<usize>> = Vec::new();
 
-                // Try each pattern in sequence
+                // Compile all patterns
                 for (pattern, body_expr) in patterns {
-                    let next_pattern_jumps = self.compile_pattern_check(pattern);
+                    // If we have pending jumps from the previous pattern, patch them now
+                    // They should jump to this position (start of this pattern check)
+                    if !pending_jumps.is_empty() {
+                        let target = self.bytecode.instructions.len();
+                        for jump_positions in pending_jumps.drain(..) {
+                            for jump_idx in jump_positions {
+                                let offset = (target as i32) - (jump_idx as i32 + 2);
+                                self.bytecode.patch_jump(jump_idx, offset as i16);
+                            }
+                        }
+                    }
+
+                    // Compile pattern check and collect jumps that should be patched when we know
+                    // where the next pattern (or default) starts
+                    let pattern_jumps = self.compile_pattern_check(pattern);
+                    pending_jumps.push(pattern_jumps);
 
                     // Pattern matched - pop the value and execute body
                     self.bytecode.emit(Instruction::Pop);
@@ -297,11 +313,13 @@ impl Compiler {
                     self.bytecode.emit(Instruction::Jump);
                     exit_jumps.push(self.bytecode.instructions.len());
                     self.bytecode.emit_i16(0);
+                }
 
-                    // Patch the next_pattern_jumps to skip to here if pattern doesn't match
-                    let skip_to = self.bytecode.instructions.len();
-                    for jump_idx in next_pattern_jumps {
-                        let offset = (skip_to as i32) - (jump_idx as i32 + 2);
+                // Patch any remaining jumps from the last pattern to point to default
+                let default_start = self.bytecode.instructions.len();
+                for jump_positions in pending_jumps.drain(..) {
+                    for jump_idx in jump_positions {
+                        let offset = (default_start as i32) - (jump_idx as i32 + 2);
                         self.bytecode.patch_jump(jump_idx, offset as i16);
                     }
                 }
@@ -643,8 +661,12 @@ fn value_to_pattern(value: &Value, symbols: &SymbolTable) -> Result<super::ast::
             let vec = value.list_to_vec()?;
             if vec.is_empty() {
                 Ok(Pattern::Nil)
+            } else if vec.len() == 1 {
+                // Single-element list is just that pattern (unwrap it)
+                // e.g., (1) in (match 2 ((1) "one")) becomes just the pattern 1
+                value_to_pattern(&vec[0], symbols)
             } else {
-                // Convert to List pattern
+                // Multi-element list is a list pattern
                 let patterns: Result<Vec<_>, _> =
                     vec.iter().map(|v| value_to_pattern(v, symbols)).collect();
                 Ok(Pattern::List(patterns?))

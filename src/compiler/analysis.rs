@@ -4,10 +4,7 @@ use std::collections::HashSet;
 
 /// Analyze free variables in an expression
 /// Returns the set of variable symbols that are referenced but not bound locally
-pub fn analyze_free_vars(
-    expr: &Expr,
-    local_bindings: &HashSet<SymbolId>,
-) -> HashSet<SymbolId> {
+pub fn analyze_free_vars(expr: &Expr, local_bindings: &HashSet<SymbolId>) -> HashSet<SymbolId> {
     let mut free_vars = HashSet::new();
 
     match expr {
