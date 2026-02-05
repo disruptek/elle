@@ -63,7 +63,7 @@ impl Marshal {
                 _ => Err(format!("Cannot convert {:?} to long", value)),
             },
             CType::Float => match value {
-                Value::Float(f) => Ok(CValue::Float(*f as f64)),
+                Value::Float(f) => Ok(CValue::Float(*f)),
                 Value::Int(n) => Ok(CValue::Float(*n as f64)),
                 _ => Err(format!("Cannot convert {:?} to float", value)),
             },
@@ -73,7 +73,7 @@ impl Marshal {
                 _ => Err(format!("Cannot convert {:?} to double", value)),
             },
             CType::Pointer(_) => match value {
-                Value::CHandle(handle) => Ok(CValue::Pointer(handle.ptr as *const c_void)),
+                Value::CHandle(handle) => Ok(CValue::Pointer(handle.ptr)),
                 Value::Nil => Ok(CValue::Pointer(std::ptr::null())),
                 _ => Err(format!("Cannot convert {:?} to pointer", value)),
             },

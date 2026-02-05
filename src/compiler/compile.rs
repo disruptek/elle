@@ -483,10 +483,9 @@ impl Compiler {
                 condition: _,
             } => {
                 // Guard pattern: check inner pattern first, then condition
-                let fails = self.compile_pattern_check(inner);
                 // Full guard implementation would evaluate the condition
                 // For Phase 2, just check the pattern
-                fails
+                self.compile_pattern_check(inner)
             }
         }
     }

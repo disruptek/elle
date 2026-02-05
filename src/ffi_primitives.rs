@@ -13,7 +13,7 @@ use crate::value::{LibHandle, Value};
 use crate::vm::VM;
 use std::cell::RefCell;
 thread_local! {
-    static VM_CONTEXT: RefCell<Option<*mut VM>> = RefCell::new(None);
+    static VM_CONTEXT: RefCell<Option<*mut VM>> = const { RefCell::new(None) };
 }
 
 /// Set the current VM context (called before executing code)
@@ -266,7 +266,6 @@ pub fn prim_define_enum(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
 }
 
 /// Phase 4: Advanced Features Primitives
-
 /// (make-c-callback closure arg-types return-type) -> callback-handle
 ///
 /// Creates a C callback from an Elle closure.

@@ -127,7 +127,6 @@ pub struct MemoryStats {
 
 /// Placeholder functions for memory management
 /// In a full implementation, these would be integrated with the VM
-
 /// Register a memory allocation
 pub fn register_allocation(
     _ptr: *const c_void,
@@ -138,8 +137,7 @@ pub fn register_allocation(
     // In a full implementation, this would update a tracker in the VM
     // For now, just assign a unique ID
     static ALLOC_ID_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
-    let id = ALLOC_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    id
+    ALLOC_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
 }
 
 /// Check if pointer is Elle-owned and can be freed

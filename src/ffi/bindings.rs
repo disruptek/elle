@@ -92,7 +92,7 @@ fn generate_function_wrapper(
     let arg_types_str = sig
         .args
         .iter()
-        .map(|t| ctype_to_lisp_string(t))
+        .map(ctype_to_lisp_string)
         .collect::<Vec<_>>()
         .join(" ");
 

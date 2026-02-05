@@ -212,7 +212,7 @@ impl ArrayBoundsChecker {
 
 thread_local! {
     /// Last error storage (thread-local)
-    static LAST_FFI_ERROR: std::cell::RefCell<Option<FFIError>> = std::cell::RefCell::new(None);
+    static LAST_FFI_ERROR: std::cell::RefCell<Option<FFIError>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Set the last FFI error (for recovery)
