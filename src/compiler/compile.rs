@@ -18,22 +18,44 @@ impl Compiler {
         }
     }
 
-    /// Collect all top-level define statements from an expression
+    /// Collect all define statements from an expression
     /// Returns a vector of symbol IDs that are defined at this level
+    /// Recursively collects from nested structures like while/for loop bodies
     fn collect_defines(expr: &Expr) -> Vec<SymbolId> {
-        match expr {
-            Expr::Begin(exprs) => {
-                let mut defines = Vec::new();
-                for e in exprs {
-                    if let Expr::Define { name, .. } = e {
+        let mut defines = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        fn collect_recursive(
+            expr: &Expr,
+            defines: &mut Vec<SymbolId>,
+            seen: &mut std::collections::HashSet<u32>,
+        ) {
+            match expr {
+                Expr::Begin(exprs) => {
+                    for e in exprs {
+                        if let Expr::Define { name, .. } = e {
+                            if seen.insert(name.0) {
+                                defines.push(*name);
+                            }
+                        }
+                        // Also recursively collect from nested structures
+                        collect_recursive(e, defines, seen);
+                    }
+                }
+                Expr::Define { name, .. } => {
+                    if seen.insert(name.0) {
                         defines.push(*name);
                     }
                 }
-                defines
+                Expr::While { body, .. } | Expr::For { body, .. } => {
+                    collect_recursive(body, defines, seen);
+                }
+                _ => {}
             }
-            Expr::Define { name, .. } => vec![*name],
-            _ => Vec::new(),
         }
+
+        collect_recursive(expr, &mut defines, &mut seen);
+        defines
     }
 
     fn compile_expr(&mut self, expr: &Expr, tail: bool) {
