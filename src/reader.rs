@@ -326,11 +326,8 @@ impl Reader {
     /// Try to read a single value from the token stream.
     /// Returns None if at EOF (not an error), Some(Err(_)) if there's a parse error.
     pub fn try_read(&mut self, symbols: &mut SymbolTable) -> Option<Result<Value, String>> {
-        if self.current().is_none() {
-            return None; // EOF is not an error
-        }
-        let token = self.current().cloned();
-        Some(self.read_one(symbols, token.as_ref().unwrap()))
+        let token = self.current().cloned()?;
+        Some(self.read_one(symbols, &token))
     }
 
     /// Read a single token/form and return result
