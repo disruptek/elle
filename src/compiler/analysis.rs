@@ -83,10 +83,11 @@ pub fn analyze_free_vars(expr: &Expr, local_bindings: &HashSet<SymbolId>) -> Has
             free_vars.extend(analyze_free_vars(body, local_bindings));
         }
 
-        Expr::For { var: _, iter, body } => {
+        Expr::For { var, iter, body } => {
             free_vars.extend(analyze_free_vars(iter, local_bindings));
             // Body can reference the loop variable
             let mut new_bindings = local_bindings.clone();
+            new_bindings.insert(*var);
             free_vars.extend(analyze_free_vars(body, &new_bindings));
         }
 
