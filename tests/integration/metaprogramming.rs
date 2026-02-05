@@ -101,7 +101,7 @@ fn test_unquote_expression() {
     assert!(result.is_ok());
     // Current implementation treats as literal
     let list = result.unwrap().list_to_vec().unwrap();
-    assert!(list.len() >= 1);
+    assert!(!list.is_empty());
 }
 
 #[test]
