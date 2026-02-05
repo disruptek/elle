@@ -82,6 +82,7 @@ jobs:
           RUNNABLE_EXAMPLES=(
             "hello.l"
             "arithmetic.l"
+            "fibonacci.l"
             "list-demo.l"
           )
           
