@@ -58,8 +58,7 @@ pub struct ScopeStack {
 impl ScopeStack {
     /// Create a new scope stack with global scope
     pub fn new() -> Self {
-        let mut stack = Vec::new();
-        stack.push(RuntimeScope::new(ScopeType::Global));
+        let stack = vec![RuntimeScope::new(ScopeType::Global)];
         ScopeStack { stack }
     }
 
