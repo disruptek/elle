@@ -57,13 +57,13 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install and run cargo-audit
-        run: |
-          cargo install cargo-audit
-          cargo audit
+       - uses: actions/checkout@v4
+       - uses: dtolnay/rust-toolchain@stable
+       - uses: Swatinem/rust-cache@v2
+       - name: Install and run cargo-audit
+         run: |
+           cargo install cargo-audit
+           cargo audit
 
   examples:
     name: Examples
@@ -77,28 +77,29 @@ jobs:
       - name: Test all Lisp examples with release build
         run: |
           ELLE_BIN="./target/release/elle"
-          TEMP_DIR="/tmp/elle-examples-$$"
+          # Try TMPDIR, then TMP, then fallback to /tmp
+          TEMP_DIR="${TMPDIR:-${TMP:-/tmp}}/elle-examples-$$"
           mkdir -p "$TEMP_DIR"
-          
+
           echo "Testing all Lisp examples with release build:"
           echo "=============================================="
-          
+
           TOTAL=0
           PASSED=0
           FAILED=0
-          
+
           for example in examples/*.l; do
             if [ ! -f "$example" ]; then
               continue
             fi
-            
+
             TOTAL=$((TOTAL + 1))
             EXAMPLE_NAME=$(basename "$example")
-            
+
             echo ""
             echo "Running: $EXAMPLE_NAME"
             echo "---"
-            
+
             OUTPUT_FILE="$TEMP_DIR/output_$EXAMPLE_NAME.txt"
             if timeout 10s "$ELLE_BIN" "$example" > "$OUTPUT_FILE" 2>&1; then
               PASSED=$((PASSED + 1))
@@ -113,14 +114,14 @@ jobs:
               # Don't exit on failure - continue testing all examples
             fi
           done
-          
+
           # Cleanup
           rm -rf "$TEMP_DIR"
-          
+
           echo ""
           echo "=============================================="
           echo "Results: $PASSED/$TOTAL passed, $FAILED failed"
-          
+
           if [ $FAILED -gt 0 ]; then
             echo "✗ Some examples failed"
             exit 1
