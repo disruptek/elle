@@ -1,6 +1,6 @@
 use elle::compiler::compile::value_to_expr;
 use elle::ffi_primitives;
-use elle::{compile, read_str, register_primitives, SymbolTable, VM};
+use elle::{compile, init_stdlib, read_str, register_primitives, SymbolTable, VM};
 use std::io::{self, Write};
 
 fn print_welcome() {
@@ -65,6 +65,9 @@ fn main() {
 
     // Register primitive functions
     register_primitives(&mut vm, &mut symbols);
+
+    // Initialize standard library modules
+    init_stdlib(&mut vm, &mut symbols);
 
     // Set VM context for FFI primitives
     ffi_primitives::set_vm_context(&mut vm as *mut VM);

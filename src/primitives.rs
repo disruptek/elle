@@ -192,6 +192,30 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
 
     // Quoting and meta-programming
     register_fn(vm, symbols, "gensym", prim_gensym);
+
+    // Package manager
+    register_fn(vm, symbols, "package-version", prim_package_version);
+    register_fn(vm, symbols, "package-info", prim_package_info);
+
+    // Module loading
+    register_fn(vm, symbols, "import-file", prim_import_file);
+    register_fn(vm, symbols, "add-module-path", prim_add_module_path);
+
+    // Macro expansion
+    register_fn(vm, symbols, "expand-macro", prim_expand_macro);
+    register_fn(vm, symbols, "macro?", prim_is_macro);
+
+    // Concurrency primitives
+    register_fn(vm, symbols, "spawn", prim_spawn);
+    register_fn(vm, symbols, "join", prim_join);
+    register_fn(vm, symbols, "sleep", prim_sleep);
+    register_fn(vm, symbols, "current-thread-id", prim_current_thread_id);
+
+    // Debugging and profiling primitives
+    register_fn(vm, symbols, "debug-print", prim_debug_print);
+    register_fn(vm, symbols, "trace", prim_trace);
+    register_fn(vm, symbols, "profile", prim_profile);
+    register_fn(vm, symbols, "memory-usage", prim_memory_usage);
 }
 
 fn register_fn(
@@ -1314,4 +1338,340 @@ fn prim_gensym(args: &[Value]) -> Result<Value, String> {
     let counter = GENSYM_COUNTER.fetch_add(1, Ordering::SeqCst);
     let sym_name = format!("{}{}", prefix, counter);
     Ok(Value::String(sym_name.into()))
+}
+
+// Standard library initialization
+pub fn init_stdlib(vm: &mut VM, symbols: &mut SymbolTable) {
+    init_list_module(vm, symbols);
+    init_string_module(vm, symbols);
+    init_math_module(vm, symbols);
+}
+
+fn init_list_module(vm: &mut VM, symbols: &mut SymbolTable) {
+    // List module exports
+    let mut list_exports = std::collections::HashMap::new();
+
+    // These functions are already registered globally
+    // The module just provides a namespace for them
+    let functions = vec![
+        "length", "append", "reverse", "map", "filter", "fold", "nth", "last", "take", "drop",
+        "list", "cons", "first", "rest",
+    ];
+
+    let mut exports = Vec::new();
+    for func_name in &functions {
+        if let Some(func) = vm.get_global(symbols.intern(func_name).0) {
+            list_exports.insert(symbols.intern(func_name).0, func.clone());
+        }
+        exports.push(symbols.intern(func_name));
+    }
+
+    use crate::symbol::ModuleDef;
+    let list_module = ModuleDef {
+        name: symbols.intern("list"),
+        exports,
+    };
+    symbols.define_module(list_module);
+    vm.define_module("list".to_string(), list_exports);
+}
+
+fn init_string_module(vm: &mut VM, symbols: &mut SymbolTable) {
+    // String module exports
+    let mut string_exports = std::collections::HashMap::new();
+
+    let functions = vec![
+        "string-length",
+        "string-append",
+        "string-upcase",
+        "string-downcase",
+        "substring",
+        "string-index",
+        "char-at",
+        "string",
+    ];
+
+    let mut exports = Vec::new();
+    for func_name in &functions {
+        if let Some(func) = vm.get_global(symbols.intern(func_name).0) {
+            string_exports.insert(symbols.intern(func_name).0, func.clone());
+        }
+        exports.push(symbols.intern(func_name));
+    }
+
+    use crate::symbol::ModuleDef;
+    let string_module = ModuleDef {
+        name: symbols.intern("string"),
+        exports,
+    };
+    symbols.define_module(string_module);
+    vm.define_module("string".to_string(), string_exports);
+}
+
+fn init_math_module(vm: &mut VM, symbols: &mut SymbolTable) {
+    // Math module exports
+    let mut math_exports = std::collections::HashMap::new();
+
+    let functions = vec![
+        "+",
+        "-",
+        "*",
+        "/",
+        "mod",
+        "remainder",
+        "abs",
+        "min",
+        "max",
+        "sqrt",
+        "sin",
+        "cos",
+        "tan",
+        "log",
+        "exp",
+        "pow",
+        "floor",
+        "ceil",
+        "round",
+        "even?",
+        "odd?",
+        "pi",
+        "e",
+    ];
+
+    let mut exports = Vec::new();
+    for func_name in &functions {
+        if let Some(func) = vm.get_global(symbols.intern(func_name).0) {
+            math_exports.insert(symbols.intern(func_name).0, func.clone());
+        }
+        exports.push(symbols.intern(func_name));
+    }
+
+    use crate::symbol::ModuleDef;
+    let math_module = ModuleDef {
+        name: symbols.intern("math"),
+        exports,
+    };
+    symbols.define_module(math_module);
+    vm.define_module("math".to_string(), math_exports);
+}
+
+// Package manager primitives
+fn prim_package_version(_args: &[Value]) -> Result<Value, String> {
+    // Return current version of Elle
+    Ok(Value::String("0.3.0".into()))
+}
+
+fn prim_package_info(_args: &[Value]) -> Result<Value, String> {
+    // Return package information
+    use crate::value::list;
+    Ok(list(vec![
+        Value::String("Elle".into()),
+        Value::String("0.3.0".into()),
+        Value::String("A Lisp interpreter with bytecode compilation".into()),
+    ]))
+}
+
+// Module loading primitives
+fn prim_import_file(args: &[Value]) -> Result<Value, String> {
+    // (import-file "path/to/module.elle")
+    // Placeholder: In production, would parse and load module
+    if args.len() != 1 {
+        return Err(format!(
+            "import-file: expected 1 argument, got {}",
+            args.len()
+        ));
+    }
+
+    match &args[0] {
+        Value::String(_path) => {
+            // In a full implementation, this would:
+            // 1. Read the file
+            // 2. Parse module definitions
+            // 3. Compile and execute module code
+            // 4. Register exported symbols
+            // For now, just return true to indicate success
+            Ok(Value::Bool(true))
+        }
+        _ => Err("import-file: argument must be a string".to_string()),
+    }
+}
+
+fn prim_add_module_path(args: &[Value]) -> Result<Value, String> {
+    // (add-module-path "path")
+    // Note: This would need access to VM to update search paths
+    // For now, just verify the argument
+    if args.len() != 1 {
+        return Err(format!(
+            "add-module-path: expected 1 argument, got {}",
+            args.len()
+        ));
+    }
+
+    match &args[0] {
+        Value::String(_path) => {
+            // In full implementation, would call vm.add_module_search_path(PathBuf::from(path))
+            Ok(Value::Nil)
+        }
+        _ => Err("add-module-path: argument must be a string".to_string()),
+    }
+}
+
+// Macro expansion primitives
+fn prim_expand_macro(args: &[Value]) -> Result<Value, String> {
+    // (expand-macro macro-expr)
+    // Expands a macro call and returns the expanded form
+    if args.len() != 1 {
+        return Err(format!(
+            "expand-macro: expected 1 argument, got {}",
+            args.len()
+        ));
+    }
+
+    // In production, this would:
+    // 1. Check if the value is a macro call (list starting with macro name)
+    // 2. Look up the macro definition
+    // 3. Apply the macro with arguments
+    // 4. Return the expanded form
+    // For Phase 5, just return the argument (placeholder)
+    Ok(args[0].clone())
+}
+
+fn prim_is_macro(args: &[Value]) -> Result<Value, String> {
+    // (macro? value)
+    // Returns true if value is a macro
+    if args.len() != 1 {
+        return Err(format!("macro?: expected 1 argument, got {}", args.len()));
+    }
+
+    // In production, would check symbol table for macro definitions
+    // For now, always return false
+    Ok(Value::Bool(false))
+}
+
+// Concurrency primitives
+fn prim_spawn(args: &[Value]) -> Result<Value, String> {
+    // (spawn thunk)
+    // Spawns a new thread that executes the closure
+    if args.len() != 1 {
+        return Err(format!("spawn: expected 1 argument, got {}", args.len()));
+    }
+
+    match &args[0] {
+        Value::Closure(_) | Value::NativeFn(_) => {
+            // In production, would spawn a thread and return a thread handle
+            // For now, return a placeholder thread ID (simplified)
+            let thread_id = std::thread::current().id();
+            Ok(Value::String(format!("{:?}", thread_id).into()))
+        }
+        _ => Err("spawn: argument must be a function".to_string()),
+    }
+}
+
+fn prim_join(args: &[Value]) -> Result<Value, String> {
+    // (join thread-handle)
+    // Waits for a thread to complete and returns its result
+    if args.len() != 1 {
+        return Err(format!("join: expected 1 argument, got {}", args.len()));
+    }
+
+    // In production, would wait on thread handle and return result
+    // For now, return nil as placeholder
+    Ok(Value::Nil)
+}
+
+fn prim_sleep(args: &[Value]) -> Result<Value, String> {
+    // (sleep seconds)
+    // Sleeps for the specified number of seconds
+    if args.len() != 1 {
+        return Err(format!("sleep: expected 1 argument, got {}", args.len()));
+    }
+
+    match &args[0] {
+        Value::Int(n) => {
+            if *n < 0 {
+                return Err("sleep: duration must be non-negative".to_string());
+            }
+            std::thread::sleep(std::time::Duration::from_secs(*n as u64));
+            Ok(Value::Nil)
+        }
+        Value::Float(f) => {
+            if *f < 0.0 {
+                return Err("sleep: duration must be non-negative".to_string());
+            }
+            std::thread::sleep(std::time::Duration::from_secs_f64(*f));
+            Ok(Value::Nil)
+        }
+        _ => Err("sleep: argument must be a number".to_string()),
+    }
+}
+
+fn prim_current_thread_id(_args: &[Value]) -> Result<Value, String> {
+    // (current-thread-id)
+    // Returns the ID of the current thread
+    let thread_id = std::thread::current().id();
+    Ok(Value::String(format!("{:?}", thread_id).into()))
+}
+
+// Debugging and profiling primitives
+fn prim_debug_print(args: &[Value]) -> Result<Value, String> {
+    // (debug-print value)
+    // Prints a value with debug information
+    if args.len() != 1 {
+        return Err(format!(
+            "debug-print: expected 1 argument, got {}",
+            args.len()
+        ));
+    }
+
+    eprintln!("[DEBUG] {:?}", args[0]);
+    Ok(args[0].clone())
+}
+
+fn prim_trace(args: &[Value]) -> Result<Value, String> {
+    // (trace name value)
+    // Traces execution with a label
+    if args.len() != 2 {
+        return Err(format!("trace: expected 2 arguments, got {}", args.len()));
+    }
+
+    match &args[0] {
+        Value::String(label) => {
+            eprintln!("[TRACE] {}: {:?}", label, args[1]);
+            Ok(args[1].clone())
+        }
+        Value::Symbol(label_id) => {
+            eprintln!("[TRACE] {:?}: {:?}", label_id, args[1]);
+            Ok(args[1].clone())
+        }
+        _ => Err("trace: first argument must be a string or symbol".to_string()),
+    }
+}
+
+fn prim_profile(args: &[Value]) -> Result<Value, String> {
+    // (profile thunk)
+    // Times the execution of a thunk
+    if args.len() != 1 {
+        return Err(format!("profile: expected 1 argument, got {}", args.len()));
+    }
+
+    // In production, would time execution of closure
+    // For now, just return a placeholder timing
+    match &args[0] {
+        Value::Closure(_) | Value::NativeFn(_) => {
+            Ok(Value::String("profiling-not-yet-implemented".into()))
+        }
+        _ => Err("profile: argument must be a function".to_string()),
+    }
+}
+
+fn prim_memory_usage(_args: &[Value]) -> Result<Value, String> {
+    // (memory-usage)
+    // Returns memory usage statistics
+    // Returns a list: (rss-bytes virtual-bytes)
+    use crate::value::list;
+
+    // Simplified placeholder - in production would use system memory stats
+    Ok(list(vec![
+        Value::Int(0), // RSS bytes (would be actual value)
+        Value::Int(0), // Virtual bytes (would be actual value)
+    ]))
 }

@@ -100,11 +100,20 @@ pub enum Instruction {
     False,
 }
 
+/// Inline cache entry for function lookups
+#[derive(Debug, Clone)]
+pub struct CacheEntry {
+    pub symbol_id: u32,
+    pub cached_value: Option<Value>,
+}
+
 /// Compiled bytecode with constants
 #[derive(Debug, Clone)]
+
 pub struct Bytecode {
     pub instructions: Vec<u8>,
     pub constants: Vec<Value>,
+    pub inline_caches: std::collections::HashMap<usize, CacheEntry>,
 }
 
 impl Bytecode {
@@ -112,6 +121,7 @@ impl Bytecode {
         Bytecode {
             instructions: Vec::new(),
             constants: Vec::new(),
+            inline_caches: std::collections::HashMap::new(),
         }
     }
 

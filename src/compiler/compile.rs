@@ -589,6 +589,63 @@ pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, Strin
                         })
                     }
 
+                    "try" => {
+                        // Syntax: (try <body> (catch <var> <handler>) (finally <expr>)?)
+                        if list.len() < 2 {
+                            return Err("try requires at least a body".to_string());
+                        }
+
+                        let body = Box::new(value_to_expr(&list[1], symbols)?);
+                        let mut catch_clause = None;
+                        let mut finally_clause = None;
+
+                        // Parse catch and finally clauses
+                        for item in &list[2..] {
+                            if let Value::List(v) = item {
+                                if v.is_empty() {
+                                    return Err("Empty clause in try expression".to_string());
+                                }
+                                if let Value::Symbol(keyword) = &v[0] {
+                                    let keyword_str = symbols.get_name(*keyword);
+                                    match keyword_str.as_str() {
+                                        "catch" => {
+                                            if v.len() != 3 {
+                                                return Err("catch requires exactly 2 arguments (variable and handler)".to_string());
+                                            }
+                                            let var = v[1].as_symbol()?;
+                                            let handler = Box::new(value_to_expr(&v[2], symbols)?);
+                                            catch_clause = Some((var, handler));
+                                        }
+                                        "finally" => {
+                                            if v.len() != 2 {
+                                                return Err("finally requires exactly 1 argument"
+                                                    .to_string());
+                                            }
+                                            finally_clause =
+                                                Some(Box::new(value_to_expr(&v[1], symbols)?));
+                                        }
+                                        _ => {
+                                            return Err(format!(
+                                                "Unknown clause in try: {}",
+                                                keyword_str
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    return Err("Clause keyword must be a symbol".to_string());
+                                }
+                            } else {
+                                return Err("Clauses in try must be lists".to_string());
+                            }
+                        }
+
+                        Ok(Expr::Try {
+                            body,
+                            catch: catch_clause,
+                            finally: finally_clause,
+                        })
+                    }
+
                     _ => {
                         // Function call
                         let func = Box::new(value_to_expr(first, symbols)?);

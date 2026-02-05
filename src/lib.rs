@@ -46,7 +46,7 @@ pub mod vm;
 
 pub use compiler::{compile, Bytecode};
 pub use error::{RuntimeError, SourceLoc};
-pub use primitives::register_primitives;
+pub use primitives::{init_stdlib, register_primitives};
 pub use reader::read_str;
 pub use symbol::SymbolTable;
 pub use value::Value;

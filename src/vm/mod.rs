@@ -2,7 +2,8 @@ use crate::compiler::bytecode::{Bytecode, Instruction};
 use crate::ffi::FFISubsystem;
 use crate::value::{cons, Closure, Value};
 use smallvec::SmallVec;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 type StackVec = SmallVec<[Value; 256]>;
@@ -19,6 +20,10 @@ pub struct VM {
     call_depth: usize,
     call_stack: Vec<CallFrame>,
     ffi: FFISubsystem,
+    modules: HashMap<String, HashMap<u32, Value>>, // Module name → exported symbols
+    current_module: Option<String>,
+    loaded_modules: HashSet<String>, // Track loaded module paths to prevent circular deps
+    module_search_paths: Vec<PathBuf>, // Directories to search for modules
 }
 
 impl VM {
@@ -29,6 +34,10 @@ impl VM {
             call_depth: 0,
             call_stack: Vec::new(),
             ffi: FFISubsystem::new(),
+            modules: HashMap::new(),
+            current_module: None,
+            loaded_modules: HashSet::new(),
+            module_search_paths: vec![PathBuf::from(".")],
         }
     }
 
@@ -38,6 +47,90 @@ impl VM {
 
     pub fn get_global(&self, sym_id: u32) -> Option<&Value> {
         self.globals.get(&sym_id)
+    }
+
+    /// Define a module with exported symbols
+    pub fn define_module(&mut self, name: String, exports: HashMap<u32, Value>) {
+        self.modules.insert(name, exports);
+    }
+
+    /// Get a symbol from a module
+    pub fn get_module_symbol(&self, module: &str, sym_id: u32) -> Option<&Value> {
+        self.modules.get(module).and_then(|m| m.get(&sym_id))
+    }
+
+    /// Import a module (make it available)
+    pub fn import_module(&mut self, name: String) {
+        if self.modules.contains_key(&name) {
+            // Module is now available for module:symbol references
+        }
+    }
+
+    /// Set current module context
+    pub fn set_current_module(&mut self, module: Option<String>) {
+        self.current_module = module;
+    }
+
+    /// Get current module context
+    pub fn current_module(&self) -> Option<&str> {
+        self.current_module.as_deref()
+    }
+
+    /// Add a module search path
+    pub fn add_module_search_path(&mut self, path: PathBuf) {
+        if !self.module_search_paths.contains(&path) {
+            self.module_search_paths.push(path);
+        }
+    }
+
+    /// Resolve a module path by searching in module search paths
+    pub fn resolve_module_path(&self, module_name: &str) -> Option<PathBuf> {
+        let module_file = format!("{}.elle", module_name);
+        for search_path in &self.module_search_paths {
+            let full_path = search_path.join(&module_file);
+            if full_path.exists() {
+                return Some(full_path);
+            }
+        }
+        None
+    }
+
+    /// Load a module from source code (file-based)
+    pub fn load_module(&mut self, name: String, _source: &str) -> Result<(), String> {
+        // Prevent circular dependencies
+        if self.loaded_modules.contains(&name) {
+            return Ok(()); // Already loaded
+        }
+        self.loaded_modules.insert(name.clone());
+
+        // Parse and compile the module source
+        // For now, this is a placeholder that requires integration with the compiler
+        // In production, we would:
+        // 1. Parse the source code
+        // 2. Extract (module ...) and (import ...) forms
+        // 3. Compile and execute module definitions
+        // 4. Register exported symbols in self.modules
+
+        Ok(())
+    }
+
+    /// Load a module from a file path
+    pub fn load_module_from_file(&mut self, path: &Path) -> Result<(), String> {
+        let module_path = path.to_string_lossy().to_string();
+
+        // Check for circular dependencies
+        if self.loaded_modules.contains(&module_path) {
+            return Ok(());
+        }
+        self.loaded_modules.insert(module_path);
+
+        // Read file
+        let _source = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read module file: {}", e))?;
+
+        // Load the module (parsing/compilation would happen here)
+        // For now, just mark as loaded
+        Ok(())
     }
 
     /// Get the FFI subsystem.

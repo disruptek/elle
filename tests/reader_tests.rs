@@ -276,3 +276,38 @@ fn test_symbol_interning() {
     let sym3 = read_str("bar", &mut symbols).unwrap();
     assert_ne!(sym1, sym3);
 }
+
+#[test]
+fn test_comments() {
+    let mut symbols = SymbolTable::new();
+
+    // Single line comment
+    let result = read_str("42 ; this is a comment", &mut symbols);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Value::Int(42));
+
+    // Comment with nothing after
+    let result = read_str("42 ;", &mut symbols);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Value::Int(42));
+
+    // Multiple statements with comments
+    let result = read_str("(+ 1 2) ; add", &mut symbols);
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Value::Cons(_) => {} // List is valid
+        _ => panic!("Expected list"),
+    }
+
+    // Comment between elements
+    let result = read_str("(+ 1 ; first\n 2)", &mut symbols);
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Value::Cons(_) => {} // List is valid
+        _ => panic!("Expected list"),
+    }
+
+    // Empty with comment
+    let result = read_str("; just a comment", &mut symbols);
+    assert!(result.is_err()); // No expression to read
+}

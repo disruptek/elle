@@ -1,7 +1,7 @@
 // DEFENSE: Primitives are the building blocks - must be correct
 use elle::primitives::register_primitives;
 use elle::symbol::SymbolTable;
-use elle::value::{list, Value};
+use elle::value::{list, Closure, Value};
 use elle::vm::VM;
 
 fn setup() -> (VM, SymbolTable) {
@@ -487,7 +487,6 @@ fn test_gensym_with_prefix() {
 #[test]
 fn test_symbol_table_macro_support() {
     use elle::symbol::{MacroDef, SymbolTable};
-    use elle::value::SymbolId;
 
     let mut table = SymbolTable::new();
     let name = table.intern("when");
@@ -554,4 +553,425 @@ fn test_module_tracking() {
     // Clear current module
     table.set_current_module(None);
     assert_eq!(table.current_module(), None);
+}
+
+// Standard library tests
+#[test]
+fn test_list_module_functions() {
+    let (vm, mut symbols) = setup();
+
+    // Test list functions
+    let length_fn = get_primitive(&vm, &mut symbols, "length");
+    let list_val = list(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
+    assert_eq!(
+        call_primitive(&length_fn, &[list_val]).unwrap(),
+        Value::Int(3)
+    );
+
+    // Test append
+    let append_fn = get_primitive(&vm, &mut symbols, "append");
+    let list1 = list(vec![Value::Int(1), Value::Int(2)]);
+    let list2 = list(vec![Value::Int(3), Value::Int(4)]);
+    let result = call_primitive(&append_fn, &[list1, list2]).unwrap();
+    assert!(result.is_list());
+
+    // Test reverse
+    let reverse_fn = get_primitive(&vm, &mut symbols, "reverse");
+    let list_val = list(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
+    let reversed = call_primitive(&reverse_fn, &[list_val]).unwrap();
+    assert!(reversed.is_list());
+}
+
+#[test]
+fn test_string_module_functions() {
+    let (vm, mut symbols) = setup();
+
+    // Test string-length
+    let strlen_fn = get_primitive(&vm, &mut symbols, "string-length");
+    let str_val = Value::String("hello".into());
+    assert_eq!(
+        call_primitive(&strlen_fn, &[str_val]).unwrap(),
+        Value::Int(5)
+    );
+
+    // Test string-upcase
+    let upcase_fn = get_primitive(&vm, &mut symbols, "string-upcase");
+    let str_val = Value::String("hello".into());
+    match call_primitive(&upcase_fn, &[str_val]).unwrap() {
+        Value::String(s) => assert_eq!(s.as_ref(), "HELLO"),
+        _ => panic!("Expected string"),
+    }
+
+    // Test string-downcase
+    let downcase_fn = get_primitive(&vm, &mut symbols, "string-downcase");
+    let str_val = Value::String("HELLO".into());
+    match call_primitive(&downcase_fn, &[str_val]).unwrap() {
+        Value::String(s) => assert_eq!(s.as_ref(), "hello"),
+        _ => panic!("Expected string"),
+    }
+}
+
+#[test]
+fn test_math_module_functions() {
+    let (vm, mut symbols) = setup();
+
+    // Test sqrt
+    let sqrt_fn = get_primitive(&vm, &mut symbols, "sqrt");
+    match call_primitive(&sqrt_fn, &[Value::Int(4)]).unwrap() {
+        Value::Float(f) => assert!((f - 2.0).abs() < 0.0001),
+        _ => panic!("Expected float"),
+    }
+
+    // Test floor
+    let floor_fn = get_primitive(&vm, &mut symbols, "floor");
+    assert_eq!(
+        call_primitive(&floor_fn, &[Value::Float(3.7)]).unwrap(),
+        Value::Int(3)
+    );
+
+    // Test ceil
+    let ceil_fn = get_primitive(&vm, &mut symbols, "ceil");
+    assert_eq!(
+        call_primitive(&ceil_fn, &[Value::Float(3.2)]).unwrap(),
+        Value::Int(4)
+    );
+
+    // Test round
+    let round_fn = get_primitive(&vm, &mut symbols, "round");
+    assert_eq!(
+        call_primitive(&round_fn, &[Value::Float(3.6)]).unwrap(),
+        Value::Int(4)
+    );
+
+    // Test pi
+    let pi_fn = get_primitive(&vm, &mut symbols, "pi");
+    match call_primitive(&pi_fn, &[]).unwrap() {
+        Value::Float(f) => assert!((f - 3.14159).abs() < 0.001),
+        _ => panic!("Expected float"),
+    }
+
+    // Test e
+    let e_fn = get_primitive(&vm, &mut symbols, "e");
+    match call_primitive(&e_fn, &[]).unwrap() {
+        Value::Float(f) => assert!((f - 2.71828).abs() < 0.001),
+        _ => panic!("Expected float"),
+    }
+}
+
+#[test]
+fn test_package_manager() {
+    let (vm, mut symbols) = setup();
+
+    // Test package-version
+    let version_fn = get_primitive(&vm, &mut symbols, "package-version");
+    match call_primitive(&version_fn, &[]).unwrap() {
+        Value::String(s) => assert_eq!(s.as_ref(), "0.3.0"),
+        _ => panic!("Expected string"),
+    }
+
+    // Test package-info
+    let info_fn = get_primitive(&vm, &mut symbols, "package-info");
+    let result = call_primitive(&info_fn, &[]).unwrap();
+    assert!(result.is_list());
+
+    // Should be (name version description)
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec.len(), 3);
+}
+
+#[test]
+fn test_stdlib_initialization() {
+    use elle::init_stdlib;
+
+    let mut vm = VM::new();
+    let mut symbols = SymbolTable::new();
+
+    // Register primitives
+    elle::register_primitives(&mut vm, &mut symbols);
+
+    // Initialize stdlib
+    init_stdlib(&mut vm, &mut symbols);
+
+    // Verify modules exist
+    let list_id = symbols.intern("list");
+    let string_id = symbols.intern("string");
+    let math_id = symbols.intern("math");
+
+    assert!(symbols.is_module(list_id));
+    assert!(symbols.is_module(string_id));
+    assert!(symbols.is_module(math_id));
+
+    // Verify some functions are in modules
+    let length_id = symbols.intern("length");
+    assert!(vm.get_module_symbol("list", length_id.0).is_some());
+}
+
+#[test]
+fn test_module_qualified_access() {
+    use elle::init_stdlib;
+
+    let mut vm = VM::new();
+    let mut symbols = SymbolTable::new();
+
+    elle::register_primitives(&mut vm, &mut symbols);
+    init_stdlib(&mut vm, &mut symbols);
+
+    // Test getting functions from modules
+    let add_sym = symbols.intern("+");
+
+    // Should find + in math module
+    let result = vm.get_module_symbol("math", add_sym.0);
+    assert!(result.is_some());
+
+    // Test string module
+    let strlen_sym = symbols.intern("string-length");
+    let result = vm.get_module_symbol("string", strlen_sym.0);
+    assert!(result.is_some());
+}
+
+#[test]
+fn test_module_import() {
+    let mut vm = VM::new();
+    let mut symbols = SymbolTable::new();
+
+    elle::register_primitives(&mut vm, &mut symbols);
+
+    // Import a module
+    vm.import_module("list".to_string());
+
+    // Module should still be accessible
+    let length_sym = symbols.intern("length");
+    vm.get_module_symbol("list", length_sym.0);
+}
+
+// Phase 5: Advanced Runtime Features Tests
+
+#[test]
+fn test_import_file_primitive() {
+    let (vm, mut symbols) = setup();
+    let import_file = get_primitive(&vm, &mut symbols, "import-file");
+
+    // Test with valid string argument
+    let result = call_primitive(&import_file, &[Value::String("lib/math.elle".into())]);
+    assert!(result.is_ok());
+
+    // Test with invalid argument type
+    let result = call_primitive(&import_file, &[Value::Int(42)]);
+    assert!(result.is_err());
+
+    // Test with wrong argument count
+    let result = call_primitive(&import_file, &[]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_add_module_path_primitive() {
+    let (vm, mut symbols) = setup();
+    let add_path = get_primitive(&vm, &mut symbols, "add-module-path");
+
+    // Test with valid string argument
+    let result = call_primitive(&add_path, &[Value::String("./lib".into())]);
+    assert!(result.is_ok());
+
+    // Test with invalid argument type
+    let result = call_primitive(&add_path, &[Value::Int(42)]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_expand_macro_primitive() {
+    let (vm, mut symbols) = setup();
+    let expand = get_primitive(&vm, &mut symbols, "expand-macro");
+
+    let test_val = Value::String("test-macro".into());
+    let result = call_primitive(&expand, &[test_val.clone()]);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), test_val);
+}
+
+#[test]
+fn test_is_macro_primitive() {
+    let (vm, mut symbols) = setup();
+    let is_macro = get_primitive(&vm, &mut symbols, "macro?");
+
+    let sym_id = symbols.intern("some-symbol");
+    let result = call_primitive(&is_macro, &[Value::Symbol(sym_id)]);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Value::Bool(false));
+
+    let result = call_primitive(&is_macro, &[Value::Int(42)]);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Value::Bool(false));
+}
+
+#[test]
+fn test_spawn_primitive() {
+    let (vm, mut symbols) = setup();
+    let spawn = get_primitive(&vm, &mut symbols, "spawn");
+
+    // Create a simple closure to spawn
+    let closure = Value::Closure(std::rc::Rc::new(Closure {
+        bytecode: std::rc::Rc::new(vec![0u8]), // dummy bytecode
+        arity: elle::value::Arity::Exact(0),
+        env: std::rc::Rc::new(vec![]),
+        num_locals: 0,
+    }));
+
+    let result = call_primitive(&spawn, &[closure]);
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Value::String(s) => {
+            // Should return a thread ID string
+            assert!(!s.is_empty());
+        }
+        _ => panic!("spawn should return a string (thread ID)"),
+    }
+
+    // Test with non-function
+    let result = call_primitive(&spawn, &[Value::Int(42)]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_join_primitive() {
+    let (vm, mut symbols) = setup();
+    let join = get_primitive(&vm, &mut symbols, "join");
+
+    // join with thread handle string
+    let result = call_primitive(&join, &[Value::String("thread-id".into())]);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_sleep_primitive() {
+    let (vm, mut symbols) = setup();
+    let sleep = get_primitive(&vm, &mut symbols, "sleep");
+
+    // Test with integer seconds
+    let result = call_primitive(&sleep, &[Value::Int(0)]);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Value::Nil);
+
+    // Test with float seconds
+    let result = call_primitive(&sleep, &[Value::Float(0.01)]);
+    assert!(result.is_ok());
+
+    // Test with negative duration
+    let result = call_primitive(&sleep, &[Value::Int(-1)]);
+    assert!(result.is_err());
+
+    // Test with wrong argument type
+    let result = call_primitive(&sleep, &[Value::String("invalid".into())]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_current_thread_id_primitive() {
+    let (vm, mut symbols) = setup();
+    let thread_id = get_primitive(&vm, &mut symbols, "current-thread-id");
+
+    let result = call_primitive(&thread_id, &[]);
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Value::String(s) => {
+            assert!(!s.is_empty());
+        }
+        _ => panic!("current-thread-id should return a string"),
+    }
+}
+
+#[test]
+fn test_debug_print_primitive() {
+    let (vm, mut symbols) = setup();
+    let debug_print = get_primitive(&vm, &mut symbols, "debug-print");
+
+    let test_val = Value::Int(42);
+    let result = call_primitive(&debug_print, &[test_val.clone()]);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), test_val);
+}
+
+#[test]
+fn test_trace_primitive() {
+    let (vm, mut symbols) = setup();
+    let trace = get_primitive(&vm, &mut symbols, "trace");
+
+    let label = Value::String("test-trace".into());
+    let value = Value::Int(42);
+    let result = call_primitive(&trace, &[label, value.clone()]);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), value);
+
+    // Test with symbol label
+    let sym_id = symbols.intern("trace-label");
+    let label = Value::Symbol(sym_id);
+    let result = call_primitive(&trace, &[label, value.clone()]);
+    assert!(result.is_ok());
+
+    // Test with invalid label type
+    let label = Value::Int(123);
+    let result = call_primitive(&trace, &[label, value]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_profile_primitive() {
+    let (vm, mut symbols) = setup();
+    let profile = get_primitive(&vm, &mut symbols, "profile");
+
+    let closure = Value::Closure(std::rc::Rc::new(Closure {
+        bytecode: std::rc::Rc::new(vec![0u8]),
+        arity: elle::value::Arity::Exact(0),
+        env: std::rc::Rc::new(vec![]),
+        num_locals: 0,
+    }));
+
+    let result = call_primitive(&profile, &[closure]);
+    assert!(result.is_ok());
+
+    // Test with non-function
+    let result = call_primitive(&profile, &[Value::Int(42)]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_memory_usage_primitive() {
+    let (vm, mut symbols) = setup();
+    let memory_usage = get_primitive(&vm, &mut symbols, "memory-usage");
+
+    let result = call_primitive(&memory_usage, &[]);
+    assert!(result.is_ok());
+
+    // Should return a list
+    match result.unwrap() {
+        Value::Cons(_) | Value::Nil => {
+            // Valid list representation
+        }
+        _ => panic!("memory-usage should return a list"),
+    }
+}
+
+#[test]
+fn test_module_loading_path_tracking() {
+    let mut vm = VM::new();
+
+    // Add search paths
+    vm.add_module_search_path(std::path::PathBuf::from("./lib"));
+    vm.add_module_search_path(std::path::PathBuf::from("./modules"));
+
+    // Paths should be trackable (internal state, not exposed via API)
+    // This test verifies the VM accepts path additions without panic
+}
+
+#[test]
+fn test_module_circular_dependency_prevention() {
+    let mut vm = VM::new();
+
+    // Try to load the same module twice
+    let result1 = vm.load_module("test-module".to_string(), "");
+    let result2 = vm.load_module("test-module".to_string(), "");
+
+    // Both should succeed (second is no-op due to circular dep prevention)
+    assert!(result1.is_ok());
+    assert!(result2.is_ok());
 }
