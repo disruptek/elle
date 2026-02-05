@@ -18,8 +18,8 @@ proptest! {
         let result1 = read_str(&expr1, &mut symbols).unwrap();
         let result2 = read_str(&expr2, &mut symbols).unwrap();
 
-        let e1 = value_to_expr(&result1, &symbols).unwrap();
-        let e2 = value_to_expr(&result2, &symbols).unwrap();
+        let e1 = value_to_expr(&result1, &mut symbols).unwrap();
+        let e2 = value_to_expr(&result2, &mut symbols).unwrap();
 
         let bc1 = compile(&e1);
         let bc2 = compile(&e2);
@@ -43,8 +43,8 @@ proptest! {
         let result1 = read_str(&expr1, &mut symbols).unwrap();
         let result2 = read_str(&expr2, &mut symbols).unwrap();
 
-        let e1 = value_to_expr(&result1, &symbols).unwrap();
-        let e2 = value_to_expr(&result2, &symbols).unwrap();
+        let e1 = value_to_expr(&result1, &mut symbols).unwrap();
+        let e2 = value_to_expr(&result2, &mut symbols).unwrap();
 
         let bc1 = compile(&e1);
         let bc2 = compile(&e2);
@@ -67,8 +67,8 @@ proptest! {
         let result1 = read_str(&expr1, &mut symbols).unwrap();
         let result2 = read_str(&expr2, &mut symbols).unwrap();
 
-        let e1 = value_to_expr(&result1, &symbols).unwrap();
-        let e2 = value_to_expr(&result2, &symbols).unwrap();
+        let e1 = value_to_expr(&result1, &mut symbols).unwrap();
+        let e2 = value_to_expr(&result2, &mut symbols).unwrap();
 
         let bc1 = compile(&e1);
         let bc2 = compile(&e2);
@@ -89,7 +89,7 @@ proptest! {
         let expr = format!("(- (+ {} {}) {})", a, b, b);
 
         let result = read_str(&expr, &mut symbols).unwrap();
-        let e = value_to_expr(&result, &symbols).unwrap();
+        let e = value_to_expr(&result, &mut symbols).unwrap();
         let bc = compile(&e);
         let r = vm.execute(&bc).unwrap();
 
@@ -106,7 +106,7 @@ proptest! {
         let expr = format!("(/ (* {} {}) {})", a, b, b);
 
         let result = read_str(&expr, &mut symbols).unwrap();
-        let e = value_to_expr(&result, &symbols).unwrap();
+        let e = value_to_expr(&result, &mut symbols).unwrap();
         let bc = compile(&e);
         let r = vm.execute(&bc).unwrap();
 
@@ -126,7 +126,7 @@ proptest! {
         if a < b && b < c {
             let expr = format!("(< {} {})", a, c);
             let result = read_str(&expr, &mut symbols).unwrap();
-            let e = value_to_expr(&result, &symbols).unwrap();
+            let e = value_to_expr(&result, &mut symbols).unwrap();
             let bc = compile(&e);
             let r = vm.execute(&bc).unwrap();
 
@@ -142,7 +142,7 @@ proptest! {
 
         let expr = format!("(= {} {})", a, a);
         let result = read_str(&expr, &mut symbols).unwrap();
-        let e = value_to_expr(&result, &symbols).unwrap();
+        let e = value_to_expr(&result, &mut symbols).unwrap();
         let bc = compile(&e);
         let r = vm.execute(&bc).unwrap();
 
@@ -161,8 +161,8 @@ proptest! {
         let result1 = read_str(&expr1, &mut symbols).unwrap();
         let result2 = read_str(&expr2, &mut symbols).unwrap();
 
-        let e1 = value_to_expr(&result1, &symbols).unwrap();
-        let e2 = value_to_expr(&result2, &symbols).unwrap();
+        let e1 = value_to_expr(&result1, &mut symbols).unwrap();
+        let e2 = value_to_expr(&result2, &mut symbols).unwrap();
 
         let bc1 = compile(&e1);
         let bc2 = compile(&e2);
@@ -209,7 +209,7 @@ proptest! {
 
         // Get first
         let first_expr = read_str("(first test-list)", &mut symbols).unwrap();
-        let e = value_to_expr(&first_expr, &symbols).unwrap();
+        let e = value_to_expr(&first_expr, &mut symbols).unwrap();
         let bc = compile(&e);
         let first_val = vm.execute(&bc).unwrap();
 
@@ -305,7 +305,7 @@ proptest! {
         let expr = format!("(not (not {}))", bool_str);
 
         let result = read_str(&expr, &mut symbols).unwrap();
-        let e = value_to_expr(&result, &symbols).unwrap();
+        let e = value_to_expr(&result, &mut symbols).unwrap();
         let bc = compile(&e);
         let r = vm.execute(&bc).unwrap();
 
@@ -323,7 +323,7 @@ proptest! {
 
         let expr = format!("(if #t {} {})", a, b);
         let result = read_str(&expr, &mut symbols).unwrap();
-        let e = value_to_expr(&result, &symbols).unwrap();
+        let e = value_to_expr(&result, &mut symbols).unwrap();
         let bc = compile(&e);
         let r = vm.execute(&bc).unwrap();
 
@@ -338,7 +338,7 @@ proptest! {
 
         let expr = format!("(if #f {} {})", a, b);
         let result = read_str(&expr, &mut symbols).unwrap();
-        let e = value_to_expr(&result, &symbols).unwrap();
+        let e = value_to_expr(&result, &mut symbols).unwrap();
         let bc = compile(&e);
         let r = vm.execute(&bc).unwrap();
 

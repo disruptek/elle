@@ -31,7 +31,7 @@ fn main() {
     benchmark("Simple addition", 1000, || {
         let code = "(+ 1 2 3 4 5)";
         let value = read_str(code, &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         let _ = vm.execute(&bytecode);
     });
@@ -39,7 +39,7 @@ fn main() {
     benchmark("Complex arithmetic", 1000, || {
         let code = "(* (+ 1 2) (- 10 3) (/ 20 4))";
         let value = read_str(code, &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         let _ = vm.execute(&bytecode);
     });
@@ -49,7 +49,7 @@ fn main() {
     benchmark("List construction", 1000, || {
         let code = "(list 1 2 3 4 5)";
         let value = read_str(code, &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         let _ = vm.execute(&bytecode);
     });
@@ -57,7 +57,7 @@ fn main() {
     benchmark("List append", 100, || {
         let code = "(append (list 1 2) (list 3 4))";
         let value = read_str(code, &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         let _ = vm.execute(&bytecode);
     });
@@ -67,7 +67,7 @@ fn main() {
     benchmark("String append", 1000, || {
         let code = "(string-append \"hello\" \"world\")";
         let value = read_str(code, &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         let _ = vm.execute(&bytecode);
     });
@@ -77,7 +77,7 @@ fn main() {
     benchmark("If-then-else", 1000, || {
         let code = "(if (> 5 3) (+ 1 2) (- 10 5))";
         let value = read_str(code, &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         let _ = vm.execute(&bytecode);
     });
@@ -87,7 +87,7 @@ fn main() {
     benchmark("Map with native function", 100, || {
         let code = "(map abs (list -1 -2 -3 -4 -5))";
         let value = read_str(code, &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         let _ = vm.execute(&bytecode);
     });
@@ -95,7 +95,7 @@ fn main() {
     benchmark("Filter with native function", 100, || {
         let code = "(filter even? (list 1 2 3 4 5 6 7 8))";
         let value = read_str(code, &mut symbols).unwrap();
-        let expr = value_to_expr(&value, &symbols).unwrap();
+        let expr = value_to_expr(&value, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         let _ = vm.execute(&bytecode);
     });

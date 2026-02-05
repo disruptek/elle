@@ -1,6 +1,6 @@
 use super::ast::Expr;
 use super::bytecode::{Bytecode, Instruction};
-use crate::symbol::SymbolTable;
+use crate::symbol::{MacroDef, SymbolTable};
 use crate::value::{Closure, SymbolId, Value};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -388,11 +388,12 @@ impl Compiler {
             Expr::DefMacro {
                 name: _,
                 params: _,
-                body,
+                body: _,
             } => {
-                // Define macro: Phase 2 simplified - just compile the body
-                // Full macro expansion would happen during parsing
-                self.compile_expr(body, tail);
+                // DefMacro: Just return nil
+                // The actual macro registration happens during parsing (value_to_expr)
+                // where the macro definition is stored in the symbol table
+                self.bytecode.emit(Instruction::Nil);
             }
 
             Expr::Module {
@@ -678,7 +679,7 @@ fn value_to_pattern(value: &Value, symbols: &SymbolTable) -> Result<super::ast::
 
 /// Simple value-to-expr conversion for bootstrap
 /// This is a simple tree-walking approach before full macro expansion
-pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, String> {
+pub fn value_to_expr(value: &Value, symbols: &mut SymbolTable) -> Result<Expr, String> {
     match value {
         Value::Nil | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::String(_) => {
             Ok(Expr::Literal(value.clone()))
@@ -914,8 +915,65 @@ pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, Strin
                         })
                     }
 
+                    "defmacro" | "define-macro" => {
+                        // Syntax: (defmacro name (params...) body)
+                        //      or (define-macro name (params...) body)
+                        if list.len() != 4 {
+                            return Err(
+                                "defmacro requires exactly 3 arguments (name, parameters, body)"
+                                    .to_string(),
+                            );
+                        }
+                        let name = list[1].as_symbol()?;
+                        let params_val = &list[2];
+
+                        // Parse parameter list
+                        let params = if params_val.is_list() {
+                            let param_vec = params_val.list_to_vec()?;
+                            param_vec
+                                .iter()
+                                .map(|v| v.as_symbol())
+                                .collect::<Result<Vec<_>, _>>()?
+                        } else {
+                            return Err("Macro parameters must be a list".to_string());
+                        };
+
+                        // Store macro body as source code for later expansion
+                        let body_str = format!("{}", list[3]);
+
+                        // Register the macro in the symbol table
+                        use crate::symbol::MacroDef;
+                        symbols.define_macro(MacroDef {
+                            name,
+                            params: params.clone(),
+                            body: body_str,
+                        });
+
+                        let body = Box::new(value_to_expr(&list[3], symbols)?);
+
+                        Ok(Expr::DefMacro { name, params, body })
+                    }
+
                     _ => {
-                        // Function call
+                        // Check if this is a macro call
+                        if let Value::Symbol(sym_id) = first {
+                            if symbols.is_macro(*sym_id) {
+                                if let Some(macro_def) = symbols.get_macro(*sym_id) {
+                                    // This is a macro call - expand it
+                                    // Get the arguments as unevaluated values
+                                    let args = list[1..].to_vec();
+
+                                    // Expand the macro
+                                    let expanded =
+                                        expand_macro(*sym_id, &macro_def, &args, symbols)?;
+
+                                    // Parse the expanded result as an expression
+                                    return value_to_expr(&expanded, symbols);
+                                }
+                            }
+                        }
+
+                        // Regular function call
                         let func = Box::new(value_to_expr(first, symbols)?);
                         let args: Result<Vec<_>, _> = list[1..]
                             .iter()
@@ -944,5 +1002,80 @@ pub fn value_to_expr(value: &Value, symbols: &SymbolTable) -> Result<Expr, Strin
         }
 
         _ => Err(format!("Cannot convert {:?} to expression", value)),
+    }
+}
+
+/// Expand a macro by substituting parameters with arguments
+fn expand_macro(
+    _macro_name: SymbolId,
+    macro_def: &Rc<MacroDef>,
+    args: &[Value],
+    symbols: &mut SymbolTable,
+) -> Result<Value, String> {
+    use crate::read_str;
+
+    // Check argument count
+    if args.len() != macro_def.params.len() {
+        return Err(format!(
+            "Macro expects {} arguments, got {}",
+            macro_def.params.len(),
+            args.len()
+        ));
+    }
+
+    // Build a mapping of parameter names to their argument values
+    // We need to get the names of the parameter symbols
+    let mut param_mapping: Vec<(String, Value)> = Vec::new();
+    for (param_id, arg_value) in macro_def.params.iter().zip(args.iter()) {
+        if let Some(param_name) = symbols.name(*param_id) {
+            param_mapping.push((param_name.to_string(), arg_value.clone()));
+        }
+    }
+
+    // Parse the macro body from its source code
+    // This will create NEW symbol IDs for any symbols in the body
+    let body_value = read_str(&macro_def.body, symbols)
+        .map_err(|e| format!("Failed to parse macro body: {}", e))?;
+
+    // Now substitute by name, so we can handle symbol ID mismatches
+    Ok(substitute_params_by_name(
+        &body_value,
+        &param_mapping,
+        symbols,
+    ))
+}
+
+/// Recursively substitute macro parameters with their arguments (by name)
+fn substitute_params_by_name(
+    value: &Value,
+    param_mapping: &[(String, Value)],
+    symbols: &SymbolTable,
+) -> Value {
+    match value {
+        Value::Symbol(sym_id) => {
+            // Get the name of this symbol
+            if let Some(name) = symbols.name(*sym_id) {
+                // Check if this is a parameter name
+                if let Some((_param_name, arg_value)) =
+                    param_mapping.iter().find(|(pname, _)| pname == name)
+                {
+                    return arg_value.clone();
+                }
+            }
+            value.clone()
+        }
+        Value::Cons(_) => {
+            // Recursively substitute in list/cons cells
+            if let Ok(list_vec) = value.list_to_vec() {
+                let new_items: Vec<Value> = list_vec
+                    .iter()
+                    .map(|item| substitute_params_by_name(item, param_mapping, symbols))
+                    .collect();
+                crate::value::list(new_items)
+            } else {
+                value.clone()
+            }
+        }
+        _ => value.clone(),
     }
 }

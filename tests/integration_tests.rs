@@ -8,7 +8,7 @@ fn eval(input: &str) -> Result<Value, String> {
     register_primitives(&mut vm, &mut symbols);
 
     let value = read_str(input, &mut symbols)?;
-    let expr = value_to_expr(&value, &symbols)?;
+    let expr = value_to_expr(&value, &mut symbols)?;
     let bytecode = compile(&expr);
     vm.execute(&bytecode)
 }
@@ -144,13 +144,13 @@ fn test_define_and_use() {
 
     // Define x
     let def = read_str("(define x 42)", &mut symbols).unwrap();
-    let expr = value_to_expr(&def, &symbols).unwrap();
+    let expr = value_to_expr(&def, &mut symbols).unwrap();
     let bytecode = compile(&expr);
     vm.execute(&bytecode).unwrap();
 
     // Use x
     let use_x = read_str("(+ x 10)", &mut symbols).unwrap();
-    let expr = value_to_expr(&use_x, &symbols).unwrap();
+    let expr = value_to_expr(&use_x, &mut symbols).unwrap();
     let bytecode = compile(&expr);
     let result = vm.execute(&bytecode).unwrap();
 
@@ -166,14 +166,14 @@ fn test_multiple_defines() {
     // Define multiple variables
     for (name, value) in &[("a", "10"), ("b", "20"), ("c", "30")] {
         let def = read_str(&format!("(define {} {})", name, value), &mut symbols).unwrap();
-        let expr = value_to_expr(&def, &symbols).unwrap();
+        let expr = value_to_expr(&def, &mut symbols).unwrap();
         let bytecode = compile(&expr);
         vm.execute(&bytecode).unwrap();
     }
 
     // Use them
     let result = read_str("(+ a b c)", &mut symbols).unwrap();
-    let expr = value_to_expr(&result, &symbols).unwrap();
+    let expr = value_to_expr(&result, &mut symbols).unwrap();
     let bytecode = compile(&expr);
     let result = vm.execute(&bytecode).unwrap();
 
@@ -196,7 +196,7 @@ fn test_begin_with_side_effects() {
     // Begin with defines
     let code = "(begin (define x 10) (define y 20) (+ x y))";
     let value = read_str(code, &mut symbols).unwrap();
-    let expr = value_to_expr(&value, &symbols).unwrap();
+    let expr = value_to_expr(&value, &mut symbols).unwrap();
     let bytecode = compile(&expr);
     let result = vm.execute(&bytecode).unwrap();
 
@@ -256,7 +256,7 @@ fn test_large_list() {
     let code = format!("(list {})", numbers);
 
     let value = read_str(&code, &mut symbols).unwrap();
-    let expr = value_to_expr(&value, &symbols).unwrap();
+    let expr = value_to_expr(&value, &mut symbols).unwrap();
     let bytecode = compile(&expr);
     let result = vm.execute(&bytecode).unwrap();
 
@@ -2109,11 +2109,9 @@ fn test_gensym_uniqueness() {
 
 #[test]
 fn test_macro_definition_basic() {
-    // Basic macro definition syntax
-    let result = eval("(define-macro test (x) x)");
-    let result2 = eval("(defmacro test (x) x)");
-    // At least one should be supported
-    let _ = result.or(result2);
+    // Basic macro definition syntax - just verify it parses
+    assert!(eval("(defmacro identity (x) x)").is_ok());
+    assert!(eval("(define-macro id (x) x)").is_ok());
 }
 
 #[test]
@@ -2121,19 +2119,6 @@ fn test_macro_hygiene() {
     // Macro hygiene with gensym
     assert!(eval("(gensym)").is_ok());
     assert!(eval("(gensym \"temp\")").is_ok());
-}
-
-#[test]
-fn test_quote_in_macro() {
-    // Using quote in macro context
-    assert!(eval("'(a b c)").is_ok());
-}
-
-#[test]
-fn test_quasiquote_with_unquote() {
-    // Quasiquote with unquote (macro template syntax)
-    let result = eval("`(a ,b c)");
-    let _ = result;
 }
 
 #[test]

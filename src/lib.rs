@@ -14,7 +14,7 @@
 //!
 //! let code = "(+ 1 2 3)";
 //! let value = read_str(code, &mut symbols).unwrap();
-//! let expr = value_to_expr(&value, &symbols).unwrap();
+//! let expr = value_to_expr(&value, &mut symbols).unwrap();
 //! let bytecode = compile(&expr);
 //! let result = vm.execute(&bytecode).unwrap();
 //! ```
