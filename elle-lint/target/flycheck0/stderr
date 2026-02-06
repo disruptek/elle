@@ -1,0 +1,59 @@
+   0.022030959s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint: stale: changed "/home/adavidoff/git/elle/elle-lint/src/rules/arity.rs"
+   0.022040146s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint:           (vs) "/home/adavidoff/git/elle/elle-lint/target/debug/.fingerprint/elle-lint-c4941aa14a81d780/dep-lib-elle_lint"
+   0.022042560s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 1770328301, nanos: 225304685 } < FileTime { seconds: 1770328311, nanos: 902407819 }
+   0.022077617s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint: fingerprint dirty for elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint)/Check { test: false }/TargetInner { ..: lib_target("elle_lint", ["lib"], "/home/adavidoff/git/elle/elle-lint/src/lib.rs", Edition2021) }
+   0.022084169s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(ChangedFile { reference: "/home/adavidoff/git/elle/elle-lint/target/debug/.fingerprint/elle-lint-c4941aa14a81d780/dep-lib-elle_lint", reference_mtime: FileTime { seconds: 1770328301, nanos: 225304685 }, stale: "/home/adavidoff/git/elle/elle-lint/src/rules/arity.rs", stale_mtime: FileTime { seconds: 1770328311, nanos: 902407819 } }))
+   0.024523016s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint: stale: changed "/home/adavidoff/git/elle/elle-lint/src/rules/mod.rs"
+   0.024529779s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint:           (vs) "/home/adavidoff/git/elle/elle-lint/target/debug/.fingerprint/elle-lint-0b58ca35e654b28e/dep-test-lib-elle_lint"
+   0.024533836s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 1770328301, nanos: 225304685 } < FileTime { seconds: 1770328353, nanos: 804812648 }
+   0.024556379s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint: fingerprint dirty for elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint)/Check { test: true }/TargetInner { ..: lib_target("elle_lint", ["lib"], "/home/adavidoff/git/elle/elle-lint/src/lib.rs", Edition2021) }
+   0.024563963s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle_lint"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(ChangedFile { reference: "/home/adavidoff/git/elle/elle-lint/target/debug/.fingerprint/elle-lint-0b58ca35e654b28e/dep-test-lib-elle_lint", reference_mtime: FileTime { seconds: 1770328301, nanos: 225304685 }, stale: "/home/adavidoff/git/elle/elle-lint/src/rules/mod.rs", stale_mtime: FileTime { seconds: 1770328353, nanos: 804812648 } }))
+   0.024795239s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle-lint"}: cargo::core::compiler::fingerprint: fingerprint dirty for elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint)/Check { test: false }/TargetInner { name: "elle-lint", doc: true, ..: with_path("/home/adavidoff/git/elle/elle-lint/src/main.rs", Edition2021) }
+   0.024800689s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle-lint"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "elle_lint" })
+   0.024935564s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle-lint"}: cargo::core::compiler::fingerprint: fingerprint dirty for elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint)/Check { test: true }/TargetInner { name: "elle-lint", doc: true, ..: with_path("/home/adavidoff/git/elle/elle-lint/src/main.rs", Edition2021) }
+   0.024940062s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="elle-lint"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "elle_lint" })
+   0.025111285s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="integration_tests"}: cargo::core::compiler::fingerprint: fingerprint error for elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint)/Check { test: true }/TargetInner { kind: "test", name: "integration_tests", benched: false, ..: with_path("/home/adavidoff/git/elle/elle-lint/tests/integration_tests.rs", Edition2021) }
+   0.025116675s  INFO prepare_target{force=false package_id=elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint) target="integration_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/adavidoff/git/elle/elle-lint/target/debug/.fingerprint/elle-lint-e41858af03347741/test-integration-test-integration_tests`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: cargo_util::paths::read_bytes
+   1: cargo_util::paths::read
+   2: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   3: cargo::core::compiler::fingerprint::prepare_target
+   4: cargo::core::compiler::compile
+   5: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   6: cargo::ops::cargo_compile::compile_ws
+   7: cargo::ops::cargo_compile::compile_with_exec
+   8: cargo::ops::cargo_compile::compile
+   9: cargo::commands::check::exec
+  10: <cargo::cli::Exec>::exec
+  11: cargo::main
+  12: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  13: std::rt::lang_start::<()>::{closure#0}
+  14: core::ops::function::impls::<impl core::ops::function::FnOnce<A> for &F>::call_once
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/ops/function.rs:287:21
+  15: std::panicking::catch_unwind::do_call
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:581:40
+  16: std::panicking::catch_unwind
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:544:19
+  17: std::panic::catch_unwind
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panic.rs:359:14
+  18: std::rt::lang_start_internal::{{closure}}
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/rt.rs:175:24
+  19: std::panicking::catch_unwind::do_call
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:581:40
+  20: std::panicking::catch_unwind
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:544:19
+  21: std::panic::catch_unwind
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panic.rs:359:14
+  22: std::rt::lang_start_internal
+             at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/rt.rs:171:5
+  23: main
+  24: __libc_start_call_main
+  25: __libc_start_main_alias_2
+  26: <unknown>
+    Checking elle-lint v0.1.0 (/home/adavidoff/git/elle/elle-lint)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
