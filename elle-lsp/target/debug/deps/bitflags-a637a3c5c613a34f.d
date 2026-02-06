@@ -1,0 +1,11 @@
+/home/adavidoff/git/elle/elle-lsp/target/debug/deps/bitflags-a637a3c5c613a34f.d: /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/lib.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/iter.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/parser.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/traits.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/public.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/internal.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/external.rs
+
+/home/adavidoff/git/elle/elle-lsp/target/debug/deps/libbitflags-a637a3c5c613a34f.rmeta: /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/lib.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/iter.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/parser.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/traits.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/public.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/internal.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/external.rs
+
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/lib.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/iter.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/parser.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/traits.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/public.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/internal.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.10.0/src/external.rs:
