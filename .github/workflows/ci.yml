@@ -224,12 +224,14 @@ jobs:
           https://disruptek.github.io/elle/api/elle/
           https://disruptek.github.io/elle/api/elle/vm/
           https://disruptek.github.io/elle/api/elle/ffi/
-          https://disruptek.github.io/elle/api/elle/compiler/
+           https://disruptek.github.io/elle/api/elle/compiler/
           EOF
       - name: Upload documentation artifact
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
+          name: documentation
           path: site/
+          retention-days: 30
 
   deploy-pages:
     name: Deploy to GitHub Pages
