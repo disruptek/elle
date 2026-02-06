@@ -1,0 +1,11 @@
+/home/adavidoff/git/elle/elle-lsp/target/debug/deps/quote-6c13933044e750fd.d: /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/lib.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ext.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/format.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ident_fragment.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/to_tokens.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/runtime.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/spanned.rs
+
+/home/adavidoff/git/elle/elle-lsp/target/debug/deps/libquote-6c13933044e750fd.rmeta: /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/lib.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ext.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/format.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ident_fragment.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/to_tokens.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/runtime.rs /home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/spanned.rs
+
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/lib.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ext.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/format.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ident_fragment.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/to_tokens.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/runtime.rs:
+/home/adavidoff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/spanned.rs:
