@@ -11,83 +11,152 @@
 ; ->> (thread-last): Inserts the value as the LAST argument to each form
 ; Example: (->> 5 (+ 10) (* 2)) expands to (* 2 (+ 10 5)) = 30
 
-(define (demo-thread-first)
-  (prn "=== Thread-First (->) Examples ===")
-  
-  ; Simple arithmetic chain
-  (prn "Simple chain: (-> 5 (+ 10) (* 2))")
-  (prn "Expected: 30, Got: " (-> 5 (+ 10) (* 2)))
-  
-  ; Multiple arguments
-  (prn "\nWith multiple args: (-> 5 (+ 10 2) (* 3))")
-  (prn "Expected: 51, Got: " (-> 5 (+ 10 2) (* 3)))
-  
-  ; Longer chain
-  (prn "\nLonger chain: (-> 1 (+ 1) (+ 1) (+ 1))")
-  (prn "Expected: 4, Got: " (-> 1 (+ 1) (+ 1) (+ 1)))
-  
-  ; With list operations
-  (prn "\nWith lists: (-> (list 1 2 3) (length))")
-  (prn "Expected: 3, Got: " (-> (list 1 2 3) (length)))
-  
-  ; Nested operations
-  (prn "\nNested: (-> 10 (- 3) (+ 5))")
-  (prn "Evaluation: (+ (- 10 3) 5) = (+ 7 5) = 12")
-  (prn "Got: " (-> 10 (- 3) (+ 5)))
+(define demo-thread-first
+  (lambda ()
+    (display "=== Thread-First (->) Examples ===")
+    (newline)
+    
+    ; Simple arithmetic chain
+    (display "Simple chain: (-> 5 (+ 10) (* 2))")
+    (newline)
+    (display "Expected: 30, Got: ")
+    (display (-> 5 (+ 10) (* 2)))
+    (newline)
+    
+    ; Multiple arguments
+    (newline)
+    (display "With multiple args: (-> 5 (+ 10 2) (* 3))")
+    (newline)
+    (display "Expected: 51, Got: ")
+    (display (-> 5 (+ 10 2) (* 3)))
+    (newline)
+    
+    ; Longer chain
+    (newline)
+    (display "Longer chain: (-> 1 (+ 1) (+ 1) (+ 1))")
+    (newline)
+    (display "Expected: 4, Got: ")
+    (display (-> 1 (+ 1) (+ 1) (+ 1)))
+    (newline)
+    
+    ; With list operations
+    (newline)
+    (display "With lists: (-> (list 1 2 3) (length))")
+    (newline)
+    (display "Expected: 3, Got: ")
+    (display (-> (list 1 2 3) (length)))
+    (newline)
+    
+    ; Nested operations
+    (newline)
+    (display "Nested: (-> 10 (- 3) (+ 5))")
+    (newline)
+    (display "Evaluation: (+ (- 10 3) 5) = (+ 7 5) = 12")
+    (newline)
+    (display "Got: ")
+    (display (-> 10 (- 3) (+ 5)))
+    (newline)
+  )
 )
 
-(define (demo-thread-last)
-  (prn "\n=== Thread-Last (->>) Examples ===")
-  
-  ; Simple arithmetic chain
-  (prn "Simple chain: (->> 5 (+ 10) (* 2))")
-  (prn "Expected: 30, Got: " (->> 5 (+ 10) (* 2)))
-  
-  ; Multiple arguments
-  (prn "\nWith multiple args: (->> 2 (+ 10) (* 3))")
-  (prn "Expected: 36, Got: " (->> 2 (+ 10) (* 3)))
-  
-  ; Longer chain
-  (prn "\nLonger chain: (->> 1 (+ 1) (+ 1) (+ 1))")
-  (prn "Expected: 4, Got: " (->> 1 (+ 1) (+ 1) (+ 1)))
-  
-  ; With list operations
-  (prn "\nWith lists: (->> (list 1 2 3) (length))")
-  (prn "Expected: 3, Got: " (->> (list 1 2 3) (length)))
-  
-  ; Nested operations with order difference
-  (prn "\nNested: (->> 10 (- 3) (+ 5))")
-  (prn "Evaluation: (+ 5 (- 3 10)) = (+ 5 -7) = -2")
-  (prn "Got: " (->> 10 (- 3) (+ 5)))
+(define demo-thread-last
+  (lambda ()
+    (display "=== Thread-Last (->>) Examples ===")
+    (newline)
+    
+    ; Simple arithmetic chain
+    (display "Simple chain: (->> 5 (+ 10) (* 2))")
+    (newline)
+    (display "Expected: 30, Got: ")
+    (display (->> 5 (+ 10) (* 2)))
+    (newline)
+    
+    ; Multiple arguments
+    (newline)
+    (display "With multiple args: (->> 2 (+ 10) (* 3))")
+    (newline)
+    (display "Expected: 36, Got: ")
+    (display (->> 2 (+ 10) (* 3)))
+    (newline)
+    
+    ; Longer chain
+    (newline)
+    (display "Longer chain: (->> 1 (+ 1) (+ 1) (+ 1))")
+    (newline)
+    (display "Expected: 4, Got: ")
+    (display (->> 1 (+ 1) (+ 1) (+ 1)))
+    (newline)
+    
+    ; With list operations
+    (newline)
+    (display "With lists: (->> (list 1 2 3) (length))")
+    (newline)
+    (display "Expected: 3, Got: ")
+    (display (->> (list 1 2 3) (length)))
+    (newline)
+    
+    ; Nested operations with order difference
+    (newline)
+    (display "Nested: (->> 10 (- 3) (+ 5))")
+    (newline)
+    (display "Evaluation: (+ 5 (- 3 10)) = (+ 5 -7) = -2")
+    (newline)
+    (display "Got: ")
+    (display (->> 10 (- 3) (+ 5)))
+    (newline)
+  )
 )
 
-(define (demo-comparison)
-  (prn "\n=== Thread-First vs Thread-Last Comparison ===")
-  
-  ; Show how the same threading path gives different results
-  ; with different operators
-  
-  (prn "Value: 3")
-  (prn "Operations: (- 1), (+ 2)")
-  
-  (prn "\nThread-first: (-> 3 (- 1) (+ 2))")
-  (prn "  = (+ (- 3 1) 2)")
-  (prn "  = (+ 2 2)")
-  (prn "  = 4")
-  (prn "Result: " (-> 3 (- 1) (+ 2)))
-  
-  (prn "\nThread-last: (->> 3 (- 1) (+ 2))")
-  (prn "  = (+ 2 (- 1 3))")
-  (prn "  = (+ 2 -2)")
-  (prn "  = 0")
-  (prn "Result: " (->> 3 (- 1) (+ 2)))
+(define demo-comparison
+  (lambda ()
+    (display "=== Thread-First vs Thread-Last Comparison ===")
+    (newline)
+    
+    ; Show how the same threading path gives different results
+    ; with different operators
+    
+    (display "Value: 3")
+    (newline)
+    (display "Operations: (- 1), (+ 2)")
+    (newline)
+    
+    (newline)
+    (display "Thread-first: (-> 3 (- 1) (+ 2))")
+    (newline)
+    (display "  = (+ (- 3 1) 2)")
+    (newline)
+    (display "  = (+ 2 2)")
+    (newline)
+    (display "  = 4")
+    (newline)
+    (display "Result: ")
+    (display (-> 3 (- 1) (+ 2)))
+    (newline)
+    
+    (newline)
+    (display "Thread-last: (->> 3 (- 1) (+ 2))")
+    (newline)
+    (display "  = (+ 2 (- 1 3))")
+    (newline)
+    (display "  = (+ 2 -2)")
+    (newline)
+    (display "  = 0")
+    (newline)
+    (display "Result: ")
+    (display (->> 3 (- 1) (+ 2)))
+    (newline)
+  )
 )
 
-(define (main)
-  (demo-thread-first)
-  (demo-thread-last)
-  (demo-comparison)
-  (prn "\n=== Demo Complete ===")
+(define main
+  (lambda ()
+    (demo-thread-first)
+    (demo-thread-last)
+    (demo-comparison)
+    (newline)
+    (display "=== Demo Complete ===")
+    (newline)
+  )
 )
 
 (main)
