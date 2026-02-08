@@ -3,6 +3,7 @@
 // This module handles the core logic of translating Elle AST expressions
 // into Cranelift IR (CLIF) and compiling to native x86_64 code.
 
+use super::branching::BranchManager;
 use super::codegen::IrEmitter;
 use super::context::JITContext;
 use crate::compiler::ast::Expr;
@@ -141,22 +142,68 @@ impl ExprCompiler {
         Ok(result)
     }
 
-    /// Compile an if expression
+    /// Compile an if expression with proper conditional branching
     fn compile_if(
         builder: &mut FunctionBuilder,
         cond: &Expr,
         then_expr: &Expr,
         else_expr: &Expr,
     ) -> Result<IrValue, String> {
-        // Compile condition (for now just evaluate it for side effects)
-        let _cond_val = Self::compile_expr_block(builder, cond)?;
+        // Compile the condition expression
+        let cond_val = Self::compile_expr_block(builder, cond)?;
 
-        // Compile both branches and return then branch
-        // TODO: Implement proper conditional branching with Cranelift's brif/br_table
+        // Extract i64 value from condition (floats would need conversion)
+        let cond_i64 = match cond_val {
+            IrValue::I64(v) => v,
+            IrValue::F64(_v) => {
+                // For now, treat any f64 as truthy (non-zero)
+                // TODO: Proper float-to-int conversion
+                return Err("Float conditions not yet supported".to_string());
+            }
+        };
+
+        // Create branch blocks
+        let (then_block, else_block, join_block) = BranchManager::create_if_blocks(builder);
+
+        // Emit the conditional branch
+        BranchManager::emit_if_cond(builder, cond_i64, then_block, else_block);
+
+        // Compile then branch
+        builder.switch_to_block(then_block);
+        builder.seal_block(then_block);
         let then_val = Self::compile_expr_block(builder, then_expr)?;
-        let _else_val = Self::compile_expr_block(builder, else_expr)?;
+        let then_i64 = Self::ir_value_to_i64(builder, then_val)?;
+        BranchManager::jump_to_join(builder, join_block, then_i64);
 
-        Ok(then_val)
+        // Compile else branch
+        builder.switch_to_block(else_block);
+        builder.seal_block(else_block);
+        let else_val = Self::compile_expr_block(builder, else_expr)?;
+        let else_i64 = Self::ir_value_to_i64(builder, else_val)?;
+        BranchManager::jump_to_join(builder, join_block, else_i64);
+
+        // Set up join block and get the result value
+        BranchManager::setup_join_block_for_value(join_block, builder);
+        builder.switch_to_block(join_block);
+        builder.seal_block(join_block);
+        let result_i64 = BranchManager::get_join_value(builder, join_block);
+
+        Ok(IrValue::I64(result_i64))
+    }
+
+    /// Convert IrValue to i64 for control flow operations
+    fn ir_value_to_i64(
+        builder: &mut FunctionBuilder,
+        val: IrValue,
+    ) -> Result<cranelift::prelude::Value, String> {
+        match val {
+            IrValue::I64(v) => Ok(v),
+            IrValue::F64(_v) => {
+                // For now, return a placeholder
+                // TODO: Proper float-to-i64 encoding
+                Ok(builder.ins().iconst(types::I64, 0))
+            }
+        }
     }
 }
 
