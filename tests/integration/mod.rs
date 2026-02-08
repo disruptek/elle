@@ -90,3 +90,7 @@ mod scoping {
 mod compiler_core {
     include!("compiler_core.rs");
 }
+
+mod primitives_core {
+    include!("primitives_core.rs");
+}
