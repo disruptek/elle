@@ -11,7 +11,7 @@ use crate::value::SymbolId;
 use std::collections::HashMap;
 
 /// Escape state of a value
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum EscapeState {
     /// Value doesn't escape scope (can be stack-allocated)
     NoEscape,
@@ -20,6 +20,7 @@ pub enum EscapeState {
     /// Value escapes to global state
     GlobalEscape,
     /// Value escapes in unknown ways (assume worst case)
+    #[default]
     Unknown,
 }
 
@@ -54,12 +55,6 @@ impl EscapeState {
             (EscapeState::ArgsEscape, _) | (_, EscapeState::ArgsEscape) => EscapeState::ArgsEscape,
             _ => EscapeState::NoEscape,
         }
-    }
-}
-
-impl Default for EscapeState {
-    fn default() -> Self {
-        EscapeState::Unknown
     }
 }
 
@@ -109,9 +104,7 @@ impl AllocationProfile {
     pub fn finalize(&mut self) {
         let escape_state = if self.escapes_to_global {
             EscapeState::GlobalEscape
-        } else if self.escapes_to_args {
-            EscapeState::ArgsEscape
-        } else if self.is_returned {
+        } else if self.escapes_to_args || self.is_returned {
             EscapeState::ArgsEscape
         } else if self.allocation_count > 0 {
             EscapeState::NoEscape
@@ -219,7 +212,7 @@ impl EscapeAnalyzer {
 
     /// Record an allocation for a function parameter
     pub fn record_parameter_allocation(&mut self, func: SymbolId, param_index: usize, size: usize) {
-        let profiles = self.function_profiles.entry(func).or_insert_with(Vec::new);
+        let profiles = self.function_profiles.entry(func).or_default();
 
         while profiles.len() <= param_index {
             profiles.push(AllocationProfile::new());

@@ -16,11 +16,12 @@ use crate::value::SymbolId;
 use std::collections::HashMap;
 
 /// Compilation strategy selection
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompilationStrategy {
     /// Conservative: only compile very safe optimizations
     Conservative,
     /// Balanced: moderate optimization level (default)
+    #[default]
     Balanced,
     /// Aggressive: apply all possible optimizations
     Aggressive,
@@ -52,12 +53,6 @@ impl CompilationStrategy {
             CompilationStrategy::Balanced => 0.6,
             CompilationStrategy::Aggressive => 0.4,
         }
-    }
-}
-
-impl Default for CompilationStrategy {
-    fn default() -> Self {
-        CompilationStrategy::Balanced
     }
 }
 

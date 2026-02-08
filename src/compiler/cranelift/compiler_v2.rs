@@ -143,11 +143,11 @@ impl ExprCompilerV2 {
         match FunctionCallCompiler::try_compile_call(func, args, ctx.symbol_table) {
             super::funcall::CallCompileResult::CompiledConstant(val) => {
                 // Convert folded constant to IR value
-                return Self::compile_literal(ctx, &val);
+                Self::compile_literal(ctx, &val)
             }
             super::funcall::CallCompileResult::NotCompilable => {
                 // Dynamic call compilation would go here (Phase 4+)
-                return Err("Dynamic function calls not yet implemented".to_string());
+                Err("Dynamic function calls not yet implemented".to_string())
             }
         }
     }

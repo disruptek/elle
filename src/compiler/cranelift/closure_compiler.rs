@@ -128,11 +128,11 @@ impl ClosureCompiler {
     /// Returns a list of (SymbolId, depth, index) tuples for captured vars
     pub fn analyze_captures(
         expr: &Expr,
-        scope_manager: &ScopeManager,
+        _scope_manager: &ScopeManager,
         bound_params: &[SymbolId],
     ) -> Result<Vec<(SymbolId, usize, usize)>, String> {
         let mut captures = Vec::new();
-        Self::collect_captures(expr, scope_manager, bound_params, &mut captures)?;
+        Self::collect_captures(expr, bound_params, &mut captures)?;
 
         // Remove duplicates while preserving order
         captures.sort_by_key(|&(sym, d, i)| (sym, d, i));
@@ -144,7 +144,6 @@ impl ClosureCompiler {
     /// Recursively collect captured variables from an expression
     fn collect_captures(
         expr: &Expr,
-        scope_manager: &ScopeManager,
         bound_params: &[SymbolId],
         captures: &mut Vec<(SymbolId, usize, usize)>,
     ) -> Result<(), String> {
@@ -160,34 +159,34 @@ impl ClosureCompiler {
             Expr::Literal(_) => Ok(()),
             Expr::Begin(exprs) | Expr::Block(exprs) => {
                 for e in exprs {
-                    Self::collect_captures(e, scope_manager, bound_params, captures)?;
+                    Self::collect_captures(e, bound_params, captures)?;
                 }
                 Ok(())
             }
             Expr::If { cond, then, else_ } => {
-                Self::collect_captures(cond, scope_manager, bound_params, captures)?;
-                Self::collect_captures(then, scope_manager, bound_params, captures)?;
-                Self::collect_captures(else_, scope_manager, bound_params, captures)?;
+                Self::collect_captures(cond, bound_params, captures)?;
+                Self::collect_captures(then, bound_params, captures)?;
+                Self::collect_captures(else_, bound_params, captures)?;
                 Ok(())
             }
             Expr::Let { bindings, body } => {
                 for (_sym, binding_expr) in bindings {
-                    Self::collect_captures(binding_expr, scope_manager, bound_params, captures)?;
+                    Self::collect_captures(binding_expr, bound_params, captures)?;
                 }
-                Self::collect_captures(body, scope_manager, bound_params, captures)?;
+                Self::collect_captures(body, bound_params, captures)?;
                 Ok(())
             }
             Expr::Lambda { params, body, .. } => {
                 // For nested lambdas, only analyze body with extended param list
                 let mut extended_params = bound_params.to_vec();
                 extended_params.extend_from_slice(params);
-                Self::collect_captures(body, scope_manager, &extended_params, captures)?;
+                Self::collect_captures(body, &extended_params, captures)?;
                 Ok(())
             }
             Expr::Call { func, args, .. } => {
-                Self::collect_captures(func, scope_manager, bound_params, captures)?;
+                Self::collect_captures(func, bound_params, captures)?;
                 for arg in args {
-                    Self::collect_captures(arg, scope_manager, bound_params, captures)?;
+                    Self::collect_captures(arg, bound_params, captures)?;
                 }
                 Ok(())
             }

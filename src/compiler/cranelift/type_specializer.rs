@@ -124,9 +124,10 @@ impl Default for TypeProfile {
 }
 
 /// Specialization strategy
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SpecializationStrategy {
     /// No specialization
+    #[default]
     None,
     /// Specialize for dominant type only
     Monomorphic,
@@ -153,12 +154,6 @@ impl SpecializationStrategy {
             self,
             SpecializationStrategy::Duomorphic | SpecializationStrategy::Polymorphic
         )
-    }
-}
-
-impl Default for SpecializationStrategy {
-    fn default() -> Self {
-        SpecializationStrategy::None
     }
 }
 
@@ -229,7 +224,7 @@ impl TypeSpecializer {
 
     /// Record a function call with argument types
     pub fn observe_call(&mut self, func: SymbolId, arg_types: Vec<ValueType>) {
-        let profiles = self.function_profiles.entry(func).or_insert_with(Vec::new);
+        let profiles = self.function_profiles.entry(func).or_default();
 
         // Ensure we have profiles for all arguments
         while profiles.len() < arg_types.len() {
@@ -289,10 +284,7 @@ impl TypeSpecializer {
         let mut variant = SpecializedVariant::new(input_types);
         variant.code_address = Some(self.total_specializations * 256); // Placeholder address
 
-        let variants = self
-            .specialized_variants
-            .entry(func)
-            .or_insert_with(Vec::new);
+        let variants = self.specialized_variants.entry(func).or_default();
         variants.push(variant.clone());
 
         variant
