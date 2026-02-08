@@ -297,23 +297,7 @@ The else branch is optional:
 
 The final clause `(#t ...)` acts as a catch-all.
 
-### when and unless
 
-`when` executes a body if a condition is true:
-
-```lisp
-(when (> 10 5)
-  (display "10 is greater")
-  (newline))
-```
-
-`unless` is the opposite (executes if condition is false):
-
-```lisp
-(unless (< 10 5)
-  (display "10 is not less than 5")
-  (newline))
-```
 
 ### do - Compound Statements
 
@@ -331,62 +315,25 @@ The final clause `(#t ...)` acts as a catch-all.
 
 Also called `begin` in some Lisp dialects.
 
-### loop - Infinite Loop
+### Functional Iteration (map, filter, fold)
 
-`loop` creates an infinite loop that continues until broken:
-
-```lisp
-(define count 0)
-(loop
-  (when (>= count 3)
-    (break))
-  (display count)
-  (newline)
-  (set! count (+ count 1)))
-```
-
-Output:
-```
-0
-1
-2
-```
-
-### while - Conditional Loop
-
-`while` repeats while a condition is true:
+Elle uses functional iteration rather than imperative loops. Use higher-order functions to process collections:
 
 ```lisp
-(define x 0)
-(while (< x 3)
-  (display x)
-  (newline)
-  (set! x (+ x 1)))
+; Process each element
+(map (lambda (x) (* x 2)) (list 1 2 3))
+⟹ (2 4 6)
+
+; Select matching elements
+(filter (lambda (x) (> x 2)) (list 1 2 3 4))
+⟹ (3 4)
+
+; Accumulate a result
+(fold (lambda (acc x) (+ acc x)) 0 (list 1 2 3 4))
+⟹ 10
 ```
 
-Output:
-```
-0
-1
-2
-```
-
-### for - Iteration Loop
-
-`for` iterates over a list:
-
-```lisp
-(for (item (list 'a 'b 'c))
-  (display item)
-  (newline))
-```
-
-Output:
-```
-a
-b
-c
-```
+See the [Higher-Order Functions](#functions-and-higher-order-operations) section for more details.
 
 ---
 

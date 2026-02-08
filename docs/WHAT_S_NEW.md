@@ -138,18 +138,18 @@ If you have existing Elle code:
 
 ## File I/O Functions
 
-### slurp and spit
+### Renamed: slurp and spit
 
-Read and write entire files efficiently:
+File I/O was renamed for idiom consistency with Clojure/Janet:
 
 ```lisp
-; Read entire file
+; Read entire file (old: read-file)
 (define content (slurp "path/to/file.txt"))
 
-; Write to file (overwrites)
+; Write to file - overwrites (old: write-file)
 (spit "output.txt" content)
 
-; Append to file
+; Append to file (unchanged)
 (append-file "log.txt" "New log entry\n")
 ```
 

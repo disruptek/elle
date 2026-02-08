@@ -5,7 +5,7 @@ A comprehensive guide to control flow constructs, exception handling, and the co
 ## Table of Contents
 
 1. [Conditionals](#conditionals)
-2. [Loops](#loops)
+2. [Functional Iteration](#functional-iteration)
 3. [Exception Handling](#exception-handling)
 4. [The Condition System](#the-condition-system)
 5. [Control Flow Best Practices](#control-flow-best-practices)
@@ -79,56 +79,7 @@ The final `(#t ...)` clause acts as a catch-all (equivalent to `else`):
   (#t          "It's something else"))
 ```
 
-### when - Execute if True
 
-`when` executes a body if and only if a condition is true:
-
-```lisp
-(when condition
-  expression1
-  expression2
-  ...)
-```
-
-Returns `nil` if condition is false, otherwise returns the value of the last expression.
-
-**Examples:**
-
-```lisp
-(when (> 10 5)
-  (display "10 is greater")
-  (newline))
-
-(define result (when #t 42))
-result ⟹ 42
-
-(define result (when #f 42))
-result ⟹ nil
-```
-
-### unless - Execute if False
-
-`unless` is the opposite of `when` - executes if condition is false:
-
-```lisp
-(unless condition
-  expression1
-  expression2
-  ...)
-```
-
-**Examples:**
-
-```lisp
-(unless (< 5 10)
-  (display "5 is not less than 10"))
-⟹ nil (condition is true, so body doesn't run)
-
-(unless (< 10 5)
-  (display "10 is not less than 5")
-  (newline))
-⟹ prints message, returns nil
-```
 
 ### do/begin - Compound Expressions
 
@@ -162,138 +113,84 @@ result ⟹ 30
 
 ---
 
-## Loops
+## Functional Iteration
 
-### loop - Infinite Loop with break
+Elle uses functional iteration patterns rather than imperative loops. Process collections using higher-order functions:
 
-`loop` creates an infinite loop that continues until explicitly broken:
+### map - Transform Each Element
 
 ```lisp
-(loop
-  body...
-  (when condition (break)))
+(map function list)
 ```
 
 **Examples:**
 
 ```lisp
-(define count 0)
-(loop
-  (display count)
-  (newline)
-  (set! count (+ count 1))
-  (when (>= count 3)
-    (break)))
+(map (lambda (x) (* x 2)) (list 1 2 3))
+⟹ (2 4 6)
+
+(map (lambda (s) (string-upcase s)) (list "a" "b" "c"))
+⟹ ("A" "B" "C")
+
+(map abs (list -1 -2 3 -4))
+⟹ (1 2 3 4)
 ```
 
-Output:
-```
-0
-1
-2
-```
-
-### while - Conditional Loop
-
-`while` repeats a body while a condition remains true:
+### filter - Select Matching Elements
 
 ```lisp
-(while condition
-  body...)
+(filter predicate list)
 ```
 
 **Examples:**
 
 ```lisp
-(define x 0)
-(while (< x 3)
-  (display x)
-  (newline)
-  (set! x (+ x 1)))
+(filter (lambda (x) (> x 2)) (list 1 2 3 4))
+⟹ (3 4)
+
+(filter even? (list 1 2 3 4 5 6))
+⟹ (2 4 6)
+
+(filter (lambda (s) (> (string-length s) 3))
+  (list "hi" "hello" "ok" "world"))
+⟹ ("hello" "world")
 ```
 
-Output:
-```
-0
-1
-2
-```
-
-More complex example:
+### fold - Accumulate a Result
 
 ```lisp
-(define lst (list 1 2 3 4 5))
-(define sum 0)
-(define remaining lst)
-
-(while (not (nil? remaining))
-  (set! sum (+ sum (first remaining)))
-  (set! remaining (rest remaining)))
-
-sum ⟹ 15
-```
-
-### for - List Iteration
-
-`for` iterates over elements of a list:
-
-```lisp
-(for (item list)
-  body...)
+(fold function initial-value list)
 ```
 
 **Examples:**
 
 ```lisp
-(for (item (list 'a 'b 'c))
-  (display item)
-  (newline))
+(fold (lambda (acc x) (+ acc x)) 0 (list 1 2 3 4))
+⟹ 10
+
+(fold (lambda (acc x) (cons x acc)) nil (list 1 2 3))
+⟹ (3 2 1)
+
+(fold (lambda (acc s) (string-append acc " " s))
+  "" (list "hello" "world"))
+⟹ " hello world"
 ```
 
-Output:
-```
-a
-b
-c
-```
+### Combining map, filter, and fold
 
-With accumulation:
+Process data through multiple transformations:
 
 ```lisp
-(define sum 0)
-(for (n (list 1 2 3 4 5))
-  (set! sum (+ sum n)))
+; Double all even numbers
+(map (lambda (x) (* x 2))
+  (filter even? (list 1 2 3 4 5 6)))
+⟹ (4 8 12)
 
-sum ⟹ 15
-```
-
-### break and continue
-
-`break` exits a loop immediately:
-
-```lisp
-(loop
-  (when (> x 10) (break))
-  (display x)
-  (set! x (+ x 1)))
-```
-
-`continue` skips to the next iteration:
-
-```lisp
-(for (n (list 1 2 3 4 5))
-  (when (= n 3)
-    (continue))
-  (display n)
-  (newline))
-```
-
-Output:
-```
-1
-2
-4
-5
+; Sum of squares of positive numbers
+(fold (lambda (acc x) (+ acc (* x x)))
+  0
+  (filter (lambda (x) (> x 0)) (list -2 3 -1 4 -5)))
+⟹ 25 (3² + 4²)
 ```
 
 ---
@@ -628,13 +525,13 @@ Instead of nested `if`:
 ```lisp
 ; Good
 (cond
-  ((null? x) "empty")
+  ((nil? x) "empty")
   ((> x 0) "positive")
   ((< x 0) "negative")
   (#t "zero"))
 
 ; Avoid
-(if (null? x)
+(if (nil? x)
   "empty"
   (if (> x 0)
     "positive"
@@ -643,32 +540,24 @@ Instead of nested `if`:
       "zero")))
 ```
 
-### 2. Use `when` and `unless` for Single-Branch Conditions
+### 2. Use Functional Iteration for Data Processing
+
+Prefer `map`, `filter`, and `fold` for processing collections:
 
 ```lisp
-; Good
-(when (valid? input)
-  (process input))
+; Good: Clear intent, composable
+(define doubled (map (lambda (x) (* x 2)) (list 1 2 3)))
+(define evens (filter even? (list 1 2 3 4 5 6)))
+(define sum (fold (lambda (acc x) (+ acc x)) 0 (list 1 2 3)))
 
-; Less clear
-(if (valid? input)
-  (process input)
-  nil)
+; Less idiomatic: Manual recursion (still valid)
+(define (sum-list lst)
+  (if (nil? lst)
+    0
+    (+ (first lst) (sum-list (rest lst)))))
 ```
 
-### 3. Use Loops for Side Effects, Higher-Order Functions for Data
-
-```lisp
-; For iteration with side effects
-(for (item items)
-  (display item)
-  (newline))
-
-; For data transformation
-(define doubled (map (lambda (x) (* x 2)) items))
-```
-
-### 4. Use the Condition System for Expected Errors
+### 3. Use the Condition System for Expected Errors
 
 Use exceptions for truly exceptional cases, conditions for expected error scenarios:
 
@@ -682,19 +571,19 @@ Use exceptions for truly exceptional cases, conditions for expected error scenar
 (throw (exception "Input validation failed" nil))
 ```
 
-### 5. Always Use try-finally for Resource Cleanup
+### 4. Always Use try-finally for Resource Cleanup
 
-If you open resources, ensure they're closed:
+If you open resources, ensure cleanup code runs:
 
 ```lisp
-(define file (slurp "data.txt"))
 (try
-  (process file)
+  (process-file "data.txt")
   (finally
-    (close file)))
+    (display "File processing complete")
+    (newline)))
 ```
 
-### 6. Separate Concerns with catch-condition
+### 5. Separate Concerns with catch-condition
 
 ```lisp
 ; Good: Handle specific conditions
@@ -718,6 +607,19 @@ If you open resources, ensure they're closed:
     ...))
 ```
 
+### 6. Combine map/filter for Complex Transformations
+
+Chain functional operations for clarity:
+
+```lisp
+; Get square of all positive even numbers
+(map (lambda (x) (* x x))
+  (filter even?
+    (filter (lambda (x) (> x 0))
+      (list -2 1 2 3 -4 5 6))))
+⟹ (4 36)
+```
+
 ---
 
 ## Summary
@@ -726,12 +628,10 @@ If you open resources, ensure they're closed:
 |-----------|----------|---------|
 | `if` | Simple true/false choice | Any value |
 | `cond` | Multiple conditions | First true branch value |
-| `when` | Execute if true | Value or nil |
-| `unless` | Execute if false | Value or nil |
 | `do/begin` | Multiple expressions | Last expression value |
-| `loop` | Infinite loop | Value after break |
-| `while` | Conditional loop | nil |
-| `for` | List iteration | nil |
+| `map` | Transform each element | New list with transformed elements |
+| `filter` | Select matching elements | New list with selected elements |
+| `fold` | Accumulate a result | Final accumulated value |
 | `try-catch` | Exception handling | Caught value or exception |
 | `finally` | Cleanup code | Always executes |
 | Condition system | Sophisticated error handling | Handler result |
