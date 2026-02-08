@@ -18,6 +18,7 @@ pub mod binop;
 pub mod branching;
 pub mod codegen;
 pub mod compiler;
+pub mod compiler_v2;
 pub mod context;
 pub mod e2e_test;
 pub mod funcall;
