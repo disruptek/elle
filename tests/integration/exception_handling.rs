@@ -1,6 +1,26 @@
 use elle::compiler::converters::value_to_expr;
 use elle::{compile, read_str, register_primitives, SymbolTable, Value, VM};
 
+// Exception Handling Tests
+//
+// This test suite covers exception creation, inspection, try/catch/finally syntax,
+// and exception catching behavior.
+//
+// ## Implementation Status
+//
+// - ✅ Exception creation and data storage (complete)
+// - ✅ Exception message and data extraction (complete)
+// - ✅ Try block execution (complete)
+// - ✅ Try/catch/finally parsing and compilation (complete)
+// - ✅ Exception handler infrastructure (complete)
+// - ⏳ Exception catching during execution (in progress)
+// - ⏳ Catch variable binding (in progress)
+// - ⏳ Exception unwinding and propagation (in progress)
+//
+// Tests marked with `#[ignore]` document the expected behavior for features
+// that are not yet implemented. They will be enabled once the exception
+// propagation mechanism is fully integrated into the VM execution loop.
+
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
@@ -358,4 +378,99 @@ fn test_exception_message_all_types_as_data() {
     assert_eq!(int_data, Value::Int(100));
     assert_eq!(bool_data, Value::Bool(false));
     assert_eq!(nil_data, Value::Nil);
+}
+
+// ============================================================================
+// Try/Catch Block Execution (Exception Catching)
+// ============================================================================
+// NOTE: The following tests document the expected behavior of catch blocks.
+// These tests will pass once the exception unwinding and catch variable
+// binding mechanism is fully implemented in the VM execution loop.
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_try_catch_catches_thrown_exception() {
+    // When an exception is thrown in the try block, it should be caught
+    // by the catch handler and bound to the catch variable
+    let result = eval("(try (throw (exception \"error\")) (catch e (exception-message e)))");
+    // Expected: result should be Ok with the message "error"
+    // This requires: exception propagation, catch variable binding
+    assert_eq!(result.unwrap(), Value::String("error".into()));
+}
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_try_catch_ignores_catch_on_success() {
+    // When no exception is thrown, the catch block should be skipped
+    // and the try body result returned
+    let result = eval("(try (+ 1 2) (catch e 999))");
+    assert_eq!(result.unwrap(), Value::Int(3));
+}
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_try_catch_exception_with_data() {
+    // The catch variable should be bound to the thrown exception
+    // including any associated data
+    let result = eval("(try (throw (exception \"custom error\" 42)) (catch e (exception-data e)))");
+    assert_eq!(result.unwrap(), Value::Int(42));
+}
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_try_finally_executes_on_exception() {
+    // The finally block should execute even when an exception is thrown
+    // and caught
+    let result =
+        eval("(try (throw (exception \"error\")) (catch e \"caught\") (finally \"cleanup\"))");
+    // Expected: Should return "caught" but finally must have executed
+    // This requires: proper exception unwinding with finally support
+    assert_eq!(result.unwrap(), Value::String("caught".into()));
+}
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_try_finally_preserves_result_on_success() {
+    // The finally block should execute and then the try result returned
+    let result = eval("(try (+ 2 2) (finally 0))");
+    assert_eq!(result.unwrap(), Value::Int(4));
+}
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_nested_try_catch_inner_catches() {
+    // Inner try/catch should catch exceptions thrown in nested code
+    let code = "(try (try (throw (exception \"inner\")) (catch e \"caught-inner\")) (catch e \"caught-outer\"))";
+    let result = eval(code);
+    assert_eq!(result.unwrap(), Value::String("caught-inner".into()));
+}
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_nested_try_catch_outer_catches() {
+    // If inner try doesn't catch, outer catch should handle it
+    let code = "(try (try 42 (catch x 999)) (catch e \"outer-caught\"))";
+    let result = eval(code);
+    // Expected: should return 42 (no exception thrown)
+    assert_eq!(result.unwrap(), Value::Int(42));
+}
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_catch_handler_can_throw() {
+    // A catch handler can throw a new exception
+    let code = "(try (throw (exception \"first\")) (catch e (throw (exception \"second\"))))";
+    let result = eval(code);
+    // Expected: should result in the "second" exception propagating up
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore] // TODO: Implement exception propagation and catch variable binding
+fn test_finally_always_executes_with_exception() {
+    // Finally should execute and its value discarded when exception occurs
+    let code = "(try (throw (exception \"error\")) (catch e (+ 1 2)) (finally (+ 10 20)))";
+    let result = eval(code);
+    // Expected: should return 3 (result of catch block), but finally (30) must execute
+    assert_eq!(result.unwrap(), Value::Int(3));
 }

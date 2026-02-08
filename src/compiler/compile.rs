@@ -538,17 +538,75 @@ impl Compiler {
 
             Expr::Try {
                 body,
-                catch: _,
+                catch,
                 finally,
             } => {
-                // Try-catch implementation
-                // For now: compile body, then optionally execute finally
-                // Full exception handling requires VM-level support for stack unwinding
+                // Push exception handler for this try block
+                let handler_offset_pos = self.bytecode.current_pos();
+                let finally_offset = if finally.is_some() { 0 } else { -1 };
 
+                self.bytecode.emit(Instruction::PushHandler);
+                self.bytecode.emit_i16(0); // placeholder for catch handler offset
+                self.bytecode.emit_i16(finally_offset); // placeholder for finally offset
+
+                // Compile try body
                 self.compile_expr(body, false);
+
+                // Jump over catch handler
+                let catch_jump_pos = if catch.is_some() {
+                    self.bytecode.emit(Instruction::Jump);
+                    let pos = self.bytecode.current_pos();
+                    self.bytecode.emit_i16(0); // placeholder for catch jump offset
+                    Some(pos) // This is position after Jump but before emit_i16
+                } else {
+                    None
+                };
+
+                // Compile catch handler if present
+                let catch_handler_pos = self.bytecode.current_pos();
+                if let Some((catch_var, catch_body)) = catch.as_ref() {
+                    // Bind exception to catch variable
+                    self.bytecode.emit(Instruction::BindCatchVar);
+                    self.bytecode.emit_u16((catch_var.0 & 0xFFFF) as u16);
+
+                    // Compile catch body
+                    self.compile_expr(catch_body, false);
+
+                    // Pop exception handler after successful catch
+                    self.bytecode.emit(Instruction::PopHandler);
+                }
+
+                // Patch catch handler offset in PushHandler instruction
+                if catch.is_some() {
+                    // Offset is relative to IP after reading the i16 value
+                    // handler_offset_pos is position of PushHandler instruction
+                    // handler_offset_pos + 1 is position of handler_offset i16 value
+                    // After read_i16: IP will be at handler_offset_pos + 1 + 2 = handler_offset_pos + 3
+                    let offset = (catch_handler_pos as i32) - (handler_offset_pos as i32 + 3);
+                    self.bytecode
+                        .patch_jump(handler_offset_pos + 1, offset as i16);
+                }
+
+                // Patch jump over catch handler
+                if let Some(catch_pos) = catch_jump_pos {
+                    let finally_code_pos = self.bytecode.current_pos();
+                    // catch_pos is position of Jump offset i16 value
+                    // After read_i16: IP will be at catch_pos + 2
+                    // Offset formula: target - (after_read_position) = target - (catch_pos + 2)
+                    let offset = (finally_code_pos as i32) - (catch_pos as i32 + 2);
+                    self.bytecode.patch_jump(catch_pos, offset as i16);
+                }
 
                 // Finally block: always executed after try/catch
                 if let Some(finally_expr) = finally {
+                    // Patch finally offset in PushHandler instruction
+                    let finally_pos = self.bytecode.current_pos();
+                    // handler_offset_pos + 3 is position of finally_offset i16 value
+                    // After read_i16: IP will be at handler_offset_pos + 3 + 2 = handler_offset_pos + 5
+                    let offset = (finally_pos as i32) - (handler_offset_pos as i32 + 5);
+                    self.bytecode
+                        .patch_jump(handler_offset_pos + 3, offset as i16);
+
                     // Save the result
                     self.bytecode.emit(Instruction::Dup);
                     self.compile_expr(finally_expr, false);
@@ -556,12 +614,9 @@ impl Compiler {
                     // The original result stays on stack
                 }
 
-                // NOTE: Catch handlers will need VM support to:
-                // 1. Check if body produced an exception
-                // 2. Unwind stack to try frame
-                // 3. Bind exception to catch variable
-                // 4. Execute handler
-                // For now, parsing works but catch is not yet functional
+                // Pop exception handler after finally block
+                self.bytecode.emit(Instruction::PopHandler);
+                self.bytecode.emit(Instruction::ClearException);
             }
 
             Expr::Quote(expr) => {

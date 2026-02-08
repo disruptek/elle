@@ -117,6 +117,27 @@ pub enum Instruction {
 
     /// Define local variable (symbol_idx u16)
     DefineLocal,
+
+    /// Exception handling instructions
+    /// Push an exception handler (handler_offset i16, finally_offset i16 or -1 for none)
+    PushHandler,
+
+    /// Pop the current exception handler
+    PopHandler,
+
+    /// Throw an exception (exception value is on top of stack)
+    Throw,
+
+    /// Bind catch variable to the current exception
+    /// (symbol_idx u16)
+    BindCatchVar,
+
+    /// Check if an exception occurred and jump if true
+    /// (offset i16)
+    JumpOnException,
+
+    /// Clear the current exception state
+    ClearException,
 }
 
 /// Inline cache entry for function lookups

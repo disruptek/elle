@@ -4,6 +4,7 @@ pub mod comparison;
 pub mod control;
 pub mod core;
 pub mod data;
+pub mod exception;
 pub mod literals;
 pub mod scope;
 pub mod stack;
@@ -338,6 +339,31 @@ impl VM {
 
                 Instruction::DefineLocal => {
                     scope::handle_define_local(self, bytecode, &mut ip, constants)?;
+                }
+
+                // Exception handling
+                Instruction::PushHandler => {
+                    exception::handle_push_handler(self, bytecode, &mut ip);
+                }
+
+                Instruction::PopHandler => {
+                    exception::handle_pop_handler(self);
+                }
+
+                Instruction::Throw => {
+                    exception::handle_throw(self)?;
+                }
+
+                Instruction::BindCatchVar => {
+                    exception::handle_bind_catch_var(self, bytecode, &mut ip)?;
+                }
+
+                Instruction::JumpOnException => {
+                    exception::handle_jump_on_exception(self, bytecode, &mut ip);
+                }
+
+                Instruction::ClearException => {
+                    exception::handle_clear_exception(self);
                 }
             }
         }
