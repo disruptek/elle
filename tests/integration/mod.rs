@@ -86,3 +86,7 @@ mod tables_and_structs {
 mod scoping {
     include!("scoping.rs");
 }
+
+mod compiler_core {
+    include!("compiler_core.rs");
+}
