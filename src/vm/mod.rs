@@ -339,6 +339,50 @@ impl VM {
                 Instruction::DefineLocal => {
                     scope::handle_define_local(self, bytecode, &mut ip, constants)?;
                 }
+
+                // Exception handling (Phase 3)
+                Instruction::PushHandler => {
+                    // TODO: Implement handler push
+                    // Read handler_offset (i16) and finally_offset (i16)
+                    let _handler_offset = self.read_i16(bytecode, &mut ip);
+                    let _finally_offset = self.read_i16(bytecode, &mut ip);
+                    // Push handler frame to exception_handlers stack
+                }
+
+                Instruction::PopHandler => {
+                    // TODO: Implement handler pop
+                    // Pop from exception_handlers stack
+                }
+
+                Instruction::CreateHandler => {
+                    // TODO: Implement create handler
+                    // Create handler context
+                    let _handler_fn_idx = self.read_u16(bytecode, &mut ip);
+                    let _condition_id = self.read_u16(bytecode, &mut ip);
+                }
+
+                Instruction::CheckException => {
+                    // TODO: Implement check exception
+                    // Check if exception occurred
+                }
+
+                Instruction::BindException => {
+                    // TODO: Implement bind exception
+                    // Bind caught exception to variable
+                    let _var_id = self.read_u16(bytecode, &mut ip);
+                }
+
+                Instruction::ClearException => {
+                    // TODO: Implement clear exception
+                    // Clear current exception
+                    self.current_exception = None;
+                }
+
+                Instruction::InvokeRestart => {
+                    // TODO: Implement invoke restart
+                    // Invoke a restart by name
+                    let _restart_name_id = self.read_u16(bytecode, &mut ip);
+                }
             }
         }
     }
