@@ -36,11 +36,13 @@ pub mod phase10_milestone;
 pub mod phase11_milestone;
 pub mod phase12_milestone;
 pub mod phase13_milestone;
+pub mod phase14_milestone;
 pub mod primitives;
 pub mod profiler;
 pub mod scoping;
 pub mod stack_allocator;
 pub mod tests;
+pub mod type_specializer;
 
 pub use binop::BinOpCompiler;
 pub use branching::BranchManager;
