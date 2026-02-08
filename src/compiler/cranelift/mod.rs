@@ -15,12 +15,14 @@
 // - Primitives (Int, Float, Bool, Nil) optimized as inline values
 
 pub mod binop;
+pub mod codegen;
 pub mod compiler;
 pub mod context;
 pub mod primitives;
 pub mod tests;
 
 pub use binop::BinOpCompiler;
+pub use codegen::IrEmitter;
 pub use compiler::ExprCompiler;
 pub use context::JITContext;
 pub use primitives::{CompiledValue, PrimitiveEncoder};
