@@ -8,7 +8,7 @@
 // - Allocation cost tracking
 
 use crate::value::SymbolId;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Escape state of a value
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -200,8 +200,6 @@ pub struct EscapeAnalyzer {
     function_profiles: HashMap<SymbolId, Vec<AllocationProfile>>,
     /// Analysis results per function
     analysis_results: HashMap<SymbolId, EscapeAnalysisResult>,
-    /// Escape states per function
-    escape_states: HashMap<SymbolId, Vec<EscapeState>>,
     /// Total allocations analyzed
     total_allocations: usize,
     /// Total potential savings identified
@@ -214,7 +212,6 @@ impl EscapeAnalyzer {
         EscapeAnalyzer {
             function_profiles: HashMap::new(),
             analysis_results: HashMap::new(),
-            escape_states: HashMap::new(),
             total_allocations: 0,
             total_potential_savings: 0,
         }

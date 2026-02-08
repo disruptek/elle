@@ -8,7 +8,7 @@
 use super::binop::BinOpCompiler;
 use crate::compiler::ast::Expr;
 use crate::symbol::SymbolTable;
-use crate::value::{SymbolId, Value};
+use crate::value::Value;
 
 /// Represents the result of trying to compile a call
 #[derive(Debug, Clone)]
@@ -178,6 +178,7 @@ impl FunctionCallCompiler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::value::SymbolId;
 
     #[test]
     fn test_constant_fold_add() {
