@@ -438,8 +438,8 @@ impl VM {
                     while self.stack.len() > handler.stack_depth {
                         self.stack.pop();
                     }
-                    // Jump to handler code using relative offset
-                    ip = (ip as i32 + handler.handler_offset as i32) as usize;
+                    // Jump to handler code (handler_offset is absolute bytecode position)
+                    ip = handler.handler_offset as usize;
                 } else {
                     // No handler for this exception - propagate as error
                     if let Some(exc) = &self.current_exception {
