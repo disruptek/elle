@@ -19,6 +19,7 @@ pub mod branching;
 pub mod codegen;
 pub mod compiler;
 pub mod context;
+pub mod e2e_test;
 pub mod funcall;
 pub mod primitives;
 pub mod tests;
