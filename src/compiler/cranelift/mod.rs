@@ -14,6 +14,7 @@
 // - Passed by reference/pointer across native boundaries
 // - Primitives (Int, Float, Bool, Nil) optimized as inline values
 
+pub mod advanced_optimizer;
 pub mod binop;
 pub mod branching;
 pub mod closure_compiler;
@@ -29,6 +30,7 @@ pub mod expr_compiler;
 pub mod funcall;
 pub mod function_compiler;
 pub mod optimizer;
+pub mod phase10_milestone;
 pub mod phase3_milestone;
 pub mod phase4_milestone;
 pub mod phase5_milestone;
