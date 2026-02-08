@@ -29,8 +29,8 @@ pub struct ModuleDef {
 
 /// Symbol interning table for fast symbol comparison
 ///
-/// Uses Rc<str> for symbol names to avoid duplication:
-/// - Single allocation via Rc::from(name)
+/// Uses `Rc<str>` for symbol names to avoid duplication:
+/// - Single allocation via `Rc::from(name)`
 /// - Shared reference counting between map and names vector
 /// - Reduces memory fragmentation
 #[derive(Debug)]
@@ -55,7 +55,7 @@ impl SymbolTable {
 
     /// Intern a symbol, returning its ID
     ///
-    /// Uses Rc::from() for a single allocation that's shared between
+    /// Uses `Rc::from()` for a single allocation that's shared between
     /// the map and names vector, avoiding the previous double-allocation.
     pub fn intern(&mut self, name: &str) -> SymbolId {
         if let Some(&id) = self.map.get(name) {
