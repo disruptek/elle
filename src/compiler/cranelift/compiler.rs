@@ -3,11 +3,22 @@
 // This module handles the core logic of translating Elle AST expressions
 // into Cranelift IR (CLIF) and compiling to native x86_64 code.
 
+use super::codegen::IrEmitter;
 use super::context::JITContext;
 use crate::compiler::ast::Expr;
 use crate::value::Value;
 use cranelift::prelude::*;
 use cranelift_module::Module;
+
+/// Represents a compiled expression value in CLIF IR
+/// Maps Elle values to Cranelift SSA values
+#[derive(Debug, Clone, Copy)]
+pub enum IrValue {
+    /// An i64 SSA value (nil, bool, int, or encoded float)
+    I64(cranelift::prelude::Value),
+    /// An f64 SSA value (unboxed float)
+    F64(cranelift::prelude::Value),
+}
 
 /// Expression compiler
 pub struct ExprCompiler;
@@ -53,10 +64,17 @@ impl ExprCompiler {
         builder.seal_block(entry_block);
 
         // Compile the expression
-        let _result = Self::compile_expr_block(&mut builder, expr)?;
+        let result = Self::compile_expr_block(&mut builder, expr)?;
 
-        // For now, return a constant based on the expression type
-        let return_val = builder.ins().iconst(types::I64, 0);
+        // Convert the compiled value to i64 for return
+        let return_val = match result {
+            IrValue::I64(v) => v,
+            IrValue::F64(_v) => {
+                // TODO: Encode float as its bit representation (i64)
+                // For now, return 0
+                builder.ins().iconst(types::I64, 0)
+            }
+        };
         builder.ins().return_(&[return_val]);
 
         builder.finalize();
@@ -68,7 +86,11 @@ impl ExprCompiler {
     }
 
     /// Compile an expression within a builder block
-    pub fn compile_expr_block(builder: &mut FunctionBuilder, expr: &Expr) -> Result<Value, String> {
+    /// Returns an IrValue (Cranelift SSA value)
+    pub fn compile_expr_block(
+        builder: &mut FunctionBuilder,
+        expr: &Expr,
+    ) -> Result<IrValue, String> {
         match expr {
             Expr::Literal(val) => Self::compile_literal(builder, val),
             Expr::Begin(exprs) => Self::compile_begin(builder, exprs),
@@ -80,13 +102,29 @@ impl ExprCompiler {
         }
     }
 
-    /// Compile a literal value
-    fn compile_literal(_builder: &mut FunctionBuilder, val: &Value) -> Result<Value, String> {
+    /// Compile a literal value to CLIF IR
+    fn compile_literal(builder: &mut FunctionBuilder, val: &Value) -> Result<IrValue, String> {
         match val {
-            Value::Nil => Ok(Value::Nil),
-            Value::Bool(b) => Ok(Value::Bool(*b)),
-            Value::Int(i) => Ok(Value::Int(*i)),
-            Value::Float(f) => Ok(Value::Float(*f)),
+            Value::Nil => {
+                // Nil is encoded as 0i64
+                let ir_val = IrEmitter::emit_nil(builder);
+                Ok(IrValue::I64(ir_val))
+            }
+            Value::Bool(b) => {
+                // Bool is encoded as 0 (false) or 1 (true)
+                let ir_val = IrEmitter::emit_bool(builder, *b);
+                Ok(IrValue::I64(ir_val))
+            }
+            Value::Int(i) => {
+                // Int is emitted directly
+                let ir_val = IrEmitter::emit_int(builder, *i);
+                Ok(IrValue::I64(ir_val))
+            }
+            Value::Float(f) => {
+                // Float is emitted as f64
+                let ir_val = IrEmitter::emit_float(builder, *f);
+                Ok(IrValue::F64(ir_val))
+            }
             _ => Err(format!(
                 "Cannot compile non-primitive literal in JIT: {:?}",
                 val
@@ -95,8 +133,8 @@ impl ExprCompiler {
     }
 
     /// Compile a begin (sequence) expression
-    fn compile_begin(builder: &mut FunctionBuilder, exprs: &[Expr]) -> Result<Value, String> {
-        let mut result = Value::Nil;
+    fn compile_begin(builder: &mut FunctionBuilder, exprs: &[Expr]) -> Result<IrValue, String> {
+        let mut result = IrValue::I64(IrEmitter::emit_nil(builder));
         for expr in exprs {
             result = Self::compile_expr_block(builder, expr)?;
         }
@@ -109,36 +147,16 @@ impl ExprCompiler {
         cond: &Expr,
         then_expr: &Expr,
         else_expr: &Expr,
-    ) -> Result<Value, String> {
-        // Create blocks for each branch
-        let then_block = builder.create_block();
-        let else_block = builder.create_block();
-        let join_block = builder.create_block();
-
-        // Compile condition
+    ) -> Result<IrValue, String> {
+        // Compile condition (for now just evaluate it for side effects)
         let _cond_val = Self::compile_expr_block(builder, cond)?;
 
-        // Branch based on condition
-        // Stub: always take then branch for now
-        builder.ins().jump(then_block, &[]);
-
-        // Then branch
-        builder.switch_to_block(then_block);
-        builder.seal_block(then_block);
-        let _then_val = Self::compile_expr_block(builder, then_expr)?;
-        builder.ins().jump(join_block, &[]);
-
-        // Else branch
-        builder.switch_to_block(else_block);
-        builder.seal_block(else_block);
+        // Compile both branches and return then branch
+        // TODO: Implement proper conditional branching with Cranelift's brif/br_table
+        let then_val = Self::compile_expr_block(builder, then_expr)?;
         let _else_val = Self::compile_expr_block(builder, else_expr)?;
-        builder.ins().jump(join_block, &[]);
 
-        // Join point
-        builder.switch_to_block(join_block);
-        builder.seal_block(join_block);
-
-        Ok(Value::Nil)
+        Ok(then_val)
     }
 }
 

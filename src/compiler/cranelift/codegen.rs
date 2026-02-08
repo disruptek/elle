@@ -4,7 +4,6 @@
 // native machine code. Unlike the BinOpCompiler which operates on
 // compile-time constants, this emits runtime code generation.
 
-use crate::value::Value;
 use cranelift::prelude::*;
 
 /// Emits CLIF IR for primitive value literals
