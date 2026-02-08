@@ -645,7 +645,7 @@ impl Compiler {
                 self.bytecode
                     .patch_jump(handler_offset_pos, handler_code_offset);
 
-                // Emit CheckException to see if one occurred
+                // Emit CheckException (only reached if an exception actually occurred)
                 self.bytecode.emit(Instruction::CheckException);
 
                 // Compile each handler clause
@@ -679,14 +679,20 @@ impl Compiler {
                         .patch_jump(next_handler_jump, next_handler_offset);
                 }
 
-                // Patch all handler end jumps to the final end
-                let final_end = self.bytecode.current_pos() as i16;
+                // Patch all handler end jumps to the final end (before ClearException)
+                let final_end_pos = self.bytecode.current_pos();
+
+                // Patch handler end jumps (Jump instructions use relative offsets)
                 for jump_pos in handler_end_jumps {
-                    self.bytecode.patch_jump(jump_pos, final_end);
+                    // Relative jump: from jump_pos+2 (after the 2-byte offset) to final_end_pos
+                    let relative_offset = (final_end_pos - jump_pos - 2) as i16;
+                    self.bytecode.patch_jump(jump_pos, relative_offset);
                 }
 
-                // Patch the end jump from after PopHandler
-                self.bytecode.patch_jump(end_jump, final_end);
+                // Patch the end jump from after PopHandler (Jump instruction uses relative offset)
+                // Relative jump: from end_jump+2 to final_end_pos
+                let relative_offset = (final_end_pos - end_jump - 2) as i16;
+                self.bytecode.patch_jump(end_jump, relative_offset);
 
                 // Clear exception state
                 self.bytecode.emit(Instruction::ClearException);
