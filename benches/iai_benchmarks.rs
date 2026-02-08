@@ -17,6 +17,10 @@ use iai_callgrind::black_box;
 // - Validating compiler optimizations
 // - Detecting performance regressions
 // - Cross-platform comparisons (no OS variability)
+//
+// Note: Requires valgrind to be installed:
+// Linux: sudo apt-get install valgrind
+// macOS: brew install valgrind
 
 /// Parse a simple number (42)
 #[inline(never)]
@@ -108,15 +112,8 @@ pub fn bench_end_to_end_simple() {
     black_box(vm.execute(&bytecode).unwrap());
 }
 
-// iai-callgrind will automatically profile these functions when running:
-// cargo bench --bench iai_benchmarks
-//
-// It uses Valgrind's callgrind tool underneath, so you need valgrind installed:
-// Linux: sudo apt-get install valgrind
-// macOS: brew install valgrind
-//
-// The tool will generate baseline results in target/iai/ and report any changes
 fn main() {
-    println!("This benchmark should be run with: cargo bench --bench iai_benchmarks");
-    println!("It will use Valgrind's callgrind tool to measure instruction counts.");
+    println!("This benchmark file provides deterministic instruction-counting benchmarks.");
+    println!("To run: cargo bench --bench iai_benchmarks");
+    println!("Requires: valgrind package installed");
 }
