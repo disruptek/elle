@@ -179,7 +179,7 @@ impl SymbolExtractor {
                     index
                         .symbol_usages
                         .entry(*sym)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(source_loc);
                 }
             }
@@ -189,7 +189,7 @@ impl SymbolExtractor {
                     index
                         .symbol_usages
                         .entry(*sym)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(source_loc);
                 }
             }
