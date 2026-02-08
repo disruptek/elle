@@ -1,16 +1,17 @@
 # N-Queens Problem Solver in Janet
 
 (defn safe? [col queens]
+  (var safe true)
   (var row-offset 1)
   (var idx 0)
-  (while (< idx (length queens))
+  (while (and (< idx (length queens)) safe)
     (let [placed-col (queens idx)]
-      (if (or (= col placed-col)
-              (= row-offset (math/abs (- col placed-col))))
-        (break false)))
+      (when (or (= col placed-col)
+                (= row-offset (math/abs (- col placed-col))))
+        (set safe false)))
     (set row-offset (+ row-offset 1))
     (set idx (+ idx 1)))
-  true)
+  safe)
 
 (defn solve-nqueens [n]
   (defn solve [row queens]
