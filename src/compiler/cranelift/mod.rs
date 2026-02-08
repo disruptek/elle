@@ -16,6 +16,7 @@
 
 pub mod binop;
 pub mod branching;
+pub mod closure_compiler;
 pub mod codegen;
 pub mod compiler;
 pub mod compiler_v2;
@@ -30,6 +31,7 @@ pub mod phase3_milestone;
 pub mod phase4_milestone;
 pub mod phase5_milestone;
 pub mod phase6_milestone;
+pub mod phase7_milestone;
 pub mod primitives;
 pub mod scoping;
 pub mod stack_allocator;
