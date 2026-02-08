@@ -15,7 +15,7 @@ mod tests {
         AdaptiveCompiler, AdaptiveDecisions, CompilationContext, CompilationStrategy,
     };
     use crate::compiler::cranelift::advanced_optimizer::{
-        AdvancedOptimizer, InliningOpportunity, TailCallAnalysis, TailPosition,
+        InliningOpportunity, TailCallAnalysis, TailPosition,
     };
     use crate::value::{SymbolId, Value};
 
