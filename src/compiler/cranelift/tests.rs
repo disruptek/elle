@@ -6,9 +6,7 @@
 
 #[cfg(test)]
 mod integration_tests {
-    use crate::compiler::ast::Expr;
     use crate::compiler::cranelift::context::JITContext;
-    use crate::value::Value;
 
     #[test]
     fn test_jit_context_creation() {
@@ -18,7 +16,7 @@ mod integration_tests {
 
     #[test]
     fn test_jit_context_make_signature() {
-        let mut ctx = JITContext::new().expect("Failed to create context");
+        let ctx = JITContext::new().expect("Failed to create context");
         let sig = ctx.make_signature();
         assert!(
             sig.params.is_empty(),

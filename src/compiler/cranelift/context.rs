@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_make_signature() {
-        let mut ctx = JITContext::new().expect("Failed to create context");
+        let ctx = JITContext::new().expect("Failed to create context");
         let sig = ctx.make_signature();
         assert!(sig.params.is_empty());
     }
