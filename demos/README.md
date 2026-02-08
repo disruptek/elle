@@ -33,13 +33,48 @@ A classic backtracking algorithm that solves the N-Queens chess problem. Tests:
 | Janet | 0 ✗ | 0 ✗ | [Issue #155](https://github.com/disruptek/elle/issues/155) |
 | Elle | 1 ✗ | 1 ✗ | [Issue #154](https://github.com/disruptek/elle/issues/154) |
 
-### Matrix Operations (`./matrix-ops/`) - TODO
+### Matrix Operations (`./matrix-ops/`)
 
-Pure Lisp and FFI-based matrix operations. Tests:
-- **Dense matrix representation** (vector of vectors)
-- **Numeric computation** (matrix multiply, transpose, decomposition)
-- **FFI integration** (calling BLAS/LAPACK for performance comparison)
-- **Performance across implementation boundaries**
+Pure Lisp matrix operations testing numeric computation and performance. Tests:
+- **Dense matrix representation** (vector of vectors, 2D arrays)
+- **Numeric computation** (matrix multiply, transpose, LU decomposition)
+- **Performance at different scales** (16x16, 64x64, 256x256 matrices)
+- **Loops vs functional iteration** patterns
+
+**Status:**
+| Language | 16x16 | 64x64 | 256x256 | Status |
+|----------|-------|-------|---------|--------|
+| Chez Scheme | ✓ | ✓ | ✓ | Working |
+| SBCL | - | - | - | In progress |
+| Janet | - | - | - | Planned |
+| Elle | - | - | - | Planned |
+
+**Performance (Pure Lisp, no optimization):**
+- Chez 256x256 matrix multiply: ~128ms
+- Chez LU decomposition: ~0.88ms
+
+### AWS SigV4 Signing (`./aws-sigv4/`)
+
+AWS API authentication implementation testing string manipulation, datetime handling, and cryptographic operations. Tests:
+- **Datetime parsing and formatting** (ISO 8601, AWS format YYYYMMDDTHHMMSSZ)
+- **String manipulation** (canonicalization, padding, formatting)
+- **URL/URI encoding** (percent encoding for query parameters)
+- **Hex conversion** (bytevector to hex string)
+- **FFI requirements** (cryptographic hashing - SHA256, HMAC-SHA256)
+
+**Status:**
+| Language | Parsing | Encoding | Formatting | Hashing | Status |
+|----------|---------|----------|------------|---------|--------|
+| Chez Scheme | ✓ | ✓ | ✓ | ✗ (FFI) | Partial |
+| SBCL | - | - | - | - | Planned |
+| Janet | - | - | - | - | Planned |
+| Elle | - | - | - | - | Planned |
+
+**What This Reveals:**
+- How well each Lisp handles string operations
+- Need for datetime libraries and utilities
+- FFI integration for cryptographic functions
+- Real-world API authentication patterns
 
 ## Running the Demos
 
@@ -59,14 +94,54 @@ janet nqueens/nqueens.janet
 cargo run --release -- nqueens/nqueens.lisp
 ```
 
-### Expected Output
+### Matrix Operations
 
-For correct implementations (Chez, SBCL):
+```bash
+# Chez Scheme
+chezscheme --script matrix-ops/matrix-pure.scm
+
+# SBCL
+sbcl --script matrix-ops/matrix-pure.lisp
+```
+
+### AWS SigV4 Signing
+
+```bash
+# Chez Scheme
+chezscheme --script aws-sigv4/sigv4.scm
+```
+
+### Expected Output Examples
+
+**N-Queens (correct implementation):**
 ```
 Solving N-Queens for N=4... Found 2 solution(s)
 Solving N-Queens for N=8... Found 92 solution(s)
 Solving N-Queens for N=10... Found 724 solution(s)
 Solving N-Queens for N=12... Found 14200 solution(s)
+```
+
+**Matrix Operations (Chez, 256x256):**
+```
+Large matrix (256x256):
+Matrix multiply (256x256): done in ~128.29ms, norm=169254.21
+Matrix transpose (256x256): done in ~0.29ms
+LU decomposition (256x256): done in ~0.88ms
+```
+
+**AWS SigV4 (Chez):**
+```
+=== Timestamp Parsing Test ===
+Input: 2023-02-08T15:30:45Z
+Parsed: (2023 2 8 15 30 45)
+
+=== URI Encoding Test ===
+Input:  hello world
+Encoded: hello%20world
+
+=== DateTime Formatting Test ===
+Date (YYYYMMDD): 20230208
+DateTime (YYYYMMDDTHHmmSSZ): 20230208T153045Z
 ```
 
 ## Known Issues
@@ -102,14 +177,31 @@ If you fix one of the known issues:
 2. Run the demo to verify it produces correct results
 3. Create a pull request with the fix and a note about which issue it closes
 
+## What These Demos Test
+
+### Language Features Tested Across All Demos
+
+| Feature | N-Queens | Matrix Ops | SigV4 |
+|---------|----------|-----------|-------|
+| **Recursion** | ✓ | - | - |
+| **Backtracking** | ✓ | - | - |
+| **List operations** | ✓ | - | - |
+| **Numeric loops** | - | ✓ | - |
+| **2D arrays** | - | ✓ | - |
+| **String manipulation** | - | - | ✓ |
+| **DateTime handling** | - | - | ✓ |
+| **URL encoding** | - | - | ✓ |
+| **Cryptographic hashing** | - | - | ✗ (FFI) |
+
 ## Future Demos
 
 Planned demonstrations:
 
-- **Matrix Operations** (pure + FFI)
+- **BLAS/LAPACK FFI** (calling optimized numeric libraries from matrix ops)
 - **Symbolic Differentiation** (macro/metaprogramming showcase)
 - **Game Tree Search** (Minimax with alpha-beta pruning)
 - **JSON Processing Pipeline** (data transformation idioms)
+- **HTTP Server** (I/O, networking, concurrency)
 
 ## Notes for Implementers
 
