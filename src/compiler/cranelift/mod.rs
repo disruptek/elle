@@ -20,6 +20,7 @@ pub mod codegen;
 pub mod compiler;
 pub mod compiler_v2;
 pub mod compiler_v3;
+pub mod compiler_v3_stack;
 pub mod context;
 pub mod e2e_test;
 pub mod funcall;
@@ -28,6 +29,7 @@ pub mod phase4_milestone;
 pub mod phase5_milestone;
 pub mod primitives;
 pub mod scoping;
+pub mod stack_allocator;
 pub mod tests;
 
 pub use binop::BinOpCompiler;
