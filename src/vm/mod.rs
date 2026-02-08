@@ -428,6 +428,26 @@ impl VM {
                     let _restart_name_id = self.read_u16(bytecode, &mut ip);
                 }
             }
+
+            // Phase 9a: Exception interrupt mechanism
+            // Check if an exception occurred during instruction execution
+            // If yes, jump to the handler if one exists, otherwise propagate error
+            if self.current_exception.is_some() {
+                if let Some(handler) = self.exception_handlers.last() {
+                    // Unwind stack to saved depth
+                    while self.stack.len() > handler.stack_depth {
+                        self.stack.pop();
+                    }
+                    // Jump to handler code using relative offset
+                    ip = (ip as i32 + handler.handler_offset as i32) as usize;
+                } else {
+                    // No handler for this exception - propagate as error
+                    if let Some(exc) = &self.current_exception {
+                        return Err(format!("Unhandled exception: {}", exc.exception_id));
+                    }
+                    return Err("Unhandled exception".to_string());
+                }
+            }
         }
     }
 }
