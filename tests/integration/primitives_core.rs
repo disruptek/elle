@@ -188,46 +188,50 @@ fn test_file_size_known_file() {
 #[test]
 fn test_file_io_slurp_write_basic() {
     // Test file write and read - uses a temp file
-    let test_file = "/var/run/user/1000/test_slurp.txt";
+    let test_dir = std::env::temp_dir();
+    let test_file = test_dir.join("test_slurp.txt");
+    let test_file_str = test_file.to_string_lossy();
 
     // Clean up any existing test file
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 
     // Write file
-    let write_result = eval(&format!("(spit \"{}\" \"hello world\")", test_file));
+    let write_result = eval(&format!("(spit \"{}\" \"hello world\")", test_file_str));
     assert!(write_result.is_ok());
 
     // Read file
-    let read_result = eval(&format!("(slurp \"{}\")", test_file));
+    let read_result = eval(&format!("(slurp \"{}\")", test_file_str));
     assert!(read_result.is_ok());
     assert_eq!(read_result.unwrap(), Value::String(Rc::from("hello world")));
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 }
 
 #[test]
 fn test_file_io_append() {
     // Test file append
-    let test_file = "/var/run/user/1000/test_append.txt";
+    let test_dir = std::env::temp_dir();
+    let test_file = test_dir.join("test_append.txt");
+    let test_file_str = test_file.to_string_lossy();
 
     // Clean up any existing test file
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 
     // Write initial content
-    let _ = eval(&format!("(spit \"{}\" \"hello\")", test_file));
+    let _ = eval(&format!("(spit \"{}\" \"hello\")", test_file_str));
 
     // Append content
-    let append_result = eval(&format!("(append-file \"{}\" \" world\")", test_file));
+    let append_result = eval(&format!("(append-file \"{}\" \" world\")", test_file_str));
     assert!(append_result.is_ok());
 
     // Verify appended content
-    let read_result = eval(&format!("(slurp \"{}\")", test_file));
+    let read_result = eval(&format!("(slurp \"{}\")", test_file_str));
     assert!(read_result.is_ok());
     assert_eq!(read_result.unwrap(), Value::String(Rc::from("hello world")));
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 }
 
 #[test]
@@ -248,23 +252,25 @@ fn test_parent_directory() {
 #[test]
 fn test_read_lines() {
     // Create a file with multiple lines and read them
-    let test_file = "/var/run/user/1000/test_lines.txt";
+    let test_dir = std::env::temp_dir();
+    let test_file = test_dir.join("test_lines.txt");
+    let test_file_str = test_file.to_string_lossy();
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 
     // Write file with multiple lines
     let _ = eval(&format!(
-        "(spit \"{}\" \"line1\\nline2\\nline3\")",
-        test_file
+        "(spit \"{}\" \"Line1\\nLine2\\nLine3\")",
+        test_file_str
     ));
 
     // Read lines
-    let result = eval(&format!("(read-lines \"{}\")", test_file));
+    let result = eval(&format!("(read-lines \"{}\")", test_file_str));
     assert!(result.is_ok());
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 }
 
 // ============================================================================
@@ -366,27 +372,32 @@ fn test_string_operations_combined() {
 }
 
 #[test]
-fn test_file_io_with_strings() {
-    // Test file I/O with string operations
-    let test_file = "/var/run/user/1000/test_string_io.txt";
+fn test_file_text_processing() {
+    // File reading and text processing
+    let test_dir = std::env::temp_dir();
+    let test_file = test_dir.join("test_processing.txt");
+    let test_file_str = test_file.to_string_lossy();
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 
-    // Write formatted string to file
-    let write_result = eval(&format!(
-        "(spit \"{}\" (string-upcase \"hello world\"))",
-        test_file
+    // Create test file
+    let _ = eval(&format!(
+        "(spit \"{}\" \"Line1\\nLine2\\nLine3\")",
+        test_file_str
     ));
-    assert!(write_result.is_ok());
 
-    // Read and verify
-    let read_result = eval(&format!("(slurp \"{}\")", test_file));
-    assert!(read_result.is_ok());
-    assert_eq!(read_result.unwrap(), Value::String(Rc::from("HELLO WORLD")));
+    // Read and process
+    let result = eval(&format!(
+        "(begin \
+         (define content (slurp \"{}\")) \
+         (string-upcase content))",
+        test_file_str
+    ));
+    assert!(result.is_ok());
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 }
 
 // ============================================================================
@@ -406,28 +417,27 @@ fn test_string_pipeline() {
 }
 
 #[test]
-fn test_file_text_processing() {
-    // File reading and text processing
-    let test_file = "/var/run/user/1000/test_processing.txt";
+fn test_file_io_with_strings() {
+    // Test file I/O with string operations
+    let test_dir = std::env::temp_dir();
+    let test_file = test_dir.join("test_string_io.txt");
+    let test_file_str = test_file.to_string_lossy();
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 
-    // Create test file
-    let _ = eval(&format!(
-        "(spit \"{}\" \"Line1\\nLine2\\nLine3\")",
-        test_file
+    // Write formatted string to file
+    let write_result = eval(&format!(
+        "(spit \"{}\" (string-upcase \"hello world\"))",
+        test_file_str
     ));
+    assert!(write_result.is_ok());
 
-    // Read and process
-    let result = eval(&format!(
-        "(begin \
-         (define content (slurp \"{}\")) \
-         (string-upcase content))",
-        test_file
-    ));
-    assert!(result.is_ok());
+    // Read and verify
+    let read_result = eval(&format!("(slurp \"{}\")", test_file_str));
+    assert!(read_result.is_ok());
+    assert_eq!(read_result.unwrap(), Value::String(Rc::from("HELLO WORLD")));
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 }
