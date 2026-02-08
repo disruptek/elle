@@ -23,6 +23,7 @@ pub mod context;
 pub mod e2e_test;
 pub mod funcall;
 pub mod phase3_milestone;
+pub mod phase4_milestone;
 pub mod primitives;
 pub mod tests;
 
