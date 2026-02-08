@@ -6,7 +6,7 @@
 //! - Code completion suggestions
 //! - Navigation to symbol definitions
 
-use elle_lsp::CompilerState;
+use elle_lsp::{completion, hover, CompilerState};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 
@@ -66,6 +66,36 @@ fn main() {
             }
         }
     }
+}
+
+/// Extract the word/prefix at the given position
+fn extract_prefix_at_position(text: &str, line: u32, character: u32) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+
+    if line as usize >= lines.len() {
+        return String::new();
+    }
+
+    let target_line = lines[line as usize];
+    let col = character as usize;
+
+    if col > target_line.len() {
+        return String::new();
+    }
+
+    // Find the start of the word by going backwards from the cursor
+    let mut start = col;
+    for (i, ch) in target_line[..col].chars().rev().enumerate() {
+        if !ch.is_alphanumeric() && ch != '-' && ch != '_' {
+            start = col - i;
+            break;
+        }
+        if i == col - 1 {
+            start = 0;
+        }
+    }
+
+    target_line[start..col].to_string()
 }
 
 fn handle_request(request: &Value, compiler_state: &mut CompilerState) -> (Value, Vec<Value>) {
@@ -229,21 +259,83 @@ fn handle_request(request: &Value, compiler_state: &mut CompilerState) -> (Value
             json!({})
         }
         "textDocument/hover" => {
-            // Hover is handled but not fully implemented yet
+            let mut result = None;
+
+            if let Some(params) = params {
+                if let Some(uri) = params
+                    .get("textDocument")
+                    .and_then(|d| d.get("uri"))
+                    .and_then(|u| u.as_str())
+                {
+                    if let Some(position) = params.get("position").and_then(|p| p.as_object()) {
+                        if let (Some(line), Some(character)) = (
+                            position.get("line").and_then(|l| l.as_u64()),
+                            position.get("character").and_then(|c| c.as_u64()),
+                        ) {
+                            if let Some(doc) = compiler_state.get_document(uri) {
+                                result = hover::find_hover_info(
+                                    line as u32,
+                                    character as u32,
+                                    &doc.symbol_index,
+                                    compiler_state.symbol_table(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
-                "result": null
+                "result": result
             })
         }
         "textDocument/completion" => {
-            // Completion is handled but not fully implemented yet
+            let mut items = Vec::new();
+
+            if let Some(params) = params {
+                if let Some(uri) = params
+                    .get("textDocument")
+                    .and_then(|d| d.get("uri"))
+                    .and_then(|u| u.as_str())
+                {
+                    if let Some(position) = params.get("position").and_then(|p| p.as_object()) {
+                        if let (Some(line), Some(character)) = (
+                            position.get("line").and_then(|l| l.as_u64()),
+                            position.get("character").and_then(|c| c.as_u64()),
+                        ) {
+                            // Get the word at the cursor for prefix matching
+                            let prefix = if let Some(doc) = compiler_state.get_document(uri) {
+                                extract_prefix_at_position(
+                                    &doc.source_text,
+                                    line as u32,
+                                    character as u32,
+                                )
+                            } else {
+                                String::new()
+                            };
+
+                            if let Some(doc) = compiler_state.get_document(uri) {
+                                items = completion::get_completions(
+                                    line as u32,
+                                    character as u32,
+                                    &prefix,
+                                    &doc.symbol_index,
+                                    compiler_state.symbol_table(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
                 "result": {
                     "isIncomplete": false,
-                    "items": []
+                    "items": items
                 }
             })
         }

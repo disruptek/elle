@@ -7,7 +7,9 @@
 //! - Navigation to symbols
 
 pub mod compiler_state;
+pub mod completion;
 pub mod handler;
+pub mod hover;
 pub mod protocol;
 
 pub use compiler_state::CompilerState;
