@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 /// Signal a condition (silent - just propagates)
 pub fn prim_signal(args: &[Value]) -> Result<Value, String> {
-    if args.len() < 1 {
+    if args.is_empty() {
         return Err("signal requires at least 1 argument (condition ID)".to_string());
     }
 
