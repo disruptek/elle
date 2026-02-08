@@ -25,6 +25,7 @@ pub mod funcall;
 pub mod phase3_milestone;
 pub mod phase4_milestone;
 pub mod primitives;
+pub mod scoping;
 pub mod tests;
 
 pub use binop::BinOpCompiler;
