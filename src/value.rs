@@ -167,14 +167,14 @@ impl Exception {
 }
 
 /// Thread handle for concurrent execution
-/// Holds the actual Result<Value> from the spawned thread
+/// Holds the actual `Result<Value>` from the spawned thread
 ///
-/// The result is wrapped in a SendValue to allow safe transmission across threads
+/// The result is wrapped in a `SendValue` to allow safe transmission across threads
 #[derive(Clone)]
 pub struct ThreadHandle {
     /// The result of the spawned thread execution
-    /// Arc<Mutex<>> allows safe sharing across threads
-    /// The Result is wrapped in SendValue to make it Send
+    /// `Arc<Mutex<>>` allows safe sharing across threads
+    /// The `Result` is wrapped in `SendValue` to make it Send
     pub(crate) result: Arc<Mutex<Option<Result<SendValue, String>>>>,
 }
 
