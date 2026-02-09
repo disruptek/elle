@@ -1438,7 +1438,7 @@ fn test_spawn_primitive() {
     let closure = Value::Closure(std::rc::Rc::new(Closure {
         bytecode: std::rc::Rc::new(vec![0u8]), // dummy bytecode
         arity: elle::value::Arity::Exact(0),
-        env: std::rc::Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: std::rc::Rc::new(vec![]),
@@ -1549,7 +1549,7 @@ fn test_profile_primitive() {
     let closure = Value::Closure(std::rc::Rc::new(Closure {
         bytecode: std::rc::Rc::new(vec![0u8]),
         arity: elle::value::Arity::Exact(0),
-        env: std::rc::Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: std::rc::Rc::new(vec![]),
@@ -1895,7 +1895,7 @@ fn test_json_serialize_errors() {
     let closure = Value::Closure(std::rc::Rc::new(Closure {
         bytecode: std::rc::Rc::new(vec![]),
         arity: elle::value::Arity::Exact(0),
-        env: std::rc::Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: std::rc::Rc::new(vec![]),

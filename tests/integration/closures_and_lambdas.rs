@@ -1175,3 +1175,143 @@ fn test_set_local_return_value() {
     let result = eval(code).unwrap();
     assert_eq!(result, Value::Int(210)); // (5 + 100) * 2 = 105 * 2 = 210
 }
+
+#[test]
+fn test_set_in_for_loop() {
+    // Test set! on local variables inside for loops
+    let code = r#"
+        (define collect-squares (lambda ()
+          (begin
+            (define result (list))
+            (for i (list 1 2 3 4)
+              (set! result (append result (list (* i i)))))
+            result)))
+        (collect-squares)
+    "#;
+    let result = eval(code).unwrap();
+    let list = result.list_to_vec().unwrap();
+    assert_eq!(list.len(), 4);
+    assert_eq!(list[0], Value::Int(1)); // 1*1
+    assert_eq!(list[1], Value::Int(4)); // 2*2
+    assert_eq!(list[2], Value::Int(9)); // 3*3
+    assert_eq!(list[3], Value::Int(16)); // 4*4
+}
+
+#[test]
+fn test_set_in_conditional() {
+    // Test set! in if/cond expressions
+    let code = r#"
+        (define conditional-update (lambda (n)
+          (begin
+            (define result 0)
+            (if (> n 5)
+              (set! result 100)
+              (set! result 10))
+            result)))
+        (list (conditional-update 10) (conditional-update 3))
+    "#;
+    let result = eval(code).unwrap();
+    let list = result.list_to_vec().unwrap();
+    assert_eq!(list[0], Value::Int(100)); // n=10 > 5, so 100
+    assert_eq!(list[1], Value::Int(10)); // n=3 <= 5, so 10
+}
+
+#[test]
+fn test_set_in_begin_blocks() {
+    // Test set! in nested begin blocks
+    let code = r#"
+        (define nested-begin (lambda ()
+          (begin
+            (define x 1)
+            (begin
+              (set! x (+ x 10))
+              (begin
+                (set! x (* x 2))))
+            x)))
+        (nested-begin)
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::Int(22)); // ((1 + 10) * 2) = 22
+}
+
+#[test]
+fn test_set_accumulates_correctly() {
+    // Test that set! properly accumulates across multiple iterations
+    let code = r#"
+        (define fibonacci (lambda (n)
+          (begin
+            (define a 0)
+            (define b 1)
+            (define i 0)
+            (while (< i n)
+              (begin
+                (set! i (+ i 1))
+                (define temp (+ a b))
+                (set! a b)
+                (set! b temp)))
+            a)))
+        (list (fibonacci 0) (fibonacci 1) (fibonacci 5) (fibonacci 8))
+    "#;
+    let result = eval(code).unwrap();
+    let list = result.list_to_vec().unwrap();
+    // fib(0)=0, fib(1)=1, fib(5)=5, fib(8)=21
+    assert_eq!(list[0], Value::Int(0));
+    assert_eq!(list[1], Value::Int(1));
+    assert_eq!(list[2], Value::Int(5));
+    assert_eq!(list[3], Value::Int(21));
+}
+
+#[test]
+fn test_set_multiple_locals_independent() {
+    // Test that multiple local variables are independent
+    let code = r#"
+        (define multi-vars (lambda ()
+          (begin
+            (define x 1)
+            (define y 2)
+            (define z 3)
+            (set! x (+ x 10))
+            (set! y (+ y 20))
+            (set! z (+ z 30))
+            (list x y z))))
+        (multi-vars)
+    "#;
+    let result = eval(code).unwrap();
+    let list = result.list_to_vec().unwrap();
+    assert_eq!(list[0], Value::Int(11));
+    assert_eq!(list[1], Value::Int(22));
+    assert_eq!(list[2], Value::Int(33));
+}
+
+#[test]
+fn test_set_with_lambda_parameter_shadowing() {
+    // Test set! on local variables that shadow parameters
+    let code = r#"
+        (define shadow-param (lambda (x)
+          (begin
+            (define x 0)  ; Local x shadows parameter x
+            (set! x (+ x 1))
+            (set! x (+ x 1))
+            x)))
+        (shadow-param 100)  ; Parameter is ignored, local x starts at 0
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::Int(2)); // 0 + 1 + 1
+}
+
+#[test]
+fn test_set_preserves_type() {
+    // Test that set! works with different value types
+    let code = r#"
+        (define type-changes (lambda ()
+          (begin
+            (define val 0)
+            (set! val "string")
+            (set! val (list 1 2 3))
+            (set! val (lambda () 42))
+            "done")))
+        (type-changes)
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::String(Rc::from("done")));
+}

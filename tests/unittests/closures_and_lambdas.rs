@@ -169,7 +169,7 @@ fn test_closure_multiple_captured_variables() {
 #[test]
 fn test_closure_environment_sharing() {
     // Multiple closures can share environment data
-    let shared_env = Rc::new(vec![Value::Int(100), Value::Int(200)]);
+    let shared_env = Closure::env_from_vec(vec![Value::Int(100), Value::Int(200)]);
 
     let closure1 = Closure {
         bytecode: Rc::new(vec![1]),
@@ -478,8 +478,8 @@ fn test_closure_type_check() {
 #[test]
 fn test_closure_environment_isolation() {
     // Different closures should have different environments
-    let env1 = Rc::new(vec![Value::Int(1)]);
-    let env2 = Rc::new(vec![Value::Int(2)]);
+    let env1 = Closure::env_from_vec(vec![Value::Int(1)]);
+    let env2 = Closure::env_from_vec(vec![Value::Int(2)]);
 
     let closure1 = Closure {
         bytecode: Rc::new(vec![]),

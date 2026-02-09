@@ -81,13 +81,11 @@ impl Closure {
     }
 
     /// Test helper: get the length of the environment
-    #[cfg(test)]
     pub fn env_len(&self) -> usize {
         self.env.borrow().len()
     }
 
     /// Test helper: get a value from the environment by index
-    #[cfg(test)]
     pub fn env_get(&self, index: usize) -> Option<Value> {
         self.env.borrow().get(index).cloned()
     }
