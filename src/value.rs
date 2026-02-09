@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 pub struct SendValue(pub Arc<Value>);
 
 impl SendValue {
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new(value: Value) -> Self {
         SendValue(Arc::new(value))
     }
