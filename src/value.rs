@@ -74,6 +74,13 @@ pub struct Closure {
     pub constants: Rc<Vec<Value>>,
 }
 
+impl Closure {
+    /// Helper to wrap a Vec in RefCell for easier closure construction in tests
+    pub fn env_from_vec(values: Vec<Value>) -> Rc<RefCell<Vec<Value>>> {
+        Rc::new(RefCell::new(values))
+    }
+}
+
 /// FFI library handle
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LibHandle(pub u32);

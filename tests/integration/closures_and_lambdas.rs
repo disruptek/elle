@@ -1071,3 +1071,107 @@ fn test_fold_string_concatenation_with_closure() {
     let result = eval(code).unwrap();
     assert_eq!(result, Value::String(Rc::from("abc")));
 }
+
+// ============================================================================
+// SECTION: Local set! in Lambda Bodies (Issue #106)
+// ============================================================================
+
+#[test]
+fn test_set_in_lambda_body_basic() {
+    // Basic test: define and set! a local variable inside a lambda body
+    let code = r#"
+        (define test (lambda ()
+          (begin
+            (define x 0)
+            (set! x 42)
+            x)))
+        (test)
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::Int(42));
+}
+
+#[test]
+fn test_set_in_lambda_body_multiple_sets() {
+    // Test multiple set! calls on the same variable
+    let code = r#"
+        (define test (lambda ()
+          (begin
+            (define x 1)
+            (set! x (+ x 1))
+            (set! x (+ x 1))
+            (set! x (+ x 10))
+            x)))
+        (test)
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::Int(13));
+}
+
+#[test]
+fn test_set_in_lambda_with_while_loop() {
+    // Test set! in a while loop inside a lambda body
+    let code = r#"
+        (define counter (lambda ()
+          (begin
+            (define x 0)
+            (while (< x 5)
+              (set! x (+ x 1)))
+            x)))
+        (counter)
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::Int(5));
+}
+
+#[test]
+fn test_set_multiple_locals_in_lambda() {
+    // Test set! on multiple locally-defined variables
+    let code = r#"
+        (define multi-set (lambda ()
+          (begin
+            (define a 1)
+            (define b 2)
+            (set! a (+ a 10))
+            (set! b (+ b 20))
+            (+ a b))))
+        (multi-set)
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::Int(33)); // (1+10) + (2+20) = 11 + 22 = 33
+}
+
+#[test]
+fn test_set_in_nested_lambda_locals() {
+    // Test set! on local variables in nested lambdas
+    let code = r#"
+        (define outer (lambda ()
+          (begin
+            (define x 10)
+            (define inner (lambda ()
+              (begin
+                (define y 5)
+                (set! y (+ y x))
+                y)))
+            (inner))))
+        (outer)
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::Int(15)); // 5 + 10 = 15
+}
+
+#[test]
+fn test_set_local_return_value() {
+    // Test that set! properly updates the variable and it's visible in subsequent code
+    let code = r#"
+        (define update-and-return (lambda (initial)
+          (begin
+            (define result initial)
+            (set! result (+ result 100))
+            (set! result (* result 2))
+            result)))
+        (update-and-return 5)
+    "#;
+    let result = eval(code).unwrap();
+    assert_eq!(result, Value::Int(210)); // (5 + 100) * 2 = 105 * 2 = 210
+}

@@ -23,7 +23,7 @@ fn test_closure_type_identification() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -42,7 +42,7 @@ fn test_closure_display() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(1),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 1,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -58,7 +58,7 @@ fn test_closure_clone() {
     let closure = Closure {
         bytecode: Rc::new(vec![1, 2, 3]),
         arity: Arity::Exact(2),
-        env: Rc::new(vec![Value::Int(42)]),
+        env: Closure::env_from_vec(vec![Value::Int(42)]),
         num_locals: 2,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -120,7 +120,7 @@ fn test_closure_empty_environment() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -135,7 +135,7 @@ fn test_closure_single_captured_variable() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(1),
-        env: Rc::new(env),
+        env: Closure::env_from_vec(env),
         num_locals: 1,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -156,7 +156,7 @@ fn test_closure_multiple_captured_variables() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(2),
-        env: Rc::new(env),
+        env: Closure::env_from_vec(env),
         num_locals: 2,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -205,7 +205,7 @@ fn test_closure_bytecode_storage() {
     let closure = Closure {
         bytecode: Rc::new(bytecode.clone()),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -224,7 +224,7 @@ fn test_closure_constants_storage() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(constants.clone()),
@@ -239,7 +239,7 @@ fn test_closure_num_locals() {
         let closure = Closure {
             bytecode: Rc::new(vec![]),
             arity: Arity::Exact(0),
-            env: Rc::new(vec![]),
+            env: Closure::env_from_vec(vec![]),
             num_locals,
             num_captures: 0,
             constants: Rc::new(vec![]),
@@ -257,7 +257,7 @@ fn test_closure_zero_parameters() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -271,7 +271,7 @@ fn test_closure_single_parameter() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(1),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 1,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -284,7 +284,7 @@ fn test_closure_multiple_parameters() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(3),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 3,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -299,7 +299,7 @@ fn test_closure_variadic_parameters() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::AtLeast(1),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 1,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -319,7 +319,7 @@ fn test_closures_never_equal() {
     let closure1 = Value::Closure(Rc::new(Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -328,7 +328,7 @@ fn test_closures_never_equal() {
     let closure2 = Value::Closure(Rc::new(Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -344,7 +344,7 @@ fn test_same_closure_reference_equality() {
     let closure_rc = Rc::new(Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -376,7 +376,7 @@ fn test_closure_with_nested_captured_values() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(env),
+        env: Closure::env_from_vec(env),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -391,7 +391,7 @@ fn test_closure_with_closure_in_constants() {
     let inner_closure = Value::Closure(Rc::new(Closure {
         bytecode: Rc::new(vec![1]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -400,7 +400,7 @@ fn test_closure_with_closure_in_constants() {
     let outer_closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![inner_closure]),
@@ -417,7 +417,7 @@ fn test_closure_with_many_upvalues() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(env),
+        env: Closure::env_from_vec(env),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -437,7 +437,7 @@ fn test_closure_as_method() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(2),
-        env: Rc::new(vec![Value::Int(10)]),
+        env: Closure::env_from_vec(vec![Value::Int(10)]),
         num_locals: 2,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -459,7 +459,7 @@ fn test_closure_type_check() {
     let closure = Value::Closure(Rc::new(Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -509,7 +509,7 @@ fn test_closure_local_variables_count() {
         let closure = Closure {
             bytecode: Rc::new(vec![]),
             arity: Arity::Exact(0),
-            env: Rc::new(vec![]),
+            env: Closure::env_from_vec(vec![]),
             num_locals: locals,
             num_captures: 0,
             constants: Rc::new(vec![]),
@@ -527,7 +527,7 @@ fn test_closure_with_empty_bytecode() {
     let closure = Closure {
         bytecode: Rc::new(vec![]),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -542,7 +542,7 @@ fn test_closure_with_large_bytecode() {
     let closure = Closure {
         bytecode: Rc::new(large_code.clone()),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -559,7 +559,7 @@ fn test_closure_rc_reference_counting() {
     let closure = Closure {
         bytecode: bytecode.clone(),
         arity: Arity::Exact(0),
-        env: Rc::new(vec![]),
+        env: Closure::env_from_vec(vec![]),
         num_locals: 0,
         num_captures: 0,
         constants: Rc::new(vec![]),
@@ -579,7 +579,7 @@ fn test_closure_debug_format() {
     let closure = Closure {
         bytecode: Rc::new(vec![1, 2, 3]),
         arity: Arity::Exact(2),
-        env: Rc::new(vec![Value::Int(42)]),
+        env: Closure::env_from_vec(vec![Value::Int(42)]),
         num_locals: 2,
         num_captures: 0,
         constants: Rc::new(vec![Value::String("test".into())]),

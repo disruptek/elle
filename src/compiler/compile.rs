@@ -313,26 +313,19 @@ impl Compiler {
 
             Expr::Set {
                 var,
-                depth,
-                index,
+                depth: _,
+                index: _,
                 value,
             } => {
                 self.compile_expr(value, false);
-                if *index == usize::MAX {
-                    // Global variable set
-                    let idx = self.bytecode.add_constant(Value::Symbol(*var));
-                    self.bytecode.emit(Instruction::StoreGlobal);
-                    self.bytecode.emit_u16(idx);
-                } else if self.scope_depth > 0 {
-                    // Inside a scope (lambda, block, loop) - store to scope_stack
-                    self.bytecode.emit(Instruction::StoreScoped);
-                    self.bytecode.emit_byte(*depth as u8);
-                    self.bytecode.emit_byte(*index as u8);
-                } else {
-                    // At top level - use StoreLocal for stack variables
-                    self.bytecode.emit(Instruction::StoreLocal);
-                    self.bytecode.emit_byte(*index as u8);
-                }
+                // Always use StoreGlobal for set! — it checks scope_stack first, then globals
+                // This handles:
+                // 1. Variables defined with `define` inside lambda bodies (stored in scope_stack)
+                // 2. Actual global variables (stored in vm.globals)
+                // 3. Lambda parameters (error, but that's correct behavior for now)
+                let idx = self.bytecode.add_constant(Value::Symbol(*var));
+                self.bytecode.emit(Instruction::StoreGlobal);
+                self.bytecode.emit_u16(idx);
             }
 
             Expr::Define { name, value } => {

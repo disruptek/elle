@@ -544,13 +544,14 @@ fn value_to_expr_with_scope(
                         }
                         let name = list[1].as_symbol()?;
 
-                        // Register the variable in the current scope BEFORE processing the value
-                        // This way, if the value references the variable (unusual but possible),
-                        // it can be found. More importantly, it makes the variable available to
-                        // subsequent expressions in the same scope.
-                        if !scope_stack.is_empty() {
-                            scope_stack.last_mut().unwrap().push(name);
-                        }
+                        // NOTE: We do NOT register locally-defined variables in the compile-time scope_stack.
+                        // Instead, they are stored in the runtime scope_stack via DefineLocal.
+                        // Subsequent references to them will be resolved as GlobalVar, routing through
+                        // LoadGlobal/StoreGlobal, which check the runtime scope_stack first.
+                        // This fixes issue #106: set! on locally-defined variables now works correctly.
+                        //
+                        // The only variables in the compile-time scope_stack should be lambda parameters
+                        // and captures, which are fixed at compile time.
 
                         let value =
                             Box::new(value_to_expr_with_scope(&list[2], symbols, scope_stack)?);
