@@ -96,6 +96,10 @@ impl VM {
                     variables::handle_load_upvalue(self, bytecode, &mut ip, closure_env)?;
                 }
 
+                Instruction::StoreUpvalue => {
+                    variables::handle_store_upvalue(self, bytecode, &mut ip, closure_env)?;
+                }
+
                 // Control flow
                 Instruction::Jump => {
                     control::handle_jump(bytecode, &mut ip, self);

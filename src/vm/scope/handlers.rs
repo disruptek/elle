@@ -85,6 +85,7 @@ pub fn handle_define_local(
     };
 
     // Define in current scope
+    // Note: ScopeStack always has at least the global scope, so we don't need to check
     vm.scope_stack.define_local(sym_id, value);
 
     Ok(())
