@@ -8,14 +8,16 @@ use super::cranelift::compiler::ExprCompiler;
 use super::cranelift::context::JITContext;
 use crate::symbol::SymbolTable;
 use crate::value::Value;
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// A compiled and cached native code function
 #[derive(Clone)]
 pub struct JitCompiledCode {
     /// Function pointer to native code
     func_ptr: *const u8,
-    /// Expression hash for validation
+    /// Expression hash for validation (used for cache validation)
+    #[allow(dead_code)]
     expr_hash: u64,
 }
 
@@ -74,10 +76,10 @@ impl CachedJitCode {
 
 /// JIT Code Executor manages execution of JIT-compiled code
 pub struct JitExecutor {
-    /// Cache of compiled code
-    cache: Arc<Mutex<std::collections::HashMap<u64, CachedJitCode>>>,
+    /// Cache of compiled code (RefCell for interior mutability in single-threaded context)
+    cache: Rc<RefCell<std::collections::HashMap<u64, CachedJitCode>>>,
     /// JIT context for compilation
-    jit_context: Option<Arc<Mutex<JITContext>>>,
+    jit_context: Option<Rc<RefCell<JITContext>>>,
 }
 
 impl JitExecutor {
@@ -85,8 +87,8 @@ impl JitExecutor {
     pub fn new() -> Result<Self, String> {
         let jit_ctx = JITContext::new().ok();
         Ok(JitExecutor {
-            cache: Arc::new(Mutex::new(std::collections::HashMap::new())),
-            jit_context: jit_ctx.map(|ctx| Arc::new(Mutex::new(ctx))),
+            cache: Rc::new(RefCell::new(std::collections::HashMap::new())),
+            jit_context: jit_ctx.map(|ctx| Rc::new(RefCell::new(ctx))),
         })
     }
 
@@ -104,10 +106,7 @@ impl JitExecutor {
         let hash = CachedJitCode::compute_hash(expr);
 
         {
-            let cache = self
-                .cache
-                .lock()
-                .map_err(|e| format!("Cache lock failed: {}", e))?;
+            let cache = self.cache.borrow();
             if let Some(cached) = cache.get(&hash) {
                 if !cached.compiled {
                     // Already tried and failed
@@ -124,10 +123,7 @@ impl JitExecutor {
         let result = match expr {
             // Literals can be compiled and executed immediately
             Expr::Literal(val) => {
-                let mut cache = self
-                    .cache
-                    .lock()
-                    .map_err(|e| format!("Cache lock failed: {}", e))?;
+                let mut cache = self.cache.borrow_mut();
                 cache.insert(hash, CachedJitCode::new(hash, true));
                 Ok(Some(val.clone()))
             }
@@ -140,10 +136,7 @@ impl JitExecutor {
 
             // Everything else
             _ => {
-                let mut cache = self
-                    .cache
-                    .lock()
-                    .map_err(|e| format!("Cache lock failed: {}", e))?;
+                let mut cache = self.cache.borrow_mut();
                 cache.insert(hash, CachedJitCode::new(hash, false));
                 Ok(None)
             }
@@ -162,9 +155,7 @@ impl JitExecutor {
             .jit_context
             .as_ref()
             .ok_or("JIT context not available")?;
-        let mut jit_ctx = ctx
-            .lock()
-            .map_err(|e| format!("JIT context lock failed: {}", e))?;
+        let mut jit_ctx = ctx.borrow_mut();
 
         // Generate a unique function name
         let func_name = format!("jit_expr_{:x}", hash);
@@ -173,14 +164,11 @@ impl JitExecutor {
         match ExprCompiler::compile_expr(&mut jit_ctx, &func_name, expr) {
             Ok(func_ptr) => {
                 // Cache the compiled code
-                let mut cache = self
-                    .cache
-                    .lock()
-                    .map_err(|e| format!("Cache lock failed: {}", e))?;
+                let mut cache = self.cache.borrow_mut();
                 cache.insert(hash, CachedJitCode::with_native(hash, func_ptr));
 
-                drop(cache); // Release lock before executing
-                drop(jit_ctx); // Release JIT context lock
+                drop(cache); // Release borrow before executing
+                drop(jit_ctx); // Release JIT context borrow
 
                 // Execute the native code
                 let compiled = JitCompiledCode::new(func_ptr, hash);
@@ -188,10 +176,7 @@ impl JitExecutor {
             }
             Err(_e) => {
                 // Compilation failed, mark as unsuccessful
-                let mut cache = self
-                    .cache
-                    .lock()
-                    .map_err(|e| format!("Cache lock failed: {}", e))?;
+                let mut cache = self.cache.borrow_mut();
                 cache.insert(hash, CachedJitCode::new(hash, false));
                 Ok(None)
             }
@@ -262,20 +247,17 @@ impl JitExecutor {
 
     /// Get cache statistics
     pub fn cache_stats(&self) -> (usize, usize) {
-        if let Ok(cache) = self.cache.lock() {
-            let total = cache.len();
-            let compiled = cache.values().filter(|c| c.compiled).count();
-            (compiled, total)
-        } else {
-            (0, 0)
-        }
+        let cache = self.cache.borrow();
+        let total = cache.len();
+        let compiled = cache.values().filter(|c| c.compiled).count();
+        (compiled, total)
     }
 }
 
 impl Default for JitExecutor {
     fn default() -> Self {
         Self::new().unwrap_or(JitExecutor {
-            cache: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            cache: Rc::new(RefCell::new(std::collections::HashMap::new())),
             jit_context: None,
         })
     }

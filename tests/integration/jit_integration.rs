@@ -126,9 +126,8 @@ fn test_jit_with_profiling_feedback() {
     let stats = coordinator.get_stats();
     assert!(stats.contains("JIT Coordinator"));
 
-    // Get profiling summary
-    let summary = profiler.summary();
-    assert!(summary.total_functions_compiled >= 0);
+    // Get profiling summary - verify profiler is working
+    let _summary = profiler.summary();
 }
 
 #[test]
@@ -183,7 +182,7 @@ fn test_jit_executor_cache_functionality() {
 
     // Execute first expression
     executor.try_jit_execute(&expr1, &symbols).ok();
-    let (compiled1, total1) = executor.cache_stats();
+    let (_compiled1, total1) = executor.cache_stats();
 
     // Execute second expression
     executor.try_jit_execute(&expr2, &symbols).ok();
