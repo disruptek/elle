@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_diagnostic_creation() {
-        let loc = SourceLoc::new(5, 2);
+        let loc = SourceLoc::new("test.l", 5, 2);
         let diag = Diagnostic::new(
             Severity::Warning,
             "W001",

@@ -1,12 +1,26 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceLoc {
+    pub file: String,
     pub line: usize,
     pub col: usize,
 }
 
 impl SourceLoc {
-    pub fn new(line: usize, col: usize) -> Self {
-        SourceLoc { line, col }
+    pub fn new(file: impl Into<String>, line: usize, col: usize) -> Self {
+        SourceLoc {
+            file: file.into(),
+            line,
+            col,
+        }
+    }
+
+    /// Create a location from line and column (file set to unknown)
+    pub fn from_line_col(line: usize, col: usize) -> Self {
+        SourceLoc {
+            file: "<unknown>".to_string(),
+            line,
+            col,
+        }
     }
 }
 

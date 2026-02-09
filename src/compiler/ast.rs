@@ -15,8 +15,8 @@ impl ExprWithLoc {
     }
 
     pub fn format_loc(&self) -> String {
-        match self.loc {
-            Some(loc) => format!("{}:{}", loc.line, loc.col),
+        match &self.loc {
+            Some(loc) => format!("{}:{}:{}", loc.file, loc.line, loc.col),
             None => "unknown".to_string(),
         }
     }
