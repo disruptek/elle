@@ -125,7 +125,7 @@ fn test_closure_empty_environment() {
         num_captures: 0,
         constants: Rc::new(vec![]),
     };
-    assert_eq!(closure.env.len(), 0);
+    assert_eq!(closure.env_len(), 0);
 }
 
 #[test]
@@ -140,8 +140,8 @@ fn test_closure_single_captured_variable() {
         num_captures: 0,
         constants: Rc::new(vec![]),
     };
-    assert_eq!(closure.env.len(), 1);
-    assert_eq!(closure.env[0], Value::Int(42));
+    assert_eq!(closure.env_len(), 1);
+    assert_eq!(closure.env_get(0).unwrap(), Value::Int(42));
 }
 
 #[test]
@@ -161,9 +161,9 @@ fn test_closure_multiple_captured_variables() {
         num_captures: 0,
         constants: Rc::new(vec![]),
     };
-    assert_eq!(closure.env.len(), 4);
-    assert_eq!(closure.env[0], Value::Int(1));
-    assert_eq!(closure.env[2], Value::String("test".into()));
+    assert_eq!(closure.env_len(), 4);
+    assert_eq!(closure.env_get(0).unwrap(), Value::Int(1));
+    assert_eq!(closure.env_get(2).unwrap(), Value::String("test".into()));
 }
 
 #[test]
@@ -190,8 +190,8 @@ fn test_closure_environment_sharing() {
     };
 
     // Both closures share the same environment
-    assert_eq!(closure1.env[0], closure2.env[0]);
-    assert_eq!(closure1.env.len(), closure2.env.len());
+    assert_eq!(closure1.env_get(0).unwrap(), closure2.env_get(0).unwrap());
+    assert_eq!(closure1.env_len(), closure2.env_len());
 }
 
 // ============================================================================
@@ -382,7 +382,7 @@ fn test_closure_with_nested_captured_values() {
         constants: Rc::new(vec![]),
     };
 
-    assert_eq!(closure.env.len(), 1);
+    assert_eq!(closure.env_len(), 1);
 }
 
 #[test]
@@ -423,7 +423,7 @@ fn test_closure_with_many_upvalues() {
         constants: Rc::new(vec![]),
     };
 
-    assert_eq!(closure.env.len(), 100);
+    assert_eq!(closure.env_len(), 100);
 }
 
 // ============================================================================
@@ -448,7 +448,7 @@ fn test_closure_as_method() {
     // Should be able to extract as closure
     match value.as_closure() {
         Ok(c) => {
-            assert_eq!(c.env.len(), 1);
+            assert_eq!(c.env_len(), 1);
         }
         Err(_) => panic!("Should be a closure"),
     }
@@ -499,7 +499,7 @@ fn test_closure_environment_isolation() {
         constants: Rc::new(vec![]),
     };
 
-    assert_ne!(closure1.env[0], closure2.env[0]);
+    assert_ne!(closure1.env_get(0).unwrap(), closure2.env_get(0).unwrap());
 }
 
 #[test]
