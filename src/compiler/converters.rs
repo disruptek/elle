@@ -35,6 +35,44 @@ fn extract_pattern_variables(pattern: &Pattern) -> Vec<SymbolId> {
     vars
 }
 
+/// Pre-scan body values for define names and register them in the current scope.
+/// This enables mutual recursion and self-recursion by making all locally-defined
+/// names visible before any lambda values are parsed.
+fn pre_register_defines(
+    body_vals: &[Value],
+    symbols: &SymbolTable,
+    scope_stack: &mut Vec<Vec<SymbolId>>,
+) {
+    for val in body_vals {
+        if let Ok(inner_list) = val.list_to_vec() {
+            if inner_list.is_empty() {
+                continue;
+            }
+            if let Value::Symbol(sym) = &inner_list[0] {
+                if let Some(name) = symbols.name(*sym) {
+                    match name {
+                        "define" => {
+                            if inner_list.len() == 3 {
+                                if let Ok(def_name) = inner_list[1].as_symbol() {
+                                    if let Some(scope) = scope_stack.last_mut() {
+                                        if !scope.contains(&def_name) {
+                                            scope.push(def_name);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        "begin" => {
+                            pre_register_defines(&inner_list[1..], symbols, scope_stack);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Adjust variable indices in an expression to account for the closure environment layout.
 /// The closure environment is laid out as [captures..., parameters...]
 ///
@@ -377,6 +415,10 @@ fn convert_lambda(
     // Push a new scope with the lambda parameters (as Vec for ordered indices)
     scope_stack.push(param_syms.clone());
 
+    // Pre-scan body for define names to enable mutual recursion and self-recursion
+    // All locally-defined names must be in scope before any lambda values are parsed
+    pre_register_defines(&list[2..], symbols, scope_stack);
+
     // Process body expressions sequentially to handle variable definitions properly
     let mut body_exprs_vec = Vec::new();
     for expr_val in &list[2..] {
@@ -411,6 +453,11 @@ fn convert_lambda(
     let mut local_bindings = HashSet::new();
     for param in &param_syms {
         local_bindings.insert(*param);
+    }
+    // Also include locally-defined variables so they're not treated as free variables
+    // They will be tracked separately in the `locals` field of the Lambda expression
+    for local_var in &locally_defined_vars {
+        local_bindings.insert(*local_var);
     }
     let free_vars = analyze_free_vars(&body, &local_bindings);
 
@@ -1185,7 +1232,10 @@ fn value_to_expr_with_scope(
                         // it can be found. More importantly, it makes the variable available to
                         // subsequent expressions in the same scope.
                         if !scope_stack.is_empty() {
-                            scope_stack.last_mut().unwrap().push(name);
+                            let scope = scope_stack.last_mut().unwrap();
+                            if !scope.contains(&name) {
+                                scope.push(name);
+                            }
                         }
 
                         let value =
