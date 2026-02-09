@@ -263,11 +263,17 @@ impl Compiler {
 
                 let idx = self.bytecode.add_constant(Value::Closure(Rc::new(closure)));
 
-                if captures.is_empty() {
-                    // No captures — just load the closure template directly as a constant
+                if captures.is_empty() && locals.is_empty() {
+                    // No captures AND no locals — just load the closure template directly as a constant
                     // No need for MakeClosure instruction
                     self.bytecode.emit(Instruction::LoadConst);
                     self.bytecode.emit_u16(idx);
+                } else if captures.is_empty() {
+                    // Has locals but no external captures — still need MakeClosure for closure env
+                    // so that nested lambdas can access locally-defined variables via LoadUpvalueRaw
+                    self.bytecode.emit(Instruction::MakeClosure);
+                    self.bytecode.emit_u16(idx);
+                    self.bytecode.emit_byte(0); // 0 captures
                 } else {
                     // Has captures — emit capture loads + MakeClosure as before
                     // First, analyze which variables are mutated in the lambda body
