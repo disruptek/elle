@@ -102,6 +102,8 @@ impl ExprCompiler {
             // Try to compile And/Or with shortcircuiting
             Expr::And(exprs) => Self::try_compile_and(builder, exprs, symbols),
             Expr::Or(exprs) => Self::try_compile_or(builder, exprs, symbols),
+            // Try to compile Let bindings
+            Expr::Let { bindings, body } => Self::try_compile_let(builder, bindings, body, symbols),
             // Try to compile binary operations with integer operands
             Expr::Call { func, args, .. } if args.len() == 2 => {
                 Self::try_compile_binop(builder, func, args, symbols)
@@ -117,7 +119,42 @@ impl ExprCompiler {
         }
     }
 
+    /// Try to compile a Let expression
+    /// Note: This only works for Let that doesn't refer to Var/GlobalVar
+    fn try_compile_let(
+        builder: &mut FunctionBuilder,
+        bindings: &[(crate::value::SymbolId, Expr)],
+        body: &Expr,
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
+        // For now, we only support Let with constant bindings (no Var/GlobalVar references)
+        // and where body doesn't reference the bindings via Var indices
+        // This is a limitation of the current JIT approach which doesn't track local var bindings
+
+        // We could extend this to track bindings in a map, but for now just reject
+        // Let expressions that have non-literal bindings
+        for (_sym, binding_expr) in bindings {
+            match binding_expr {
+                Expr::Literal(_) => {
+                    // OK - constant binding
+                }
+                _ => {
+                    // Reject - would need tracking
+                    return Err(
+                        "Let bindings with non-literal values not yet supported in JIT".to_string(),
+                    );
+                }
+            }
+        }
+
+        // For Let with only constant bindings where body doesn't reference them,
+        // just compile the body (since the bindings don't affect it in JIT)
+        // This is actually a missed optimization, but safe
+        Self::compile_expr_block(builder, body, symbols)
+    }
+
     /// Try to compile an And expression with shortcircuiting
+    /// (and expr1 expr2 expr3 ...) => returns first falsy value or last value
     fn try_compile_and(
         builder: &mut FunctionBuilder,
         exprs: &[Expr],
@@ -131,31 +168,74 @@ impl ExprCompiler {
             return Self::compile_expr_block(builder, &exprs[0], symbols);
         }
 
-        // For now, only handle simple cases with 2 arguments
-        // Full multi-argument and with shortcircuiting would need control flow
-        if exprs.len() > 2 {
-            return Err("And with more than 2 arguments not yet supported in JIT".to_string());
+        // For multi-argument and, we need control flow for proper short-circuiting
+        // Create blocks: one for each expression evaluation + one for the final result
+        let mut eval_blocks = Vec::new();
+        let mut phi_values = Vec::new();
+
+        for _ in 0..exprs.len() {
+            eval_blocks.push(builder.create_block());
+        }
+        let end_block = builder.create_block();
+
+        let zero = builder.ins().iconst(types::I64, 0);
+
+        // Start with first expression
+        let first_val = Self::compile_expr_block(builder, &exprs[0], symbols)?;
+        let first_i64 = match first_val {
+            IrValue::I64(v) => v,
+            _ => return Err("And on non-I64 values not supported".to_string()),
+        };
+        phi_values.push(first_i64);
+
+        // Check if first is false (equal to 0), if so jump to end with that value
+        // Otherwise continue to next expression
+        let is_false = builder.ins().icmp(IntCC::Equal, first_i64, zero);
+        if exprs.len() > 1 {
+            builder
+                .ins()
+                .brif(is_false, end_block, &[first_i64], eval_blocks[1], &[]);
+        } else {
+            builder.ins().jump(end_block, &[first_i64]);
         }
 
-        let left = Self::compile_expr_block(builder, &exprs[0], symbols)?;
-        let right = Self::compile_expr_block(builder, &exprs[1], symbols)?;
+        // Evaluate remaining expressions
+        for i in 1..exprs.len() {
+            builder.switch_to_block(eval_blocks[i]);
+            builder.seal_block(eval_blocks[i]);
 
-        match (left, right) {
-            (IrValue::I64(l), IrValue::I64(r)) => {
-                // (and x y) => if x then y else false
-                // Result is 1 if both truthy, 0 otherwise
-                let zero = builder.ins().iconst(types::I64, 0);
-                let l_is_false = builder.ins().icmp(IntCC::Equal, l, zero);
+            let val = Self::compile_expr_block(builder, &exprs[i], symbols)?;
+            let val_i64 = match val {
+                IrValue::I64(v) => v,
+                _ => return Err("And on non-I64 values not supported".to_string()),
+            };
+            phi_values.push(val_i64);
 
-                // If l is false, return 0, else return r
-                let result = builder.ins().select(l_is_false, zero, r);
-                Ok(IrValue::I64(result))
+            // If this is not the last expression, check if value is false
+            if i < exprs.len() - 1 {
+                let is_false = builder.ins().icmp(IntCC::Equal, val_i64, zero);
+                if i + 1 < eval_blocks.len() {
+                    builder
+                        .ins()
+                        .brif(is_false, end_block, &[val_i64], eval_blocks[i + 1], &[]);
+                } else {
+                    builder.ins().jump(end_block, &[val_i64]);
+                }
+            } else {
+                // Last expression - jump to end with its value
+                builder.ins().jump(end_block, &[val_i64]);
             }
-            _ => Err("And on non-I64 values not supported".to_string()),
         }
+
+        builder.switch_to_block(end_block);
+        builder.seal_block(end_block);
+        let param = builder.block_params(end_block)[0];
+
+        Ok(IrValue::I64(param))
     }
 
     /// Try to compile an Or expression with shortcircuiting
+    /// (or expr1 expr2 expr3 ...) => returns first truthy value or last value
     fn try_compile_or(
         builder: &mut FunctionBuilder,
         exprs: &[Expr],
@@ -169,27 +249,69 @@ impl ExprCompiler {
             return Self::compile_expr_block(builder, &exprs[0], symbols);
         }
 
-        // For now, only handle simple cases with 2 arguments
-        if exprs.len() > 2 {
-            return Err("Or with more than 2 arguments not yet supported in JIT".to_string());
+        // For multi-argument or, we need control flow for proper short-circuiting
+        let mut eval_blocks = Vec::new();
+        let mut phi_values = Vec::new();
+
+        for _ in 0..exprs.len() {
+            eval_blocks.push(builder.create_block());
+        }
+        let end_block = builder.create_block();
+
+        let zero = builder.ins().iconst(types::I64, 0);
+
+        // Start with first expression
+        let first_val = Self::compile_expr_block(builder, &exprs[0], symbols)?;
+        let first_i64 = match first_val {
+            IrValue::I64(v) => v,
+            _ => return Err("Or on non-I64 values not supported".to_string()),
+        };
+        phi_values.push(first_i64);
+
+        // Check if first is true (not equal to 0), if so jump to end with that value
+        // Otherwise continue to next expression
+        let is_true = builder.ins().icmp(IntCC::NotEqual, first_i64, zero);
+        if exprs.len() > 1 {
+            builder
+                .ins()
+                .brif(is_true, end_block, &[first_i64], eval_blocks[1], &[]);
+        } else {
+            builder.ins().jump(end_block, &[first_i64]);
         }
 
-        let left = Self::compile_expr_block(builder, &exprs[0], symbols)?;
-        let right = Self::compile_expr_block(builder, &exprs[1], symbols)?;
+        // Evaluate remaining expressions
+        for i in 1..exprs.len() {
+            builder.switch_to_block(eval_blocks[i]);
+            builder.seal_block(eval_blocks[i]);
 
-        match (left, right) {
-            (IrValue::I64(l), IrValue::I64(r)) => {
-                // (or x y) => if x then x else y
-                // Result is x if truthy, else y
-                let zero = builder.ins().iconst(types::I64, 0);
-                let l_is_true = builder.ins().icmp(IntCC::NotEqual, l, zero);
+            let val = Self::compile_expr_block(builder, &exprs[i], symbols)?;
+            let val_i64 = match val {
+                IrValue::I64(v) => v,
+                _ => return Err("Or on non-I64 values not supported".to_string()),
+            };
+            phi_values.push(val_i64);
 
-                // If l is true, return l, else return r
-                let result = builder.ins().select(l_is_true, l, r);
-                Ok(IrValue::I64(result))
+            // If this is not the last expression, check if value is true
+            if i < exprs.len() - 1 {
+                let is_true = builder.ins().icmp(IntCC::NotEqual, val_i64, zero);
+                if i + 1 < eval_blocks.len() {
+                    builder
+                        .ins()
+                        .brif(is_true, end_block, &[val_i64], eval_blocks[i + 1], &[]);
+                } else {
+                    builder.ins().jump(end_block, &[val_i64]);
+                }
+            } else {
+                // Last expression - jump to end with its value
+                builder.ins().jump(end_block, &[val_i64]);
             }
-            _ => Err("Or on non-I64 values not supported".to_string()),
         }
+
+        builder.switch_to_block(end_block);
+        builder.seal_block(end_block);
+        let param = builder.block_params(end_block)[0];
+
+        Ok(IrValue::I64(param))
     }
 
     /// Try to compile a unary operation (like empty?, abs)
