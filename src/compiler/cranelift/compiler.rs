@@ -110,10 +110,8 @@ impl ExprCompiler {
             // Try to compile While loops
             Expr::While { cond, body } => Self::try_compile_while(builder, cond, body, symbols),
             // Try to compile For loops
-            Expr::For { var: _, iter, body } => {
-                // For now, reject For loops as they require variable binding support
-                let _ = (iter, body); // Silence unused variable warnings
-                Err("For loops not yet supported in JIT (requires variable binding)".to_string())
+            Expr::For { var, iter, body } => {
+                Self::try_compile_for(builder, *var, iter, body, symbols)
             }
             // Try to compile binary operations with integer operands
             Expr::Call { func, args, .. } if args.len() == 2 => {
@@ -277,6 +275,38 @@ impl ExprCompiler {
         // just compile the body (since the bindings don't affect it in JIT)
         // This is actually a missed optimization, but safe
         Self::compile_expr_block(builder, body, symbols)
+    }
+
+    /// Try to compile a For loop expression
+    /// (for var iterable body) - iterates over elements, binding to var
+    ///
+    /// Note: This requires variable binding support which the current JIT doesn't have.
+    /// We can only support trivial cases or will need to reject.
+    fn try_compile_for(
+        builder: &mut FunctionBuilder,
+        _var: crate::value::SymbolId,
+        iter: &Expr,
+        body: &Expr,
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
+        // For loops require:
+        // 1. Evaluating the iterable at runtime
+        // 2. Creating a mutable binding for the loop variable
+        // 3. Iterating through elements
+        // 4. Executing body with each element
+        //
+        // The current JIT architecture cannot handle this because:
+        // - We don't have runtime value storage/retrieval
+        // - Variables require mutable state across iterations
+        // - We'd need to convert runtime Elle values to IR values
+        //
+        // For now, we reject For loops. Future versions could:
+        // - Accept variable binding context from runtime
+        // - Specialize for literal lists (unroll the loop)
+        // - Generate code that expects variables to be pre-bound
+
+        let _ = (iter, body); // Silence unused variable warnings
+        Err("For loops not yet supported in JIT (requires runtime variable binding)".to_string())
     }
 
     /// Try to compile a While loop expression
@@ -841,7 +871,7 @@ mod tests {
 
         let mut symbols = SymbolTable::new();
         let lt_sym = symbols.intern("<");
-
+        
         // Test: (while (< 0 10) 42)
         // A while loop with a condition and a body
         let result = ExprCompiler::compile_expr_block(
@@ -849,17 +879,51 @@ mod tests {
             &Expr::While {
                 cond: Box::new(Expr::Call {
                     func: Box::new(Expr::Literal(Value::Symbol(lt_sym))),
-                    args: vec![Expr::Literal(Value::Int(0)), Expr::Literal(Value::Int(10))],
+                    args: vec![
+                        Expr::Literal(Value::Int(0)),
+                        Expr::Literal(Value::Int(10)),
+                    ],
                     tail: false,
                 }),
                 body: Box::new(Expr::Literal(Value::Int(42))),
             },
             &symbols,
         );
-        assert!(
-            result.is_ok(),
-            "Failed to compile while loop: {:?}",
-            result.err()
+        assert!(result.is_ok(), "Failed to compile while loop: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_compile_for_loop_unsupported() {
+        use crate::symbol::SymbolTable;
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func = ir::Function::new();
+        func.signature.params.push(AbiParam::new(types::I64));
+        func.signature.returns.push(AbiParam::new(types::I64));
+        let mut builder = FunctionBuilder::new(&mut func, &mut builder_ctx);
+        let block = builder.create_block();
+        builder.switch_to_block(block);
+        builder.seal_block(block);
+
+        let mut symbols = SymbolTable::new();
+        let item_sym = symbols.intern("item");
+        
+        // Test: (for item (list 1 2 3) item)
+        // For loops require variable binding which JIT doesn't support yet
+        let result = ExprCompiler::compile_expr_block(
+            &mut builder,
+            &Expr::For {
+                var: item_sym,
+                iter: Box::new(Expr::Literal(Value::Nil)), // Dummy iterator
+                body: Box::new(Expr::Literal(Value::Int(0))),
+            },
+            &symbols,
         );
+        // Should fail with appropriate message
+        assert!(
+            result.is_err(),
+            "For loop should not compile without variable binding support"
+        );
+        let err_msg = result.err().unwrap();
+        assert!(err_msg.contains("variable binding"));
     }
 }
