@@ -99,6 +99,9 @@ impl ExprCompiler {
             Expr::Literal(val) => Self::compile_literal(builder, val),
             Expr::Begin(exprs) => Self::compile_begin(builder, exprs, symbols),
             Expr::If { cond, then, else_ } => Self::compile_if(builder, cond, then, else_, symbols),
+            Expr::Cond { clauses, else_body } => {
+                Self::try_compile_cond(builder, clauses, else_body, symbols)
+            }
             // Try to compile And/Or with shortcircuiting
             Expr::And(exprs) => Self::try_compile_and(builder, exprs, symbols),
             Expr::Or(exprs) => Self::try_compile_or(builder, exprs, symbols),
@@ -117,6 +120,121 @@ impl ExprCompiler {
                 expr
             )),
         }
+    }
+
+    /// Try to compile a Cond expression (multi-way conditional)
+    fn try_compile_cond(
+        builder: &mut FunctionBuilder,
+        clauses: &[(Expr, Expr)],
+        else_body: &Option<Box<Expr>>,
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
+        if clauses.is_empty() {
+            // No clauses - return else body or nil
+            if let Some(else_expr) = else_body {
+                return Self::compile_expr_block(builder, else_expr, symbols);
+            } else {
+                return Ok(IrValue::I64(builder.ins().iconst(types::I64, 0))); // nil
+            }
+        }
+
+        // Create blocks for each clause + one for end
+        let mut clause_blocks = Vec::new();
+        for _ in 0..clauses.len() {
+            clause_blocks.push(builder.create_block());
+        }
+        let end_block = builder.create_block();
+
+        let zero = builder.ins().iconst(types::I64, 0);
+
+        // Evaluate first condition
+        let (first_cond, first_body) = &clauses[0];
+        let cond_val = Self::compile_expr_block(builder, first_cond, symbols)?;
+        let cond_i64 = match cond_val {
+            IrValue::I64(v) => v,
+            _ => return Err("Cond condition must be I64".to_string()),
+        };
+
+        let is_true = builder.ins().icmp(IntCC::NotEqual, cond_i64, zero);
+
+        // Jump to first body if true, else to second clause or else block
+        let next_block = if clauses.len() > 1 {
+            clause_blocks[1]
+        } else if else_body.is_some() {
+            let else_eval_block = builder.create_block();
+            builder.switch_to_block(else_eval_block);
+            builder.seal_block(else_eval_block);
+            if let Some(else_expr) = else_body {
+                let else_val = Self::compile_expr_block(builder, else_expr, symbols)?;
+                let else_i64 = Self::ir_value_to_i64(builder, else_val)?;
+                builder.ins().jump(end_block, &[else_i64]);
+            } else {
+                builder.ins().jump(end_block, &[zero]);
+            }
+            else_eval_block
+        } else {
+            end_block
+        };
+
+        builder
+            .ins()
+            .brif(is_true, clause_blocks[0], &[], next_block, &[]);
+
+        // Compile first clause body
+        builder.switch_to_block(clause_blocks[0]);
+        builder.seal_block(clause_blocks[0]);
+        let first_body_val = Self::compile_expr_block(builder, first_body, symbols)?;
+        let first_body_i64 = Self::ir_value_to_i64(builder, first_body_val)?;
+        builder.ins().jump(end_block, &[first_body_i64]);
+
+        // Compile remaining clauses
+        for i in 1..clauses.len() {
+            builder.switch_to_block(clause_blocks[i]);
+            builder.seal_block(clause_blocks[i]);
+
+            let (cond, body) = &clauses[i];
+            let cond_val = Self::compile_expr_block(builder, cond, symbols)?;
+            let cond_i64 = match cond_val {
+                IrValue::I64(v) => v,
+                _ => return Err("Cond condition must be I64".to_string()),
+            };
+
+            let is_true = builder.ins().icmp(IntCC::NotEqual, cond_i64, zero);
+
+            let next_block = if i + 1 < clauses.len() {
+                clause_blocks[i + 1]
+            } else if else_body.is_some() {
+                let else_eval_block = builder.create_block();
+                builder.switch_to_block(else_eval_block);
+                builder.seal_block(else_eval_block);
+                if let Some(else_expr) = else_body {
+                    let else_val = Self::compile_expr_block(builder, else_expr, symbols)?;
+                    let else_i64 = Self::ir_value_to_i64(builder, else_val)?;
+                    builder.ins().jump(end_block, &[else_i64]);
+                } else {
+                    builder.ins().jump(end_block, &[zero]);
+                }
+                else_eval_block
+            } else {
+                end_block
+            };
+
+            builder
+                .ins()
+                .brif(is_true, clause_blocks[i], &[], next_block, &[]);
+
+            builder.switch_to_block(clause_blocks[i]);
+            builder.seal_block(clause_blocks[i]);
+            let body_val = Self::compile_expr_block(builder, body, symbols)?;
+            let body_i64 = Self::ir_value_to_i64(builder, body_val)?;
+            builder.ins().jump(end_block, &[body_i64]);
+        }
+
+        builder.switch_to_block(end_block);
+        builder.seal_block(end_block);
+        let param = builder.block_params(end_block)[0];
+
+        Ok(IrValue::I64(param))
     }
 
     /// Try to compile a Let expression
