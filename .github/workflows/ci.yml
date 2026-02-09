@@ -292,19 +292,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: |
-                📚 **Documentation Preview**
-
-                Generated documentation is available as an artifact:
-
-                [Download PR #${{ github.event.number }} Documentation](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-                Including:
-                - Elle language documentation (getting started, language guide, stdlib reference)
-                - Rust API documentation
-                - Cross-language demos (N-Queens, Matrix Operations)
-
-                To view: Download the artifact and open `index.html` in your browser.
+              body: `📚 **Documentation Preview**\n\nGenerated documentation is available as an artifact:\n\n[Download PR #${{ github.event.number }} Documentation](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n\nIncluding:\n- Elle language documentation (getting started, language guide, stdlib reference)\n- Rust API documentation\n- Cross-language demos (N-Queens, Matrix Operations)\n\nTo view: Download the artifact and open \`index.html\` in your browser.`
             })
 
   benchmarks:
