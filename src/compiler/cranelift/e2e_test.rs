@@ -45,7 +45,10 @@ mod tests {
 
     #[test]
     fn test_compile_float_literal() {
-        test_compilation_no_panic(&Expr::Literal(Value::Float(3.14)), "float_literal");
+        test_compilation_no_panic(
+            &Expr::Literal(Value::Float(std::f64::consts::PI)),
+            "float_literal",
+        );
     }
 
     #[test]
@@ -105,7 +108,7 @@ mod tests {
         let expr = Expr::Begin(vec![
             Expr::Literal(Value::Int(42)),
             Expr::Literal(Value::Bool(true)),
-            Expr::Literal(Value::Float(3.14)),
+            Expr::Literal(Value::Float(std::f64::consts::PI)),
             Expr::Literal(Value::Nil),
         ]);
         test_compilation_no_panic(&expr, "mixed_primitives");

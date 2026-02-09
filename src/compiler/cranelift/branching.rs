@@ -86,9 +86,9 @@ mod tests {
         let (then_bl, else_bl, join_bl) = BranchManager::create_if_blocks(&mut builder);
 
         // Verify blocks are created
-        assert_eq!(then_bl.as_u32() > 0, true);
-        assert_eq!(else_bl.as_u32() > 0, true);
-        assert_eq!(join_bl.as_u32() > 0, true);
+        assert!(then_bl.as_u32() > 0);
+        assert!(else_bl.as_u32() > 0);
+        assert!(join_bl.as_u32() > 0);
     }
 
     #[test]

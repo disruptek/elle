@@ -216,7 +216,7 @@ mod tests {
         builder.switch_to_block(block);
         builder.seal_block(block);
 
-        let val = IrEmitter::emit_float(&mut builder, 3.14);
+        let val = IrEmitter::emit_float(&mut builder, std::f64::consts::PI);
         builder.ins().return_(&[val]);
         builder.finalize();
         assert!(true);

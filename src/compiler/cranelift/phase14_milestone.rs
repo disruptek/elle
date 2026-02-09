@@ -24,7 +24,10 @@ mod tests {
 
     #[test]
     fn phase14_valuetype_float() {
-        assert_eq!(ValueType::from_value(&Value::Float(3.14)), ValueType::Float);
+        assert_eq!(
+            ValueType::from_value(&Value::Float(std::f64::consts::PI)),
+            ValueType::Float
+        );
     }
 
     #[test]

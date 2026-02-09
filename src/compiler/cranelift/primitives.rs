@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_float() {
-        let original = 3.14159;
+        let original = std::f64::consts::PI;
         let encoded = CompiledValue::encode_float(original);
         let decoded = CompiledValue::decode_float(encoded);
         assert_eq!(original, decoded);
@@ -116,7 +116,7 @@ mod tests {
             Some(types::I64)
         );
         assert_eq!(
-            PrimitiveEncoder::get_type(&Value::Float(3.14)),
+            PrimitiveEncoder::get_type(&Value::Float(std::f64::consts::PI)),
             Some(types::F64)
         );
     }

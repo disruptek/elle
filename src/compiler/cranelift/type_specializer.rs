@@ -417,7 +417,10 @@ mod tests {
     #[test]
     fn phase14_value_type_from_value() {
         assert_eq!(ValueType::from_value(&Value::Int(42)), ValueType::Int);
-        assert_eq!(ValueType::from_value(&Value::Float(3.14)), ValueType::Float);
+        assert_eq!(
+            ValueType::from_value(&Value::Float(std::f64::consts::PI)),
+            ValueType::Float
+        );
         assert_eq!(ValueType::from_value(&Value::Bool(true)), ValueType::Bool);
         assert_eq!(ValueType::from_value(&Value::Nil), ValueType::Nil);
     }

@@ -394,9 +394,8 @@ mod tests {
         }
 
         // Analyze and recompile
-        let result = compiler.trigger_feedback_cycle();
-
-        assert!(result.decisions_made > 0 || result.decisions_made == 0);
+        let _result = compiler.trigger_feedback_cycle();
+        // decisions_made is always >= 0 (it's a usize)
     }
 
     #[test]
@@ -419,7 +418,7 @@ mod tests {
 
         // Analyze
         let feedbacks = compiler.analyze_feedback();
-        assert!(feedbacks.len() > 0);
+        assert!(!feedbacks.is_empty());
     }
 
     #[test]
@@ -462,7 +461,7 @@ mod tests {
         }
 
         let pending = compiler.get_pending_recompilations();
-        assert!(pending.len() > 0);
+        assert!(!pending.is_empty());
 
         // Most called functions should have higher priority
         if pending.len() >= 2 {
