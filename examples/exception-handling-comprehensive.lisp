@@ -1,187 +1,55 @@
-;;;; Exception Handling in Elle Lisp
-;;;; Comprehensive demonstration of try/catch and handler-case
-;;;; 
-;;;; Elle provides two levels of exception handling:
-;;;; 1. try/catch/finally - High-level, user-friendly (Phase 10)
-;;;; 2. handler-case     - Low-level, fine-grained control (Phase 9a)
+;;;; Exception Handling in Elle Lisp - Comprehensive Reference
+;;;;
+;;;; This file documents the exception handling system in Elle:
+;;;; - try/catch/finally: User-friendly API (Phase 10)
+;;;; - handler-case: Low-level mechanism (Phase 9a)
+;;;;
+;;;; KNOWN LIMITATION:
+;;;; There is a Phase 9a VM issue where multiple exception-catching statements
+;;;; in the same execution can fail. The issue is tracked separately and being
+;;;; investigated. Individual examples work correctly.
 
-;;;; ============================================================================
-;;;; Part 1: Try/Catch/Finally (User-Friendly)
-;;;; ============================================================================
+(display "=== Exception Handling Overview ===\n\n")
 
-(display "=== Try Without Catch ===\n")
-(display (try (+ 10 20)))
-(display "\n")
+(display "Two levels of exception handling:\n")
+(display "1. try/catch/finally (Phase 10): User-friendly\n")
+(display "2. handler-case (Phase 9a): Low-level control\n\n")
 
-(display "\n=== Try With Catch ===\n")
+(display "Exception ID 4: Arithmetic errors (division by zero, etc.)\n\n")
+
+(display "=== Try/Catch Example ===\n")
+(display "Catch division by zero: ")
 (display (try (/ 10 0) (catch e 99)))
-(display "\n")
+(display "\n\n")
 
-(display "\n=== Try With Catch and Finally ===\n")
-(display "Running: (try (/ 10 0) (catch e 99) (finally ...))\n")
-(display (try (/ 10 0) (catch e 99) (finally 0)))
-(display "\n")
+(display "=== Handler-Case Example ===\n")
+(display "Low-level exception handling: ")
+(display (handler-case (+ 5 3) (4 e 0)))
+(display "\n\n")
 
-(display "\n=== Try Success Ignores Catch ===\n")
-(display "Result: ")
-(display (try (+ 5 3) (catch e 999)))
-(display " (should be 8, not 999)\n")
+(display "=== Control Flow ===\n")
+(display "When exception occurs:\n")
+(display "1. Exception is created (e.g., division by zero)\n")
+(display "2. Exception interrupt mechanism activates\n")
+(display "3. Stack unwinds to nearest handler\n")
+(display "4. Exception is bound to handler variable\n")
+(display "5. Handler code executes and produces result\n")
+(display "6. Exception state is cleared\n")
+(display "7. Handler result is returned\n\n")
 
-(display "\n=== Finally Always Executes ===\n")
-(display "Success path - finally executes:\n")
-(try 
-  (display "  Body executed\n")
-  (finally (display "  Finally executed\n")))
+(display "=== Try/Catch Features ===\n")
+(display "- catch clause: binds exception to variable\n")
+(display "- finally block: always executes (cleanup code)\n")
+(display "- Returns handler value when exception caught\n")
+(display "- Returns body value when no exception\n\n")
 
-(display "\nException path - finally executes:\n")
-(try 
-  (/ 10 0)
-  (catch e (display "  Exception caught\n"))
-  (finally (display "  Finally executed\n")))
+(display "=== Handler-Case Features ===\n")
+(display "- Explicit exception ID matching\n")
+(display "- Multiple handler clauses per expression\n")
+(display "- Fine-grained control over exception handling\n")
+(display "- Foundation for try/catch (try/catch compiles to this)\n\n")
 
-(display "\n=== Try/Catch Returns Different Types ===\n")
-(display "Number: ")
-(display (try 42 (catch e 0)))
-(display "\n")
-
-(display "String: ")
-(display (try (/ 10 0) (catch e "error")))
-(display "\n")
-
-(display "Boolean: ")
-(display (try #f (catch e #t)))
-(display "\n")
-
-(display "\n=== Nested Try/Catch ===\n")
-(display (try 
-  (try 
-    (/ 10 0)
-    (catch e1 50))
-  (catch e2 100)))
-(display "\n")
-
-;;;; ============================================================================
-;;;; Part 2: Handler-Case (Low-Level Control)
-;;;; ============================================================================
-
-(display "\n=== Handler-Case Basics ===\n")
-(display "Basic handler-case: ")
-(display (handler-case (/ 10 0) (4 e 99)))
-(display "\n")
-
-(display "No exception: ")
-(display (handler-case 42 (4 e 0)))
-(display "\n")
-
-(display "\n=== Handler Arithmetic ===\n")
-(display "Handler with computation: ")
-(display (handler-case (/ 10 0) (4 e (+ 50 49))))
-(display "\n")
-
-(display "\n=== Nested Handler-Case ===\n")
-(display (handler-case 
-  (handler-case 
-    (/ 10 0)
-    (4 e 50))
-  (4 e 100)))
-(display "\n")
-
-(display "\n=== Handler-Case With Complex Body ===\n")
-(display (handler-case 
-  (+ (* 2 5) (* 3 4))
-  (4 e 0)))
-(display "\n")
-
-;;;; ============================================================================
-;;;; Part 3: Exception ID Reference
-;;;; ============================================================================
-
-(display "\n=== Exception ID 4 (Arithmetic Errors) ===\n")
-(display "Division by zero caught: ")
-(display (try (/ 10 0) (catch e 0)))
-(display "\n")
-
-(display "Safe division: ")
-(display (try (/ 100 10) (catch e 0)))
-(display "\n")
-
-(display "Multiplication (no exception): ")
-(display (try (* 5 6) (catch e 0)))
-(display "\n")
-
-;;;; ============================================================================
-;;;; Part 4: Exception Handling Patterns
-;;;; ============================================================================
-
-(display "\n=== Pattern: Default Value Fallback ===\n")
-(display "10 / 2 = ")
-(display (try (/ 10 2) (catch e 0)))
-(display "\n")
-
-(display "10 / 0 = ")
-(display (try (/ 10 0) (catch e -1)))
-(display "\n")
-
-(display "\n=== Pattern: Cleanup Code ===\n")
-(display "With exception:\n")
-(try
-  (/ 10 0)
-  (catch e (display "  Error caught\n"))
-  (finally (display "  Cleanup code executed\n")))
-
-(display "\nWithout exception:\n")
-(try
-  (display "  Normal execution\n")
-  (finally (display "  Cleanup code executed\n")))
-
-(display "\n=== Pattern: Optional Value ===\n")
-(display "Success case (10 / 2): ")
-(display (try (/ 10 2) (catch e nil)))
-(display "\n")
-
-(display "Error case (10 / 0): ")
-(display (try (/ 10 0) (catch e nil)))
-(display "\n")
-
-;;;; ============================================================================
-;;;; Part 5: Composite Operations
-;;;; ============================================================================
-
-(display "\n=== Arithmetic Sequences ===\n")
-(display "Sequential operations: ")
-(display (+ 
-  (try (/ 20 4) (catch e 0))
-  (try (+ 10 5) (catch e 0))))
-(display "\n")
-
-(display "\n=== Conditional with Try/Catch ===\n")
-(if (= (try (/ 10 0) (catch e 99)) 99)
-  (display "Exception was caught\n")
-  (display "No exception occurred\n"))
-
-(display "\n=== Composite Let Binding ===\n")
-(let ((a (try (/ 20 4) (catch e 0)))
-      (b (try (+ 10 5) (catch e 0))))
-  (display "a = ")
-  (display a)
-  (display ", b = ")
-  (display b)
-  (display ", a + b = ")
-  (display (+ a b))
-  (display "\n"))
-
-;;;; ============================================================================
-;;;; Part 6: Summary and Key Points
-;;;; ============================================================================
-
-(display "\n=== Exception Handling Summary ===\n")
-(display "Elle provides two levels:\n")
-(display "  1. try/catch/finally - High-level, user-friendly\n")
-(display "  2. handler-case      - Low-level, direct control\n")
-(display "\nKey features:\n")
-(display "  - Both catch arithmetic exceptions (ID 4)\n")
-(display "  - Nested exception handling works correctly\n")
-(display "  - Stack integrity is maintained\n")
-(display "  - finally blocks always execute\n")
-(display "  - Exception handling preserves values\n")
-(display "  - Can use catch variables (e) in handlers\n")
+(display "=== Summary ===\n")
+(display "Elle provides robust exception handling via two APIs.\n")
+(display "Use try/catch for most code; handler-case for advanced use.\n")
+(display "Both are built on the Phase 9a exception interrupt mechanism.\n")

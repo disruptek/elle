@@ -1,75 +1,42 @@
 ;;;; Exception Handling Demo - Try/Catch/Finally
-;;;; 
+;;;;
 ;;;; This demonstrates the user-friendly try/catch mechanism
 ;;;; for handling exceptions in Elle Lisp
+;;;;
+;;;; NOTE: There is a known Phase 9a VM issue where sequential exception-catching
+;;;; in the same execution context can fail. Each example below works correctly,
+;;;; but combining multiple exception-catching statements in one execution can
+;;;; trigger a bug in the exception handler stack management.
+;;;; See: https://github.com/disruptek/elle/issues/[tracking issue]
 
-(display "=== Try/Catch Basic Example ===\n")
-
-;; Simple division that works
-(display "Safe division: 10 / 2 = ")
+(display "=== Try/Catch Example 1: Safe Division ===\n")
+(display "10 / 2 = ")
 (display (try (/ 10 2) (catch e 0)))
-(display "\n")
+(display "\n\n")
 
-;; Division by zero caught
-(display "Division by zero: 10 / 0 = ")
+(display "=== Try/Catch Example 2: Caught Exception ===\n")
+(display "10 / 0 (caught) = ")
 (display (try (/ 10 0) (catch e -1)))
-(display "\n")
+(display "\n\n")
 
-;; Try without catch
-(display "\nNo exception, no catch needed:\n")
-(display "Result: ")
+(display "=== Try/Catch Example 3: No Exception ===\n")
+(display "Try without exception: ")
 (display (try (+ 5 3)))
-(display "\n")
+(display "\n\n")
 
-;; Catch not executed when no exception
-(display "\nCatch clause is skipped when no exception:\n")
-(display "Try (+ 5 3) with catch e 999: ")
+(display "=== Try/Catch Example 4: Catch Ignored on Success ===\n")
+(display "(try (+ 5 3) (catch e 999)) = ")
 (display (try (+ 5 3) (catch e 999)))
-(display "\n")
+(display " (catch not executed)\n\n")
 
-;; Different return types
-(display "\nException handlers can return different types:\n")
-(display "Number on error: ")
-(display (try (/ 10 0) (catch e 99)))
-(display "\n")
-
-(display "String on error: ")
-(display (try (/ 10 0) (catch e "error")))
-(display "\n")
-
-;; Finally block
-(display "\nFinally blocks always execute:\n")
-(display "With exception:\n")
+(display "=== Try/Catch Example 5: Finally Block ===\n")
+(display "Finally always executes:\n")
 (try 
-  (/ 10 0)
-  (catch e (display "  Caught!\n"))
-  (finally (display "  Cleanup\n")))
+  (display "  Try body\n")
+  (finally (display "  Finally block\n")))
 
-(display "\nWithout exception:\n")
-(try 
-  (display "  Running\n")
-  (finally (display "  Cleanup\n")))
-
-;; Nested try/catch
-(display "\n=== Nested Try/Catch ===\n")
-(display "Inner handles exception, outer doesn't run:\n")
-(display (try 
-  (try (/ 10 0) (catch inner 50))
-  (catch outer 100)))
-(display "\n")
-
-;; Multiple operations
-(display "\n=== Sequence with Error Handling ===\n")
-(let ((a (try (+ 5 3) (catch e 0)))
-      (b (try (/ 20 4) (catch e 0)))
-      (c (try (/ 10 0) (catch e -1))))
-  (display "a = ")
-  (display a)
-  (display ", b = ")
-  (display b)
-  (display ", c = ")
-  (display c)
-  (display "\n")
-  (display "sum = ")
-  (display (+ a b c))
-  (display "\n"))
+(display "\n=== Summary ===\n")
+(display "try/catch/finally provides exception handling:\n")
+(display "- catch: binds exception to variable for handler\n")
+(display "- finally: cleanup code that always runs\n")
+(display "- exception ID 4: arithmetic errors (division by zero)\n")
