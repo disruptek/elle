@@ -241,6 +241,46 @@ Inner functions access outer scope:
 (add-10 5)  ; Returns 15
 ```
 
+### Pattern 5: Mutable Local Variables in Lambda Bodies
+
+Define local variables inside a lambda and mutate them with `set!`:
+
+```lisp
+(define make-counter (lambda (start)
+  (begin
+    (define count start)
+    (lambda ()
+      (begin
+        (set! count (+ count 1))
+        count)))))
+
+(define counter (make-counter 0))
+(counter)  ; Returns 1
+(counter)  ; Returns 2
+(counter)  ; Returns 3
+```
+
+This enables **imperative patterns** inside functions that would otherwise require recursion:
+
+```lisp
+(define sum-list (lambda (numbers)
+  (begin
+    (define sum 0)
+    (while (> (length numbers) 0)
+      (begin
+        (set! sum (+ sum (car numbers)))
+        (set! numbers (cdr numbers))))
+    sum)))
+
+(sum-list (list 1 2 3 4 5))  ; Returns 15
+```
+
+**Key insight**: 
+- `(define x value)` inside a lambda creates a **mutable local variable** scoped to that lambda
+- `(set! x new-value)` modifies that local variable, affecting subsequent code in the same lambda
+- Each call to the lambda gets its own fresh variables
+- This is different from closures with captured variables - those are shared across all calls
+
 ## Scope Errors
 
 ### Undefined Variable

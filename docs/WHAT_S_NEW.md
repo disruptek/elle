@@ -4,6 +4,48 @@ A summary of recent additions and improvements to the Elle language.
 
 ## Recent Additions
 
+### Fixed: set! in Lambda Bodies (Issue #106)
+
+The `set!` operator now correctly works on locally-defined variables inside lambda bodies. This enables imperative patterns using mutable state within functions.
+
+**Before (Issue #106):**
+```lisp
+(define counter (lambda ()
+  (begin
+    (define count 0)
+    (set! count 42)  ; ❌ ERROR: Undefined global variable
+    count)))
+```
+
+**Now (Fixed):**
+```lisp
+(define counter (lambda ()
+  (begin
+    (define count 0)
+    (set! count 42)  ; ✅ Works correctly
+    count)))         ; Returns 42
+```
+
+**Use cases:**
+- Counters and accumulators within functions
+- Imperative loops using `while` with mutation
+- Stateful closures
+- String/list building with incremental mutations
+
+**Example:**
+```lisp
+(define count-up (lambda (limit)
+  (begin
+    (define i 0)
+    (while (< i limit)
+      (set! i (+ i 1)))
+    i)))
+
+(count-up 10)  ; Returns 10
+```
+
+See `docs/SCOPING_GUIDE.md` "Pattern 5: Mutable Local Variables" for detailed examples, and `examples/mutable-closures.lisp` for comprehensive patterns.
+
 ### Exception Handling (try-catch-finally)
 
 Elle now provides comprehensive exception handling with the `try-catch-finally` construct:
