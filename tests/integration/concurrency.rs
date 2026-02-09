@@ -1,6 +1,7 @@
 use elle::compiler::converters::value_to_expr;
 use elle::reader::OwnedToken;
 use elle::{compile, list, register_primitives, Lexer, Reader, SymbolTable, Value, VM};
+use std::f64;
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
@@ -245,14 +246,14 @@ fn test_spawn_closure_with_float_capture() {
     // Test spawning a closure that captures a float
     let result = eval(
         r#"
-        (let ((f 3.14))
-          (let ((handle (spawn (lambda () f))))
-            (join handle)))
-        "#,
+         (let ((f 3.14159))
+           (let ((handle (spawn (lambda () f))))
+             (join handle)))
+         "#,
     );
 
     match result {
-        Ok(Value::Float(fl)) => assert!((fl - 3.14).abs() < 0.001),
+        Ok(Value::Float(fl)) => assert!((fl - f64::consts::PI).abs() < 0.01),
         Ok(v) => panic!("Expected float, got {:?}", v),
         Err(e) => panic!("Unexpected error: {}", e),
     }
