@@ -114,7 +114,7 @@ impl ExprCompiler {
         }
     }
 
-    /// Try to compile a unary operation (like empty?)
+    /// Try to compile a unary operation (like empty?, abs)
     fn try_compile_unary_op(
         builder: &mut FunctionBuilder,
         func: &Expr,
@@ -151,6 +151,47 @@ impl ExprCompiler {
                         Ok(IrValue::I64(result))
                     }
                     _ => Err("empty? on non-I64 not supported".to_string()),
+                }
+            }
+            "abs" => {
+                // Absolute value: if x < 0 then -x else x
+                match arg {
+                    IrValue::I64(val) => {
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        let is_negative = builder.ins().icmp(IntCC::SignedLessThan, val, zero);
+                        let negated = builder.ins().ineg(val);
+                        let result = builder.ins().select(is_negative, negated, val);
+                        Ok(IrValue::I64(result))
+                    }
+                    _ => Err("abs on non-I64 not supported".to_string()),
+                }
+            }
+            "nil?" => {
+                // nil? is same as empty?
+                match arg {
+                    IrValue::I64(val) => {
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        let result =
+                            builder
+                                .ins()
+                                .icmp(cranelift::prelude::IntCC::Equal, val, zero);
+                        Ok(IrValue::I64(result))
+                    }
+                    _ => Err("nil? on non-I64 not supported".to_string()),
+                }
+            }
+            "not" => {
+                // Logical NOT
+                match arg {
+                    IrValue::I64(val) => {
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        let result =
+                            builder
+                                .ins()
+                                .icmp(cranelift::prelude::IntCC::Equal, val, zero);
+                        Ok(IrValue::I64(result))
+                    }
+                    _ => Err("not on non-I64 not supported".to_string()),
                 }
             }
             _ => Err(format!("Unknown unary operator: {}", op_name)),
@@ -191,6 +232,24 @@ impl ExprCompiler {
                     "=" => IrEmitter::emit_eq_int(builder, l, r),
                     "<" => IrEmitter::emit_lt_int(builder, l, r),
                     ">" => IrEmitter::emit_gt_int(builder, l, r),
+                    "<=" => {
+                        // <= is (not (>))
+                        let gt_result = IrEmitter::emit_gt_int(builder, l, r);
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        builder.ins().icmp(IntCC::Equal, gt_result, zero)
+                    }
+                    ">=" => {
+                        // >= is (not (<))
+                        let lt_result = IrEmitter::emit_lt_int(builder, l, r);
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        builder.ins().icmp(IntCC::Equal, lt_result, zero)
+                    }
+                    "!=" | "neq" => {
+                        // != is (not (=))
+                        let eq_result = IrEmitter::emit_eq_int(builder, l, r);
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        builder.ins().icmp(IntCC::Equal, eq_result, zero)
+                    }
                     _ => return Err(format!("Unknown binary operator: {}", op_name)),
                 };
                 Ok(IrValue::I64(result))
