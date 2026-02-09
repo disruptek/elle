@@ -7,6 +7,7 @@ use super::branching::BranchManager;
 use super::codegen::IrEmitter;
 use super::context::JITContext;
 use crate::compiler::ast::Expr;
+use crate::symbol::SymbolTable;
 use crate::value::Value;
 use cranelift::prelude::*;
 use cranelift_module::Module;
@@ -30,6 +31,7 @@ impl ExprCompiler {
         ctx: &mut JITContext,
         name: &str,
         expr: &Expr,
+        symbols: &SymbolTable,
     ) -> Result<*const u8, String> {
         // Create function signature: fn(args_ptr: i64, args_len: i64) -> i64
         let mut sig = ctx.make_signature();
@@ -65,7 +67,7 @@ impl ExprCompiler {
         builder.seal_block(entry_block);
 
         // Compile the expression
-        let result = Self::compile_expr_block(&mut builder, expr)?;
+        let result = Self::compile_expr_block(&mut builder, expr, symbols)?;
 
         // Convert the compiled value to i64 for return
         let return_val = match result {
@@ -91,15 +93,62 @@ impl ExprCompiler {
     pub fn compile_expr_block(
         builder: &mut FunctionBuilder,
         expr: &Expr,
+        symbols: &SymbolTable,
     ) -> Result<IrValue, String> {
         match expr {
             Expr::Literal(val) => Self::compile_literal(builder, val),
-            Expr::Begin(exprs) => Self::compile_begin(builder, exprs),
-            Expr::If { cond, then, else_ } => Self::compile_if(builder, cond, then, else_),
+            Expr::Begin(exprs) => Self::compile_begin(builder, exprs, symbols),
+            Expr::If { cond, then, else_ } => Self::compile_if(builder, cond, then, else_, symbols),
+            // Try to compile binary operations with integer operands
+            Expr::Call { func, args, .. } if args.len() == 2 => {
+                Self::try_compile_binop(builder, func, args, symbols)
+            }
             _ => Err(format!(
                 "Expression type not yet supported in JIT: {:?}",
                 expr
             )),
+        }
+    }
+
+    /// Try to compile a binary operation
+    /// Only works for operations on literal integers
+    fn try_compile_binop(
+        builder: &mut FunctionBuilder,
+        func: &Expr,
+        args: &[Expr],
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
+        // Extract operator name from function
+        let op_name = match func {
+            Expr::Literal(Value::Symbol(sym_id)) => symbols.name(*sym_id),
+            _ => None,
+        };
+
+        let op_name = match op_name {
+            Some(name) => name,
+            None => return Err("Could not resolve operator name".to_string()),
+        };
+
+        // Compile the arguments
+        let left = Self::compile_expr_block(builder, &args[0], symbols)?;
+        let right = Self::compile_expr_block(builder, &args[1], symbols)?;
+
+        // Perform the binary operation
+        match (left, right) {
+            (IrValue::I64(l), IrValue::I64(r)) => {
+                let result = match op_name {
+                    "+" => IrEmitter::emit_add_int(builder, l, r),
+                    "-" => IrEmitter::emit_sub_int(builder, l, r),
+                    "*" => IrEmitter::emit_mul_int(builder, l, r),
+                    "/" => IrEmitter::emit_sdiv_int(builder, l, r),
+                    "=" => IrEmitter::emit_eq_int(builder, l, r),
+                    "<" => IrEmitter::emit_lt_int(builder, l, r),
+                    ">" => IrEmitter::emit_gt_int(builder, l, r),
+                    _ => return Err(format!("Unknown binary operator: {}", op_name)),
+                };
+                Ok(IrValue::I64(result))
+            }
+            _ => Err("Type mismatch in binary operation".to_string()),
         }
     }
 
@@ -134,10 +183,14 @@ impl ExprCompiler {
     }
 
     /// Compile a begin (sequence) expression
-    fn compile_begin(builder: &mut FunctionBuilder, exprs: &[Expr]) -> Result<IrValue, String> {
+    fn compile_begin(
+        builder: &mut FunctionBuilder,
+        exprs: &[Expr],
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
         let mut result = IrValue::I64(IrEmitter::emit_nil(builder));
         for expr in exprs {
-            result = Self::compile_expr_block(builder, expr)?;
+            result = Self::compile_expr_block(builder, expr, symbols)?;
         }
         Ok(result)
     }
@@ -148,9 +201,10 @@ impl ExprCompiler {
         cond: &Expr,
         then_expr: &Expr,
         else_expr: &Expr,
+        symbols: &SymbolTable,
     ) -> Result<IrValue, String> {
         // Compile the condition expression
-        let cond_val = Self::compile_expr_block(builder, cond)?;
+        let cond_val = Self::compile_expr_block(builder, cond, symbols)?;
 
         // Extract i64 value from condition (floats would need conversion)
         let cond_i64 = match cond_val {
@@ -171,14 +225,14 @@ impl ExprCompiler {
         // Compile then branch
         builder.switch_to_block(then_block);
         builder.seal_block(then_block);
-        let then_val = Self::compile_expr_block(builder, then_expr)?;
+        let then_val = Self::compile_expr_block(builder, then_expr, symbols)?;
         let then_i64 = Self::ir_value_to_i64(builder, then_val)?;
         BranchManager::jump_to_join(builder, join_block, then_i64);
 
         // Compile else branch
         builder.switch_to_block(else_block);
         builder.seal_block(else_block);
-        let else_val = Self::compile_expr_block(builder, else_expr)?;
+        let else_val = Self::compile_expr_block(builder, else_expr, symbols)?;
         let else_i64 = Self::ir_value_to_i64(builder, else_val)?;
         BranchManager::jump_to_join(builder, join_block, else_i64);
 
@@ -223,7 +277,13 @@ mod tests {
         builder.switch_to_block(block);
         builder.seal_block(block);
 
-        let result = ExprCompiler::compile_expr_block(&mut builder, &Expr::Literal(Value::Int(42)));
+        use crate::symbol::SymbolTable;
+        let symbols = SymbolTable::new();
+        let result = ExprCompiler::compile_expr_block(
+            &mut builder,
+            &Expr::Literal(Value::Int(42)),
+            &symbols,
+        );
         assert!(
             result.is_ok(),
             "Failed to compile integer literal: {:?}",
@@ -233,6 +293,7 @@ mod tests {
 
     #[test]
     fn test_compile_expr_block_bool() {
+        use crate::symbol::SymbolTable;
         let mut builder_ctx = FunctionBuilderContext::new();
         let mut func = ir::Function::new();
         func.signature.params.push(AbiParam::new(types::I64));
@@ -242,8 +303,12 @@ mod tests {
         builder.switch_to_block(block);
         builder.seal_block(block);
 
-        let result =
-            ExprCompiler::compile_expr_block(&mut builder, &Expr::Literal(Value::Bool(true)));
+        let symbols = SymbolTable::new();
+        let result = ExprCompiler::compile_expr_block(
+            &mut builder,
+            &Expr::Literal(Value::Bool(true)),
+            &symbols,
+        );
         assert!(
             result.is_ok(),
             "Failed to compile boolean literal: {:?}",
@@ -253,6 +318,7 @@ mod tests {
 
     #[test]
     fn test_compile_expr_block_begin() {
+        use crate::symbol::SymbolTable;
         let mut builder_ctx = FunctionBuilderContext::new();
         let mut func = ir::Function::new();
         func.signature.params.push(AbiParam::new(types::I64));
@@ -262,12 +328,14 @@ mod tests {
         builder.switch_to_block(block);
         builder.seal_block(block);
 
+        let symbols = SymbolTable::new();
         let result = ExprCompiler::compile_expr_block(
             &mut builder,
             &Expr::Begin(vec![
                 Expr::Literal(Value::Int(1)),
                 Expr::Literal(Value::Int(2)),
             ]),
+            &symbols,
         );
         assert!(
             result.is_ok(),

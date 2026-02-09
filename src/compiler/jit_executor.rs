@@ -96,7 +96,7 @@ impl JitExecutor {
     pub fn try_jit_execute(
         &mut self,
         expr: &Expr,
-        _symbols: &SymbolTable,
+        symbols: &SymbolTable,
     ) -> Result<Option<Value>, String> {
         if self.jit_context.is_none() {
             return Ok(None);
@@ -129,10 +129,10 @@ impl JitExecutor {
             }
 
             // If expressions and Begin can be JIT compiled
-            Expr::If { .. } | Expr::Begin(_) => self.compile_and_execute_expr(expr, hash),
+            Expr::If { .. } | Expr::Begin(_) => self.compile_and_execute_expr(expr, hash, symbols),
 
-            // Call expressions - try to compile
-            Expr::Call { .. } => self.compile_and_execute_expr(expr, hash),
+            // Call expressions - try to compile them
+            Expr::Call { .. } => self.compile_and_execute_expr(expr, hash, symbols),
 
             // Everything else
             _ => {
@@ -150,6 +150,7 @@ impl JitExecutor {
         &mut self,
         expr: &Expr,
         hash: u64,
+        symbols: &SymbolTable,
     ) -> Result<Option<Value>, String> {
         let ctx = self
             .jit_context
@@ -161,7 +162,7 @@ impl JitExecutor {
         let func_name = format!("jit_expr_{:x}", hash);
 
         // Compile the expression to native code
-        match ExprCompiler::compile_expr(&mut jit_ctx, &func_name, expr) {
+        match ExprCompiler::compile_expr(&mut jit_ctx, &func_name, expr, symbols) {
             Ok(func_ptr) => {
                 // Cache the compiled code
                 let mut cache = self.cache.borrow_mut();
