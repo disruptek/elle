@@ -23,7 +23,7 @@
 (display "Example 1a: Simple iteration over literal list")
 (newline)
 (define result1 (list))
-(for x (list 1 2 3)
+(for x in (list 1 2 3)
   (display x)
   (display " "))
 (newline)
@@ -31,7 +31,7 @@
 
 (display "Example 1b: Processing elements from literal list")
 (newline)
-(for item (list 10 20 30 40 50)
+(for item in (list 10 20 30 40 50)
   (display item)
   (display " "))
 (newline)
@@ -49,7 +49,7 @@
 
 (display "Example 2a: Empty list iteration")
 (newline)
-(define empty-result (for item (list)
+(define empty-result (for item in (list)
   (display "This will not print")))
 (display "Result: ")
 (display empty-result)
@@ -68,9 +68,9 @@
 
 (display "Example 3a: 2D grid iteration")
 (newline)
-(for row (list 1 2 3)
+(for row in (list 1 2 3)
   (begin
-    (for col (list 'a 'b)
+    (for col in (list 'a 'b)
       (begin
         (display "(")
         (display row)
@@ -92,7 +92,7 @@
 
 (display "Example 4a: Arithmetic in loop body")
 (newline)
-(for n (list 1 2 3 4 5)
+(for n in (list 1 2 3 4 5)
   (display (* n n))
   (display " "))
 (newline)
@@ -100,7 +100,7 @@
 
 (display "Example 4b: Conditional logic in loop body")
 (newline)
-(for n (list 1 2 3 4 5)
+(for n in (list 1 2 3 4 5)
   (if (> n 2)
     (display n)
     (display "-")))
@@ -119,13 +119,13 @@
 
 (display "Example 5a: First loop")
 (newline)
-(for x (list 'A 'B 'C)
+(for x in (list 'A 'B 'C)
   (display x))
 (newline)
 
 (display "Example 5b: Second loop")
 (newline)
-(for x (list 1 2 3)
+(for x in (list 1 2 3)
   (display x))
 (newline)
 (newline)
@@ -142,7 +142,7 @@
 
 (display "Example 6a: For loop (JIT unrolled) over literal list")
 (newline)
-(for val (list 10 20 30)
+(for val in (list 10 20 30)
   (display val)
   (display " "))
 (newline)
