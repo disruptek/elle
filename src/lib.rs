@@ -50,6 +50,7 @@ pub use ffi::primitives as ffi_primitives;
 
 pub use compiler::{
     compile, compile_jit, is_jit_compilable, Bytecode, JitCompiledFunction, JitCoordinator,
+    JitExecutor,
 };
 pub use error::{RuntimeError, SourceLoc};
 pub use primitives::{init_stdlib, register_primitives};
