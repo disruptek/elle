@@ -74,20 +74,21 @@ pub fn handle_load_upvalue(
     vm: &mut VM,
     bytecode: &[u8],
     ip: &mut usize,
-    closure_env: Option<&std::rc::Rc<Vec<Value>>>,
+    closure_env: Option<&std::rc::Rc<std::cell::RefCell<Vec<Value>>>>,
 ) -> Result<(), String> {
     let _depth = vm.read_u8(bytecode, ip);
     let idx = vm.read_u8(bytecode, ip) as usize;
 
     // Load from closure environment
     if let Some(env) = closure_env {
-        if idx < env.len() {
-            vm.stack.push(env[idx].clone());
+        let env_borrow = env.borrow();
+        if idx < env_borrow.len() {
+            vm.stack.push(env_borrow[idx].clone());
         } else {
             return Err(format!(
                 "Upvalue index {} out of bounds (env size: {})",
                 idx,
-                env.len()
+                env_borrow.len()
             ));
         }
     } else {
@@ -100,27 +101,26 @@ pub fn handle_store_upvalue(
     vm: &mut VM,
     bytecode: &[u8],
     ip: &mut usize,
-    closure_env: Option<&std::rc::Rc<Vec<Value>>>,
+    closure_env: Option<&std::rc::Rc<std::cell::RefCell<Vec<Value>>>>,
 ) -> Result<(), String> {
     let _depth = vm.read_u8(bytecode, ip);
     let idx = vm.read_u8(bytecode, ip) as usize;
-    let _val = vm.stack.pop().ok_or("Stack underflow")?;
+    let val = vm.stack.pop().ok_or("Stack underflow")?;
 
     // Store to closure environment
     if let Some(env) = closure_env {
-        if idx < env.len() {
-            // We cannot mutate through an immutable reference
-            // This is a fundamental architectural issue - we need RefCell or similar
-            // For now, return an error that indicates this is not yet supported
-            return Err("Cannot mutate closure environment variables yet".to_string());
+        let mut env_borrow = env.borrow_mut();
+        if idx < env_borrow.len() {
+            env_borrow[idx] = val;
+            Ok(())
         } else {
-            return Err(format!(
+            Err(format!(
                 "Upvalue index {} out of bounds (env size: {})",
                 idx,
-                env.len()
-            ));
+                env_borrow.len()
+            ))
         }
     } else {
-        return Err("StoreUpvalue used outside of closure".to_string());
+        Err("StoreUpvalue used outside of closure".to_string())
     }
 }

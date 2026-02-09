@@ -60,13 +60,17 @@ impl Cons {
 }
 
 /// Closure with captured environment
+///
+/// The environment is shared mutable state: `Rc<RefCell<Vec<Value>>>` allows
+/// multiple closures and the enclosing scope to mutate the same captured variables.
+/// The layout is: [captures..., params..., locals...]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Closure {
     pub bytecode: Rc<Vec<u8>>,
     pub arity: Arity,
-    pub env: Rc<Vec<Value>>,
-    pub num_locals: usize,
-    pub num_captures: usize, // Number of captured variables (for env layout)
+    pub env: Rc<RefCell<Vec<Value>>>,
+    pub num_locals: usize, // total local slots: num_captures + num_params + num_defines
+    pub num_captures: usize, // Number of captured variables (prefix of env)
     pub constants: Rc<Vec<Value>>,
 }
 

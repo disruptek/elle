@@ -21,10 +21,11 @@ pub fn handle_make_closure(
         captured.reverse();
 
         // Create closure with captured values in environment
+        // Wrap in RefCell to allow mutation of captures in the closure
         let closure = Closure {
             bytecode: template.bytecode.clone(),
             arity: template.arity,
-            env: Rc::new(captured),
+            env: Rc::new(std::cell::RefCell::new(captured)),
             num_locals: template.num_locals,
             num_captures: template.num_captures,
             constants: template.constants.clone(),

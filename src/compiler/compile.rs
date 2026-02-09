@@ -215,7 +215,7 @@ impl Compiler {
                 let closure = Closure {
                     bytecode: Rc::new(lambda_compiler.bytecode.instructions),
                     arity: crate::value::Arity::Exact(params.len()),
-                    env: Rc::new(Vec::new()), // Will be populated by VM when closure is created
+                    env: Rc::new(std::cell::RefCell::new(Vec::new())), // Will be populated by VM when closure is created
                     num_locals: params.len() + captures.len(),
                     num_captures: captures.len(),
                     constants: Rc::new(lambda_compiler.bytecode.constants),

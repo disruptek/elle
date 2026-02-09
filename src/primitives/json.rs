@@ -948,7 +948,7 @@ mod tests {
         let closure = Value::Closure(Rc::new(crate::value::Closure {
             bytecode: Rc::new(vec![]),
             arity: crate::value::Arity::Exact(0),
-            env: Rc::new(vec![]),
+            env: Rc::new(std::cell::RefCell::new(vec![])),
             num_locals: 0,
             num_captures: 0,
             constants: Rc::new(vec![]),

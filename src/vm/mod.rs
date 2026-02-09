@@ -25,7 +25,7 @@ impl VM {
         &mut self,
         bytecode: &[u8],
         constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
+        closure_env: Option<&Rc<std::cell::RefCell<Vec<Value>>>>,
     ) -> Result<Value, String> {
         let mut ip = 0;
         let mut instruction_count = 0;
@@ -184,9 +184,9 @@ impl VM {
                             // Create a new environment that includes both captured variables and parameters
                             // The closure's env contains captured variables, and we append the arguments as parameters
                             let mut new_env = Vec::new();
-                            new_env.extend((*closure.env).iter().cloned());
+                            new_env.extend(closure.env.borrow().iter().cloned());
                             new_env.extend(args.clone());
-                            let new_env_rc = std::rc::Rc::new(new_env);
+                            let new_env_rc = std::rc::Rc::new(std::cell::RefCell::new(new_env));
 
                             let result = self.execute_bytecode(
                                 &closure.bytecode,
@@ -220,9 +220,9 @@ impl VM {
                         Value::Closure(closure) => {
                             // Build proper environment: captures + args (same as Call)
                             let mut new_env = Vec::new();
-                            new_env.extend((*closure.env).iter().cloned());
+                            new_env.extend(closure.env.borrow().iter().cloned());
                             new_env.extend(args);
-                            let new_env_rc = std::rc::Rc::new(new_env);
+                            let new_env_rc = std::rc::Rc::new(std::cell::RefCell::new(new_env));
 
                             // Use closure's own constants table (not parent's)
                             // Don't increment call_depth — this is the tail call optimization
