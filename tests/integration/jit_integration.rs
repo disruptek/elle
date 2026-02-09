@@ -3,8 +3,11 @@
 // End-to-end tests showing the JIT compilation pipeline working with
 // profiling feedback and hot function detection.
 
+use elle::compiler::ast::Expr;
 use elle::compiler::converters::value_to_expr;
+use elle::compiler::jit_executor::JitExecutor;
 use elle::compiler::JitCoordinator;
+use elle::value::Value;
 use elle::{compile, read_str, register_primitives, SymbolTable, VM};
 
 #[test]
@@ -126,4 +129,70 @@ fn test_jit_with_profiling_feedback() {
     // Get profiling summary
     let summary = profiler.summary();
     assert!(summary.total_functions_compiled >= 0);
+}
+
+#[test]
+fn test_jit_executor_native_code_execution() {
+    // Test native code compilation and execution through JIT executor
+    let mut executor = JitExecutor::new().expect("Failed to create JIT executor");
+    let symbols = SymbolTable::new();
+
+    // Test 1: Literal integer execution
+    let expr = Expr::Literal(Value::Int(42));
+    let result = executor
+        .try_jit_execute(&expr, &symbols)
+        .expect("JIT execution failed");
+    assert!(
+        result.is_some(),
+        "JIT executor should return Some for literal"
+    );
+    match result.unwrap() {
+        Value::Int(42) => (),
+        other => panic!("Expected Value::Int(42), got {:?}", other),
+    }
+
+    // Test 2: Boolean literal
+    let expr_bool = Expr::Literal(Value::Bool(true));
+    let result_bool = executor
+        .try_jit_execute(&expr_bool, &symbols)
+        .expect("JIT execution failed");
+    assert!(
+        result_bool.is_some(),
+        "JIT executor should return Some for boolean"
+    );
+
+    // Test 3: Nil literal
+    let expr_nil = Expr::Literal(Value::Nil);
+    let result_nil = executor
+        .try_jit_execute(&expr_nil, &symbols)
+        .expect("JIT execution failed");
+    assert!(
+        result_nil.is_some(),
+        "JIT executor should return Some for nil"
+    );
+}
+
+#[test]
+fn test_jit_executor_cache_functionality() {
+    // Test that JIT executor correctly caches compiled code
+    let mut executor = JitExecutor::new().expect("Failed to create JIT executor");
+    let symbols = SymbolTable::new();
+
+    let expr1 = Expr::Literal(Value::Int(10));
+    let expr2 = Expr::Literal(Value::Int(20));
+
+    // Execute first expression
+    executor.try_jit_execute(&expr1, &symbols).ok();
+    let (compiled1, total1) = executor.cache_stats();
+
+    // Execute second expression
+    executor.try_jit_execute(&expr2, &symbols).ok();
+    let (compiled2, total2) = executor.cache_stats();
+
+    // Cache should have grown
+    assert!(total2 >= total1, "Cache should not shrink");
+    assert!(
+        compiled2 >= 1,
+        "Should have at least one successful compilation"
+    );
 }
