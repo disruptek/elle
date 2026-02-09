@@ -103,10 +103,57 @@ impl ExprCompiler {
             Expr::Call { func, args, .. } if args.len() == 2 => {
                 Self::try_compile_binop(builder, func, args, symbols)
             }
+            // Try to compile unary operations like empty?
+            Expr::Call { func, args, .. } if args.len() == 1 => {
+                Self::try_compile_unary_op(builder, func, args, symbols)
+            }
             _ => Err(format!(
                 "Expression type not yet supported in JIT: {:?}",
                 expr
             )),
+        }
+    }
+
+    /// Try to compile a unary operation (like empty?)
+    fn try_compile_unary_op(
+        builder: &mut FunctionBuilder,
+        func: &Expr,
+        args: &[Expr],
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
+        // Extract operator name from function
+        let op_name = match func {
+            Expr::Literal(Value::Symbol(sym_id)) => symbols.name(*sym_id),
+            _ => None,
+        };
+
+        let op_name = match op_name {
+            Some(name) => name,
+            None => return Err("Could not resolve operator name".to_string()),
+        };
+
+        // Compile the argument
+        let arg = Self::compile_expr_block(builder, &args[0], symbols)?;
+
+        // Perform the unary operation
+        match op_name {
+            "empty?" => {
+                // empty? on nil returns true, on cons returns false
+                // This is essentially the same as (nil? x)
+                match arg {
+                    IrValue::I64(val) => {
+                        // Check if value is nil (0)
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        let result =
+                            builder
+                                .ins()
+                                .icmp(cranelift::prelude::IntCC::Equal, val, zero);
+                        Ok(IrValue::I64(result))
+                    }
+                    _ => Err("empty? on non-I64 not supported".to_string()),
+                }
+            }
+            _ => Err(format!("Unknown unary operator: {}", op_name)),
         }
     }
 
