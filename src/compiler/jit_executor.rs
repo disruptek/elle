@@ -80,6 +80,8 @@ pub struct JitExecutor {
     cache: Rc<RefCell<std::collections::HashMap<u64, CachedJitCode>>>,
     /// JIT context for compilation
     jit_context: Option<Rc<RefCell<JITContext>>>,
+    /// Call counters for profiling hot functions (bytecode pointer -> call count)
+    call_counts: Rc<RefCell<std::collections::HashMap<*const u8, usize>>>,
 }
 
 impl JitExecutor {
@@ -89,6 +91,7 @@ impl JitExecutor {
         Ok(JitExecutor {
             cache: Rc::new(RefCell::new(std::collections::HashMap::new())),
             jit_context: jit_ctx.map(|ctx| Rc::new(RefCell::new(ctx))),
+            call_counts: Rc::new(RefCell::new(std::collections::HashMap::new())),
         })
     }
 
@@ -253,6 +256,37 @@ impl JitExecutor {
         let compiled = cache.values().filter(|c| c.compiled).count();
         (compiled, total)
     }
+
+    /// Try to compile and cache bytecode for a closure (optimization attempt)
+    /// Returns true if compilation succeeded and code can be used
+    pub fn can_compile_bytecode(&self, _bytecode: &[u8]) -> bool {
+        // Check if we can compile this bytecode signature
+        // For now, return false - full implementation would analyze bytecode pattern
+        // This is a placeholder for future bytecode analysis
+        false
+    }
+
+    /// Get cache statistics for profiling
+    pub fn get_cache_size(&self) -> usize {
+        self.cache.borrow().len()
+    }
+
+    /// Record a closure call and return whether it's "hot" (called 10+ times)
+    pub fn record_closure_call(&self, bytecode_ptr: *const u8) -> bool {
+        let mut counts = self.call_counts.borrow_mut();
+        let count = counts.entry(bytecode_ptr).or_insert(0);
+        *count += 1;
+        *count >= 10
+    }
+
+    /// Get the call count for a closure
+    pub fn get_call_count(&self, bytecode_ptr: *const u8) -> usize {
+        self.call_counts
+            .borrow()
+            .get(&bytecode_ptr)
+            .copied()
+            .unwrap_or(0)
+    }
 }
 
 impl Default for JitExecutor {
@@ -260,6 +294,7 @@ impl Default for JitExecutor {
         Self::new().unwrap_or(JitExecutor {
             cache: Rc::new(RefCell::new(std::collections::HashMap::new())),
             jit_context: None,
+            call_counts: Rc::new(RefCell::new(std::collections::HashMap::new())),
         })
     }
 }
