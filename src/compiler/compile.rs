@@ -323,16 +323,15 @@ impl Compiler {
                     let idx = self.bytecode.add_constant(Value::Symbol(*var));
                     self.bytecode.emit(Instruction::StoreGlobal);
                     self.bytecode.emit_u16(idx);
-                } else if *depth == 0 {
-                    // Local variable set
-                    self.bytecode.emit(Instruction::StoreLocal);
+                } else if self.scope_depth > 0 {
+                    // Inside a scope (lambda, block, loop) - store to scope_stack
+                    self.bytecode.emit(Instruction::StoreScoped);
+                    self.bytecode.emit_byte(*depth as u8);
                     self.bytecode.emit_byte(*index as u8);
                 } else {
-                    // Upvalue variable set (not supported yet - treat as error or global)
-                    // For now, treat as global to avoid corruption
-                    let idx = self.bytecode.add_constant(Value::Symbol(*var));
-                    self.bytecode.emit(Instruction::StoreGlobal);
-                    self.bytecode.emit_u16(idx);
+                    // At top level - use StoreLocal for stack variables
+                    self.bytecode.emit(Instruction::StoreLocal);
+                    self.bytecode.emit_byte(*index as u8);
                 }
             }
 

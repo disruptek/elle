@@ -22,6 +22,9 @@ pub enum Instruction {
     /// Load from closure environment
     LoadUpvalue,
 
+    /// Store to closure environment
+    StoreUpvalue,
+
     /// Pop value from stack
     Pop,
 

@@ -441,11 +441,14 @@ fn value_to_expr_with_scope(
                     }
 
                     "begin" => {
-                        let exprs: Result<Vec<_>, _> = list[1..]
-                            .iter()
-                            .map(|v| value_to_expr_with_scope(v, symbols, scope_stack))
-                            .collect();
-                        Ok(Expr::Begin(exprs?))
+                        // Process expressions sequentially to handle variable definitions properly
+                        // This allows define to register variables that are then available to later expressions
+                        let mut exprs = Vec::new();
+                        for v in &list[1..] {
+                            let expr = value_to_expr_with_scope(v, symbols, scope_stack)?;
+                            exprs.push(expr);
+                        }
+                        Ok(Expr::Begin(exprs))
                     }
 
                     "block" => {
@@ -469,15 +472,18 @@ fn value_to_expr_with_scope(
                         // Push a new scope with the lambda parameters (as Vec for ordered indices)
                         scope_stack.push(param_syms.clone());
 
-                        let body_exprs: Result<Vec<_>, _> = list[2..]
-                            .iter()
-                            .map(|v| value_to_expr_with_scope(v, symbols, scope_stack))
-                            .collect();
+                        // Process body expressions sequentially to handle variable definitions properly
+                        let mut body_exprs_vec = Vec::new();
+                        for expr_val in &list[2..] {
+                            let expr = value_to_expr_with_scope(expr_val, symbols, scope_stack)?;
+                            body_exprs_vec.push(expr);
+                        }
 
                         // Pop the lambda's scope
                         scope_stack.pop();
 
-                        let body_exprs = body_exprs?;
+                        let body_exprs = body_exprs_vec;
+
                         let body = if body_exprs.len() == 1 {
                             Box::new(body_exprs[0].clone())
                         } else {
@@ -538,8 +544,18 @@ fn value_to_expr_with_scope(
                             return Err("define requires exactly 2 arguments".to_string());
                         }
                         let name = list[1].as_symbol()?;
+
+                        // Register the variable in the current scope BEFORE processing the value
+                        // This way, if the value references the variable (unusual but possible),
+                        // it can be found. More importantly, it makes the variable available to
+                        // subsequent expressions in the same scope.
+                        if !scope_stack.is_empty() {
+                            scope_stack.last_mut().unwrap().push(name);
+                        }
+
                         let value =
                             Box::new(value_to_expr_with_scope(&list[2], symbols, scope_stack)?);
+
                         Ok(Expr::Define { name, value })
                     }
 
