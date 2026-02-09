@@ -531,6 +531,7 @@ fn serialize_value(value: &Value) -> Result<String, String> {
         Value::Exception(_) => Err("Cannot serialize exceptions to JSON".to_string()),
         Value::Condition(_) => Err("Cannot serialize conditions to JSON".to_string()),
         Value::ThreadHandle(_) => Err("Cannot serialize thread handles to JSON".to_string()),
+        Value::Cell(_) => Err("Cannot serialize cells to JSON".to_string()),
     }
 }
 
@@ -643,6 +644,7 @@ fn serialize_value_pretty(value: &Value, indent_level: usize) -> Result<String, 
         Value::Exception(_) => Err("Cannot serialize exceptions to JSON".to_string()),
         Value::Condition(_) => Err("Cannot serialize conditions to JSON".to_string()),
         Value::ThreadHandle(_) => Err("Cannot serialize thread handles to JSON".to_string()),
+        Value::Cell(_) => Err("Cannot serialize cells to JSON".to_string()),
     }
 }
 
