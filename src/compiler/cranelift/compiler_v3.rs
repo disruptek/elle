@@ -306,7 +306,7 @@ mod tests {
         var_values.insert((depth, index), ir_val);
 
         // Verify retrieval
-        assert!(var_values.get(&(depth, index)).is_some());
+        assert!(var_values.contains_key(&(depth, index)));
     }
 
     #[test]

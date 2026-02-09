@@ -109,7 +109,6 @@ mod tests {
         let cond = builder.block_params(entry)[0];
         BranchManager::emit_if_cond(&mut builder, cond, then_bl, else_bl);
 
-        // Verify branching doesn't panic
-        assert!(true);
+        // Branching created without panicking - test passes
     }
 }

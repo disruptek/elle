@@ -187,7 +187,6 @@ mod tests {
         builder.ins().return_(&[val]);
         builder.finalize();
         // Test passes if no panic occurs
-        assert!(true);
     }
 
     #[test]
@@ -203,7 +202,6 @@ mod tests {
         let val = IrEmitter::emit_bool(&mut builder, true);
         builder.ins().return_(&[val]);
         builder.finalize();
-        assert!(true);
     }
 
     #[test]
@@ -219,7 +217,6 @@ mod tests {
         let val = IrEmitter::emit_float(&mut builder, std::f64::consts::PI);
         builder.ins().return_(&[val]);
         builder.finalize();
-        assert!(true);
     }
 
     #[test]
@@ -241,7 +238,6 @@ mod tests {
         let result = IrEmitter::emit_add_int(&mut builder, p0, p1);
         builder.ins().return_(&[result]);
         builder.finalize();
-        assert!(true);
     }
 
     #[test]
@@ -263,6 +259,5 @@ mod tests {
         let result = IrEmitter::emit_lt_int(&mut builder, p0, p1);
         builder.ins().return_(&[result]);
         builder.finalize();
-        assert!(true);
     }
 }

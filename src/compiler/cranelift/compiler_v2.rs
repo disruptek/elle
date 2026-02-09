@@ -173,6 +173,5 @@ mod tests {
     fn test_compiler_v2_available() {
         // Phase 4 compiler with symbol table integration is available
         // This verifies the module structure compiles
-        assert!(true);
     }
 }

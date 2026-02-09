@@ -340,7 +340,7 @@ mod tests {
         let ir_val = IrValue::I64(cranelift::prelude::Value::from_u32(0));
         var_values.insert((0, 0), ir_val);
 
-        assert!(var_values.get(&(0, 0)).is_some());
+        assert!(var_values.contains_key(&(0, 0)));
     }
 
     #[test]
@@ -357,6 +357,6 @@ mod tests {
         let func_val = FunctionValue { lambda };
         functions.insert(SymbolId(1), func_val);
 
-        assert!(functions.get(&SymbolId(1)).is_some());
+        assert!(functions.contains_key(&SymbolId(1)));
     }
 }
