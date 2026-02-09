@@ -107,6 +107,14 @@ impl ExprCompiler {
             Expr::Or(exprs) => Self::try_compile_or(builder, exprs, symbols),
             // Try to compile Let bindings
             Expr::Let { bindings, body } => Self::try_compile_let(builder, bindings, body, symbols),
+            // Try to compile While loops
+            Expr::While { cond, body } => Self::try_compile_while(builder, cond, body, symbols),
+            // Try to compile For loops
+            Expr::For { var: _, iter, body } => {
+                // For now, reject For loops as they require variable binding support
+                let _ = (iter, body); // Silence unused variable warnings
+                Err("For loops not yet supported in JIT (requires variable binding)".to_string())
+            }
             // Try to compile binary operations with integer operands
             Expr::Call { func, args, .. } if args.len() == 2 => {
                 Self::try_compile_binop(builder, func, args, symbols)
@@ -269,6 +277,57 @@ impl ExprCompiler {
         // just compile the body (since the bindings don't affect it in JIT)
         // This is actually a missed optimization, but safe
         Self::compile_expr_block(builder, body, symbols)
+    }
+
+    /// Try to compile a While loop expression
+    /// (while cond body) - executes body repeatedly while cond is truthy, returns nil
+    fn try_compile_while(
+        builder: &mut FunctionBuilder,
+        cond: &Expr,
+        body: &Expr,
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
+        // Create blocks: header (check condition), body_block (execute), exit
+        let header_block = builder.create_block();
+        let body_block = builder.create_block();
+        let exit_block = builder.create_block();
+
+        // Jump to header to start loop
+        builder.ins().jump(header_block, &[]);
+
+        // Header block: evaluate condition and branch
+        builder.switch_to_block(header_block);
+        // Don't seal yet - we'll add predecessors from body_block
+
+        let cond_val = Self::compile_expr_block(builder, cond, symbols)?;
+        let cond_i64 = match cond_val {
+            IrValue::I64(v) => v,
+            _ => return Err("While condition must evaluate to I64".to_string()),
+        };
+
+        let zero = builder.ins().iconst(types::I64, 0);
+        let is_true = builder.ins().icmp(IntCC::NotEqual, cond_i64, zero);
+        builder
+            .ins()
+            .brif(is_true, body_block, &[], exit_block, &[]);
+
+        // Body block: execute body and jump back to header
+        builder.switch_to_block(body_block);
+        builder.seal_block(body_block);
+
+        let _body_val = Self::compile_expr_block(builder, body, symbols)?;
+        // Note: we discard the body value (while loops return nil)
+        builder.ins().jump(header_block, &[]);
+
+        // Now seal header after we've added the back-edge from body
+        builder.seal_block(header_block);
+
+        // Exit block: return nil
+        builder.switch_to_block(exit_block);
+        builder.seal_block(exit_block);
+
+        let nil_val = builder.ins().iconst(types::I64, 0);
+        Ok(IrValue::I64(nil_val))
     }
 
     /// Try to compile an And expression with shortcircuiting
@@ -764,6 +823,42 @@ mod tests {
         assert!(
             result.is_ok(),
             "Failed to compile begin expression: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn test_compile_while_loop() {
+        use crate::symbol::SymbolTable;
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func = ir::Function::new();
+        func.signature.params.push(AbiParam::new(types::I64));
+        func.signature.returns.push(AbiParam::new(types::I64));
+        let mut builder = FunctionBuilder::new(&mut func, &mut builder_ctx);
+        let block = builder.create_block();
+        builder.switch_to_block(block);
+        builder.seal_block(block);
+
+        let mut symbols = SymbolTable::new();
+        let lt_sym = symbols.intern("<");
+
+        // Test: (while (< 0 10) 42)
+        // A while loop with a condition and a body
+        let result = ExprCompiler::compile_expr_block(
+            &mut builder,
+            &Expr::While {
+                cond: Box::new(Expr::Call {
+                    func: Box::new(Expr::Literal(Value::Symbol(lt_sym))),
+                    args: vec![Expr::Literal(Value::Int(0)), Expr::Literal(Value::Int(10))],
+                    tail: false,
+                }),
+                body: Box::new(Expr::Literal(Value::Int(42))),
+            },
+            &symbols,
+        );
+        assert!(
+            result.is_ok(),
+            "Failed to compile while loop: {:?}",
             result.err()
         );
     }
