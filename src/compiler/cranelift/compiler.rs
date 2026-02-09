@@ -99,6 +99,9 @@ impl ExprCompiler {
             Expr::Literal(val) => Self::compile_literal(builder, val),
             Expr::Begin(exprs) => Self::compile_begin(builder, exprs, symbols),
             Expr::If { cond, then, else_ } => Self::compile_if(builder, cond, then, else_, symbols),
+            // Try to compile And/Or with shortcircuiting
+            Expr::And(exprs) => Self::try_compile_and(builder, exprs, symbols),
+            Expr::Or(exprs) => Self::try_compile_or(builder, exprs, symbols),
             // Try to compile binary operations with integer operands
             Expr::Call { func, args, .. } if args.len() == 2 => {
                 Self::try_compile_binop(builder, func, args, symbols)
@@ -111,6 +114,81 @@ impl ExprCompiler {
                 "Expression type not yet supported in JIT: {:?}",
                 expr
             )),
+        }
+    }
+
+    /// Try to compile an And expression with shortcircuiting
+    fn try_compile_and(
+        builder: &mut FunctionBuilder,
+        exprs: &[Expr],
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
+        if exprs.is_empty() {
+            return Ok(IrValue::I64(builder.ins().iconst(types::I64, 1))); // (and) => true
+        }
+
+        if exprs.len() == 1 {
+            return Self::compile_expr_block(builder, &exprs[0], symbols);
+        }
+
+        // For now, only handle simple cases with 2 arguments
+        // Full multi-argument and with shortcircuiting would need control flow
+        if exprs.len() > 2 {
+            return Err("And with more than 2 arguments not yet supported in JIT".to_string());
+        }
+
+        let left = Self::compile_expr_block(builder, &exprs[0], symbols)?;
+        let right = Self::compile_expr_block(builder, &exprs[1], symbols)?;
+
+        match (left, right) {
+            (IrValue::I64(l), IrValue::I64(r)) => {
+                // (and x y) => if x then y else false
+                // Result is 1 if both truthy, 0 otherwise
+                let zero = builder.ins().iconst(types::I64, 0);
+                let l_is_false = builder.ins().icmp(IntCC::Equal, l, zero);
+
+                // If l is false, return 0, else return r
+                let result = builder.ins().select(l_is_false, zero, r);
+                Ok(IrValue::I64(result))
+            }
+            _ => Err("And on non-I64 values not supported".to_string()),
+        }
+    }
+
+    /// Try to compile an Or expression with shortcircuiting
+    fn try_compile_or(
+        builder: &mut FunctionBuilder,
+        exprs: &[Expr],
+        symbols: &SymbolTable,
+    ) -> Result<IrValue, String> {
+        if exprs.is_empty() {
+            return Ok(IrValue::I64(builder.ins().iconst(types::I64, 0))); // (or) => false
+        }
+
+        if exprs.len() == 1 {
+            return Self::compile_expr_block(builder, &exprs[0], symbols);
+        }
+
+        // For now, only handle simple cases with 2 arguments
+        if exprs.len() > 2 {
+            return Err("Or with more than 2 arguments not yet supported in JIT".to_string());
+        }
+
+        let left = Self::compile_expr_block(builder, &exprs[0], symbols)?;
+        let right = Self::compile_expr_block(builder, &exprs[1], symbols)?;
+
+        match (left, right) {
+            (IrValue::I64(l), IrValue::I64(r)) => {
+                // (or x y) => if x then x else y
+                // Result is x if truthy, else y
+                let zero = builder.ins().iconst(types::I64, 0);
+                let l_is_true = builder.ins().icmp(IntCC::NotEqual, l, zero);
+
+                // If l is true, return l, else return r
+                let result = builder.ins().select(l_is_true, l, r);
+                Ok(IrValue::I64(result))
+            }
+            _ => Err("Or on non-I64 values not supported".to_string()),
         }
     }
 
