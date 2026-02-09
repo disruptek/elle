@@ -3,6 +3,7 @@
 //! Replaces generic `Result<T, String>` with typed error enums for better
 //! error handling, reporting, and composability.
 
+use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -296,6 +297,12 @@ impl SourceLoc {
         SourceLoc { line: 1, col: 1 }
     }
 }
+
+/// Mapping from bytecode instruction index to source code location
+///
+/// Used for generating runtime error messages with source location information.
+/// Maps instruction pointers to the source location they originated from.
+pub type LocationMap = HashMap<usize, SourceLoc>;
 
 /// Runtime error with optional source location
 #[derive(Debug, Clone, PartialEq, Eq)]
