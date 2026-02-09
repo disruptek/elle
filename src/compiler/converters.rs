@@ -315,7 +315,8 @@ fn build_quasiquote_expr(
         | Value::CHandle(_)
         | Value::Exception(_)
         | Value::Condition(_)
-        | Value::ThreadHandle(_) => Err("Cannot quote closure or native function".to_string()),
+        | Value::ThreadHandle(_)
+        | Value::Cell(_) => Err("Cannot quote closure or native function".to_string()),
     }
 }
 
