@@ -1,3 +1,5 @@
+mod utils;
+
 use super::analysis::analyze_mutated_vars;
 use super::ast::Expr;
 use super::bytecode::{Bytecode, Instruction};
@@ -5,6 +7,7 @@ use crate::error::LocationMap;
 use crate::value::{Closure, SymbolId, Value};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use utils::collect_defines;
 
 struct Compiler {
     bytecode: Bytecode,
@@ -27,49 +30,6 @@ impl Compiler {
             lambda_captures_len: 0,
             lambda_params_len: 0,
         }
-    }
-
-    /// Collect all define statements from an expression
-    /// Returns a vector of symbol IDs that are defined at this level
-    /// Recursively collects from nested structures like while/for loop bodies
-    fn collect_defines(expr: &Expr) -> Vec<SymbolId> {
-        let mut defines = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-
-        fn collect_recursive(
-            expr: &Expr,
-            defines: &mut Vec<SymbolId>,
-            seen: &mut std::collections::HashSet<u32>,
-        ) {
-            match expr {
-                Expr::Begin(exprs) => {
-                    for e in exprs {
-                        if let Expr::Define { name, .. } = e {
-                            if seen.insert(name.0) {
-                                defines.push(*name);
-                            }
-                        }
-                        // Also recursively collect from nested structures
-                        // BUT: Don't recurse into nested lambdas (they have their own scope)
-                        if !matches!(e, Expr::Lambda { .. }) {
-                            collect_recursive(e, defines, seen);
-                        }
-                    }
-                }
-                Expr::Define { name, .. } => {
-                    if seen.insert(name.0) {
-                        defines.push(*name);
-                    }
-                }
-                Expr::While { body, .. } | Expr::For { body, .. } => {
-                    collect_recursive(body, defines, seen);
-                }
-                _ => {}
-            }
-        }
-
-        collect_recursive(expr, &mut defines, &mut seen);
-        defines
     }
 
     fn compile_expr(&mut self, expr: &Expr, tail: bool) {
@@ -127,7 +87,7 @@ impl Compiler {
             Expr::Begin(exprs) => {
                 // Pre-declare all defines to enable recursive functions and forward references
                 // This allows a function to reference itself in its own body
-                let defines = Self::collect_defines(expr);
+                let defines = collect_defines(expr);
                 for sym_id in defines {
                     // Skip pre-declaration for lambda locals — their cells are pre-allocated by the Call handler
                     if self.lambda_locals.contains(&sym_id) {
@@ -181,7 +141,7 @@ impl Compiler {
                 self.scope_depth += 1;
 
                 // Pre-declare defines within the block for mutual visibility
-                let defines = Self::collect_defines(expr);
+                let defines = collect_defines(expr);
                 for sym_id in defines {
                     self.bytecode.emit(Instruction::Nil);
                     let idx = self.bytecode.add_constant(Value::Symbol(sym_id));
