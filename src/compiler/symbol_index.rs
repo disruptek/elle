@@ -205,13 +205,17 @@ impl SymbolExtractor {
 
                     if let Some(name_str) = symbols.name(*name) {
                         let def = SymbolDef::new(*name, name_str.to_string(), SymbolKind::Variable)
-                            .with_location(loc.as_ref().cloned().unwrap_or_else(|| SourceLoc::from_line_col(0, 0)));
+                            .with_location(
+                                loc.as_ref()
+                                    .cloned()
+                                    .unwrap_or_else(|| SourceLoc::from_line_col(0, 0)),
+                            );
 
                         index.definitions.insert(*name, def);
                     }
                 }
 
-                self.walk_expr(value, &loc, index, symbols);
+                self.walk_expr(value, loc, index, symbols);
             }
 
             Expr::Lambda { body, params, .. } => {
@@ -220,11 +224,15 @@ impl SymbolExtractor {
                     if let Some(param_str) = symbols.name(*param) {
                         let def =
                             SymbolDef::new(*param, param_str.to_string(), SymbolKind::Variable)
-                                .with_location(loc.as_ref().cloned().unwrap_or_else(|| SourceLoc::from_line_col(0, 0)));
+                                .with_location(
+                                    loc.as_ref()
+                                        .cloned()
+                                        .unwrap_or_else(|| SourceLoc::from_line_col(0, 0)),
+                                );
                         index.definitions.insert(*param, def);
                     }
                 }
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
             }
 
             Expr::Let { bindings, body } => {
@@ -232,12 +240,16 @@ impl SymbolExtractor {
                 for (var, init) in bindings {
                     if let Some(var_str) = symbols.name(*var) {
                         let def = SymbolDef::new(*var, var_str.to_string(), SymbolKind::Variable)
-                            .with_location(loc.as_ref().cloned().unwrap_or_else(|| SourceLoc::from_line_col(0, 0)));
+                            .with_location(
+                                loc.as_ref()
+                                    .cloned()
+                                    .unwrap_or_else(|| SourceLoc::from_line_col(0, 0)),
+                            );
                         index.definitions.insert(*var, def);
                     }
-                    self.walk_expr(init, &loc, index, symbols);
+                    self.walk_expr(init, loc, index, symbols);
                 }
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
             }
 
             Expr::Letrec { bindings, body } => {
@@ -245,51 +257,55 @@ impl SymbolExtractor {
                 for (var, init) in bindings {
                     if let Some(var_str) = symbols.name(*var) {
                         let def = SymbolDef::new(*var, var_str.to_string(), SymbolKind::Function)
-                            .with_location(loc.as_ref().cloned().unwrap_or_else(|| SourceLoc::from_line_col(0, 0)));
+                            .with_location(
+                                loc.as_ref()
+                                    .cloned()
+                                    .unwrap_or_else(|| SourceLoc::from_line_col(0, 0)),
+                            );
                         index.definitions.insert(*var, def);
                     }
-                    self.walk_expr(init, &loc, index, symbols);
+                    self.walk_expr(init, loc, index, symbols);
                 }
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
             }
 
             Expr::If { cond, then, else_ } => {
-                self.walk_expr(cond, &loc, index, symbols);
-                self.walk_expr(then, &loc, index, symbols);
-                self.walk_expr(else_, &loc, index, symbols);
+                self.walk_expr(cond, loc, index, symbols);
+                self.walk_expr(then, loc, index, symbols);
+                self.walk_expr(else_, loc, index, symbols);
             }
 
             Expr::Cond { clauses, else_body } => {
                 for (cond, body) in clauses {
-                    self.walk_expr(cond, &loc, index, symbols);
-                    self.walk_expr(body, &loc, index, symbols);
+                    self.walk_expr(cond, loc, index, symbols);
+                    self.walk_expr(body, loc, index, symbols);
                 }
                 if let Some(else_body) = else_body {
-                    self.walk_expr(else_body, &loc, index, symbols);
+                    self.walk_expr(else_body, loc, index, symbols);
                 }
             }
 
             Expr::Begin(exprs) | Expr::Block(exprs) => {
                 for e in exprs {
-                    self.walk_expr(e, &loc, index, symbols);
+                    self.walk_expr(e, loc, index, symbols);
                 }
             }
 
             Expr::Call { func, args, .. } => {
-                self.walk_expr(func, &loc, index, symbols);
+                self.walk_expr(func, loc, index, symbols);
                 for arg in args {
-                    self.walk_expr(arg, &loc, index, symbols);
+                    self.walk_expr(arg, loc, index, symbols);
                 }
             }
 
             Expr::While { cond, body } => {
-                self.walk_expr(cond, &loc, index, symbols);
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(cond, loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
             }
 
             Expr::For { iter, body, .. } => {
-                self.walk_expr(iter, &loc, index, symbols);
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(iter, loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
             }
 
             Expr::Match {
@@ -297,9 +313,9 @@ impl SymbolExtractor {
                 patterns: _,
                 default,
             } => {
-                self.walk_expr(value, &loc, index, symbols);
+                self.walk_expr(value, loc, index, symbols);
                 if let Some(default) = default {
-                    self.walk_expr(default, &loc, index, symbols);
+                    self.walk_expr(default, loc, index, symbols);
                 }
             }
 
@@ -308,30 +324,30 @@ impl SymbolExtractor {
                 catch,
                 finally,
             } => {
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
                 if let Some((_, handler)) = catch {
-                    self.walk_expr(handler, &loc, index, symbols);
+                    self.walk_expr(handler, loc, index, symbols);
                 }
                 if let Some(finally) = finally {
-                    self.walk_expr(finally, &loc, index, symbols);
+                    self.walk_expr(finally, loc, index, symbols);
                 }
             }
 
             Expr::Throw { value } => {
-                self.walk_expr(value, &loc, index, symbols);
+                self.walk_expr(value, loc, index, symbols);
             }
 
             Expr::HandlerCase { body, handlers } => {
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
                 for (_exc_id, _var, handler_expr) in handlers {
-                    self.walk_expr(handler_expr, &loc, index, symbols);
+                    self.walk_expr(handler_expr, loc, index, symbols);
                 }
             }
 
             Expr::HandlerBind { handlers, body } => {
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
                 for (_exc_id, handler_fn) in handlers {
-                    self.walk_expr(handler_fn, &loc, index, symbols);
+                    self.walk_expr(handler_fn, loc, index, symbols);
                 }
             }
 
@@ -340,21 +356,21 @@ impl SymbolExtractor {
             }
 
             Expr::Set { value, .. } => {
-                self.walk_expr(value, &loc, index, symbols);
+                self.walk_expr(value, loc, index, symbols);
             }
 
             Expr::And(exprs) | Expr::Or(exprs) | Expr::Xor(exprs) => {
                 for e in exprs {
-                    self.walk_expr(e, &loc, index, symbols);
+                    self.walk_expr(e, loc, index, symbols);
                 }
             }
 
             Expr::DefMacro { body, .. } => {
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
             }
 
             Expr::Module { body, .. } => {
-                self.walk_expr(body, &loc, index, symbols);
+                self.walk_expr(body, loc, index, symbols);
             }
 
             Expr::Import { .. } | Expr::ModuleRef { .. } => {
