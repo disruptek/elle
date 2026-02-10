@@ -55,13 +55,13 @@ fn main() {
 
             // Send response
             let body = response.to_string();
-            let _ = writeln!(stdout, "Content-Length: {}\r\n\r{}", body.len(), body);
+            let _ = write!(stdout, "Content-Length: {}\r\n\r\n{}", body.len(), body);
             let _ = stdout.flush();
 
             // Send notifications (e.g., diagnostics)
             for notification in notifications {
                 let body = notification.to_string();
-                let _ = writeln!(stdout, "Content-Length: {}\r\n\r{}", body.len(), body);
+                let _ = write!(stdout, "Content-Length: {}\r\n\r\n{}", body.len(), body);
                 let _ = stdout.flush();
             }
         }
