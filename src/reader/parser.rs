@@ -74,8 +74,8 @@ impl Reader {
                             None => {
                                 let loc = self.current_location();
                                 return Err(format!(
-                                    "{}:{}: unterminated list literal",
-                                    loc.line, loc.col
+                                    "{}: unterminated list literal",
+                                    loc.position()
                                 ));
                             }
                             Some(OwnedToken::RightBracket) => {
@@ -97,8 +97,8 @@ impl Reader {
                 } else {
                     let loc = self.current_location();
                     Err(format!(
-                        "{}:{}: @ must be followed by [...] or {{...}}",
-                        loc.line, loc.col
+                        "{}: @ must be followed by [...] or {{...}}",
+                        loc.position()
                     ))
                 }
             }
@@ -185,23 +185,17 @@ impl Reader {
             OwnedToken::RightParen => {
                 let loc = self.current_location();
                 Err(format!(
-                    "{}:{}: unexpected closing parenthesis",
-                    loc.line, loc.col
+                    "{}: unexpected closing parenthesis",
+                    loc.position()
                 ))
             }
             OwnedToken::RightBracket => {
                 let loc = self.current_location();
-                Err(format!(
-                    "{}:{}: unexpected closing bracket",
-                    loc.line, loc.col
-                ))
+                Err(format!("{}: unexpected closing bracket", loc.position()))
             }
             OwnedToken::RightBrace => {
                 let loc = self.current_location();
-                Err(format!(
-                    "{}:{}: unexpected closing brace",
-                    loc.line, loc.col
-                ))
+                Err(format!("{}: unexpected closing brace", loc.position()))
             }
         }
     }
@@ -211,7 +205,7 @@ impl Reader {
             Some(result) => result,
             None => {
                 let loc = self.current_location();
-                Err(format!("{}:{}: unexpected end of input", loc.line, loc.col))
+                Err(format!("{}: unexpected end of input", loc.position()))
             }
         }
     }
@@ -238,8 +232,8 @@ impl Reader {
                 None => {
                     let loc = self.current_location();
                     return Err(format!(
-                        "{}:{}: unterminated list (missing closing paren)",
-                        loc.line, loc.col
+                        "{}: unterminated list (missing closing paren)",
+                        loc.position()
                     ));
                 }
                 Some(OwnedToken::RightParen) => {
@@ -263,8 +257,8 @@ impl Reader {
                 None => {
                     let loc = self.current_location();
                     return Err(format!(
-                        "{}:{}: unterminated vector (missing closing bracket)",
-                        loc.line, loc.col
+                        "{}: unterminated vector (missing closing bracket)",
+                        loc.position()
                     ));
                 }
                 Some(OwnedToken::RightBracket) => {
@@ -285,8 +279,8 @@ impl Reader {
                 None => {
                     let loc = self.current_location();
                     return Err(format!(
-                        "{}:{}: unterminated struct literal (missing closing brace)",
-                        loc.line, loc.col
+                        "{}: unterminated struct literal (missing closing brace)",
+                        loc.position()
                     ));
                 }
                 Some(OwnedToken::RightBrace) => {

@@ -54,6 +54,47 @@ fn print_help() {
     println!();
 }
 
+/// Format and print an error message with source context
+fn print_error_with_context(error_msg: &str, source: Option<&str>) {
+    // Check if error message contains location info (format: "line:col: message")
+    if let Some(colon_pos) = error_msg.find(':') {
+        if let Ok(line_num) = error_msg[..colon_pos].parse::<usize>() {
+            // Found line number, try to parse column
+            let rest = &error_msg[colon_pos + 1..];
+            if let Some(second_colon) = rest.find(':') {
+                if let Ok(col_num) = rest[..second_colon].parse::<usize>() {
+                    let message = &rest[second_colon + 1..].trim_start();
+
+                    // Print error header
+                    eprintln!("error: {}", message);
+
+                    // Try to print source context
+                    if let Some(src) = source {
+                        if let Some(line) =
+                            elle::error::formatting::extract_source_line(src, line_num)
+                        {
+                            let line_num_str = line_num.to_string();
+                            let padding = " ".repeat(line_num_str.len());
+                            eprintln!("  --> {}:{}:{}", "<input>", line_num, col_num);
+                            eprintln!("   |");
+                            eprintln!(" {} | {}", line_num_str, line);
+                            eprintln!(
+                                " {} | {}",
+                                padding,
+                                elle::error::formatting::highlight_column(&line, col_num)
+                            );
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    // Fallback: just print the error as-is
+    eprintln!("error: {}", error_msg);
+}
+
 fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<(), String> {
     let mut contents =
         fs::read_to_string(filename).map_err(|e| format!("Failed to read file: {}", e))?;
@@ -72,15 +113,21 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
     {
         let mut lexer = elle::reader::Lexer::new(&contents);
         let mut temp_tokens = Vec::new();
+        let mut temp_locations = Vec::new();
         loop {
-            match lexer.next_token() {
-                Ok(Some(token)) => temp_tokens.push(elle::reader::OwnedToken::from(token)),
+            match lexer.next_token_with_loc() {
+                Ok(Some(mut token_with_loc)) => {
+                    // Set the file name in the location
+                    token_with_loc.loc.file = filename.to_string();
+                    temp_tokens.push(elle::reader::OwnedToken::from(token_with_loc.token));
+                    temp_locations.push(token_with_loc.loc);
+                }
                 Ok(None) => break,
                 Err(_) => break,
             }
         }
 
-        let mut temp_reader = elle::reader::Reader::new(temp_tokens);
+        let mut temp_reader = elle::reader::Reader::with_locations(temp_tokens, temp_locations);
         while let Some(result) = temp_reader.try_read(symbols) {
             match result {
                 Ok(value) => {
@@ -110,15 +157,21 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
     // Second pass: execute all expressions
     let mut lexer = elle::reader::Lexer::new(&contents);
     let mut tokens = Vec::new();
+    let mut locations = Vec::new();
     loop {
-        match lexer.next_token() {
-            Ok(Some(token)) => tokens.push(elle::reader::OwnedToken::from(token)),
+        match lexer.next_token_with_loc() {
+            Ok(Some(mut token_with_loc)) => {
+                // Set the file name in the location
+                token_with_loc.loc.file = filename.to_string();
+                tokens.push(elle::reader::OwnedToken::from(token_with_loc.token));
+                locations.push(token_with_loc.loc);
+            }
             Ok(None) => break,
             Err(e) => return Err(format!("Lexer error: {}", e)),
         }
     }
 
-    let mut reader = elle::reader::Reader::new(tokens);
+    let mut reader = elle::reader::Reader::with_locations(tokens, locations);
     while let Some(result) = reader.try_read(symbols) {
         match result {
             Ok(value) => {
