@@ -278,7 +278,7 @@ mod lsp_compliance {
             }),
         ];
 
-        assert!(locations.len() > 0);
+        assert!(!locations.is_empty());
         for loc in &locations {
             assert!(loc.get("uri").is_some());
             assert!(loc.get("range").is_some());
