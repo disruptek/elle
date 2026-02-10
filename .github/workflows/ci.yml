@@ -29,6 +29,10 @@ jobs:
         run: cargo test --test '*' --verbose
       - name: Run doc tests
         run: cargo test --doc --verbose
+      - name: Build Elle LSP
+        run: cargo build --release -p elle-lsp
+      - name: Run Elle LSP tests
+        run: cargo test --release -p elle-lsp --verbose
 
   fmt:
     name: Rustfmt
