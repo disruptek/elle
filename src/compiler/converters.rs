@@ -230,6 +230,9 @@ fn adjust_var_indices(
                 adjust_var_indices(e, captures, params, locals);
             }
         }
+        Expr::Define { value, .. } => {
+            adjust_var_indices(value, captures, params, locals);
+        }
         Expr::DefMacro { body, .. } => {
             adjust_var_indices(body, captures, params, locals);
         }
