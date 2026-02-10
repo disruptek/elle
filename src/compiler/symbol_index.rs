@@ -205,11 +205,7 @@ impl SymbolExtractor {
 
                     if let Some(name_str) = symbols.name(*name) {
                         let def = SymbolDef::new(*name, name_str.to_string(), SymbolKind::Variable)
-                            .with_location(
-                                loc.as_ref()
-                                    .cloned()
-                                    .unwrap_or_else(|| SourceLoc::from_line_col(0, 0)),
-                            );
+                            .with_location(loc.as_ref().cloned().unwrap_or_else(|| SourceLoc::from_line_col(0, 0)));
 
                         index.definitions.insert(*name, def);
                     }
@@ -224,11 +220,7 @@ impl SymbolExtractor {
                     if let Some(param_str) = symbols.name(*param) {
                         let def =
                             SymbolDef::new(*param, param_str.to_string(), SymbolKind::Variable)
-                                .with_location(
-                                    loc.as_ref()
-                                        .cloned()
-                                        .unwrap_or_else(|| SourceLoc::from_line_col(0, 0)),
-                                );
+                                .with_location(loc.as_ref().cloned().unwrap_or_else(|| SourceLoc::from_line_col(0, 0)));
                         index.definitions.insert(*param, def);
                     }
                 }
@@ -240,11 +232,7 @@ impl SymbolExtractor {
                 for (var, init) in bindings {
                     if let Some(var_str) = symbols.name(*var) {
                         let def = SymbolDef::new(*var, var_str.to_string(), SymbolKind::Variable)
-                            .with_location(
-                                loc.as_ref()
-                                    .cloned()
-                                    .unwrap_or_else(|| SourceLoc::from_line_col(0, 0)),
-                            );
+                            .with_location(loc.as_ref().cloned().unwrap_or_else(|| SourceLoc::from_line_col(0, 0)));
                         index.definitions.insert(*var, def);
                     }
                     self.walk_expr(init, &loc, index, symbols);
@@ -257,11 +245,7 @@ impl SymbolExtractor {
                 for (var, init) in bindings {
                     if let Some(var_str) = symbols.name(*var) {
                         let def = SymbolDef::new(*var, var_str.to_string(), SymbolKind::Function)
-                            .with_location(
-                                loc.as_ref()
-                                    .cloned()
-                                    .unwrap_or_else(|| SourceLoc::from_line_col(0, 0)),
-                            );
+                            .with_location(loc.as_ref().cloned().unwrap_or_else(|| SourceLoc::from_line_col(0, 0)));
                         index.definitions.insert(*var, def);
                     }
                     self.walk_expr(init, &loc, index, symbols);
