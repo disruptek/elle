@@ -72,21 +72,7 @@ impl Compiler {
                 args,
                 tail: is_tail,
             } => {
-                // Compile arguments
-                for arg in args {
-                    self.compile_expr(arg, false);
-                }
-
-                // Compile function
-                self.compile_expr(func, false);
-
-                // Emit call
-                if tail && *is_tail {
-                    self.bytecode.emit(Instruction::TailCall);
-                } else {
-                    self.bytecode.emit(Instruction::Call);
-                }
-                self.bytecode.emit_byte(args.len() as u8);
+                self.compile_call(func, args, *is_tail, tail);
             }
 
             Expr::Lambda {
@@ -95,93 +81,7 @@ impl Compiler {
                 captures,
                 locals,
             } => {
-                // Phase 4: Locally-defined variables are now part of the closure environment
-                // The closure environment layout is: [captures..., parameters..., locals...]
-                // Each local is pre-allocated as a cell in the environment
-                // We NO LONGER use PushScope/PopScope for lambda bodies - all variables are in closure_env
-                let mut lambda_compiler = Compiler::new();
-                lambda_compiler.scope_depth = 0; // NOT inside a scope (Phase 4: no scope_stack for lambdas)
-                lambda_compiler.lambda_locals = locals.clone();
-                lambda_compiler.lambda_captures_len = captures.len();
-                lambda_compiler.lambda_params_len = params.len();
-
-                // Compile the body directly (no scope management)
-                lambda_compiler.compile_expr(body, true);
-
-                // Return from the lambda
-                lambda_compiler.bytecode.emit(Instruction::Return);
-
-                // Create closure value with environment
-                // Note: env is empty here, actual capturing happens at runtime via MakeClosure instruction
-                // num_locals includes: parameters + captures + locally-defined variables
-                // The environment layout will be: [captures..., parameters..., locals...]
-                let closure = Closure {
-                    bytecode: Rc::new(lambda_compiler.bytecode.instructions),
-                    arity: crate::value::Arity::Exact(params.len()),
-                    env: Rc::new(Vec::new()), // Will be populated by VM when closure is created
-                    num_locals: params.len() + captures.len() + locals.len(),
-                    num_captures: captures.len(),
-                    constants: Rc::new(lambda_compiler.bytecode.constants),
-                };
-
-                let idx = self.bytecode.add_constant(Value::Closure(Rc::new(closure)));
-
-                if captures.is_empty() && locals.is_empty() {
-                    // No captures AND no locals — just load the closure template directly as a constant
-                    // No need for MakeClosure instruction
-                    self.bytecode.emit(Instruction::LoadConst);
-                    self.bytecode.emit_u16(idx);
-                } else if captures.is_empty() {
-                    // Has locals but no external captures — still need MakeClosure for closure env
-                    // so that nested lambdas can access locally-defined variables via LoadUpvalueRaw
-                    self.bytecode.emit(Instruction::MakeClosure);
-                    self.bytecode.emit_u16(idx);
-                    self.bytecode.emit_byte(0); // 0 captures
-                } else {
-                    // Has captures — emit capture loads + MakeClosure as before
-                    // First, analyze which variables are mutated in the lambda body
-                    let mutated_vars = analyze_mutated_vars(body);
-                    let mutated_captures: HashSet<SymbolId> = captures
-                        .iter()
-                        .map(|(sym, _, _)| *sym)
-                        .filter(|sym| mutated_vars.contains(sym))
-                        .collect();
-
-                    // Emit captured values onto the stack (in order)
-                    // These will be stored in the closure's environment by the VM
-                    for (sym, depth, index) in captures {
-                        if *index == usize::MAX {
-                            // This is a global variable - store the symbol itself, not the value
-                            // This allows us to look it up in the global scope at runtime
-                            let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                            self.bytecode.emit(Instruction::LoadConst);
-                            self.bytecode.emit_u16(sym_idx);
-                        } else {
-                            // This is a local variable from an outer scope
-                            // Load it using LoadUpvalueRaw with the resolved depth and index
-                            // depth is relative to the inner lambda's scope_stack
-                            // We need to adjust it to be relative to the current lambda's closure environment
-                            // depth=1 means one level up from the inner lambda (i.e., the outer lambda)
-                            // When we're compiling the outer lambda, we're inside the outer lambda's bytecode
-                            // So we need to adjust depth from 1 to 0 (the current closure)
-                            // Use LoadUpvalueRaw to preserve cells for shared mutable captures
-                            let adjusted_depth = if *depth > 0 { *depth - 1 } else { 0 };
-                            self.bytecode.emit(Instruction::LoadUpvalueRaw);
-                            self.bytecode.emit_byte((adjusted_depth + 1) as u8);
-                            self.bytecode.emit_byte(*index as u8);
-
-                            // If this variable is mutated in the lambda body, wrap it in a cell
-                            if mutated_captures.contains(sym) {
-                                self.bytecode.emit(Instruction::MakeCell);
-                            }
-                        }
-                    }
-
-                    // Create closure with captured values
-                    self.bytecode.emit(Instruction::MakeClosure);
-                    self.bytecode.emit_u16(idx);
-                    self.bytecode.emit_byte(captures.len() as u8);
-                }
+                self.compile_lambda(params, body, captures, locals);
             }
 
             Expr::Let { bindings, body } => {
@@ -246,74 +146,7 @@ impl Compiler {
                 patterns,
                 default,
             } => {
-                // Compile the value to match against
-                self.compile_expr(value, false);
-                let mut exit_jumps = Vec::new();
-                let mut pending_jumps: Vec<Vec<usize>> = Vec::new();
-
-                // Compile all patterns
-                for (pattern, body_expr) in patterns {
-                    // If we have pending jumps from the previous pattern, patch them now
-                    // They should jump to this position (start of this pattern check)
-                    if !pending_jumps.is_empty() {
-                        let target = self.bytecode.instructions.len();
-                        for jump_positions in pending_jumps.drain(..) {
-                            for jump_idx in jump_positions {
-                                let offset = (target as i32) - (jump_idx as i32 + 2);
-                                self.bytecode.patch_jump(jump_idx, offset as i16);
-                            }
-                        }
-                    }
-
-                    // Compile pattern check and collect jumps that should be patched when we know
-                    // where the next pattern (or default) starts
-                    let pattern_jumps = self.compile_pattern_check(pattern);
-                    pending_jumps.push(pattern_jumps);
-
-                    // Pattern matched - compile the body
-                    // If the body is a lambda (pattern variables), keep the matched value on stack
-                    // to apply to the lambda. Otherwise, pop it.
-                    let is_lambda = matches!(body_expr, Expr::Lambda { .. });
-                    if is_lambda {
-                        // Keep matched value on stack to apply to lambda
-                        self.compile_expr(body_expr, false);
-                        // Apply lambda to matched value: (lambda-expr matched-value)
-                        self.bytecode.emit(Instruction::Call);
-                        self.bytecode.emit_byte(1); // 1 argument
-                    } else {
-                        // No pattern variables, pop the value and execute body
-                        self.bytecode.emit(Instruction::Pop);
-                        self.compile_expr(body_expr, tail);
-                    }
-
-                    // Jump to end of match
-                    self.bytecode.emit(Instruction::Jump);
-                    exit_jumps.push(self.bytecode.instructions.len());
-                    self.bytecode.emit_i16(0);
-                }
-
-                // Patch any remaining jumps from the last pattern to point to default
-                let default_start = self.bytecode.instructions.len();
-                for jump_positions in pending_jumps.drain(..) {
-                    for jump_idx in jump_positions {
-                        let offset = (default_start as i32) - (jump_idx as i32 + 2);
-                        self.bytecode.patch_jump(jump_idx, offset as i16);
-                    }
-                }
-
-                // Default/fallback case
-                if let Some(default_expr) = default {
-                    self.compile_expr(default_expr, tail);
-                } else {
-                    self.bytecode.emit(Instruction::Nil);
-                }
-
-                // Patch all exit jumps to the end
-                let end_pos = self.bytecode.instructions.len();
-                for jump_idx in exit_jumps {
-                    let offset = (end_pos as i32) - (jump_idx as i32 + 2);
-                    self.bytecode.patch_jump(jump_idx, offset as i16);
-                }
+                self.compile_match(value, patterns, default, tail);
             }
 
             Expr::Try {
@@ -1095,6 +928,200 @@ impl Compiler {
 
         self.scope_depth -= 1;
         self.bytecode.emit(Instruction::PopScope);
+    }
+
+    /// Compile a function call expression
+    fn compile_call(&mut self, func: &Expr, args: &[Expr], is_tail: bool, tail: bool) {
+        // Compile arguments
+        for arg in args {
+            self.compile_expr(arg, false);
+        }
+
+        // Compile function
+        self.compile_expr(func, false);
+
+        // Emit call
+        if tail && is_tail {
+            self.bytecode.emit(Instruction::TailCall);
+        } else {
+            self.bytecode.emit(Instruction::Call);
+        }
+        self.bytecode.emit_byte(args.len() as u8);
+    }
+
+    /// Compile a lambda (closure creation) expression
+    fn compile_lambda(
+        &mut self,
+        params: &[SymbolId],
+        body: &Expr,
+        captures: &[(SymbolId, usize, usize)],
+        locals: &[SymbolId],
+    ) {
+        // Phase 4: Locally-defined variables are now part of the closure environment
+        // The closure environment layout is: [captures..., parameters..., locals...]
+        // Each local is pre-allocated as a cell in the environment
+        // We NO LONGER use PushScope/PopScope for lambda bodies - all variables are in closure_env
+        let mut lambda_compiler = Compiler::new();
+        lambda_compiler.scope_depth = 0; // NOT inside a scope (Phase 4: no scope_stack for lambdas)
+        lambda_compiler.lambda_locals = locals.to_vec();
+        lambda_compiler.lambda_captures_len = captures.len();
+        lambda_compiler.lambda_params_len = params.len();
+
+        // Compile the body directly (no scope management)
+        lambda_compiler.compile_expr(body, true);
+
+        // Return from the lambda
+        lambda_compiler.bytecode.emit(Instruction::Return);
+
+        // Create closure value with environment
+        // Note: env is empty here, actual capturing happens at runtime via MakeClosure instruction
+        // num_locals includes: parameters + captures + locally-defined variables
+        // The environment layout will be: [captures..., parameters..., locals...]
+        let closure = Closure {
+            bytecode: Rc::new(lambda_compiler.bytecode.instructions),
+            arity: crate::value::Arity::Exact(params.len()),
+            env: Rc::new(Vec::new()), // Will be populated by VM when closure is created
+            num_locals: params.len() + captures.len() + locals.len(),
+            num_captures: captures.len(),
+            constants: Rc::new(lambda_compiler.bytecode.constants),
+        };
+
+        let idx = self.bytecode.add_constant(Value::Closure(Rc::new(closure)));
+
+        if captures.is_empty() && locals.is_empty() {
+            // No captures AND no locals — just load the closure template directly as a constant
+            // No need for MakeClosure instruction
+            self.bytecode.emit(Instruction::LoadConst);
+            self.bytecode.emit_u16(idx);
+        } else if captures.is_empty() {
+            // Has locals but no external captures — still need MakeClosure for closure env
+            // so that nested lambdas can access locally-defined variables via LoadUpvalueRaw
+            self.bytecode.emit(Instruction::MakeClosure);
+            self.bytecode.emit_u16(idx);
+            self.bytecode.emit_byte(0); // 0 captures
+        } else {
+            // Has captures — emit capture loads + MakeClosure as before
+            // First, analyze which variables are mutated in the lambda body
+            let mutated_vars = analyze_mutated_vars(body);
+            let mutated_captures: HashSet<SymbolId> = captures
+                .iter()
+                .map(|(sym, _, _)| *sym)
+                .filter(|sym| mutated_vars.contains(sym))
+                .collect();
+
+            // Emit captured values onto the stack (in order)
+            // These will be stored in the closure's environment by the VM
+            for (sym, depth, index) in captures {
+                if *index == usize::MAX {
+                    // This is a global variable - store the symbol itself, not the value
+                    // This allows us to look it up in the global scope at runtime
+                    let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                    self.bytecode.emit(Instruction::LoadConst);
+                    self.bytecode.emit_u16(sym_idx);
+                } else {
+                    // This is a local variable from an outer scope
+                    // Load it using LoadUpvalueRaw with the resolved depth and index
+                    // depth is relative to the inner lambda's scope_stack
+                    // We need to adjust it to be relative to the current lambda's closure environment
+                    // depth=1 means one level up from the inner lambda (i.e., the outer lambda)
+                    // When we're compiling the outer lambda, we're inside the outer lambda's bytecode
+                    // So we need to adjust depth from 1 to 0 (the current closure)
+                    // Use LoadUpvalueRaw to preserve cells for shared mutable captures
+                    let adjusted_depth = if *depth > 0 { *depth - 1 } else { 0 };
+                    self.bytecode.emit(Instruction::LoadUpvalueRaw);
+                    self.bytecode.emit_byte((adjusted_depth + 1) as u8);
+                    self.bytecode.emit_byte(*index as u8);
+
+                    // If this variable is mutated in the lambda body, wrap it in a cell
+                    if mutated_captures.contains(sym) {
+                        self.bytecode.emit(Instruction::MakeCell);
+                    }
+                }
+            }
+
+            // Create closure with captured values
+            self.bytecode.emit(Instruction::MakeClosure);
+            self.bytecode.emit_u16(idx);
+            self.bytecode.emit_byte(captures.len() as u8);
+        }
+    }
+
+    /// Compile a match expression with pattern matching
+    fn compile_match(
+        &mut self,
+        value: &Expr,
+        patterns: &[(super::ast::Pattern, Expr)],
+        default: &Option<Box<Expr>>,
+        tail: bool,
+    ) {
+        // Compile the value to match against
+        self.compile_expr(value, false);
+        let mut exit_jumps = Vec::new();
+        let mut pending_jumps: Vec<Vec<usize>> = Vec::new();
+
+        // Compile all patterns
+        for (pattern, body_expr) in patterns {
+            // If we have pending jumps from the previous pattern, patch them now
+            // They should jump to this position (start of this pattern check)
+            if !pending_jumps.is_empty() {
+                let target = self.bytecode.instructions.len();
+                for jump_positions in pending_jumps.drain(..) {
+                    for jump_idx in jump_positions {
+                        let offset = (target as i32) - (jump_idx as i32 + 2);
+                        self.bytecode.patch_jump(jump_idx, offset as i16);
+                    }
+                }
+            }
+
+            // Compile pattern check and collect jumps that should be patched when we know
+            // where the next pattern (or default) starts
+            let pattern_jumps = self.compile_pattern_check(pattern);
+            pending_jumps.push(pattern_jumps);
+
+            // Pattern matched - compile the body
+            // If the body is a lambda (pattern variables), keep the matched value on stack
+            // to apply to the lambda. Otherwise, pop it.
+            let is_lambda = matches!(body_expr, Expr::Lambda { .. });
+            if is_lambda {
+                // Keep matched value on stack to apply to lambda
+                self.compile_expr(body_expr, false);
+                // Apply lambda to matched value: (lambda-expr matched-value)
+                self.bytecode.emit(Instruction::Call);
+                self.bytecode.emit_byte(1); // 1 argument
+            } else {
+                // No pattern variables, pop the value and execute body
+                self.bytecode.emit(Instruction::Pop);
+                self.compile_expr(body_expr, tail);
+            }
+
+            // Jump to end of match
+            self.bytecode.emit(Instruction::Jump);
+            exit_jumps.push(self.bytecode.instructions.len());
+            self.bytecode.emit_i16(0);
+        }
+
+        // Patch any remaining jumps from the last pattern to point to default
+        let default_start = self.bytecode.instructions.len();
+        for jump_positions in pending_jumps.drain(..) {
+            for jump_idx in jump_positions {
+                let offset = (default_start as i32) - (jump_idx as i32 + 2);
+                self.bytecode.patch_jump(jump_idx, offset as i16);
+            }
+        }
+
+        // Default/fallback case
+        if let Some(default_expr) = default {
+            self.compile_expr(default_expr, tail);
+        } else {
+            self.bytecode.emit(Instruction::Nil);
+        }
+
+        // Patch all exit jumps to the end
+        let end_pos = self.bytecode.instructions.len();
+        for jump_idx in exit_jumps {
+            let offset = (end_pos as i32) - (jump_idx as i32 + 2);
+            self.bytecode.patch_jump(jump_idx, offset as i16);
+        }
     }
 
     fn finish(self) -> Bytecode {
