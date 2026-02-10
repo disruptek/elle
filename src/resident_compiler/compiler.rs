@@ -128,7 +128,7 @@ impl ResidentCompiler {
         let (bytecode, location_map) = compile_with_metadata(&expr, None);
 
         // Extract symbols for IDE
-        let symbols = extract_symbols(&[expr_with_loc.clone()], &self.symbol_table);
+        let symbols = extract_symbols(std::slice::from_ref(&expr_with_loc), &self.symbol_table);
 
         // Run linter
         let mut linter = Linter::new();
