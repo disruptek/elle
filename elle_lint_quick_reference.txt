@@ -1,0 +1,207 @@
+ELLE-LINT ERROR MESSAGE HANDLING - QUICK REFERENCE
+====================================================
+
+KEY FILES FOUND:
+================
+
+1. SOURCELOC INFRASTRUCTURE
+   /home/adavidoff/git/elle3/src/reader/token.rs
+   - Defines SourceLoc(file: String, line: usize, col: usize)
+   - Implements Display trait for "file:line:col" formatting
+   - Used throughout the compiler
+
+2. COMPILER LINTER DIAGNOSTICS
+   /home/adavidoff/git/elle3/src/compiler/linter/diagnostics.rs
+   - Struct Diagnostic { severity, code, rule, message, location: Option<SourceLoc>, suggestions }
+   - Enum Severity { Info, Warning, Error } with Ord trait
+   - format_human() method for basic formatting
+
+3. COMPILER LINTER CORE
+   /home/adavidoff/git/elle3/src/compiler/linter/mod.rs
+   - Struct Linter { diagnostics: Vec<Diagnostic> }
+   - lint_expr(expr, symbol_table) - main entry point
+   - check_expr() recursively checks AST, passes location through
+   - Applies rules: check_naming_convention, check_call_arity
+
+4. COMPILER LINTING RULES
+   /home/adavidoff/git/elle3/src/compiler/linter/rules.rs
+   - check_naming_convention(name, location, diagnostics) - kebab-case validation
+   - check_call_arity(func_sym, arg_count, location, symbol_table, diagnostics)
+   - Utility: builtin_arity(name) - lookup table for built-in functions
+
+5. ELLE-LINT WRAPPER DIAGNOSTICS
+   /home/adavidoff/git/elle3/elle-lint/src/diagnostics.rs
+   - Struct Diagnostic { severity, code, rule, message, file, line, column, context, suggestions }
+   - Enhanced format_human() with visual caret and source context
+   - to_json() method for structured output
+
+6. ELLE-LINT MAIN WRAPPER
+   /home/adavidoff/git/elle3/elle-lint/src/lib.rs
+   - Struct Linter { config: LintConfig, compiler_linter: CompilerLinter }
+   - lint_str(code, filename) and lint_file(path)
+   - format_output() - routes to format_human() or format_json()
+   - Severity filtering based on config.min_severity
+
+7. ELLE-LINT CLI
+   /home/adavidoff/git/elle3/elle-lint/src/main.rs
+   - Parses: --format [json|text], --level [error|warning|info]
+   - Exit codes: 0=no errors, 1=has errors, 2=has warnings
+   - Recursively lints directories for *.l files
+
+8. ELLE-LINT RULES
+   /home/adavidoff/git/elle3/elle-lint/src/rules/
+   - naming.rs: check_naming_conventions() for kebab-case validation
+   - arity.rs: placeholder for arity validation
+   - mod.rs: check_rules() dispatcher
+
+9. INTEGRATION TESTS
+   /home/adavidoff/git/elle3/elle-lint/tests/integration_tests.rs
+   - test_lint_naming_good/bad
+   - test_json_output
+   - test_exit_code_success
+
+
+ARCHITECTURE SUMMARY:
+====================
+
+TWO-TIER DESIGN:
+
+TIER 1: COMPILER LINTER
+- Core linting logic
+- Uses SourceLoc for precise tracking
+- Recursive AST traversal with location propagation
+- Basic diagnostic formatting
+- Rules: naming convention (W001), arity mismatch (W002)
+
+TIER 2: ELLE-LINT WRAPPER
+- User-facing interface
+- Integrates compiler linter
+- Enhanced human-readable formatting (with visual cues)
+- JSON output support
+- Severity filtering
+- CLI argument parsing
+
+
+ERROR MESSAGE STRUCTURE:
+=======================
+
+COMPILER LEVEL (src/compiler/linter/diagnostics.rs):
+  severity: Severity enum (Info < Warning < Error)
+  code: String (e.g., "W001")
+  rule: String (e.g., "naming-kebab-case")
+  message: String (e.g., "identifier 'foo' should use kebab-case")
+  location: Option<SourceLoc> (file:line:col or None)
+  suggestions: Vec<String> (e.g., ["rename to 'bar'"])
+
+ELLE-LINT LEVEL (elle-lint/src/diagnostics.rs):
+  severity: Severity enum
+  code: String
+  rule: String
+  message: String
+  file: String (explicit field)
+  line: usize (explicit field)
+  column: usize (explicit field)
+  context: String (source code line)
+  suggestions: Vec<String>
+
+
+FORMATTING EXAMPLES:
+====================
+
+HUMAN OUTPUT FORMAT:
+```
+test.lisp:5:2 warning: naming-kebab-case
+  --> test.lisp:5
+    |
+  5 | (define myVariable ...)
+    | ^
+
+identifier 'myVariable' should use kebab-case
+suggestions:
+  - rename to 'my-variable'
+
+```
+
+JSON OUTPUT FORMAT:
+```json
+{
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "code": "W001",
+      "rule": "naming-kebab-case",
+      "message": "identifier 'myVariable' should use kebab-case",
+      "line": 5,
+      "column": 2,
+      "suggestions": ["rename to 'my-variable'"]
+    }
+  ]
+}
+```
+
+
+KEY PATTERNS:
+=============
+
+BUILDER PATTERN:
+  Diagnostic::new(severity, code, rule, message, location)
+      .with_suggestions(vec![suggestion1, suggestion2])
+
+OPTION HANDLING:
+  match &diagnostic.location {
+      Some(loc) => /* include full location info */,
+      None => /* fallback to basic format */
+  }
+
+SEVERITY FILTERING:
+  if diagnostic.severity >= config.min_severity {
+      /* include in output */
+  }
+
+LOCATION PROPAGATION:
+  fn check_expr(&mut self, expr: &Expr, loc: &Option<SourceLoc>, ...) {
+      /* pass loc through recursive calls */
+  }
+
+
+IMPLEMENTED RULES:
+==================
+
+W001: naming-kebab-case
+  - Validates kebab-case identifiers
+  - Allows: single letters, suffixes (? !)
+  - Suggests corrected name
+
+W002: arity-mismatch
+  - Validates function call argument counts
+  - Uses builtin_arity() lookup table
+  - Current functions: +, -, *, /, =, <, >, cons, first, rest, length, etc.
+
+
+FLOW DIAGRAM:
+=============
+
+Source Code File
+  ↓
+[Lexer] → Tokens (with SourceLoc)
+  ↓
+[Reader] → Values
+  ↓
+[value_to_expr] → Expr
+  ↓
+[ExprWithLoc] → (Expr, Option<SourceLoc>)
+  ↓
+[Compiler Linter] → check_expr (recursive)
+  ├─ check_naming_convention()
+  ├─ check_call_arity()
+  └─ Produces: Vec<Diagnostic>
+  ↓
+[Elle-lint Wrapper] → format_output()
+  ├─ Severity filtering
+  └─ Format selection
+      ├─ Human (visual, readable)
+      └─ JSON (structured, parseable)
+  ↓
+[CLI Output]
+  └─ Exit code (0, 1, or 2)
+

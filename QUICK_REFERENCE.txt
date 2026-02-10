@@ -1,0 +1,246 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║           RESIDENT COMPILER ERROR HANDLING - QUICK REFERENCE CARD            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ CORE ERROR TYPES (Three-Level Architecture)                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+1. CompileError
+   File: resident_compiler/compiler.rs:11-22
+   When: Lexing, parsing, conversion, file I/O
+   Type: Simple string wrapper (no location info)
+   Example: "Lexer error: unexpected character"
+
+2. Diagnostic
+   File: compiler/linter/diagnostics.rs:24-50
+   When: Linting analysis on valid AST
+   Type: Structured error with severity, code, rule, location, suggestions
+   Example: "W001 naming-kebab-case: rename to 'my-variable'"
+
+3. RuntimeError
+   File: error/runtime.rs:7-50
+   When: Execution time errors
+   Type: Error with optional location and context
+   Example: "Error at file:5:10: division by zero"
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ SOURCE LOCATION (SourceLoc)                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Definition:
+  File: reader/token.rs:1-42
+  Structure: { file: String, line: usize, col: usize }
+  Display: "file:line:col" (e.g., "script.lisp:5:10")
+
+Factory Methods:
+  - SourceLoc::new(file, line, col)      ← Full constructor
+  - SourceLoc::from_line_col(line, col)  ← With "<unknown>" file
+  - SourceLoc::start()                    ← File beginning (1:1)
+
+Used In:
+  - TokenWithLoc: Pairs token with SourceLoc
+  - ExprWithLoc: Wraps AST nodes with optional SourceLoc
+  - Diagnostic: Each diagnostic carries SourceLoc
+  - RuntimeError: Can be added via .with_location()
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ COMPILATION PIPELINE (7 Stages)                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+ResidentCompiler::compile_text(name, text) → Result<CompiledDocument>
+
+Stage 1: LEXING (lines 87-105)
+  Input: Source code text
+  Process: Lexer::with_file() + next_token() loop
+  Output: Vec<OwnedToken> (from TokenWithLoc)
+  Error: CompileError wrapping LexerError
+  Location: SourceLoc generated here ✓
+
+Stage 2: PARSING (lines 107-113)
+  Input: Vec<OwnedToken>
+  Process: Reader::new() + read()
+  Output: Value
+  Error: CompileError wrapping ParseError
+  Location: Implicit in tokens
+
+Stage 3: CONVERSION (lines 115-119)
+  Input: Value
+  Process: value_to_expr()
+  Output: Expr
+  Error: CompileError wrapping ConversionError
+  Location: LOST HERE ✗ (Phase 2 TODO)
+
+Stage 4: AST WRAPPING (lines 121-125)
+  Input: Expr
+  Process: ExprWithLoc { expr, loc: None }
+  Output: ExprWithLoc
+  Location: Set to None ✗ (Phase 2 TODO)
+
+Stage 5: BYTECODE COMPILATION (line 128)
+  Input: Expr
+  Process: compile_with_metadata()
+  Output: (Bytecode, LocationMap)
+  Location: LocationMap empty ✗ (Phase 2 TODO)
+
+Stage 6: LINTING (lines 134-136)
+  Input: ExprWithLoc
+  Process: Linter::new() + lint_expr()
+  Output: Vec<Diagnostic>
+  Location: In diagnostics (but expr.loc is None)
+
+Stage 7: RESULT COLLECTION (lines 138-145)
+  Input: All stages complete
+  Process: CompiledDocument::new()
+  Output: CompiledDocument
+  Location: In document.diagnostics
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ KEY PATTERNS                                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Pattern 1: Diagnostic Creation (with suggestions)
+  Diagnostic::new(Severity::Warning, "W001", "naming-kebab-case",
+                  "message", location)
+    .with_suggestions(vec!["suggestion 1".to_string()])
+
+Pattern 2: RuntimeError Builder
+  RuntimeError::new("message")
+    .with_location(SourceLoc::from_line_col(42, 15))
+    .with_context("in function foo".to_string())
+
+Pattern 3: Error Wrapping
+  operation()
+    .map_err(|e| CompileError {
+        message: format!("Context: {}", e),
+    })?
+
+Pattern 4: Diagnostic Display
+  diagnostic.format_human()
+  → "5:2 warning: naming-kebab-case\n  message: ...\n  suggestions: ..."
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ DIAGNOSTIC SEVERITY & CODES                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Severity (ordered):
+  Info    < Warning < Error
+
+Codes & Rules:
+  W001: naming-kebab-case      (identifier should use kebab-case)
+  W002: arity-mismatch         (function args count mismatch)
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ CRITICAL FILES                                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Error Types:
+  resident_compiler/compiler.rs       ← CompileError definition + compile_text()
+  error/runtime.rs                    ← RuntimeError with location
+  compiler/linter/diagnostics.rs      ← Diagnostic + Severity
+
+Location Tracking:
+  reader/token.rs                     ← SourceLoc + TokenWithLoc
+  compiler/ast.rs                     ← ExprWithLoc
+  error/mod.rs                        ← LocationMap type alias
+
+Compilation:
+  resident_compiler/compiler.rs       ← ResidentCompiler.compile_text()
+  compiler/compile/mod.rs             ← compile_with_metadata()
+
+Linting:
+  compiler/linter/mod.rs              ← Linter engine + check_expr()
+  compiler/linter/rules.rs            ← Naming & arity checks
+
+Result:
+  resident_compiler/compiled_doc.rs   ← CompiledDocument
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ KNOWN LIMITATIONS (Phase 2 TODO)                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+1. Location Lost in Conversion
+   Problem: Value→Expr conversion loses location metadata
+   Effect: ExprWithLoc.loc is always None
+   Impact: Diagnostics can't report precise locations
+
+2. Empty LocationMap
+   Problem: Bytecode instruction→source mapping not populated
+   Effect: LocationMap is empty in CompiledDocument
+   Impact: Runtime errors can't map back to source
+
+3. CompileError Lacks Location
+   Problem: CompileError is simple string-based, no SourceLoc field
+   Effect: Lexer/parser errors have no location info
+   Impact: Users see "Lexer error: ..." without line/column
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ DATA FLOW SUMMARY                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Source Code
+    ↓
+Lexer ← SourceLoc created here ✓
+    ↓ (TokenWithLoc)
+Parser
+    ↓ (Value)
+Converter ← Location lost here ✗
+    ↓ (Expr)
+ExprWithLoc { loc: None } ← Set to None ✗
+    ↓
+Compiler ← LocationMap empty ✗
+    ↓ (Bytecode, {})
+Linter ← Can't use location
+    ↓ (Vec<Diagnostic>)
+CompiledDocument
+    diagnostics: Vec<Diagnostic>  ← Limited location info
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ QUICK ANSWERS                                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Q: Where are errors structured?
+A: Three levels: CompileError (early), Diagnostic (linting), RuntimeError (exec)
+
+Q: How does source location work?
+A: SourceLoc = {file, line, col}, created at lexer, carried in TokenWithLoc
+
+Q: Where is location lost?
+A: During Value→Expr conversion (Phase 2 TODO)
+
+Q: How are diagnostics created?
+A: Diagnostic::new(severity, code, rule, message, location).with_suggestions()
+
+Q: What's the main compilation entry point?
+A: ResidentCompiler::compile_text() in resident_compiler/compiler.rs:75
+
+Q: How is AST linted?
+A: Linter::lint_expr() + recursive check_expr() with location passing
+
+Q: What gets returned?
+A: CompiledDocument with source, AST, bytecode, location_map, diagnostics
+
+Q: What design patterns are used?
+A: Builder (RuntimeError), Visitor (Linter), Wrapper (ExprWithLoc)
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ FILES TO READ (In Order)                                                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Quick (5 min):   ANALYSIS_SUMMARY.txt
+Medium (20 min): ANALYSIS_SUMMARY.txt + error_patterns_and_examples.md
+Deep (45 min):   All 4 analysis documents in order
+
+Documents Provided:
+  1. ANALYSIS_SUMMARY.txt              (Executive summary)
+  2. error_handling_analysis.md        (Technical details)
+  3. error_patterns_and_examples.md    (Code examples)
+  4. key_files_reference.md            (File locations)
+  5. ERROR_ANALYSIS_INDEX.md           (Navigation guide)
+  6. QUICK_REFERENCE.txt               (This file)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Generated: 2026-02-10
+Component: Elle Resident Compiler
+Analysis: Error Message Handling & Source Location Tracking

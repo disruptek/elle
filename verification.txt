@@ -1,0 +1,88 @@
+================================================================================
+EXACT OUTPUT VERIFICATION
+================================================================================
+
+1. CARGO TEST RESULTS
+================================================================================
+
+Command: cargo test --lib
+Result: 201 tests passed, 0 failed
+
+Sample output:
+test result: ok. 201 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+2. UTF-8 TEST OUTPUT
+================================================================================
+
+Command: ./target/release/elle /var/run/user/1000/test-utf8.l
+
+Output:
+Testing UTF-8 string functions:
+⟹ "Hello — World"
+Text: Hello — World
+Length (should be 13): 13
+Substring 0 5: Hello
+Substring 6 7: —
+Substring 8 13: World
+Char at 6: —
+Index of 'W': 8
+All tests passed!
+
+3. GENERATOR OUTPUT
+================================================================================
+
+Command: cd /home/adavidoff/git/elle && ./target/release/elle elle-doc/generate.l
+
+Output (last 10 lines):
+⟹ <closure>
+Generating: index.html...
+Generating: getting-started.html...
+Generating: language-guide.html...
+Generating: stdlib-reference.html...
+Generating: examples.html...
+Done!
+Generated documentation in site/
+
+4. LINK VERIFICATION
+================================================================================
+
+Command: grep -o '<a href="[^"]*">[^<]*</a>' site/index.html | head -10
+
+Output:
+<a href="getting-started.html">Getting Started</a>
+<a href="language-guide.html">Language Guide</a>
+<a href="getting-started.html">Getting Started</a>
+<a href="language-guide.html">Language Guide</a>
+<a href="stdlib-reference.html">Standard Library Reference</a>
+<a href="examples.html">Examples</a>
+
+5. NO RAW MARKDOWN LINKS
+================================================================================
+
+Command: grep '\[.*\](.*\.html)' site/index.html
+
+Output: (no matches)
+
+Command: grep '\[.*\](.*\.html)' site/getting-started.html
+
+Output: (no matches)
+
+6. GIT COMMITS
+================================================================================
+
+Command: git log --oneline -5
+
+Output:
+c1a7721 feat: add markdown link rendering to documentation generator
+51f4d4d fix: use character indices instead of byte indices in string primitives
+e484020 feat: implement proper inline markdown formatting parser
+93e6cf9 fix: simplify format-inline and fix CSS linking
+1e98ebc WIP: rewrite format-inline with character-by-character parser
+
+7. GITHUB ISSUE
+================================================================================
+
+Issue #106: set! does not work inside lambda bodies
+URL: https://github.com/disruptek/elle/issues/106
+Labels: bug
+

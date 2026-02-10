@@ -1,0 +1,99 @@
+ELLE LSP FEATURE ISSUES CREATED
+================================
+
+Major Features for elle-lsp:
+
+1. #191 - VS Code Extension for Elle LSP
+   Location: vscode-extension/
+   Scope: IDE integration for VS Code
+   Guidance: Package.json setup, TSX LSP client, webpack bundling
+   Key: Use vscode-languageclient library, locate built binary
+
+2. #192 - Neovim LSP Configuration for Elle  
+   Location: nvim-lsp-config/
+   Scope: Native Neovim integration
+   Guidance: Create lspconfig module, lua configuration
+   Key: Submit upstream to nvim-lspconfig after local testing
+
+3. #193 - Emacs LSP Configuration for Elle
+   Location: emacs-lsp-config/
+   Scope: Emacs integration via eglot or lsp-mode
+   Guidance: Create elle-mode.el and eglot-elle.el/lsp-elle.el
+   Key: Support both eglot (simple) and lsp-mode (full-featured)
+
+4. #194 - Go to Definition for LSP
+   Location: elle-lsp/src/definition.rs
+   Scope: textDocument/definition LSP handler
+   Guidance: Use SymbolIndex to find definition locations
+   Key: Phase 1 = single-file only, Phase 2 = cross-file
+
+5. #195 - Find References for LSP
+   Location: elle-lsp/src/references.rs
+   Scope: textDocument/references LSP handler
+   Guidance: Collect all usages from SymbolIndex
+   Key: Foundation for renaming, handle include_declaration param
+
+6. #196 - Symbol Renaming for LSP
+   Location: elle-lsp/src/rename.rs
+   Scope: textDocument/rename LSP handler
+   Guidance: Validate new name, check conflicts, generate TextEdits
+   Key: Depends on #195, handle scope carefully
+
+7. #197 - Code Formatting for LSP
+   Location: src/formatter/ + elle-lsp/src/formatting.rs
+   Scope: textDocument/formatting LSP handler
+   Guidance: Recursive pretty-printer, configurable indentation
+   Key: Phase 1 = full-doc only, Phase 2 = range formatting
+
+DEPENDENCY GRAPH
+================
+
+#191 VS Code Extension
+  └─ Requires: #190 (LSP compilation fixes)
+  
+#192 Neovim Config
+  └─ Requires: #190
+
+#193 Emacs Config
+  └─ Requires: #190
+
+#194 Go to Definition
+  └─ Requires: #190
+  └─ Recommends: Phase 2 LocationMap for better locations
+
+#195 Find References
+  └─ Requires: #190, #194 (for context)
+  └─ Foundation for: #196
+
+#196 Symbol Renaming
+  └─ Requires: #195
+
+#197 Code Formatting
+  └─ Requires: #190
+  └─ Independent from others
+
+SUGGESTED PRIORITY
+==================
+
+Immediate (enables editors to work):
+1. #190 - LSP compilation fixes ✓ (done, in PR)
+2. #191 - VS Code extension
+3. #192 - Neovim config
+4. #193 - Emacs config
+
+Core IDE features:
+5. #194 - Go to Definition
+6. #195 - Find References
+7. #196 - Symbol Renaming
+
+Polish:
+8. #197 - Code Formatting
+
+All issues include detailed implementation guidance including:
+- Exact file locations
+- Directory structure
+- Code examples
+- Testing strategy
+- References to LSP specs
+- Phase dependencies
+

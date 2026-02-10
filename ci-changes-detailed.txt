@@ -1,0 +1,204 @@
+================================================================================
+DETAILED CI CHANGES
+================================================================================
+
+FILE: .github/workflows/ci.yml
+
+================================================================================
+CHANGE 1: Added documentation generator test to examples job
+================================================================================
+
+Location: After the examples job's main test loop
+
+Added:
+```yaml
+      - name: Run documentation generator
+        run: |
+          timeout 30 ./target/release/elle elle-doc/generate.l
+          echo "Documentation generator: PASSED"
+```
+
+Purpose: Ensures the documentation generator runs successfully as part of
+the examples test suite, with a 30-second timeout.
+
+================================================================================
+CHANGE 2: Added new elle-doc job
+================================================================================
+
+Location: After examples job, before coverage job
+
+New job:
+```yaml
+  elle-doc:
+    name: Documentation Generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Elle
+        run: cargo build --release
+      - name: Generate documentation site
+        run: ./target/release/elle elle-doc/generate.l
+      - name: Verify generated files
+        run: |
+          test -f site/index.html || (echo "Missing index.html" && exit 1)
+          test -f site/getting-started.html || (echo "Missing getting-started.html" && exit 1)
+          test -f site/language-guide.html || (echo "Missing language-guide.html" && exit 1)
+          test -f site/stdlib-reference.html || (echo "Missing stdlib-reference.html" && exit 1)
+          test -f site/examples.html || (echo "Missing examples.html" && exit 1)
+          test -f site/style.css || (echo "Missing style.css" && exit 1)
+          echo "All documentation files generated successfully"
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: elle-doc-site
+          path: site/
+          retention-days: 30
+```
+
+Purpose: Dedicated job to build and test the documentation generator,
+ensuring all required files are generated and uploading them as an artifact.
+
+================================================================================
+CHANGE 3: Completely rewrote docs job
+================================================================================
+
+Location: docs job (was lines 191-328, now much shorter)
+
+OLD APPROACH:
+- Generated Rust API docs with cargo doc
+- Created custom HTML landing page
+- Added robots.txt and sitemap.txt
+- Uploaded target/doc as artifact
+
+NEW APPROACH:
+```yaml
+  docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Elle
+        run: cargo build --release
+      - name: Generate Rust API docs
+        run: cargo doc --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+      - name: Generate Elle documentation site
+        run: ./target/release/elle elle-doc/generate.l
+      - name: Merge documentation
+        run: |
+          # Move Rust API docs under site/api/
+          mv target/doc site/api
+          # Create robots.txt
+          cat > site/robots.txt << 'EOF'
+          User-agent: *
+          Allow: /
+          Sitemap: https://disruptek.github.io/elle/sitemap.txt
+          EOF
+          # Create sitemap
+          cat > site/sitemap.txt << 'EOF'
+          https://disruptek.github.io/elle/
+          https://disruptek.github.io/elle/getting-started.html
+          https://disruptek.github.io/elle/language-guide.html
+          https://disruptek.github.io/elle/stdlib-reference.html
+          https://disruptek.github.io/elle/examples.html
+          https://disruptek.github.io/elle/api/elle/
+          https://disruptek.github.io/elle/api/elle/vm/
+          https://disruptek.github.io/elle/api/elle/ffi/
+          https://disruptek.github.io/elle/api/elle/compiler/
+          EOF
+      - name: Upload documentation artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: site/
+```
+
+Key changes:
+1. Added `needs: [test]` to ensure tests pass before building docs
+2. Builds Elle release binary
+3. Generates Rust API docs
+4. Generates Elle documentation site
+5. Merges both: moves cargo doc to site/api/
+6. Creates robots.txt and sitemap.txt with proper URLs
+7. Uses upload-pages-artifact@v2 instead of upload-artifact@v4
+8. Uploads site/ instead of target/doc
+
+Result: Elle documentation is the root of the site, Rust API docs at /api/
+
+================================================================================
+CHANGE 4: Updated all-checks job
+================================================================================
+
+Location: all-checks job (end of file)
+
+OLD:
+```yaml
+  all-checks:
+    name: All Checks Passed
+    needs: [test, fmt, clippy, examples, coverage, docs]
+    ...
+    steps:
+      - name: Check test
+        ...
+      - name: Check fmt
+        ...
+      - name: Check clippy
+        ...
+      - name: Check examples
+        ...
+      - name: Check docs
+        ...
+      - name: Success
+        ...
+```
+
+NEW:
+```yaml
+  all-checks:
+    name: All Checks Passed
+    needs: [test, fmt, clippy, examples, elle-doc, coverage, docs]
+    ...
+    steps:
+      - name: Check test
+        ...
+      - name: Check fmt
+        ...
+      - name: Check clippy
+        ...
+      - name: Check examples
+        ...
+      - name: Check elle-doc
+        if: needs.elle-doc.result != 'success'
+        run: exit 1
+      - name: Check docs
+        ...
+      - name: Success
+        ...
+```
+
+Changes:
+1. Added `elle-doc` to needs list
+2. Added check step for elle-doc job
+3. Ensures documentation generator must pass for CI to succeed
+
+================================================================================
+SUMMARY OF CHANGES
+================================================================================
+
+File: .github/workflows/ci.yml
+Total changes: 68 insertions, 161 deletions
+
+Breakdown:
+- Added elle-doc job: ~35 lines
+- Modified examples job: +5 lines
+- Rewrote docs job: -130 lines (removed custom HTML), +40 lines (new logic)
+- Updated all-checks job: +3 lines
+
+Net result: Cleaner, more maintainable CI with better documentation integration
+
+================================================================================

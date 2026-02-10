@@ -1,0 +1,60 @@
+SUMMARY OF STEPS:
+
+Step 1: Test find-closing ✓ PASSED
+Output:
+⟹ <closure>
+⟹ <closure>
+5
+4
+nil
+3
+
+Step 2: Test format-links ✓ PASSED
+Output:
+⟹ <closure>
+⟹ <closure>
+⟹ <closure>
+⟹ <closure>
+See <a href="world.html">Hello</a> end
+no links
+<a href="1.html">A</a> and <a href="2.html">B</a>
+Unclosed [bracket
+plain
+Done!
+
+Step 3: Edit generate.l
+ISSUE ENCOUNTERED: The find-closing and format-links functions use substring() 
+with byte indices, which causes UTF-8 boundary errors when processing text 
+containing multi-byte characters like em-dashes (—).
+
+The documentation contains em-dashes, which are 3-byte UTF-8 characters. When 
+substring() tries to split at a byte position in the middle of an em-dash, 
+it panics with: "byte index X is not a char boundary"
+
+Step 4: Run generator
+The original code (without link processing) works fine:
+Generating: index.html...
+Generating: getting-started.html...
+Generating: language-guide.html...
+Generating: stdlib-reference.html...
+Generating: examples.html...
+Done!
+Generated documentation in site/
+
+Step 5: Verify
+The generated HTML files are correct. The original code doesn't process 
+markdown links, so they remain as plain text in the output (which is expected).
+
+Step 6: Commit and push
+NOT DONE - No changes were made to the repository because the link processing 
+functions cannot be safely added without fixing the UTF-8 boundary issue in 
+substring().
+
+RECOMMENDATION:
+The link processing feature cannot be implemented using substring() due to 
+UTF-8 boundary issues. To implement this feature safely, we would need:
+1. A UTF-8 aware substring function that works with character indices instead of byte indices
+2. Or a different approach that doesn't rely on substring for searching
+
+The original code works fine without link processing, so the generator is 
+functional as-is.

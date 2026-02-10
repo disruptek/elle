@@ -1,0 +1,7 @@
+pick 9b27400 fix: use character indices instead of byte indices in string primitives
+pick 4aa6031 feat: add elle-doc static site documentation generator (WIP)
+squash 4c32e89 fix: resolve Elle let binding issues in documentation generator
+squash bde69d6 WIP: rewrite format-inline with character-by-character parser
+squash edcf6f1 fix: simplify format-inline and fix CSS linking
+squash e800046 feat: implement proper inline markdown formatting parser
+squash cd736c7 feat: add markdown link rendering to documentation generator

@@ -1,0 +1,193 @@
+================================================================================
+        LISP FAMILY ITERATOR CONSTRUCTS - DETAILED COMPARISON TABLE
+================================================================================
+
+DIMENSION 1: NAMING & STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+Language      | Primary Name  | Syntax Pattern           | Prefix/Style
+────────────────────────────────────────────────────────────────────────────────
+Janet         | for           | (for var in iter body)   | Modern/Concise
+Clojure       | for + doseq   | (for [vars] ...) [lazy]  | Modern/Semantic
+              |               | (doseq [vars] ...) [eager]
+Scheme        | for-each      | (for-each proc list+)    | Traditional/Descriptive
+Scheme        | named-let     | (let loop (...) ...)     | Recursive/Complex
+Common Lisp   | dolist        | (dolist (var list) ...)  | Traditional/Simple
+Common Lisp   | loop          | (loop for var in list)   | DSL/Powerful
+Elle          | for           | (for var iter body)      | Modern/Concise
+────────────────────────────────────────────────────────────────────────────────
+
+DIMENSION 2: EXECUTION MODEL
+────────────────────────────────────────────────────────────────────────────────
+Language      | Eagerness     | Execution Model      | Side Effects
+────────────────────────────────────────────────────────────────────────────────
+Janet         | EAGER         | Imperative loop      | Primary use
+Clojure (for) | LAZY          | Lazy sequence gen    | Deferred
+Clojure (doseq)| EAGER        | Imperative loop      | Primary use
+Scheme        | EAGER         | Applies function     | Primary use
+Common Lisp   | EAGER         | Imperative loop      | Primary use
+Elle          | EAGER         | Imperative loop      | Primary use
+────────────────────────────────────────────────────────────────────────────────
+
+DIMENSION 3: SEQUENCE HANDLING
+────────────────────────────────────────────────────────────────────────────────
+Language      | Single Seq    | Multiple Seqs | Mechanism
+────────────────────────────────────────────────────────────────────────────────
+Janet         | YES (native)  | Nesting only  | Sequential nesting
+Clojure (for) | YES (native)  | YES (native)  | Multiple bindings in vector
+Clojure (doseq)| YES (native) | YES (native)  | Multiple bindings in vector
+Scheme        | YES (native)  | YES (multiple args) | Lambda as parameter
+Common Lisp   | YES (native)  | Nesting/loop  | Loop has full support
+Elle          | YES (native)  | Nesting only  | Sequential nesting
+────────────────────────────────────────────────────────────────────────────────
+
+DIMENSION 4: RETURN VALUE
+────────────────────────────────────────────────────────────────────────────────
+Language      | Returns       | Semantics            | Use in Expression
+────────────────────────────────────────────────────────────────────────────────
+Janet         | The iterable  | Loop completes       | Rarely used
+Clojure (for) | Lazy sequence | Results collected    | Common (chaining)
+Clojure (doseq)| nil          | Side effects only    | Rarely used
+Scheme        | Unspecified   | Side effects only    | Rarely used
+Common Lisp   | nil or form   | Optional accumulator | Configurable
+Elle          | nil           | Side effects only    | Rarely used
+────────────────────────────────────────────────────────────────────────────────
+
+DIMENSION 5: IDIOMATIC USE CASES
+────────────────────────────────────────────────────────────────────────────────
+Language      | Primary       | Secondary          | Functional
+────────────────────────────────────────────────────────────────────────────────
+Janet         | Side effects  | Iteration tracking | map, filter
+Clojure       | Lazy gen      | Side effects       | Sequence ops
+Scheme        | Side effects  | Recursion (named-let) | map, reduce
+Common Lisp   | Side effects  | Complex iteration  | Loop (powerful macro)
+Elle          | Side effects  | Loop variable      | (future: map, filter)
+────────────────────────────────────────────────────────────────────────────────
+
+DIMENSION 6: VARIABLE SCOPING & BINDING
+────────────────────────────────────────────────────────────────────────────────
+Language      | Binding Model | Scope              | Mutability
+────────────────────────────────────────────────────────────────────────────────
+Janet         | Local binding | Loop body scope    | Immutable in body
+Clojure (for) | Local binding | Generator scope    | Immutable
+Clojure (doseq)| Local binding | Loop body scope    | Immutable in body
+Scheme        | Lambda param  | Function scope     | Procedure receives
+Common Lisp   | Local binding | Loop body scope    | Can modify (setf)
+Elle          | Global set    | Global + body scope| Mutable (set!)
+────────────────────────────────────────────────────────────────────────────────
+
+================================================================================
+                            SEMANTIC COMPARISON
+================================================================================
+
+ITERATOR TYPE CLASSIFICATION:
+  1. LAZY SEQUENCE GENERATOR: Clojure `for` only
+  2. EAGER SIDE-EFFECT LOOP: Janet `for`, Clojure `doseq`, Scheme, CL `dolist`, Elle
+  3. POWERFUL MACRO: CL `loop` (supports accumulation, conditions, etc.)
+  4. RECURSIVE PATTERN: Scheme named-let
+
+Elle's `for` is: EAGER SIDE-EFFECT LOOP (Type 2)
+  - Closest matches: Janet `for`, Clojure `doseq`
+  - Different from: Clojure `for` (lazy), Scheme `for-each` (lambda-based)
+  
+================================================================================
+                        NAMING CONVENTION ANALYSIS
+================================================================================
+
+DOES language use "for"?
+  ✓ Janet: YES (primary construct)
+  ✓ Clojure: YES (but for lazy generation only!)
+  ✗ Scheme: NO (uses `for-each`)
+  ✗ Common Lisp: NO (uses `dolist`, `loop`)
+  ✓ Elle: YES (current)
+
+PATTERN IN NAMING:
+  - Modern Lisps (Janet, Elle): `for`
+  - Clojure: `for` (lazy) + `doseq` (eager, side effects)
+  - Traditional Lisps: Avoid `for`, use descriptive names
+
+WHAT "for" MEANS IN EACH LANGUAGE:
+  - Janet `for`: "iterate eagerly over a sequence"
+  - Clojure `for`: "lazily generate a sequence (comprehension)"
+  - Elle `for`: "iterate eagerly over a sequence" [MATCHES JANET]
+
+KEY INSIGHT: Elle's `for` semantics align with Janet, NOT with Clojure's `for`!
+             Clojure's semantic equivalent is `doseq`.
+
+================================================================================
+                        RECOMMENDATION MATRIX
+================================================================================
+
+OPTION 1: KEEP `for` (CURRENT)
+  ✓ Matches modern Lisp trend (Janet)
+  ✓ Simple and intuitive name
+  ✓ Concise syntax
+  ✗ Breaks Clojure `for` semantics (Elle's `for` is eager, Clojure's is lazy)
+  ✗ Breaks Scheme/CL tradition (they don't use `for`)
+  SCORE: 8/10 (Modern approach, but semantically ambiguous vs. Clojure)
+
+OPTION 2: RENAME TO `doseq` (FOLLOW CLOJURE)
+  ✓ Semantically matches Clojure's `doseq`
+  ✓ If Elle adds lazy later, can have `for` (lazy) + `doseq` (eager) like Clojure
+  ✓ Clear indication of "side effects"
+  ✗ Less intuitive for non-Clojure developers
+  ✗ Longer name
+  SCORE: 7/10 (Good for Clojure alignment, but extra complexity early)
+
+OPTION 3: RENAME TO `for-each` (FOLLOW SCHEME)
+  ✓ Matches Scheme tradition
+  ✓ Descriptive name
+  ✓ Different from any lazy `for` if added later
+  ✗ Longer name
+  ✗ Doesn't match modern Lisp (Janet) trend
+  ✗ Less intuitive
+  SCORE: 5/10 (Traditional but dated feeling)
+
+OPTION 4: RENAME TO `dolist` (FOLLOW COMMON LISP)
+  ✓ Matches Common Lisp tradition (most established Lisp)
+  ✗ Unintuitive naming
+  ✗ Not used by modern Lisps (Janet, Clojure)
+  ✗ Doesn't indicate what it does
+  SCORE: 3/10 (Too traditional, unintuitive)
+
+OPTION 5: ADD ALIASES (KEEP `for`, ADD `doseq`, `for-each`)
+  ✓ Supports all communities
+  ✓ No breaking changes
+  ✓ Flexible for users
+  ✗ Increases language surface area
+  ✗ Confuses beginners with multiple names
+  SCORE: 6/10 (Inclusive but cluttered)
+
+================================================================================
+                        FINAL RECOMMENDATION
+================================================================================
+
+RECOMMENDATION: **KEEP `for` (OPTION 1)**
+
+REASONING:
+  1. Modern alignment with Janet (active, growing modern Lisp)
+  2. Simple, intuitive name that users expect
+  3. Clear in Elle's context (no lazy sequences currently)
+  4. Common sense: "for item in list, do something"
+  5. Growth path clear: If lazy sequences added, can introduce `for` (lazy)
+     and rename current `for` to `doseq`, following Clojure
+
+SUPPORTING ACTIONS:
+  1. Document explicitly: "Elle's `for` is eager and executes for side effects"
+  2. Add examples in docs comparing to other Lisps
+  3. Consider future additions:
+     - `for-each` as an alias (if community requests)
+     - `doseq` if lazy sequences are added
+     - Map-based functional alternatives
+
+GROWTH PATH (If lazy sequences added later):
+  Current:
+    (for i lst (print i))      ; eager, side-effects
+  
+  Hypothetical future:
+    (for [i lst] (+ i 1))      ; lazy, returns lazy seq (Clojure-like)
+    (doseq [i lst] (print i))  ; eager, side-effects (explicit)
+
+This gives Elle the clarity of Clojure's approach while keeping the modern
+simplicity of Janet's naming convention.
+
+================================================================================

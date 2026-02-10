@@ -1,0 +1,247 @@
+================================================================================
+                    ISSUE #106 FINDINGS SUMMARY
+        set! does not work inside lambda bodies
+================================================================================
+
+1. CODEBASE STRUCTURE
+================================================================================
+
+   Compilation Pipeline:
+   
+   Reader (src/reader.rs)
+      ↓ (Parse S-expressions)
+   Converter (src/compiler/converters.rs)
+      ↓ (Convert to AST, determine depth/index)
+   Analysis (src/compiler/analysis.rs)
+      ↓ (Identify free variables, captures)
+   Capture Resolution (src/compiler/capture_resolution.rs)
+      ↓ (Remap indices for closure environment layout)
+   Compilation (src/compiler/compile.rs)
+      ↓ (Convert AST to bytecode instructions)
+   Runtime VM (src/vm/)
+      ↓ (Execute bytecode with scope management)
+
+   Key Scope Management:
+   - src/vm/scope/scope_stack.rs - Runtime scope stack
+   - src/vm/scope/runtime_scope.rs - Individual scope representation
+   - src/vm/variables.rs - Load/Store bytecode handlers
+
+================================================================================
+
+2. WHERE set! IS IMPLEMENTED
+================================================================================
+
+   AST Definition:
+   └─ /home/adavidoff/git/elle4/src/compiler/ast.rs:84-90
+      Set { var: SymbolId, depth: usize, index: usize, value: Box<Expr> }
+
+   Conversion (Parse → AST):
+   └─ /home/adavidoff/git/elle4/src/compiler/converters.rs:831-859
+      - Looks up variable in scope_stack
+      - Sets index=usize::MAX for global variables
+      - Sets depth/index for local/captured variables
+
+   Compilation (AST → Bytecode):
+   └─ /home/adavidoff/git/elle4/src/compiler/compile.rs:314-337
+      - Handles three cases:
+        * depth=0, index=MAX → StoreGlobal
+        * depth=0, index≠MAX → StoreLocal ❌ PROBLEMATIC
+        * depth>0 → StoreGlobal (FALLBACK, should be StoreUpvalue!)
+
+   Capture Resolution (index remapping):
+   └─ /home/adavidoff/git/elle4/src/compiler/capture_resolution.rs:183-195
+      - Remaps Set indices for closure environment layout
+      - Works correctly but compile.rs doesn't handle result properly
+
+   Runtime Handlers:
+   └─ /home/adavidoff/git/elle4/src/vm/variables.rs:1-98
+      - handle_load_global() @ line 4
+      - handle_store_global() @ line 30
+      - handle_store_local() @ line 63
+      - handle_load_upvalue() @ line 73
+      - Missing: handle_store_upvalue()
+
+================================================================================
+
+3. VARIABLE SCOPING IN CETTE IMPLEMENTATION
+================================================================================
+
+   Closure Environment Layout:
+   ┌──────────────────────────────────────────┐
+   │ [captures..., params...]                 │
+   │  0    1    2    3    4   ...             │
+   └──────────────────────────────────────────┘
+    ↑      ↑                 ↑
+    captured       number of      parameter
+    variables      captures       variables
+
+   Variable Classification:
+
+   Type 1: Global Variables (defined at top-level)
+   - Index: usize::MAX
+   - Storage: vm.globals HashMap
+   - Instructions: LoadGlobal, StoreGlobal
+
+   Type 2: Local Variables (lambda parameters or local scope)
+   - Depth: 0 (if created in current scope)
+   - Index: 0-255 (stack frame offset)
+   - Instructions: LoadLocal, StoreLocal (stack-based)
+
+   Type 3: Captured Variables (from outer scopes)
+   - Depth: > 0 (outer scope distance)
+   - Index: 0-255 (position in closure environment)
+   - Instructions: LoadUpvalue (reading), ??? (writing)
+
+   Runtime Scope Stack:
+   - Stack of RuntimeScope objects
+   - Each scope is a HashMap<u32, Value>
+   - Methods: get(), set(), define_local(), contains()
+   - Searches from current scope upward to global
+
+================================================================================
+
+4. EXISTING TESTS FOR set!
+================================================================================
+
+   Test: test_set_in_nested_closure()
+   └─ /home/adavidoff/git/elle4/tests/integration/closures_and_lambdas.rs:713-725
+      - Uses GLOBAL variable captured by lambda
+      - (define counter 0) - global
+      - (lambda () (set! counter ...)) - modifies global
+      - ✓ PASSES because emits StoreGlobal
+
+   Loop Tests (set! at top-level):
+   └─ /home/adavidoff/git/elle4/tests/integration/loops.rs:32+
+      - Extensive use of set! in while loops
+      - All at global scope
+      - ✓ PASSES
+
+   Missing Tests:
+   └─ NO TEST for set! on locally-defined lambda variables!
+
+================================================================================
+
+5. ROOT CAUSE ANALYSIS
+================================================================================
+
+   The Issue:
+
+   (define test (lambda ()
+     (begin
+       (define x 0)      ; LOCAL variable created here
+       (set! x 42)       ; Should modify LOCAL variable
+       x)))
+
+   Problem Chain:
+
+   PHASE 1: Parse (converters.rs:831-859)
+   ✓ Correctly identifies x as local
+   ✓ Sets: Set { var, depth=0, index=0, ... }
+     (x is in current scope_stack level)
+
+   PHASE 2: Capture Resolution (capture_resolution.rs:183-195)
+   ✓ Correctly remaps index if x is a captured variable
+   ✓ Adjusts Set { ..., index = env_idx, ... }
+
+   PHASE 3: Compilation (compile.rs:314-337)
+   ❌ SEES: depth=0, so emits StoreLocal
+   ❌ BUT: After capture resolution, index points to closure env, NOT stack!
+   ❌ StoreLocal tries to write to wrong location
+
+   PHASE 4: Runtime (variables.rs)
+   ❌ StoreLocal writes to stack position (wrong!)
+   ❌ Later LoadGlobal fails because var is not in vm.globals
+   ❌ Error: "Undefined global variable"
+
+   Root Cause:
+
+   The compiler can't distinguish:
+   - Local variables created in lambda (need StoreLocal with stack offset)
+   - Captured variables from outer scope (need StoreUpvalue with env offset)
+
+   Both have depth=0 after capture resolution, making it ambiguous!
+
+   Missing Implementation:
+
+   The bytecode instruction StoreUpvalue does NOT exist!
+   - LoadUpvalue exists (reads from closure environment)
+   - StoreUpvalue is MISSING (should write to closure environment)
+
+================================================================================
+
+6. FILES INVOLVED (WITH LINE NUMBERS)
+================================================================================
+
+   1. /home/adavidoff/git/elle4/src/compiler/ast.rs
+      └─ Lines 84-90: Set expression variant definition
+
+   2. /home/adavidoff/git/elle4/src/compiler/converters.rs
+      └─ Lines 831-859: "set!" parsing logic
+      └─ Lines 38-76: adjust_var_indices() function
+      └─ Lines 175-300+: Variable scope lookup logic
+
+   3. /home/adavidoff/git/elle4/src/compiler/compile.rs
+      └─ Lines 314-337: Set compilation logic (ROOT CAUSE)
+      └─ Lines 63-85: Var expression compilation
+      └─ Lines 193-240: Lambda compilation
+
+   4. /home/adavidoff/git/elle4/src/compiler/capture_resolution.rs
+      └─ Lines 16-72: resolve_in_expr() for lambdas
+      └─ Lines 173-195: remap_body_vars() for Set
+      └─ Lines 1-20: LambdaEnvInfo definition
+
+   5. /home/adavidoff/git/elle4/src/compiler/bytecode.rs
+      └─ Lines 1-50: Instruction enum (needs StoreUpvalue added)
+
+   6. /home/adavidoff/git/elle4/src/vm/variables.rs
+      └─ Lines 4-27: handle_load_global()
+      └─ Lines 30-61: handle_store_global()
+      └─ Lines 63-71: handle_store_local()
+      └─ Lines 73-97: handle_load_upvalue()
+      └─ MISSING: handle_store_upvalue()
+
+   7. /home/adavidoff/git/elle4/src/vm/scope/scope_stack.rs
+      └─ Lines 79-88: set() method (walk up scopes)
+      └─ Lines 92-103: set_at_depth() method
+
+   8. /home/adavidoff/git/elle4/tests/integration/closures_and_lambdas.rs
+      └─ Lines 713-725: test_set_in_nested_closure() (PASSES, but tests global)
+      └─ NEEDS: Test for set! on local lambda variables
+
+================================================================================
+
+7. SUMMARY: THE 3-PART FIX REQUIRED
+================================================================================
+
+   PART 1: Add StoreUpvalue Bytecode Instruction
+   File: /home/adavidoff/git/elle4/src/compiler/bytecode.rs
+   Action: Add `StoreUpvalue` to Instruction enum
+
+   PART 2: Emit Correct Bytecode in Compiler
+   File: /home/adavidoff/git/elle4/src/compiler/compile.rs (lines 314-337)
+   Problem: Needs to distinguish closure env vs. stack after capture resolution
+   Solution: Add mechanism to track whether Set variable is in closure env
+
+   PART 3: Implement Runtime Handler
+   File: /home/adavidoff/git/elle4/src/vm/variables.rs
+   Action: Add handle_store_upvalue() to write to closure environment
+
+   BONUS: Add Test Coverage
+   File: /home/adavidoff/git/elle4/tests/integration/closures_and_lambdas.rs
+   Action: Add test_set_local_in_lambda() to catch regression
+
+================================================================================
+
+KEY INSIGHT:
+
+The problem is that capture resolution remaps indices AFTER compilation
+information is determined. The compiler needs to either:
+
+A) Know BEFORE compiling that a Set target is in the closure env, OR
+B) Use a different AST node for closure env mutation vs. stack mutation, OR
+C) Embed information about closure env targets in the AST
+
+Currently, there's no way for compile.rs to know whether the remapped
+index points to a stack location or closure environment location!
+
+================================================================================
