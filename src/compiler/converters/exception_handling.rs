@@ -129,7 +129,7 @@ pub fn convert_handler_bind(
 }
 
 /// Convert try-catch-finally expressions
-/// Syntax: (try <body> (catch <var> <handler>) (finally <expr>)?)
+/// Syntax: `(try body (catch var handler) (finally expr)?)`
 #[inline(never)]
 pub fn convert_try(
     list: &[Value],
