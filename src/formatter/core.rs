@@ -41,7 +41,7 @@ pub fn format_code(source: &str, config: &FormatterConfig) -> Result<String, Str
     // Format each value
     let mut formatted = Vec::new();
     for value in values {
-        formatted.push(format_value(&value, 0, &config, &symbol_table));
+        formatted.push(format_value(&value, 0, config, &symbol_table));
     }
 
     Ok(formatted.join("\n"))
