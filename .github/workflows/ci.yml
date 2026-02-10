@@ -30,9 +30,9 @@ jobs:
       - name: Run doc tests
         run: cargo test --doc --verbose
       - name: Build Elle LSP
-        run: cargo build --release -p elle-lsp
+        run: cd elle-lsp && cargo build --release
       - name: Run Elle LSP tests
-        run: cargo test --release -p elle-lsp --verbose
+        run: cd elle-lsp && cargo test --release --verbose
 
   fmt:
     name: Rustfmt
