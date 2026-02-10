@@ -105,9 +105,8 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
                         }
                     }
                 }
-                Err(e) => {
-                    eprintln!("✗ Parse error: {}", e);
-                    had_parse_error = true;
+                Err(_) => {
+                    // Suppress error reporting in first pass; errors will be reported in second pass
                 }
             }
         }
