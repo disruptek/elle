@@ -34,16 +34,9 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: &Expr, tail: bool) {
         match expr {
-            Expr::Literal(val) => match val {
-                Value::Nil => self.bytecode.emit(Instruction::Nil),
-                Value::Bool(true) => self.bytecode.emit(Instruction::True),
-                Value::Bool(false) => self.bytecode.emit(Instruction::False),
-                _ => {
-                    let idx = self.bytecode.add_constant(val.clone());
-                    self.bytecode.emit(Instruction::LoadConst);
-                    self.bytecode.emit_u16(idx);
-                }
-            },
+            Expr::Literal(val) => {
+                self.compile_literal(val);
+            }
 
             Expr::Var(_sym, depth, index) => {
                 // Variables in closure environment - access via LoadUpvalue
@@ -63,25 +56,7 @@ impl Compiler {
             }
 
             Expr::If { cond, then, else_ } => {
-                self.compile_expr(cond, false);
-                self.bytecode.emit(Instruction::JumpIfFalse);
-                let else_jump = self.bytecode.current_pos();
-                self.bytecode.emit_u16(0); // Placeholder
-
-                self.compile_expr(then, tail);
-                self.bytecode.emit(Instruction::Jump);
-                let end_jump = self.bytecode.current_pos();
-                self.bytecode.emit_u16(0); // Placeholder
-
-                let else_pos = self.bytecode.current_pos();
-                self.bytecode
-                    .patch_jump(else_jump, (else_pos - else_jump - 2) as i16);
-
-                self.compile_expr(else_, tail);
-
-                let end_pos = self.bytecode.current_pos();
-                self.bytecode
-                    .patch_jump(end_jump, (end_pos - end_jump - 2) as i16);
+                self.compile_if(cond, then, else_, tail);
             }
 
             Expr::Begin(exprs) => {
@@ -380,116 +355,11 @@ impl Compiler {
             }
 
             Expr::While { cond, body } => {
-                // Push loop scope to isolate loop variables
-                self.bytecode.emit(Instruction::PushScope);
-                self.bytecode.emit_byte(3); // ScopeType::Loop = 3
-                self.scope_depth += 1;
-
-                // Implement while loop using conditional jumps
-                // Loop label - start of condition check
-                let loop_label = self.bytecode.current_pos() as i32;
-
-                // Compile condition
-                self.compile_expr(cond, false);
-
-                // Jump to end if condition is false
-                self.bytecode.emit(Instruction::JumpIfFalse);
-                let exit_jump = self.bytecode.current_pos() as i32;
-                self.bytecode.emit_u16(0); // Placeholder for exit offset
-
-                // Compile body
-                self.compile_expr(body, false);
-
-                // Pop the body result (we don't care about it)
-                self.bytecode.emit(Instruction::Pop);
-
-                // Jump back to loop condition
-                self.bytecode.emit(Instruction::Jump);
-                let loop_jump = self.bytecode.current_pos() as i32;
-                self.bytecode.emit_u16(0); // Placeholder
-
-                // Patch the exit jump
-                let exit_pos = self.bytecode.current_pos() as i32;
-                self.bytecode
-                    .patch_jump(exit_jump as usize, (exit_pos - exit_jump - 2) as i16);
-
-                // Patch the loop back jump
-                self.bytecode
-                    .patch_jump(loop_jump as usize, (loop_label - loop_jump - 2) as i16);
-
-                self.scope_depth -= 1;
-                // Pop loop scope
-                self.bytecode.emit(Instruction::PopScope);
-
-                // Return nil after loop
-                self.bytecode.emit(Instruction::Nil);
+                self.compile_while(cond, body);
             }
 
             Expr::For { var, iter, body } => {
-                // Push loop scope to isolate loop variables
-                self.bytecode.emit(Instruction::PushScope);
-                self.bytecode.emit_byte(3); // ScopeType::Loop = 3
-                self.scope_depth += 1;
-
-                // Implement for loop: (for x lst (do-something-with x))
-                // Compile the iterable (list)
-                self.compile_expr(iter, false);
-
-                // Loop start: check if list is nil
-                let loop_label = self.bytecode.current_pos() as i32;
-
-                // Check if list is nil (end of iteration)
-                // Stack: [list]
-                self.bytecode.emit(Instruction::Dup); // Stack: [list, list]
-                self.bytecode.emit(Instruction::IsNil);
-                self.bytecode.emit(Instruction::JumpIfTrue);
-                let exit_jump = self.bytecode.current_pos() as i32;
-                self.bytecode.emit_u16(0); // Placeholder for exit jump
-                                           // Stack: [list]
-
-                // List is not nil: Extract car (current element)
-                self.bytecode.emit(Instruction::Dup); // Stack: [list, list]
-                self.bytecode.emit(Instruction::Car); // Stack: [list, first_element]
-
-                // Store element in loop variable (locally, not globally)
-                let var_idx = self.bytecode.add_constant(Value::Symbol(*var));
-                self.bytecode.emit(Instruction::DefineLocal);
-                self.bytecode.emit_u16(var_idx);
-                // DefineLocal stores the value and pushes it back (expression semantics)
-                // We don't need the pushed value, so pop it
-                self.bytecode.emit(Instruction::Pop);
-                // Stack: [list, first_element] -> DefineLocal -> [list, first_element] -> Pop -> [list]
-
-                // Compile body (body may reference the loop variable, but won't consume the list)
-                self.compile_expr(body, false);
-                self.bytecode.emit(Instruction::Pop); // Pop body result
-                                                      // Stack: [list]
-
-                // Update list to rest for next iteration
-                self.bytecode.emit(Instruction::Cdr); // Stack: [rest_of_list]
-
-                // Loop back
-                self.bytecode.emit(Instruction::Jump);
-                let loop_jump = self.bytecode.current_pos() as i32;
-                self.bytecode.emit_u16(0); // Placeholder
-
-                // Patch exit jump
-                let exit_pos = self.bytecode.current_pos() as i32;
-                self.bytecode
-                    .patch_jump(exit_jump as usize, (exit_pos - exit_jump - 2) as i16);
-
-                // Patch the loop back jump
-                self.bytecode
-                    .patch_jump(loop_jump as usize, (loop_label - loop_jump - 2) as i16);
-
-                self.scope_depth -= 1;
-                // Pop loop scope
-                self.bytecode.emit(Instruction::PopScope);
-
-                // Pop the nil list from stack and push nil (loop return value)
-                // Stack: [nil]
-                self.bytecode.emit(Instruction::Pop);
-                self.bytecode.emit(Instruction::Nil);
+                self.compile_for(var, iter, body);
             }
 
             Expr::Match {
@@ -906,68 +776,7 @@ impl Compiler {
             }
 
             Expr::Cond { clauses, else_body } => {
-                // Cond expression: evaluates test expressions until one is truthy
-                // Syntax: (cond (test1 body1) (test2 body2) ... [(else body)])
-                //
-                // Compilation strategy:
-                // For each clause:
-                //   1. Compile test expression
-                //   2. JumpIfFalse to next clause
-                //   3. Compile body (in tail position if tail is true)
-                //   4. Jump to end
-                // For else clause (if present):
-                //   1. Compile body (in tail position if tail is true)
-                // If no else clause:
-                //   1. Load nil
-
-                if clauses.is_empty() {
-                    // (cond) with no clauses => nil, or else_body if present
-                    if let Some(else_expr) = else_body {
-                        self.compile_expr(else_expr, tail);
-                    } else {
-                        self.bytecode.emit(Instruction::Nil);
-                    }
-                    return;
-                }
-
-                let mut end_jumps = Vec::new();
-
-                // Compile each clause
-                for (test, body) in clauses {
-                    self.compile_expr(test, false);
-
-                    self.bytecode.emit(Instruction::JumpIfFalse);
-                    let next_clause_jump = self.bytecode.instructions.len();
-                    self.bytecode.emit_u16(0); // Placeholder for next clause
-
-                    // Compile the body
-                    self.compile_expr(body, tail);
-
-                    // Jump to end after executing this body
-                    self.bytecode.emit(Instruction::Jump);
-                    let end_jump = self.bytecode.instructions.len();
-                    self.bytecode.emit_u16(0); // Placeholder for end
-                    end_jumps.push(end_jump);
-
-                    // Patch the jump to next clause
-                    let next_clause_pos = self.bytecode.instructions.len();
-                    let offset = (next_clause_pos as i32) - (next_clause_jump as i32 + 2);
-                    self.bytecode.patch_jump(next_clause_jump, offset as i16);
-                }
-
-                // Handle else clause or nil
-                if let Some(else_expr) = else_body {
-                    self.compile_expr(else_expr, tail);
-                } else {
-                    self.bytecode.emit(Instruction::Nil);
-                }
-
-                // Patch all end jumps
-                let end_pos = self.bytecode.instructions.len();
-                for jump_pos in end_jumps {
-                    let offset = (end_pos as i32) - (jump_pos as i32 + 2);
-                    self.bytecode.patch_jump(jump_pos, offset as i16);
-                }
+                self.compile_cond(clauses, else_body, tail);
             }
 
             Expr::Xor(_) => {
@@ -1039,6 +848,197 @@ impl Compiler {
                 // For Phase 2, just check the pattern
                 self.compile_pattern_check(inner)
             }
+        }
+    }
+
+    /// Compile literal values (nil, booleans, and constants)
+    fn compile_literal(&mut self, val: &Value) {
+        match val {
+            Value::Nil => self.bytecode.emit(Instruction::Nil),
+            Value::Bool(true) => self.bytecode.emit(Instruction::True),
+            Value::Bool(false) => self.bytecode.emit(Instruction::False),
+            _ => {
+                let idx = self.bytecode.add_constant(val.clone());
+                self.bytecode.emit(Instruction::LoadConst);
+                self.bytecode.emit_u16(idx);
+            }
+        }
+    }
+
+    /// Compile an if expression
+    fn compile_if(&mut self, cond: &Expr, then_expr: &Expr, else_expr: &Expr, tail: bool) {
+        self.compile_expr(cond, false);
+        self.bytecode.emit(Instruction::JumpIfFalse);
+        let else_jump = self.bytecode.current_pos();
+        self.bytecode.emit_u16(0); // Placeholder
+
+        self.compile_expr(then_expr, tail);
+        self.bytecode.emit(Instruction::Jump);
+        let end_jump = self.bytecode.current_pos();
+        self.bytecode.emit_u16(0); // Placeholder
+
+        let else_pos = self.bytecode.current_pos();
+        self.bytecode
+            .patch_jump(else_jump, (else_pos - else_jump - 2) as i16);
+
+        self.compile_expr(else_expr, tail);
+
+        let end_pos = self.bytecode.current_pos();
+        self.bytecode
+            .patch_jump(end_jump, (end_pos - end_jump - 2) as i16);
+    }
+
+    /// Compile a while loop
+    fn compile_while(&mut self, cond: &Expr, body: &Expr) {
+        // Push loop scope to isolate loop variables
+        self.bytecode.emit(Instruction::PushScope);
+        self.bytecode.emit_byte(3); // ScopeType::Loop = 3
+        self.scope_depth += 1;
+
+        // Implement while loop using conditional jumps
+        let loop_label = self.bytecode.current_pos() as i32;
+
+        // Compile condition
+        self.compile_expr(cond, false);
+
+        // Jump to end if condition is false
+        self.bytecode.emit(Instruction::JumpIfFalse);
+        let exit_jump = self.bytecode.current_pos() as i32;
+        self.bytecode.emit_u16(0);
+
+        // Compile body
+        self.compile_expr(body, false);
+        self.bytecode.emit(Instruction::Pop);
+
+        // Jump back to loop condition
+        self.bytecode.emit(Instruction::Jump);
+        let loop_jump = self.bytecode.current_pos() as i32;
+        self.bytecode.emit_u16(0);
+
+        // Patch the exit jump
+        let exit_pos = self.bytecode.current_pos() as i32;
+        self.bytecode
+            .patch_jump(exit_jump as usize, (exit_pos - exit_jump - 2) as i16);
+
+        // Patch the loop back jump
+        self.bytecode
+            .patch_jump(loop_jump as usize, (loop_label - loop_jump - 2) as i16);
+
+        self.scope_depth -= 1;
+        self.bytecode.emit(Instruction::PopScope);
+        self.bytecode.emit(Instruction::Nil);
+    }
+
+    /// Compile a for loop
+    fn compile_for(&mut self, var: &SymbolId, iter: &Expr, body: &Expr) {
+        self.bytecode.emit(Instruction::PushScope);
+        self.bytecode.emit_byte(3); // ScopeType::Loop = 3
+        self.scope_depth += 1;
+
+        // Compile the iterable
+        self.compile_expr(iter, false);
+
+        // Loop start
+        let loop_label = self.bytecode.current_pos() as i32;
+
+        // Check if list is nil
+        self.bytecode.emit(Instruction::Dup);
+        self.bytecode.emit(Instruction::IsNil);
+        self.bytecode.emit(Instruction::JumpIfTrue);
+        let exit_jump = self.bytecode.current_pos() as i32;
+        self.bytecode.emit_u16(0);
+
+        // Extract car
+        self.bytecode.emit(Instruction::Dup);
+        self.bytecode.emit(Instruction::Car);
+
+        // Store in loop variable
+        let var_idx = self.bytecode.add_constant(Value::Symbol(*var));
+        self.bytecode.emit(Instruction::DefineLocal);
+        self.bytecode.emit_u16(var_idx);
+        self.bytecode.emit(Instruction::Pop);
+
+        // Compile body
+        self.compile_expr(body, false);
+        self.bytecode.emit(Instruction::Pop);
+
+        // Update list to rest
+        self.bytecode.emit(Instruction::Cdr);
+
+        // Loop back
+        self.bytecode.emit(Instruction::Jump);
+        let loop_jump = self.bytecode.current_pos() as i32;
+        self.bytecode.emit_u16(0);
+
+        // Patch exit jump
+        let exit_pos = self.bytecode.current_pos() as i32;
+        self.bytecode
+            .patch_jump(exit_jump as usize, (exit_pos - exit_jump - 2) as i16);
+
+        // Patch the loop back jump
+        self.bytecode
+            .patch_jump(loop_jump as usize, (loop_label - loop_jump - 2) as i16);
+
+        self.scope_depth -= 1;
+        self.bytecode.emit(Instruction::PopScope);
+        self.bytecode.emit(Instruction::Pop);
+        self.bytecode.emit(Instruction::Nil);
+    }
+
+    /// Compile a cond expression
+    fn compile_cond(
+        &mut self,
+        clauses: &[(Expr, Expr)],
+        else_body: &Option<Box<Expr>>,
+        tail: bool,
+    ) {
+        if clauses.is_empty() {
+            // (cond) with no clauses => nil, or else_body if present
+            if let Some(else_expr) = else_body {
+                self.compile_expr(else_expr, tail);
+            } else {
+                self.bytecode.emit(Instruction::Nil);
+            }
+            return;
+        }
+
+        let mut end_jumps = Vec::new();
+
+        // Compile each clause
+        for (test, body) in clauses {
+            self.compile_expr(test, false);
+
+            self.bytecode.emit(Instruction::JumpIfFalse);
+            let next_clause_jump = self.bytecode.instructions.len();
+            self.bytecode.emit_u16(0); // Placeholder for next clause
+
+            // Compile the body
+            self.compile_expr(body, tail);
+
+            // Jump to end after executing this body
+            self.bytecode.emit(Instruction::Jump);
+            let end_jump = self.bytecode.instructions.len();
+            self.bytecode.emit_u16(0); // Placeholder for end
+            end_jumps.push(end_jump);
+
+            // Patch the jump to next clause
+            let next_clause_pos = self.bytecode.instructions.len();
+            let offset = (next_clause_pos as i32) - (next_clause_jump as i32 + 2);
+            self.bytecode.patch_jump(next_clause_jump, offset as i16);
+        }
+
+        // Handle else clause or nil
+        if let Some(else_expr) = else_body {
+            self.compile_expr(else_expr, tail);
+        } else {
+            self.bytecode.emit(Instruction::Nil);
+        }
+
+        // Patch all end jumps
+        let end_pos = self.bytecode.instructions.len();
+        for jump_pos in end_jumps {
+            let offset = (end_pos as i32) - (jump_pos as i32 + 2);
+            self.bytecode.patch_jump(jump_pos, offset as i16);
         }
     }
 
