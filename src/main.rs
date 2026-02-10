@@ -54,47 +54,6 @@ fn print_help() {
     println!();
 }
 
-/// Format and print an error message with source context
-fn print_error_with_context(error_msg: &str, source: Option<&str>) {
-    // Check if error message contains location info (format: "line:col: message")
-    if let Some(colon_pos) = error_msg.find(':') {
-        if let Ok(line_num) = error_msg[..colon_pos].parse::<usize>() {
-            // Found line number, try to parse column
-            let rest = &error_msg[colon_pos + 1..];
-            if let Some(second_colon) = rest.find(':') {
-                if let Ok(col_num) = rest[..second_colon].parse::<usize>() {
-                    let message = &rest[second_colon + 1..].trim_start();
-
-                    // Print error header
-                    eprintln!("error: {}", message);
-
-                    // Try to print source context
-                    if let Some(src) = source {
-                        if let Some(line) =
-                            elle::error::formatting::extract_source_line(src, line_num)
-                        {
-                            let line_num_str = line_num.to_string();
-                            let padding = " ".repeat(line_num_str.len());
-                            eprintln!("  --> {}:{}:{}", "<input>", line_num, col_num);
-                            eprintln!("   |");
-                            eprintln!(" {} | {}", line_num_str, line);
-                            eprintln!(
-                                " {} | {}",
-                                padding,
-                                elle::error::formatting::highlight_column(&line, col_num)
-                            );
-                        }
-                    }
-                    return;
-                }
-            }
-        }
-    }
-
-    // Fallback: just print the error as-is
-    eprintln!("error: {}", error_msg);
-}
-
 fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<(), String> {
     let mut contents =
         fs::read_to_string(filename).map_err(|e| format!("Failed to read file: {}", e))?;
