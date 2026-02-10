@@ -60,83 +60,11 @@ impl Compiler {
             }
 
             Expr::Begin(exprs) => {
-                // Pre-declare all defines to enable recursive functions and forward references
-                // This allows a function to reference itself in its own body
-                let defines = collect_defines(expr);
-                for sym_id in defines {
-                    // Skip pre-declaration for lambda locals — their cells are pre-allocated by the Call handler
-                    if self.lambda_locals.contains(&sym_id) {
-                        continue;
-                    }
-                    // Load nil and store it
-                    self.bytecode.emit(Instruction::Nil);
-                    let idx = self.bytecode.add_constant(Value::Symbol(sym_id));
-                    if !self.lambda_locals.is_empty() {
-                        // Inside a lambda — store to closure environment
-                        if let Some(local_idx) =
-                            self.lambda_locals.iter().position(|s| s == &sym_id)
-                        {
-                            let env_idx =
-                                self.lambda_captures_len + self.lambda_params_len + local_idx;
-                            self.bytecode.emit(Instruction::StoreUpvalue);
-                            self.bytecode.emit_byte(1); // depth = 1 (current closure)
-                            self.bytecode.emit_byte(env_idx as u8);
-                        } else {
-                            // Symbol is not in lambda_locals, so it's not a local variable
-                            // This shouldn't happen in normal code, but we'll skip it
-                            self.bytecode.emit(Instruction::Pop);
-                        }
-                    } else if self.scope_depth > 0 {
-                        // Inside a block/loop scope (not a lambda) — define locally
-                        self.bytecode.emit(Instruction::DefineLocal);
-                        self.bytecode.emit_u16(idx);
-                        // DefineLocal pushes the value back, but we don't need it for pre-declaration
-                        self.bytecode.emit(Instruction::Pop);
-                    } else {
-                        // Top-level — define globally
-                        self.bytecode.emit(Instruction::StoreGlobal);
-                        self.bytecode.emit_u16(idx);
-                    }
-                }
-
-                // Now compile the expressions normally
-                for (i, expr) in exprs.iter().enumerate() {
-                    let is_last = i == exprs.len() - 1;
-                    self.compile_expr(expr, tail && is_last);
-                    if !is_last {
-                        self.bytecode.emit(Instruction::Pop);
-                    }
-                }
+                self.compile_begin(exprs, tail);
             }
 
             Expr::Block(exprs) => {
-                // Push block scope
-                self.bytecode.emit(Instruction::PushScope);
-                self.bytecode.emit_byte(2); // ScopeType::Block = 2
-                self.scope_depth += 1;
-
-                // Pre-declare defines within the block for mutual visibility
-                let defines = collect_defines(expr);
-                for sym_id in defines {
-                    self.bytecode.emit(Instruction::Nil);
-                    let idx = self.bytecode.add_constant(Value::Symbol(sym_id));
-                    self.bytecode.emit(Instruction::DefineLocal);
-                    self.bytecode.emit_u16(idx);
-                    // DefineLocal pushes the value back, but we don't need it for pre-declaration
-                    self.bytecode.emit(Instruction::Pop);
-                }
-
-                // Compile expressions
-                for (i, expr) in exprs.iter().enumerate() {
-                    let is_last = i == exprs.len() - 1;
-                    self.compile_expr(expr, tail && is_last);
-                    if !is_last {
-                        self.bytecode.emit(Instruction::Pop);
-                    }
-                }
-
-                self.scope_depth -= 1;
-                self.bytecode.emit(Instruction::PopScope);
+                self.compile_block(exprs, tail);
             }
 
             Expr::Call {
@@ -703,76 +631,11 @@ impl Compiler {
             }
 
             Expr::And(exprs) => {
-                // Short-circuit AND: returns first falsy value or last value
-                // (and) => true, (and a) => a, (and a b c) => c if all truthy, else first falsy
-                if exprs.is_empty() {
-                    self.bytecode.emit(Instruction::True);
-                    return;
-                }
-
-                let mut end_jumps = Vec::new();
-
-                for (i, expr) in exprs.iter().enumerate() {
-                    self.compile_expr(expr, false);
-
-                    // For all but the last expression, check if it's false
-                    if i < exprs.len() - 1 {
-                        // Dup the value to check it without consuming it
-                        self.bytecode.emit(Instruction::Dup);
-                        self.bytecode.emit(Instruction::Not);
-                        self.bytecode.emit(Instruction::JumpIfTrue);
-                        let exit_jump = self.bytecode.instructions.len();
-                        self.bytecode.emit_u16(0); // Placeholder
-
-                        // Pop the duplicate for the next evaluation
-                        self.bytecode.emit(Instruction::Pop);
-
-                        end_jumps.push(exit_jump);
-                    }
-                }
-
-                // Patch all exit jumps (for falsy values) to the end
-                let end_pos = self.bytecode.instructions.len();
-                for jump_pos in end_jumps {
-                    let offset = (end_pos as i32) - (jump_pos as i32 + 2);
-                    self.bytecode.patch_jump(jump_pos, offset as i16);
-                }
+                self.compile_and(exprs);
             }
 
             Expr::Or(exprs) => {
-                // Short-circuit OR: returns first truthy value or last value
-                // (or) => false, (or a) => a, (or a b c) => a if truthy, else next...
-                if exprs.is_empty() {
-                    self.bytecode.emit(Instruction::False);
-                    return;
-                }
-
-                let mut end_jumps = Vec::new();
-
-                for (i, expr) in exprs.iter().enumerate() {
-                    self.compile_expr(expr, false);
-
-                    // For all but the last expression, check if it's true
-                    if i < exprs.len() - 1 {
-                        // Dup the value to check it without consuming it
-                        self.bytecode.emit(Instruction::Dup);
-                        self.bytecode.emit(Instruction::JumpIfTrue);
-                        let exit_jump = self.bytecode.instructions.len();
-                        self.bytecode.emit_u16(0); // Placeholder
-
-                        // Pop the duplicate for the next evaluation
-                        self.bytecode.emit(Instruction::Pop);
-
-                        end_jumps.push(exit_jump);
-                    }
-                }
-
-                // Patch all exit jumps (for truthy values) to the end
-                let end_pos = self.bytecode.instructions.len();
-                for jump_pos in end_jumps {
-                    let offset = (end_pos as i32) - (jump_pos as i32 + 2);
-                    self.bytecode.patch_jump(jump_pos, offset as i16);
-                }
+                self.compile_or(exprs);
             }
 
             Expr::Cond { clauses, else_body } => {
@@ -1035,6 +898,162 @@ impl Compiler {
         }
 
         // Patch all end jumps
+        let end_pos = self.bytecode.instructions.len();
+        for jump_pos in end_jumps {
+            let offset = (end_pos as i32) - (jump_pos as i32 + 2);
+            self.bytecode.patch_jump(jump_pos, offset as i16);
+        }
+    }
+
+    /// Compile a begin expression with pre-declared defines
+    fn compile_begin(&mut self, exprs: &[Expr], tail: bool) {
+        // Pre-declare all defines to enable recursive functions and forward references
+        // This allows a function to reference itself in its own body
+        let temp_expr = Expr::Begin(exprs.to_vec());
+        let defines = collect_defines(&temp_expr);
+        for sym_id in defines {
+            // Skip pre-declaration for lambda locals — their cells are pre-allocated by the Call handler
+            if self.lambda_locals.contains(&sym_id) {
+                continue;
+            }
+            // Load nil and store it
+            self.bytecode.emit(Instruction::Nil);
+            let idx = self.bytecode.add_constant(Value::Symbol(sym_id));
+            if !self.lambda_locals.is_empty() {
+                // Inside a lambda — store to closure environment
+                if let Some(local_idx) = self.lambda_locals.iter().position(|s| s == &sym_id) {
+                    let env_idx = self.lambda_captures_len + self.lambda_params_len + local_idx;
+                    self.bytecode.emit(Instruction::StoreUpvalue);
+                    self.bytecode.emit_byte(1); // depth = 1 (current closure)
+                    self.bytecode.emit_byte(env_idx as u8);
+                } else {
+                    // Symbol is not in lambda_locals, so it's not a local variable
+                    // This shouldn't happen in normal code, but we'll skip it
+                    self.bytecode.emit(Instruction::Pop);
+                }
+            } else if self.scope_depth > 0 {
+                // Inside a block/loop scope (not a lambda) — define locally
+                self.bytecode.emit(Instruction::DefineLocal);
+                self.bytecode.emit_u16(idx);
+                // DefineLocal pushes the value back, but we don't need it for pre-declaration
+                self.bytecode.emit(Instruction::Pop);
+            } else {
+                // Top-level — define globally
+                self.bytecode.emit(Instruction::StoreGlobal);
+                self.bytecode.emit_u16(idx);
+            }
+        }
+
+        // Now compile the expressions normally
+        for (i, expr) in exprs.iter().enumerate() {
+            let is_last = i == exprs.len() - 1;
+            self.compile_expr(expr, tail && is_last);
+            if !is_last {
+                self.bytecode.emit(Instruction::Pop);
+            }
+        }
+    }
+
+    /// Compile a block expression with scoped defines
+    fn compile_block(&mut self, exprs: &[Expr], tail: bool) {
+        // Push block scope
+        self.bytecode.emit(Instruction::PushScope);
+        self.bytecode.emit_byte(2); // ScopeType::Block = 2
+        self.scope_depth += 1;
+
+        // Pre-declare defines within the block for mutual visibility
+        let temp_expr = Expr::Block(exprs.to_vec());
+        let defines = collect_defines(&temp_expr);
+        for sym_id in defines {
+            self.bytecode.emit(Instruction::Nil);
+            let idx = self.bytecode.add_constant(Value::Symbol(sym_id));
+            self.bytecode.emit(Instruction::DefineLocal);
+            self.bytecode.emit_u16(idx);
+            // DefineLocal pushes the value back, but we don't need it for pre-declaration
+            self.bytecode.emit(Instruction::Pop);
+        }
+
+        // Compile expressions
+        for (i, expr) in exprs.iter().enumerate() {
+            let is_last = i == exprs.len() - 1;
+            self.compile_expr(expr, tail && is_last);
+            if !is_last {
+                self.bytecode.emit(Instruction::Pop);
+            }
+        }
+
+        self.scope_depth -= 1;
+        self.bytecode.emit(Instruction::PopScope);
+    }
+
+    /// Compile a short-circuit AND expression
+    fn compile_and(&mut self, exprs: &[Expr]) {
+        // Short-circuit AND: returns first falsy value or last value
+        // (and) => true, (and a) => a, (and a b c) => c if all truthy, else first falsy
+        if exprs.is_empty() {
+            self.bytecode.emit(Instruction::True);
+            return;
+        }
+
+        let mut end_jumps = Vec::new();
+
+        for (i, expr) in exprs.iter().enumerate() {
+            self.compile_expr(expr, false);
+
+            // For all but the last expression, check if it's false
+            if i < exprs.len() - 1 {
+                // Dup the value to check it without consuming it
+                self.bytecode.emit(Instruction::Dup);
+                self.bytecode.emit(Instruction::Not);
+                self.bytecode.emit(Instruction::JumpIfTrue);
+                let exit_jump = self.bytecode.instructions.len();
+                self.bytecode.emit_u16(0); // Placeholder
+
+                // Pop the duplicate for the next evaluation
+                self.bytecode.emit(Instruction::Pop);
+
+                end_jumps.push(exit_jump);
+            }
+        }
+
+        // Patch all exit jumps (for falsy values) to the end
+        let end_pos = self.bytecode.instructions.len();
+        for jump_pos in end_jumps {
+            let offset = (end_pos as i32) - (jump_pos as i32 + 2);
+            self.bytecode.patch_jump(jump_pos, offset as i16);
+        }
+    }
+
+    /// Compile a short-circuit OR expression
+    fn compile_or(&mut self, exprs: &[Expr]) {
+        // Short-circuit OR: returns first truthy value or last value
+        // (or) => false, (or a) => a, (or a b c) => a if truthy, else next...
+        if exprs.is_empty() {
+            self.bytecode.emit(Instruction::False);
+            return;
+        }
+
+        let mut end_jumps = Vec::new();
+
+        for (i, expr) in exprs.iter().enumerate() {
+            self.compile_expr(expr, false);
+
+            // For all but the last expression, check if it's true
+            if i < exprs.len() - 1 {
+                // Dup the value to check it without consuming it
+                self.bytecode.emit(Instruction::Dup);
+                self.bytecode.emit(Instruction::JumpIfTrue);
+                let exit_jump = self.bytecode.instructions.len();
+                self.bytecode.emit_u16(0); // Placeholder
+
+                // Pop the duplicate for the next evaluation
+                self.bytecode.emit(Instruction::Pop);
+
+                end_jumps.push(exit_jump);
+            }
+        }
+
+        // Patch all exit jumps (for truthy values) to the end
         let end_pos = self.bytecode.instructions.len();
         for jump_pos in end_jumps {
             let offset = (end_pos as i32) - (jump_pos as i32 + 2);
