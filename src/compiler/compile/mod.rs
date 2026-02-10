@@ -185,60 +185,11 @@ impl Compiler {
             }
 
             Expr::Let { bindings, body } => {
-                // Let-bindings create a local scope with proper isolation
-                // NOTE: Currently, let-bindings are transformed to lambda calls at the converter stage
-                // (see src/compiler/converters.rs), so this code is never reached in normal execution.
-                // This implementation is preserved for future direct let-binding compilation.
-
-                // Push a Let scope
-                self.bytecode.emit(Instruction::PushScope);
-                self.bytecode.emit_byte(4); // ScopeType::Let = 4
-
-                // Compile and store each binding in the local scope
-                for (var, expr) in bindings {
-                    // Compile the binding expression
-                    self.compile_expr(expr, false);
-                    // Define the variable in the let scope
-                    let idx = self.bytecode.add_constant(Value::Symbol(*var));
-                    self.bytecode.emit(Instruction::DefineLocal);
-                    self.bytecode.emit_u16(idx);
-                }
-
-                // Compile the body in the let scope
-                self.compile_expr(body, tail);
-
-                // Pop the let scope
-                self.bytecode.emit(Instruction::PopScope);
+                self.compile_let(bindings, body, tail);
             }
 
             Expr::Letrec { bindings, body } => {
-                // Letrec creates a scope where all bindings are mutually visible
-                // Pre-declare all binding names as nil, then update them with their values
-                self.bytecode.emit(Instruction::PushScope);
-                self.bytecode.emit_byte(4); // ScopeType::Let = 4
-                self.scope_depth += 1;
-
-                // Pre-declare all binding names as nil (enables mutual references)
-                for (var, _) in bindings {
-                    self.bytecode.emit(Instruction::Nil);
-                    let idx = self.bytecode.add_constant(Value::Symbol(*var));
-                    self.bytecode.emit(Instruction::DefineLocal);
-                    self.bytecode.emit_u16(idx);
-                }
-
-                // Compile each binding expression and update the scope
-                for (var, expr) in bindings {
-                    self.compile_expr(expr, false);
-                    let idx = self.bytecode.add_constant(Value::Symbol(*var));
-                    self.bytecode.emit(Instruction::DefineLocal);
-                    self.bytecode.emit_u16(idx);
-                }
-
-                // Compile the body
-                self.compile_expr(body, tail);
-
-                self.scope_depth -= 1;
-                self.bytecode.emit(Instruction::PopScope);
+                self.compile_letrec(bindings, body, tail);
             }
 
             Expr::Set {
@@ -1085,6 +1036,65 @@ impl Compiler {
         // For now, just compile the body (no unwinding handlers supported yet)
         // TODO: Implement actual handler-bind execution with non-unwinding semantics
         self.compile_expr(body, tail);
+    }
+
+    /// Compile a let binding expression with proper scope isolation
+    fn compile_let(&mut self, bindings: &[(SymbolId, Expr)], body: &Expr, tail: bool) {
+        // Let-bindings create a local scope with proper isolation
+        // NOTE: Currently, let-bindings are transformed to lambda calls at the converter stage
+        // (see src/compiler/converters.rs), so this code is never reached in normal execution.
+        // This implementation is preserved for future direct let-binding compilation.
+
+        // Push a Let scope
+        self.bytecode.emit(Instruction::PushScope);
+        self.bytecode.emit_byte(4); // ScopeType::Let = 4
+
+        // Compile and store each binding in the local scope
+        for (var, expr) in bindings {
+            // Compile the binding expression
+            self.compile_expr(expr, false);
+            // Define the variable in the let scope
+            let idx = self.bytecode.add_constant(Value::Symbol(*var));
+            self.bytecode.emit(Instruction::DefineLocal);
+            self.bytecode.emit_u16(idx);
+        }
+
+        // Compile the body in the let scope
+        self.compile_expr(body, tail);
+
+        // Pop the let scope
+        self.bytecode.emit(Instruction::PopScope);
+    }
+
+    /// Compile a letrec binding expression where bindings are mutually visible
+    fn compile_letrec(&mut self, bindings: &[(SymbolId, Expr)], body: &Expr, tail: bool) {
+        // Letrec creates a scope where all bindings are mutually visible
+        // Pre-declare all binding names as nil, then update them with their values
+        self.bytecode.emit(Instruction::PushScope);
+        self.bytecode.emit_byte(4); // ScopeType::Let = 4
+        self.scope_depth += 1;
+
+        // Pre-declare all binding names as nil (enables mutual references)
+        for (var, _) in bindings {
+            self.bytecode.emit(Instruction::Nil);
+            let idx = self.bytecode.add_constant(Value::Symbol(*var));
+            self.bytecode.emit(Instruction::DefineLocal);
+            self.bytecode.emit_u16(idx);
+        }
+
+        // Compile each binding expression and update the scope
+        for (var, expr) in bindings {
+            self.compile_expr(expr, false);
+            let idx = self.bytecode.add_constant(Value::Symbol(*var));
+            self.bytecode.emit(Instruction::DefineLocal);
+            self.bytecode.emit_u16(idx);
+        }
+
+        // Compile the body
+        self.compile_expr(body, tail);
+
+        self.scope_depth -= 1;
+        self.bytecode.emit(Instruction::PopScope);
     }
 
     fn finish(self) -> Bytecode {
