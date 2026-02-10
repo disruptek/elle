@@ -294,9 +294,31 @@ fn run_repl(vm: &mut VM, symbols: &mut SymbolTable) {
                             // Expression is incomplete, prompt for more input on next line
                             // Don't print an error, just continue accumulating
                         } else {
-                            // Real parse error
-                            eprintln!("✗ Parse error: {}", e);
-                            print_error_context(accumulated_input.trim(), "parse error", 1, 1);
+                            // Real parse error - extract line and column from error message
+                            let err_msg = e.to_string();
+                            eprintln!("✗ Parse error: {}", err_msg);
+
+                            // Try to extract line and column from format like "<input>:1:3: message"
+                            let (line, col) = if let Some(colon_pos) = err_msg.find(':') {
+                                let rest = &err_msg[colon_pos + 1..];
+                                if let Ok(line_num) =
+                                    rest.split(':').next().unwrap_or("1").parse::<usize>()
+                                {
+                                    if let Ok(col_num) =
+                                        rest.split(':').nth(1).unwrap_or("1").parse::<usize>()
+                                    {
+                                        (line_num, col_num)
+                                    } else {
+                                        (line_num, 1)
+                                    }
+                                } else {
+                                    (1, 1)
+                                }
+                            } else {
+                                (1, 1)
+                            };
+
+                            print_error_context(accumulated_input.trim(), "parse error", line, col);
                             accumulated_input.clear();
                         }
                     }
@@ -391,9 +413,30 @@ fn run_repl_fallback(vm: &mut VM, symbols: &mut SymbolTable) {
                     print!(". ");
                     io::stdout().flush().unwrap();
                 } else {
-                    // Real parse error
-                    eprintln!("✗ Parse error: {}", e);
-                    print_error_context(trimmed, "parse error", 1, 1);
+                    // Real parse error - extract line and column from error message
+                    let err_msg = e.to_string();
+                    eprintln!("✗ Parse error: {}", err_msg);
+
+                    // Try to extract line and column from format like "<input>:1:3: message"
+                    let (line, col) = if let Some(colon_pos) = err_msg.find(':') {
+                        let rest = &err_msg[colon_pos + 1..];
+                        if let Ok(line_num) = rest.split(':').next().unwrap_or("1").parse::<usize>()
+                        {
+                            if let Ok(col_num) =
+                                rest.split(':').nth(1).unwrap_or("1").parse::<usize>()
+                            {
+                                (line_num, col_num)
+                            } else {
+                                (line_num, 1)
+                            }
+                        } else {
+                            (1, 1)
+                        }
+                    } else {
+                        (1, 1)
+                    };
+
+                    print_error_context(trimmed, "parse error", line, col);
                     accumulated_input.clear();
                 }
             }
