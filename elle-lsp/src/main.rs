@@ -53,11 +53,10 @@ fn main() {
         if let Ok(request) = serde_json::from_str::<Value>(&message) {
             // LSP spec: Notifications have no "id" field and must NOT receive a response.
             // Requests have an "id" field and MUST receive a response.
-            let is_notification = request.get("id").is_none();
             let (response, notifications) = handle_request(&request, &mut compiler_state);
 
             // Only send response for requests (not notifications)
-            if !is_notification {
+            if request.get("id").is_some() {
                 let body = response.to_string();
                 let _ = write!(stdout, "Content-Length: {}\r\n\r\n{}", body.len(), body);
                 let _ = stdout.flush();
