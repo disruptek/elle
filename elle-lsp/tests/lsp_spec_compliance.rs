@@ -511,7 +511,7 @@ mod lsp_compliance {
     fn test_request_methods_have_id() {
         // LSP 3.17: Requests are messages that have an "id" field.
         // The server MUST send a response for every request.
-        let request_methods = vec![
+        let request_methods = [
             "initialize",
             "shutdown",
             "textDocument/hover",
