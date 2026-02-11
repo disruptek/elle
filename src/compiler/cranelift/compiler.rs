@@ -1298,12 +1298,12 @@ mod tests {
         let mut symbols = SymbolTable::new();
         let x_sym = symbols.intern("x");
 
-        // Test: (let ((x 3.14)) x)
+        // Test: (let ((x 3.14159265358979)) x)
         let mut ctx = CompileContext::new(&mut builder, &symbols);
         let result = ExprCompiler::compile_expr_block(
             &mut ctx,
             &Expr::Let {
-                bindings: vec![(x_sym, Expr::Literal(Value::Float(3.14)))],
+                bindings: vec![(x_sym, Expr::Literal(Value::Float(std::f64::consts::PI)))],
                 body: Box::new(Expr::Var(x_sym, 1, 0)),
             },
         );
