@@ -25,6 +25,15 @@ pub enum IrValue {
     F64(cranelift::prelude::Value),
 }
 
+/// Context for JIT-compiling a function, enabling tail call optimization
+#[derive(Debug, Clone)]
+pub struct JitFunctionContext {
+    /// Block to jump to for self-recursive tail calls
+    pub body_block: Block,
+    /// Current function's name (for self-call detection)
+    pub current_function_name: Option<String>,
+}
+
 /// Compilation context for JIT code generation with variable support
 pub struct CompileContext<'a, 'b, 'c> {
     pub builder: &'a mut FunctionBuilder<'b>,
@@ -33,6 +42,7 @@ pub struct CompileContext<'a, 'b, 'c> {
     pub stack_allocator: StackAllocator,
     pub module: &'c mut JITModule,
     pub primitives: &'a super::primitive_registry::PrimitiveRegistry,
+    pub func_ctx: Option<JitFunctionContext>,
 }
 
 impl<'a, 'b, 'c> CompileContext<'a, 'b, 'c> {
@@ -49,6 +59,7 @@ impl<'a, 'b, 'c> CompileContext<'a, 'b, 'c> {
             stack_allocator: StackAllocator::new(),
             module,
             primitives,
+            func_ctx: None,
         }
     }
 }
@@ -153,17 +164,30 @@ impl ExprCompiler {
             // Try to compile For loops
             Expr::For { var, iter, body } => Self::try_compile_for(ctx, *var, iter, body),
             // Try to compile calls to registered primitives
-            Expr::Call { func, args, .. } => {
+            Expr::Call { func, args, tail } => {
                 // First, try to get the function name
                 let func_name = match func.as_ref() {
-                    Expr::GlobalVar(sym_id) => ctx.symbols.name(*sym_id),
-                    Expr::Literal(Value::Symbol(sym_id)) => ctx.symbols.name(*sym_id),
+                    Expr::GlobalVar(sym_id) => ctx.symbols.name(*sym_id).map(|s| s.to_string()),
+                    Expr::Literal(Value::Symbol(sym_id)) => {
+                        ctx.symbols.name(*sym_id).map(|s| s.to_string())
+                    }
                     _ => None,
                 };
 
+                // Check for self-recursive tail call
+                if *tail {
+                    if let Some(ref name) = func_name {
+                        if let Some(ref func_ctx) = ctx.func_ctx.clone() {
+                            if func_ctx.current_function_name.as_ref() == Some(name) {
+                                return Self::compile_self_recursive_tail_call(ctx, args, func_ctx);
+                            }
+                        }
+                    }
+                }
+
                 // Check if it's a registered primitive
                 if let Some(name) = func_name {
-                    if let Some(prim) = ctx.primitives.get(name) {
+                    if let Some(prim) = ctx.primitives.get(&name) {
                         return Self::compile_primitive_call(ctx, prim, args);
                     }
                 }
@@ -1107,6 +1131,32 @@ impl ExprCompiler {
         }
     }
 
+    /// Compile a self-recursive tail call as a native jump
+    fn compile_self_recursive_tail_call(
+        ctx: &mut CompileContext,
+        args: &[Expr],
+        func_ctx: &JitFunctionContext,
+    ) -> Result<IrValue, String> {
+        // Compile all arguments
+        let mut arg_values = Vec::new();
+        for arg in args {
+            let val = Self::compile_expr_block(ctx, arg)?;
+            let val_i64 = Self::ir_value_to_i64(ctx.builder, val)?;
+            arg_values.push(val_i64);
+        }
+
+        // Jump to body block with new argument values
+        ctx.builder.ins().jump(func_ctx.body_block, &arg_values);
+
+        // Create unreachable block for continuation
+        let unreachable = ctx.builder.create_block();
+        ctx.builder.switch_to_block(unreachable);
+        ctx.builder.seal_block(unreachable);
+
+        // Return dummy value (unreachable)
+        Ok(IrValue::I64(ctx.builder.ins().iconst(types::I64, 0)))
+    }
+
     /// Compile a call to a registered primitive
     fn compile_primitive_call(
         ctx: &mut CompileContext,
@@ -1603,5 +1653,74 @@ mod tests {
             "Failed to compile for loop with floats: {:?}",
             result.err()
         );
+    }
+
+    #[test]
+    fn test_jit_function_context_creation() {
+        // Test that JitFunctionContext can be created and used
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func = ir::Function::new();
+        func.signature.params.push(AbiParam::new(types::I64));
+        func.signature.params.push(AbiParam::new(types::I64));
+        func.signature.returns.push(AbiParam::new(types::I64));
+
+        let mut builder = FunctionBuilder::new(&mut func, &mut builder_ctx);
+        let body_block = builder.create_block();
+        builder.append_block_param(body_block, types::I64);
+
+        // Create a JitFunctionContext
+        let func_ctx = JitFunctionContext {
+            body_block,
+            current_function_name: Some("countdown".to_string()),
+        };
+
+        assert_eq!(
+            func_ctx.current_function_name,
+            Some("countdown".to_string())
+        );
+        assert!(func_ctx.body_block == body_block);
+    }
+
+    #[test]
+    fn test_compile_context_with_func_ctx() {
+        // Test that CompileContext can hold a JitFunctionContext
+        use crate::symbol::SymbolTable;
+
+        let mut jit_ctx = JITContext::new().expect("Failed to create JIT context");
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func = ir::Function::new();
+        func.signature.params.push(AbiParam::new(types::I64));
+        func.signature.params.push(AbiParam::new(types::I64));
+        func.signature.returns.push(AbiParam::new(types::I64));
+
+        let mut builder = FunctionBuilder::new(&mut func, &mut builder_ctx);
+        let block = builder.create_block();
+        builder.switch_to_block(block);
+        builder.seal_block(block);
+
+        // Create a body block before creating the context
+        let body_block = builder.create_block();
+
+        let symbols = SymbolTable::new();
+        let primitives = PrimitiveRegistry::new();
+        let mut ctx = CompileContext::new(&mut builder, &symbols, &mut jit_ctx.module, &primitives);
+
+        // Initially, func_ctx should be None
+        assert!(ctx.func_ctx.is_none());
+
+        // Set func_ctx
+        ctx.func_ctx = Some(JitFunctionContext {
+            body_block,
+            current_function_name: Some("test_func".to_string()),
+        });
+
+        // Now func_ctx should be Some
+        assert!(ctx.func_ctx.is_some());
+        if let Some(ref func_ctx) = ctx.func_ctx {
+            assert_eq!(
+                func_ctx.current_function_name,
+                Some("test_func".to_string())
+            );
+        }
     }
 }

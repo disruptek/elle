@@ -138,4 +138,55 @@ mod tests {
         ]);
         test_compilation_no_panic(&expr, "complex_expression");
     }
+
+    #[test]
+    fn test_compile_tail_call_flag() {
+        // Test that tail call flag is properly handled during compilation
+        // We test with a primitive operation to ensure the tail flag doesn't break compilation
+        use crate::compiler::cranelift::compiler::CompileContext;
+        use crate::compiler::cranelift::context::JITContext;
+        use crate::compiler::cranelift::PrimitiveRegistry;
+        use crate::symbol::SymbolTable;
+        use crate::value::Value as EllValue;
+        use cranelift::prelude::*;
+
+        // Create a symbol table with the necessary symbols
+        let mut symbols = SymbolTable::new();
+        let plus_sym = symbols.intern("+");
+
+        // Create a simple binary operation marked as a tail call
+        // (+ 1 2) marked as a tail call
+        let expr = Expr::Call {
+            func: Box::new(Expr::GlobalVar(plus_sym)),
+            args: vec![
+                Expr::Literal(EllValue::Int(1)),
+                Expr::Literal(EllValue::Int(2)),
+            ],
+            tail: true, // This is marked as a tail call
+        };
+
+        // Now compile it with the proper symbol table
+        let mut jit_ctx = JITContext::new().expect("Failed to create JIT context");
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func = cranelift::codegen::ir::Function::new();
+        func.signature.params.push(AbiParam::new(types::I64));
+        func.signature.params.push(AbiParam::new(types::I64));
+        func.signature.returns.push(AbiParam::new(types::I64));
+
+        let mut builder = FunctionBuilder::new(&mut func, &mut builder_ctx);
+        let block = builder.create_block();
+        builder.switch_to_block(block);
+        builder.seal_block(block);
+
+        let primitives = PrimitiveRegistry::new();
+        let mut ctx = CompileContext::new(&mut builder, &symbols, &mut jit_ctx.module, &primitives);
+        let result = ExprCompiler::compile_expr_block(&mut ctx, &expr);
+
+        // Should not panic and should successfully compile
+        assert!(
+            result.is_ok(),
+            "Failed to compile tail_call_flag: {:?}",
+            result.err()
+        );
+    }
 }
