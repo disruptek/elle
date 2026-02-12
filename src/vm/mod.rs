@@ -176,9 +176,9 @@ impl VM {
                     }
                     args.reverse();
 
-                    let result = match func {
+                    match func {
                         Value::NativeFn(f) => {
-                            match f(&args) {
+                            let result = match f(&args) {
                                 Ok(val) => val,
                                 Err(msg) if msg == "Division by zero" => {
                                     // Create a division-by-zero exception
@@ -193,9 +193,13 @@ impl VM {
                                     Value::Nil
                                 }
                                 Err(e) => return Err(e),
-                            }
+                            };
+                            self.stack.push(result);
                         }
-                        Value::VmAwareFn(f) => f(&args, self)?,
+                        Value::VmAwareFn(f) => {
+                            let result = f(&args, self)?;
+                            self.stack.push(result);
+                        }
                         Value::Closure(closure) => {
                             self.call_depth += 1;
                             if self.call_depth > 1000 {
@@ -272,14 +276,37 @@ impl VM {
 
                             let new_env_rc = std::rc::Rc::new(new_env);
 
-                            let result = self.execute_bytecode(
-                                &closure.bytecode,
-                                &closure.constants,
-                                Some(&new_env_rc),
-                            )?;
+                            // If we're in a coroutine context, use coroutine-aware execution
+                            // that can handle yields from called functions
+                            if self.in_coroutine() {
+                                let result = self.execute_bytecode_coroutine(
+                                    &closure.bytecode,
+                                    &closure.constants,
+                                    Some(&new_env_rc),
+                                )?;
 
-                            self.call_depth -= 1;
-                            result
+                                self.call_depth -= 1;
+
+                                // If the called function yielded, propagate it up
+                                match result {
+                                    VmResult::Done(v) => {
+                                        self.stack.push(v);
+                                    }
+                                    VmResult::Yielded(v) => {
+                                        // Propagate yield - the caller will handle it
+                                        return Ok(VmResult::Yielded(v));
+                                    }
+                                }
+                            } else {
+                                let result = self.execute_bytecode(
+                                    &closure.bytecode,
+                                    &closure.constants,
+                                    Some(&new_env_rc),
+                                )?;
+
+                                self.call_depth -= 1;
+                                self.stack.push(result);
+                            }
                         }
                         Value::JitClosure(jit_closure) => {
                             // Validate argument count
@@ -317,7 +344,7 @@ impl VM {
                             // Check if we have real native code
                             if !jit_closure.code_ptr.is_null() {
                                 // Call native code!
-                                unsafe {
+                                let result = unsafe {
                                     // Prepare args array
                                     let args_encoded: Vec<i64> =
                                         args.iter().map(encode_value_for_jit).collect();
@@ -340,7 +367,8 @@ impl VM {
 
                                     // Decode result
                                     decode_jit_result(result_encoded)?
-                                }
+                                };
+                                self.stack.push(result);
                             } else if let Some(ref source) = jit_closure.source {
                                 // Fall back to interpreted execution of the source closure
                                 self.call_depth += 1;
@@ -374,22 +402,42 @@ impl VM {
 
                                 let new_env_rc = std::rc::Rc::new(new_env);
 
-                                let result = self.execute_bytecode(
-                                    &source.bytecode,
-                                    &source.constants,
-                                    Some(&new_env_rc),
-                                )?;
+                                // If we're in a coroutine context, use coroutine-aware execution
+                                if self.in_coroutine() {
+                                    let result = self.execute_bytecode_coroutine(
+                                        &source.bytecode,
+                                        &source.constants,
+                                        Some(&new_env_rc),
+                                    )?;
 
-                                self.call_depth -= 1;
-                                result
+                                    self.call_depth -= 1;
+
+                                    // If the called function yielded, propagate it up
+                                    match result {
+                                        VmResult::Done(v) => {
+                                            self.stack.push(v);
+                                        }
+                                        VmResult::Yielded(v) => {
+                                            // Propagate yield - the caller will handle it
+                                            return Ok(VmResult::Yielded(v));
+                                        }
+                                    }
+                                } else {
+                                    let result = self.execute_bytecode(
+                                        &source.bytecode,
+                                        &source.constants,
+                                        Some(&new_env_rc),
+                                    )?;
+
+                                    self.call_depth -= 1;
+                                    self.stack.push(result);
+                                }
                             } else {
                                 return Err("JIT closure has no fallback source".to_string());
                             }
                         }
                         _ => return Err(format!("Cannot call {:?}", func)),
-                    };
-
-                    self.stack.push(result);
+                    }
                 }
 
                 Instruction::TailCall => {
