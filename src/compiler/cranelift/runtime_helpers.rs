@@ -122,6 +122,51 @@ pub fn decode_value_for_jit(encoded: i64) -> Value {
     }
 }
 
+/// Load a global variable by symbol ID
+/// Returns the encoded value, or 0 (nil) if not found
+///
+/// # Safety
+/// Requires VM context to be set via set_vm_context
+#[no_mangle]
+pub extern "C" fn jit_load_global(sym_id: i64) -> i64 {
+    let vm_ptr = match crate::ffi::primitives::context::get_vm_context() {
+        Some(ptr) => ptr,
+        None => {
+            eprintln!("jit_load_global: VM context not set");
+            return 0;
+        }
+    };
+    let vm = unsafe { &*vm_ptr };
+
+    let sym_id_u32 = sym_id as u32;
+
+    // Check scope stack first (for proper shadowing)
+    if let Some(val) = vm.scope_stack.get(sym_id_u32) {
+        // Handle cells (for mutable captures)
+        match val {
+            Value::Cell(cell_rc) => {
+                let cell_ref = cell_rc.borrow();
+                return encode_value_for_jit(&**cell_ref);
+            }
+            _ => return encode_value_for_jit(&val),
+        }
+    }
+
+    // Fall back to global scope
+    if let Some(val) = vm.globals.get(&sym_id_u32) {
+        match val {
+            Value::Cell(cell_rc) => {
+                let cell_ref = cell_rc.borrow();
+                encode_value_for_jit(&**cell_ref)
+            }
+            _ => encode_value_for_jit(val),
+        }
+    } else {
+        eprintln!("jit_load_global: Undefined global variable: {}", sym_id_u32);
+        0 // nil
+    }
+}
+
 /// Runtime helper for JIT tail calls to closures
 /// This function is called via return_call_indirect from JIT code
 ///

@@ -1286,19 +1286,33 @@ impl ExprCompiler {
         use cranelift_module::Module;
 
         // 1. Compile the function expression to get the closure value
-        // For now, we can't compile arbitrary closures from JIT, so return an error
-        // This would require loading the closure from the environment or global scope
-        let callee_val = match func {
-            Expr::GlobalVar(_sym_id) => {
-                // GlobalVar would need to be loaded from the environment
-                // For now, we can't support this in JIT
-                return Err(
-                    "Closure tail calls to global variables not yet supported in JIT".to_string(),
+        let callee_i64 = match func {
+            Expr::GlobalVar(sym_id) => {
+                // Load global variable via runtime helper
+                let helper_addr = ctx.builder.ins().iconst(
+                    types::I64,
+                    super::runtime_helpers::jit_load_global as *const () as usize as i64,
                 );
+
+                // Create signature: fn(sym_id: i64) -> i64
+                let mut sig = ctx.module.make_signature();
+                sig.params.push(AbiParam::new(types::I64)); // sym_id
+                sig.returns.push(AbiParam::new(types::I64)); // result
+                let sig_ref = ctx.builder.import_signature(sig);
+
+                // Call jit_load_global
+                let sym_id_val = ctx.builder.ins().iconst(types::I64, sym_id.0 as i64);
+                let call = ctx
+                    .builder
+                    .ins()
+                    .call_indirect(sig_ref, helper_addr, &[sym_id_val]);
+                ctx.builder.inst_results(call)[0]
             }
-            _ => Self::compile_expr_block(ctx, func)?,
+            _ => {
+                let callee_val = Self::compile_expr_block(ctx, func)?;
+                Self::ir_value_to_i64(ctx.builder, callee_val)?
+            }
         };
-        let callee_i64 = Self::ir_value_to_i64(ctx.builder, callee_val)?;
 
         // 2. Allocate stack space for arguments array
         let args_size = if args.is_empty() { 8 } else { args.len() * 8 };

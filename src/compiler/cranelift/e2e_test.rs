@@ -241,8 +241,8 @@ mod tests {
     }
 
     #[test]
-    fn test_compile_closure_tail_call_not_supported() {
-        // Test that closure tail calls to global variables are not yet supported
+    fn test_compile_global_closure_tail_call() {
+        // Test that closure tail calls to global variables now compile successfully
         use crate::compiler::cranelift::compiler::CompileContext;
         use crate::compiler::cranelift::context::JITContext;
         use crate::compiler::cranelift::PrimitiveRegistry;
@@ -282,14 +282,11 @@ mod tests {
         let mut ctx = CompileContext::new(&mut builder, &symbols, &mut jit_ctx.module, &primitives);
         let result = ExprCompiler::compile_expr_block(&mut ctx, &expr);
 
-        // Should fail with a specific error message
+        // Should now compile successfully (not return an error)
         assert!(
-            result.is_err(),
-            "Expected closure_tail_call to fail, but it succeeded"
-        );
-        assert!(
-            result.unwrap_err().contains("not yet supported"),
-            "Expected error message about closure tail calls not being supported"
+            result.is_ok(),
+            "Failed to compile global_closure_tail_call: {:?}",
+            result.err()
         );
     }
 }
