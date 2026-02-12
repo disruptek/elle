@@ -146,7 +146,7 @@ pub extern "C" fn jit_load_global(sym_id: i64) -> i64 {
         match val {
             Value::Cell(cell_rc) => {
                 let cell_ref = cell_rc.borrow();
-                return encode_value_for_jit(&**cell_ref);
+                return encode_value_for_jit(&cell_ref);
             }
             _ => return encode_value_for_jit(&val),
         }
@@ -157,7 +157,7 @@ pub extern "C" fn jit_load_global(sym_id: i64) -> i64 {
         match val {
             Value::Cell(cell_rc) => {
                 let cell_ref = cell_rc.borrow();
-                encode_value_for_jit(&**cell_ref)
+                encode_value_for_jit(&cell_ref)
             }
             _ => encode_value_for_jit(val),
         }
@@ -174,7 +174,7 @@ pub extern "C" fn jit_load_global(sym_id: i64) -> i64 {
 /// - callee_encoded must be a valid encoded Value (closure)
 /// - args_ptr must be a valid pointer to an array of args_len i64 values
 #[no_mangle]
-pub extern "C" fn jit_tail_call_closure(
+pub unsafe extern "C" fn jit_tail_call_closure(
     callee_encoded: i64,
     args_ptr: *const i64,
     args_len: i64,
@@ -184,11 +184,9 @@ pub extern "C" fn jit_tail_call_closure(
 
     // Decode arguments
     let args: Vec<Value> = if args_len > 0 && !args_ptr.is_null() {
-        unsafe {
-            (0..args_len as usize)
-                .map(|i| decode_value_for_jit(*args_ptr.add(i)))
-                .collect()
-        }
+        (0..args_len as usize)
+            .map(|i| decode_value_for_jit(*args_ptr.add(i)))
+            .collect()
     } else {
         Vec::new()
     };
@@ -207,8 +205,7 @@ pub extern "C" fn jit_tail_call_closure(
             // Encode env
             let encoded_env: Vec<i64> = jc.env.iter().map(encode_value_for_jit).collect();
 
-            let result = func(encoded_args.as_ptr(), args_len, encoded_env.as_ptr());
-            result // Already encoded
+            func(encoded_args.as_ptr(), args_len, encoded_env.as_ptr()) // Already encoded
         }
         Value::Closure(_c) => {
             // For interpreted closures, we would need access to the VM
