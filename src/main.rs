@@ -152,7 +152,7 @@ fn run_file(filename: &str, vm: &mut VM, symbols: &mut SymbolTable) -> Result<()
                 // Execute
                 match vm.execute(&bytecode) {
                     Ok(result) => {
-                        if !result.is_nil() && std::io::stdout().is_terminal() {
+                        if !result.is_nil() {
                             println!("⟹ {:?}", result);
                         }
                     }
@@ -239,7 +239,7 @@ fn run_repl(vm: &mut VM, symbols: &mut SymbolTable) -> bool {
                         // Execute
                         match vm.execute(&bytecode) {
                             Ok(result) => {
-                                if !result.is_nil() && std::io::stdout().is_terminal() {
+                                if !result.is_nil() {
                                     println!("⟹ {:?}", result);
                                 }
                             }
@@ -366,7 +366,7 @@ fn run_repl_fallback(vm: &mut VM, symbols: &mut SymbolTable) -> bool {
                 // Execute
                 match vm.execute(&bytecode) {
                     Ok(result) => {
-                        if !result.is_nil() && std::io::stdout().is_terminal() {
+                        if !result.is_nil() {
                             println!("⟹ {:?}", result);
                         }
                     }

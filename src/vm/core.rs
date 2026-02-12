@@ -290,17 +290,41 @@ impl VM {
         self.stack.push(resume_value);
 
         // Get the bytecode and closure env from the current coroutine's closure
-        let (bytecode, closure_env) = {
+        let (bytecode, closure_env, num_locals, num_captures) = {
             let co = self
                 .current_coroutine()
                 .ok_or("resume_from_context called outside coroutine")?;
             let co_ref = co.borrow();
-            (co_ref.closure.bytecode.clone(), co_ref.closure.env.clone())
+            (
+                co_ref.closure.bytecode.clone(),
+                co_ref.closure.env.clone(),
+                co_ref.closure.num_locals,
+                co_ref.closure.num_captures,
+            )
         };
 
+        // Set up the environment for the coroutine
+        // The closure environment contains: [captures..., parameters..., locals...]
+        // We need to allocate space for locals if they haven't been allocated yet
+        let mut env = (*closure_env).clone();
+
+        // Calculate number of locally-defined variables
+        // num_locals = params.len() + captures.len() + locals.len()
+        // Since a coroutine has no parameters, we need to allocate space for all locals
+        let num_locally_defined = num_locals.saturating_sub(num_captures);
+
+        // Add empty cells for locally-defined variables if not already present
+        for _ in env.len()..num_captures + num_locally_defined {
+            let empty_cell = Value::Cell(std::rc::Rc::new(std::cell::RefCell::new(Box::new(
+                Value::Nil,
+            ))));
+            env.push(empty_cell);
+        }
+
+        let env_rc = std::rc::Rc::new(env);
+
         // Execute from saved IP with the closure's environment
-        let result =
-            self.execute_bytecode_from_ip(&bytecode, constants, Some(&closure_env), context.ip);
+        let result = self.execute_bytecode_from_ip(&bytecode, constants, Some(&env_rc), context.ip);
 
         // Restore our state (in case we need to continue after coroutine completes)
         self.stack = saved_stack;

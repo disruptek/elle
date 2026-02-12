@@ -169,16 +169,39 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
                     // Get closure info before releasing borrow
                     let bytecode = borrowed.closure.bytecode.clone();
                     let constants = borrowed.closure.constants.clone();
-                    let env = borrowed.closure.env.clone();
+                    let closure_env = borrowed.closure.env.clone();
+                    let num_locals = borrowed.closure.num_locals;
+                    let num_captures = borrowed.closure.num_captures;
 
                     // Release the borrow before calling vm.execute_bytecode_coroutine
                     drop(borrowed);
+
+                    // Set up the environment for the coroutine
+                    // The closure environment contains: [captures..., parameters..., locals...]
+                    // Since a coroutine is called with no arguments, we need to allocate space for locals
+                    let mut env = (*closure_env).clone();
+
+                    // Calculate number of locally-defined variables
+                    // num_locals = params.len() + captures.len() + locals.len()
+                    // Since a coroutine has no parameters, we need to allocate space for all locals
+                    let num_locally_defined = num_locals.saturating_sub(num_captures);
+
+                    // Add empty cells for locally-defined variables
+                    for _ in env.len()..num_captures + num_locally_defined {
+                        let empty_cell = Value::Cell(std::rc::Rc::new(std::cell::RefCell::new(
+                            Box::new(Value::Nil),
+                        )));
+                        env.push(empty_cell);
+                    }
+
+                    let env_rc = std::rc::Rc::new(env);
 
                     // Enter coroutine context
                     vm.enter_coroutine(co.clone());
 
                     // Execute the closure with coroutine support
-                    let result = vm.execute_bytecode_coroutine(&bytecode, &constants, Some(&env));
+                    let result =
+                        vm.execute_bytecode_coroutine(&bytecode, &constants, Some(&env_rc));
 
                     // Exit coroutine context
                     vm.exit_coroutine();
