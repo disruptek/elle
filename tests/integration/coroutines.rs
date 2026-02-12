@@ -93,9 +93,8 @@ fn test_multiple_yields() {
         Ok(Value::Cons(_)) => {
             // If it works, great!
         }
-        Err(e) => {
+        Err(_e) => {
             // Expected to fail initially
-            eprintln!("Multiple yields not yet supported: {}", e);
         }
         _ => panic!("Unexpected result type"),
     }
@@ -119,9 +118,8 @@ fn test_yield_with_resume_value() {
         Ok(Value::Cons(_)) => {
             // If it works, great!
         }
-        Err(e) => {
+        Err(_e) => {
             // Expected to fail initially as resume-value passing isn't fully implemented
-            eprintln!("Resume value passing not yet supported: {}", e);
         }
         _ => panic!("Unexpected result type"),
     }
@@ -284,12 +282,11 @@ fn test_yield_from_basic() {
     );
     // Should get the first yielded value from inner
     match result {
-        Ok(v) => {
+        Ok(_v) => {
             // Could be 1 if yield-from works, or an error if not yet implemented
-            eprintln!("yield-from result: {:?}", v);
         }
-        Err(e) => {
-            eprintln!("yield-from not yet fully implemented: {}", e);
+        Err(_e) => {
+            // yield-from not yet fully implemented
         }
     }
 }
@@ -307,11 +304,11 @@ fn test_yield_from_completion() {
     );
     // Should eventually return 42 (the final value of inner)
     match result {
-        Ok(v) => {
-            eprintln!("yield-from completion result: {:?}", v);
+        Ok(_v) => {
+            // yield-from completion result
         }
-        Err(e) => {
-            eprintln!("yield-from not yet fully implemented: {}", e);
+        Err(_e) => {
+            // yield-from not yet fully implemented
         }
     }
 }
@@ -335,11 +332,11 @@ fn test_coroutine_as_iterator() {
     );
     // This test documents the expected behavior for iterator protocol
     match result {
-        Ok(v) => {
-            eprintln!("Iterator protocol result: {:?}", v);
+        Ok(_v) => {
+            // Iterator protocol result
         }
-        Err(e) => {
-            eprintln!("Iterator protocol not yet fully implemented: {}", e);
+        Err(_e) => {
+            // Iterator protocol not yet fully implemented
         }
     }
 }
@@ -472,8 +469,8 @@ fn test_error_in_coroutine_status() {
     // The resume will fail, so we can't check status
     // This documents the expected behavior
     match result {
-        Err(e) => {
-            eprintln!("Error handling works: {}", e);
+        Err(_e) => {
+            // Error handling works
         }
         _ => panic!("Expected error"),
     }
@@ -547,11 +544,11 @@ fn test_coroutine_with_recursion() {
     );
     // Should yield 3
     match result {
-        Ok(v) => {
-            eprintln!("Recursive coroutine result: {:?}", v);
+        Ok(_v) => {
+            // Recursive coroutine result
         }
-        Err(e) => {
-            eprintln!("Recursive coroutine not yet supported: {}", e);
+        Err(_e) => {
+            // Recursive coroutine not yet supported
         }
     }
 }
@@ -567,11 +564,11 @@ fn test_coroutine_with_higher_order_functions() {
         "#,
     );
     match result {
-        Ok(v) => {
-            eprintln!("Higher-order function result: {:?}", v);
+        Ok(_v) => {
+            // Higher-order function result
         }
-        Err(e) => {
-            eprintln!("Higher-order function in coroutine: {}", e);
+        Err(_e) => {
+            // Higher-order function in coroutine
         }
     }
 }
@@ -590,11 +587,11 @@ fn test_coroutine_with_exception_handling() {
         "#,
     );
     match result {
-        Ok(v) => {
-            eprintln!("Exception handling result: {:?}", v);
+        Ok(_v) => {
+            // Exception handling result
         }
-        Err(e) => {
-            eprintln!("Exception handling in coroutine: {}", e);
+        Err(_e) => {
+            // Exception handling in coroutine
         }
     }
 }

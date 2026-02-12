@@ -474,9 +474,6 @@ mod tests {
         let co = prim_make_coroutine(&[closure]).unwrap();
         let result = prim_coroutine_resume(&[co], &mut vm);
         // Should succeed with empty bytecode returning nil
-        if let Err(e) = &result {
-            eprintln!("Error: {}", e);
-        }
         assert!(result.is_ok());
     }
 
