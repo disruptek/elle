@@ -9,7 +9,6 @@ use crate::symbol::SymbolTable;
 use crate::value::{Closure, SymbolId, Value};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use std::sync::Arc;
 use utils::collect_defines;
 
 struct Compiler {
@@ -22,7 +21,7 @@ struct Compiler {
     lambda_captures_len: usize,
     lambda_params_len: usize,
     // Phase 2: Symbol table and effect context for effect inference
-    symbol_table: Option<Arc<SymbolTable>>,
+    symbol_table: Option<Rc<SymbolTable>>,
     effect_context: EffectContext,
 }
 
@@ -40,7 +39,7 @@ impl Compiler {
         }
     }
 
-    fn with_symbols(symbol_table: Arc<SymbolTable>) -> Self {
+    fn with_symbols(symbol_table: Rc<SymbolTable>) -> Self {
         Compiler {
             bytecode: Bytecode::new(),
             symbols: HashMap::new(),
@@ -1198,7 +1197,7 @@ pub fn compile(expr: &Expr) -> Bytecode {
 }
 
 /// Compile an expression to bytecode with symbol table for effect inference
-pub fn compile_with_symbols(expr: &Expr, symbols: Arc<SymbolTable>) -> Bytecode {
+pub fn compile_with_symbols(expr: &Expr, symbols: Rc<SymbolTable>) -> Bytecode {
     let mut compiler = Compiler::with_symbols(symbols);
     compiler.compile_expr(expr, true);
     compiler.bytecode.emit(Instruction::Return);
@@ -1272,7 +1271,7 @@ mod tests {
             locals: vec![],
         };
 
-        let bytecode = compile_with_symbols(&expr, Arc::new(symbols));
+        let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
         // Should compile without errors
         assert!(!bytecode.instructions.is_empty());
     }
@@ -1383,7 +1382,7 @@ mod tests {
             locals: vec![],
         };
 
-        let bytecode = compile_with_symbols(&expr, Arc::new(symbols));
+        let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
 
         // Find the closure constant
         let closure = bytecode.constants.iter().find_map(|v| {
@@ -1432,7 +1431,7 @@ mod tests {
             locals: vec![],
         };
 
-        let bytecode = compile_with_symbols(&expr, Arc::new(symbols));
+        let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
 
         let closure = bytecode.constants.iter().find_map(|v| {
             if let Value::Closure(c) = v {
@@ -1469,7 +1468,7 @@ mod tests {
             locals: vec![],
         };
 
-        let bytecode = compile_with_symbols(&expr, Arc::new(symbols));
+        let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
 
         let closure = bytecode
             .constants
@@ -1515,7 +1514,7 @@ mod tests {
             locals: vec![],
         };
 
-        let bytecode = compile_with_symbols(&expr, Arc::new(symbols));
+        let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
 
         let closure = bytecode
             .constants
@@ -1559,7 +1558,7 @@ mod tests {
             locals: vec![y_sym],
         };
 
-        let bytecode = compile_with_symbols(&expr, Arc::new(symbols));
+        let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
 
         let closure = bytecode
             .constants
