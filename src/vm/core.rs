@@ -278,6 +278,7 @@ impl VM {
         &mut self,
         context: CoroutineContext,
         resume_value: Value,
+        bytecode: &[u8],
         constants: &[Value],
     ) -> Result<VmResult, String> {
         // Save current state
@@ -289,19 +290,41 @@ impl VM {
         // Push the resume value (this is what the yield expression evaluates to)
         self.stack.push(resume_value);
 
-        // Get the bytecode and closure env from the current coroutine's closure
-        let (bytecode, closure_env, num_locals, num_captures) = {
+        // Get the closure env from the current coroutine
+        let (closure_env, num_locals, num_captures) = {
             let co = self
                 .current_coroutine()
                 .ok_or("resume_from_context called outside coroutine")?;
             let co_ref = co.borrow();
             (
-                co_ref.closure.bytecode.clone(),
                 co_ref.closure.env.clone(),
                 co_ref.closure.num_locals,
                 co_ref.closure.num_captures,
             )
         };
+        if context.ip < bytecode.len() {
+            let instr_byte = bytecode[context.ip];
+            let bytecode_hex: String = bytecode
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<Vec<_>>()
+                .join(" ");
+            eprintln!(
+                "DEBUG resume_from_context: bytecode len={}, constants len={}, ip={}, instr_byte={}, bytecode={}",
+                bytecode.len(),
+                constants.len(),
+                context.ip,
+                instr_byte,
+                bytecode_hex
+            );
+        } else {
+            eprintln!(
+                "DEBUG resume_from_context: bytecode len={}, constants len={}, ip={} (OUT OF BOUNDS)",
+                bytecode.len(),
+                constants.len(),
+                context.ip
+            );
+        }
 
         // Set up the environment for the coroutine
         // The closure environment contains: [captures..., parameters..., locals...]

@@ -231,13 +231,15 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
                         .saved_context
                         .clone()
                         .ok_or("Suspended coroutine has no saved context")?;
+                    let bytecode = borrowed.closure.bytecode.clone();
                     let constants = borrowed.closure.constants.clone();
 
                     // Release the borrow before calling resume_from_context
                     drop(borrowed);
 
                     // Resume from the saved context
-                    let result = vm.resume_from_context(context, _resume_value, &constants);
+                    let result =
+                        vm.resume_from_context(context, _resume_value, &bytecode, &constants);
 
                     // Re-borrow to update state
                     let mut borrowed = co.borrow_mut();
@@ -286,42 +288,23 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> Result<Value, String> {
 
     match &args[0] {
         Value::Coroutine(co) => {
-            // For now, just run the coroutine to completion
-            // Full yield-from requires CPS integration
-            loop {
-                let state = {
-                    let borrowed = co.borrow();
-                    borrowed.state.clone()
-                };
+            // Resume the sub-coroutine once
+            let state = {
+                let borrowed = co.borrow();
+                borrowed.state.clone()
+            };
 
-                match &state {
-                    CoroutineState::Created | CoroutineState::Suspended => {
-                        // Resume the coroutine
-                        let result = prim_coroutine_resume(&[Value::Coroutine(co.clone())], vm)?;
-
-                        // Check state after resume
-                        let new_state = {
-                            let borrowed = co.borrow();
-                            borrowed.state.clone()
-                        };
-
-                        if matches!(new_state, CoroutineState::Done) {
-                            return Ok(result);
-                        }
-                        // If suspended, we should yield the value up
-                        // For now, just continue
-                    }
-                    CoroutineState::Done => {
-                        let borrowed = co.borrow();
-                        return Ok(borrowed.yielded_value.clone().unwrap_or(Value::Nil));
-                    }
-                    CoroutineState::Error(e) => {
-                        return Err(e.clone());
-                    }
-                    CoroutineState::Running => {
-                        return Err("Sub-coroutine is already running".to_string());
-                    }
+            match &state {
+                CoroutineState::Created | CoroutineState::Suspended => {
+                    // Resume the coroutine once
+                    prim_coroutine_resume(&[Value::Coroutine(co.clone())], vm)
                 }
+                CoroutineState::Done => {
+                    let borrowed = co.borrow();
+                    Ok(borrowed.yielded_value.clone().unwrap_or(Value::Nil))
+                }
+                CoroutineState::Error(e) => Err(e.clone()),
+                CoroutineState::Running => Err("Sub-coroutine is already running".to_string()),
             }
         }
         other => Err(format!(

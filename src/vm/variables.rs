@@ -11,31 +11,17 @@ pub fn handle_load_global(
     if let Value::Symbol(sym_id) = constants[idx] {
         // First, check if variable exists in current scope (scope-aware lookup)
         if let Some(val) = vm.scope_stack.get(sym_id.0) {
-            // Phase 4: Transparently unwrap cells for shared mutable captures
-            match val {
-                Value::Cell(cell_rc) => {
-                    let cell_ref = cell_rc.borrow();
-                    vm.stack.push((**cell_ref).clone());
-                }
-                _ => {
-                    vm.stack.push(val);
-                }
-            }
+            // Don't automatically unwrap cells in local scope
+            // Cells created by the box primitive should remain as cells
+            vm.stack.push(val);
             return Ok(());
         }
 
         // Fall back to global scope
         if let Some(val) = vm.globals.get(&sym_id.0) {
-            // Phase 4: Also handle cells in global scope
-            match val {
-                Value::Cell(cell_rc) => {
-                    let cell_ref = cell_rc.borrow();
-                    vm.stack.push((**cell_ref).clone());
-                }
-                _ => {
-                    vm.stack.push(val.clone());
-                }
-            }
+            // Don't automatically unwrap cells in global scope
+            // Cells created by the box primitive should remain as cells
+            vm.stack.push(val.clone());
         } else {
             return Err(format!("Undefined global variable: {:?}", sym_id));
         }
@@ -108,13 +94,9 @@ pub fn handle_load_upvalue(
     if let Some(env) = closure_env {
         if idx < env.len() {
             let val = env[idx].clone();
-            // Phase 4: Transparently unwrap cells for shared mutable captures
-            // If the captured value is a cell, unwrap it to get the current value
+            // Don't automatically unwrap cells - let the user explicitly unwrap them with unbox
+            // This allows cells created by the box primitive to work correctly
             match val {
-                Value::Cell(cell_rc) => {
-                    let cell_ref = cell_rc.borrow();
-                    vm.stack.push((**cell_ref).clone());
-                }
                 Value::Symbol(sym) => {
                     // This is a global variable reference - load it from the global scope
                     if let Some(global_val) = vm.globals.get(&sym.0) {
