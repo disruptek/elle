@@ -159,20 +159,20 @@ fn test_coroutine_done_predicate() {
     // (coroutine-done? co) should return #f initially, #t after completion
     let result = eval(
         r#"
-        (define co (make-coroutine (fn () 42)))
-        (list
-          (coroutine-done? co)
-          (begin (coroutine-resume co) (coroutine-done? co)))
-        "#,
+         (define co (make-coroutine (fn () 42)))
+         (list
+           (coroutine-done? co)
+           (begin (coroutine-resume co) (coroutine-done? co)))
+         "#,
     );
     match result {
         Ok(Value::Cons(cons)) => {
             assert_eq!(cons.first, Value::Bool(false));
             // Second element should be #t
-            if let Value::Bool(b) = cons.rest {
-                assert!(b);
+            if let Value::Cons(rest_cons) = &cons.rest {
+                assert_eq!(rest_cons.first, Value::Bool(true));
             } else {
-                panic!("Expected bool in rest");
+                panic!("Expected cons in rest");
             }
         }
         _ => panic!("Expected cons pair"),
@@ -215,16 +215,16 @@ fn test_coroutine_value_after_yield() {
 #[test]
 fn test_pure_function_no_cps() {
     // A function without yield should be pure
-    // (define (sum n) (if (<= n 0) 0 (+ n (sum (- n 1)))))
+    // (define sum (fn (n) (if (<= n 0) 0 (+ n (sum (- n 1))))))
     // Should work normally, no CPS overhead
     let result = eval(
         r#"
-        (define (sum n)
-          (if (<= n 0)
-            0
-            (+ n (sum (- n 1)))))
-        (sum 5)
-        "#,
+         (define sum (fn (n)
+           (if (<= n 0)
+             0
+             (+ n (sum (- n 1))))))
+         (sum 5)
+         "#,
     );
     assert_eq!(result.unwrap(), Value::Int(15));
 }
@@ -235,12 +235,12 @@ fn test_yielding_function_detected() {
     // This is more of a compiler-level test, but we can verify it works
     let result = eval(
         r#"
-        (define (gen)
-          (yield 1)
-          (yield 2))
-        (define co (make-coroutine gen))
-        (coroutine-resume co)
-        "#,
+         (define gen (fn ()
+           (yield 1)
+           (yield 2)))
+         (define co (make-coroutine gen))
+         (coroutine-resume co)
+         "#,
     );
     assert_eq!(result.unwrap(), Value::Int(1));
 }
@@ -250,14 +250,14 @@ fn test_calling_yielding_function_propagates_effect() {
     // If f yields and g calls f, g should also yield
     let result = eval(
         r#"
-        (define (f)
-          (yield 1))
-        (define (g)
-          (f)
-          (yield 2))
-        (define co (make-coroutine g))
-        (coroutine-resume co)
-        "#,
+         (define f (fn ()
+           (yield 1)))
+         (define g (fn ()
+           (f)
+           (yield 2)))
+         (define co (make-coroutine g))
+         (coroutine-resume co)
+         "#,
     );
     // Should yield 1 from f
     assert_eq!(result.unwrap(), Value::Int(1));
@@ -497,23 +497,23 @@ fn test_coroutine_predicate() {
     // (coroutine? val) should return #t for coroutines
     let result = eval(
         r#"
-        (define co (make-coroutine (fn () 42)))
-        (list
-          (coroutine? co)
-          (coroutine? 42)
-          (coroutine? (fn () 42)))
-        "#,
+         (define co (make-coroutine (fn () 42)))
+         (list
+           (coroutine? co)
+           (coroutine? 42)
+           (coroutine? (fn () 42)))
+         "#,
     );
     match result {
         Ok(Value::Cons(cons)) => {
             assert_eq!(cons.first, Value::Bool(true));
-            // Rest should be a cons with #f and #f
+            // Rest should be a cons with #f and another cons with #f
             if let Value::Cons(rest_cons) = &cons.rest {
                 assert_eq!(rest_cons.first, Value::Bool(false));
-                if let Value::Bool(b) = rest_cons.rest {
-                    assert!(!b);
+                if let Value::Cons(rest_rest_cons) = &rest_cons.rest {
+                    assert_eq!(rest_rest_cons.first, Value::Bool(false));
                 } else {
-                    panic!("Expected bool");
+                    panic!("Expected cons");
                 }
             } else {
                 panic!("Expected cons");
@@ -647,9 +647,9 @@ fn test_coroutine_with_empty_body() {
     // Coroutine with empty body (just returns nil)
     let result = eval(
         r#"
-        (define co (make-coroutine (fn ())))
-        (coroutine-resume co)
-        "#,
+         (define co (make-coroutine (fn () nil)))
+         (coroutine-resume co)
+         "#,
     );
     assert_eq!(result.unwrap(), Value::Nil);
 }
@@ -681,20 +681,20 @@ fn test_multiple_coroutines_independent() {
     // Multiple independent coroutines
     let result = eval(
         r#"
-        (define co1 (make-coroutine (fn () (yield 1))))
-        (define co2 (make-coroutine (fn () (yield 2))))
-        (list
-          (coroutine-resume co1)
-          (coroutine-resume co2))
-        "#,
+         (define co1 (make-coroutine (fn () (yield 1))))
+         (define co2 (make-coroutine (fn () (yield 2))))
+         (list
+           (coroutine-resume co1)
+           (coroutine-resume co2))
+         "#,
     );
     match result {
         Ok(Value::Cons(cons)) => {
             assert_eq!(cons.first, Value::Int(1));
-            if let Value::Int(2) = cons.rest {
-                // Success
+            if let Value::Cons(rest_cons) = &cons.rest {
+                assert_eq!(rest_cons.first, Value::Int(2));
             } else {
-                panic!("Expected 2 in rest");
+                panic!("Expected cons in rest");
             }
         }
         _ => panic!("Expected cons pair"),
