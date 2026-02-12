@@ -327,11 +327,12 @@ mod tests {
         // Bytecode: LoadConst(0), Return
         // Constants: [nil]
         use crate::compiler::bytecode::Instruction;
-        let mut bytecode = vec![];
-        bytecode.push(Instruction::LoadConst as u8);
-        bytecode.push(0); // Load constant 0 (nil) - high byte
-        bytecode.push(0); // Load constant 0 (nil) - low byte
-        bytecode.push(Instruction::Return as u8);
+        let bytecode = vec![
+            Instruction::LoadConst as u8,
+            0, // Load constant 0 (nil) - high byte
+            0, // Load constant 0 (nil) - low byte
+            Instruction::Return as u8,
+        ];
 
         Value::Closure(Rc::new(Closure {
             bytecode: Rc::new(bytecode),
@@ -431,7 +432,7 @@ mod tests {
     fn test_coroutine_to_iterator() {
         let closure = make_test_closure();
         let co = prim_make_coroutine(&[closure]).unwrap();
-        let iter = prim_coroutine_to_iterator(&[co.clone()]).unwrap();
+        let iter = prim_coroutine_to_iterator(std::slice::from_ref(&co)).unwrap();
         assert!(matches!(iter, Value::Coroutine(_)));
     }
 
