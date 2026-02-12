@@ -35,7 +35,7 @@ pub fn prim_unbox(args: &[Value]) -> Result<Value, String> {
     }
 
     match &args[0] {
-        Value::Cell(cell) => {
+        Value::Cell(cell) | Value::LocalCell(cell) => {
             let borrowed = cell.borrow();
             Ok((**borrowed).clone())
         }
@@ -57,9 +57,9 @@ pub fn prim_box_set(args: &[Value]) -> Result<Value, String> {
     }
 
     match &args[0] {
-        Value::Cell(cell) => {
+        Value::Cell(cell) | Value::LocalCell(cell) => {
             let mut borrowed = cell.borrow_mut();
-            *borrowed = Box::new(args[1].clone());
+            **borrowed = args[1].clone();
             Ok(args[1].clone())
         }
         other => Err(format!(
@@ -82,5 +82,8 @@ pub fn prim_cell_p(args: &[Value]) -> Result<Value, String> {
         ));
     }
 
-    Ok(Value::Bool(matches!(&args[0], Value::Cell(_))))
+    Ok(Value::Bool(matches!(
+        &args[0],
+        Value::Cell(_) | Value::LocalCell(_)
+    )))
 }

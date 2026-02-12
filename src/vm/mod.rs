@@ -265,10 +265,11 @@ impl VM {
                                 .num_locals
                                 .saturating_sub(num_params + closure.num_captures);
 
-                            // Add empty cells for locally-defined variables
+                            // Add empty LocalCells for locally-defined variables
                             // These will be initialized when define statements execute
+                            // LocalCell is auto-unwrapped by LoadUpvalue (unlike user Cell)
                             for _ in 0..num_locally_defined {
-                                let empty_cell = Value::Cell(std::rc::Rc::new(
+                                let empty_cell = Value::LocalCell(std::rc::Rc::new(
                                     std::cell::RefCell::new(Box::new(Value::Nil)),
                                 ));
                                 new_env.push(empty_cell);
@@ -392,9 +393,9 @@ impl VM {
                                     .num_locals
                                     .saturating_sub(num_params + source.num_captures);
 
-                                // Add empty cells for locally-defined variables
+                                // Add empty LocalCells for locally-defined variables
                                 for _ in 0..num_locally_defined {
-                                    let empty_cell = Value::Cell(std::rc::Rc::new(
+                                    let empty_cell = Value::LocalCell(std::rc::Rc::new(
                                         std::cell::RefCell::new(Box::new(Value::Nil)),
                                     ));
                                     new_env.push(empty_cell);
@@ -475,9 +476,9 @@ impl VM {
                                 .num_locals
                                 .saturating_sub(num_params + closure.num_captures);
 
-                            // Add empty cells for locally-defined variables
+                            // Add empty LocalCells for locally-defined variables
                             for _ in 0..num_locally_defined {
-                                let empty_cell = Value::Cell(std::rc::Rc::new(
+                                let empty_cell = Value::LocalCell(std::rc::Rc::new(
                                     std::cell::RefCell::new(Box::new(Value::Nil)),
                                 ));
                                 self.tail_call_env_cache.push(empty_cell);
@@ -574,9 +575,9 @@ impl VM {
                                     .num_locals
                                     .saturating_sub(num_params + source.num_captures);
 
-                                // Add empty cells for locally-defined variables
+                                // Add empty LocalCells for locally-defined variables
                                 for _ in 0..num_locally_defined {
-                                    let empty_cell = Value::Cell(std::rc::Rc::new(
+                                    let empty_cell = Value::LocalCell(std::rc::Rc::new(
                                         std::cell::RefCell::new(Box::new(Value::Nil)),
                                     ));
                                     self.tail_call_env_cache.push(empty_cell);

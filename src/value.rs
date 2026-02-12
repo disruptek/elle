@@ -294,8 +294,10 @@ pub struct Coroutine {
     pub state: CoroutineState,
     /// Last yielded value (if suspended)
     pub yielded_value: Option<Value>,
-    /// Saved execution context for resumption
+    /// Saved execution context for resumption (bytecode path)
     pub saved_context: Option<CoroutineContext>,
+    /// Saved CPS continuation for resumption (CPS path)
+    pub saved_continuation: Option<Rc<crate::compiler::cps::Continuation>>,
 }
 
 impl Coroutine {
@@ -306,6 +308,7 @@ impl Coroutine {
             state: CoroutineState::Created,
             yielded_value: None,
             saved_context: None,
+            saved_continuation: None,
         }
     }
 }
@@ -351,6 +354,9 @@ pub enum Value {
     ThreadHandle(ThreadHandle),
     // Shared mutable cell for captured variables across closures
     Cell(Rc<RefCell<Box<Value>>>),
+    // Internal cell for locally-defined variables (auto-unwrapped by LoadUpvalue)
+    // This is distinct from Cell which is user-created via `box` and NOT auto-unwrapped
+    LocalCell(Rc<RefCell<Box<Value>>>),
     // Coroutines (suspendable computations)
     Coroutine(Rc<RefCell<Coroutine>>),
 }
@@ -379,6 +385,7 @@ impl PartialEq for Value {
             (Value::Condition(a), Value::Condition(b)) => a == b,
             (Value::ThreadHandle(a), Value::ThreadHandle(b)) => a == b,
             (Value::Cell(_), Value::Cell(_)) => false, // Cells are mutable, never equal
+            (Value::LocalCell(_), Value::LocalCell(_)) => false, // LocalCells are mutable, never equal
             (Value::Coroutine(_), Value::Coroutine(_)) => false, // Coroutines are never equal
             _ => false,
         }
@@ -539,6 +546,7 @@ impl Value {
             Value::Condition(_) => "condition",
             Value::ThreadHandle(_) => "thread-handle",
             Value::Cell(_) => "cell",
+            Value::LocalCell(_) => "cell", // LocalCell appears as "cell" to users
             Value::Coroutine(_) => "coroutine",
         }
     }
@@ -611,6 +619,7 @@ impl fmt::Debug for Value {
             Value::Condition(cond) => write!(f, "<condition: id={}>", cond.exception_id),
             Value::ThreadHandle(_) => write!(f, "<thread-handle>"),
             Value::Cell(_) => write!(f, "<cell>"),
+            Value::LocalCell(_) => write!(f, "<local-cell>"),
             Value::Coroutine(co) => {
                 if let Ok(borrowed) = co.try_borrow() {
                     write!(f, "<coroutine:{:?}>", borrowed.state)

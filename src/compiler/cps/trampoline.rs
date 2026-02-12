@@ -5,6 +5,7 @@
 
 use super::{Action, Continuation};
 use crate::value::Value;
+use crate::vm::VM;
 use std::rc::Rc;
 
 /// Result of trampoline execution
@@ -211,6 +212,148 @@ impl Trampoline {
     /// Get the number of steps taken in the last run
     pub fn step_count(&self) -> usize {
         self.step_count
+    }
+
+    /// Run the trampoline with VM access for function calls
+    ///
+    /// This variant allows the trampoline to execute function calls
+    /// by delegating to the VM.
+    pub fn run_with_vm(
+        &mut self,
+        initial_action: Action,
+        vm: &mut VM,
+        env: &Rc<Vec<Value>>,
+    ) -> TrampolineResult {
+        let mut current_action = initial_action;
+        self.step_count = 0;
+
+        loop {
+            self.step_count += 1;
+
+            if self.step_count > self.config.max_steps {
+                return TrampolineResult::Error(format!(
+                    "Trampoline exceeded max steps ({})",
+                    self.config.max_steps
+                ));
+            }
+
+            match current_action {
+                Action::Done(value) => {
+                    return TrampolineResult::Done(value);
+                }
+
+                Action::Return {
+                    value,
+                    continuation,
+                } => {
+                    current_action = self.apply_continuation_with_vm(value, continuation, vm, env);
+                }
+
+                Action::Yield {
+                    value,
+                    continuation,
+                } => {
+                    return TrampolineResult::Suspended {
+                        value,
+                        continuation,
+                    };
+                }
+
+                Action::Call {
+                    func,
+                    args,
+                    continuation,
+                } => {
+                    // Execute call via VM
+                    match call_value_with_vm(&func, &args, vm) {
+                        Ok(result) => {
+                            current_action = Action::return_value(result, continuation);
+                        }
+                        Err(e) => return TrampolineResult::Error(e),
+                    }
+                }
+
+                Action::TailCall { func, args } => {
+                    // Execute tail call via VM
+                    match call_value_with_vm(&func, &args, vm) {
+                        Ok(result) => {
+                            current_action = Action::done(result);
+                        }
+                        Err(e) => return TrampolineResult::Error(e),
+                    }
+                }
+
+                Action::Error(msg) => {
+                    return TrampolineResult::Error(msg);
+                }
+            }
+        }
+    }
+
+    /// Apply a value to a continuation with VM access
+    fn apply_continuation_with_vm(
+        &self,
+        value: Value,
+        cont: Rc<Continuation>,
+        _vm: &mut VM,
+        _env: &Rc<Vec<Value>>,
+    ) -> Action {
+        match cont.as_ref() {
+            Continuation::Done => Action::Done(value),
+
+            Continuation::CallReturn { saved_env: _, next } => {
+                // Restore environment and continue
+                Action::return_value(value, next.clone())
+            }
+
+            Continuation::Apply { cont_fn } => {
+                // Apply the continuation function
+                cont_fn(value)
+            }
+
+            // For other continuation types, fall back to the basic apply
+            _ => self.apply_continuation(value, cont),
+        }
+    }
+}
+
+/// Call a value as a function with the given arguments using the VM
+fn call_value_with_vm(func: &Value, args: &[Value], vm: &mut VM) -> Result<Value, String> {
+    match func {
+        Value::Closure(closure) => {
+            // Build environment
+            let mut new_env = Vec::new();
+            new_env.extend((*closure.env).iter().cloned());
+            new_env.extend(args.iter().cloned());
+
+            // Add local cells
+            let num_params = match closure.arity {
+                crate::value::Arity::Exact(n) => n,
+                crate::value::Arity::AtLeast(n) => n,
+                crate::value::Arity::Range(min, _) => min,
+            };
+            let num_locally_defined = closure
+                .num_locals
+                .saturating_sub(num_params + closure.num_captures);
+
+            for _ in 0..num_locally_defined {
+                let empty_cell = Value::LocalCell(std::rc::Rc::new(std::cell::RefCell::new(
+                    Box::new(Value::Nil),
+                )));
+                new_env.push(empty_cell);
+            }
+
+            let env_rc = std::rc::Rc::new(new_env);
+
+            // Execute
+            vm.execute_bytecode(&closure.bytecode, &closure.constants, Some(&env_rc))
+        }
+
+        Value::NativeFn(f) => f(args),
+
+        Value::VmAwareFn(f) => f(args, vm),
+
+        _ => Err(format!("Cannot call {}", func.type_name())),
     }
 }
 

@@ -66,11 +66,12 @@ pub fn handle_define_local(
 pub fn handle_make_cell(vm: &mut VM) -> Result<(), String> {
     let value = vm.stack.pop().ok_or("Stack underflow")?;
     match value {
-        Value::Cell(_) => {
+        Value::Cell(_) | Value::LocalCell(_) => {
             // Already a cell (e.g., locally-defined variable from outer lambda) — don't double-wrap
             vm.stack.push(value);
         }
         _ => {
+            // Use Cell (not LocalCell) for MakeCell instruction - this is for user-created cells
             let cell = Value::Cell(std::rc::Rc::new(std::cell::RefCell::new(Box::new(value))));
             vm.stack.push(cell);
         }
@@ -83,7 +84,7 @@ pub fn handle_make_cell(vm: &mut VM) -> Result<(), String> {
 pub fn handle_unwrap_cell(vm: &mut VM) -> Result<(), String> {
     let cell_val = vm.stack.pop().ok_or("Stack underflow")?;
     match cell_val {
-        Value::Cell(cell_rc) => {
+        Value::Cell(cell_rc) | Value::LocalCell(cell_rc) => {
             let cell_ref = cell_rc.borrow();
             let value = (**cell_ref).clone();
             vm.stack.push(value);
@@ -99,7 +100,7 @@ pub fn handle_update_cell(vm: &mut VM) -> Result<(), String> {
     let new_value = vm.stack.pop().ok_or("Stack underflow")?;
     let cell_val = vm.stack.pop().ok_or("Stack underflow")?;
     match cell_val {
-        Value::Cell(cell_rc) => {
+        Value::Cell(cell_rc) | Value::LocalCell(cell_rc) => {
             let mut cell_ref = cell_rc.borrow_mut();
             **cell_ref = new_value.clone();
             vm.stack.push(new_value);

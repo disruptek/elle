@@ -9,8 +9,13 @@
 //! - coroutine->iterator: Convert coroutine to iterator
 //! - coroutine-next: Get next value from coroutine iterator
 
+use crate::compiler::cps::{
+    Action, Continuation, CpsInterpreter, CpsTransformer, Trampoline, TrampolineResult,
+};
+use crate::compiler::effects::EffectContext;
 use crate::value::{Coroutine, CoroutineState, Value};
 use crate::vm::{VmResult, VM};
+use std::cell::RefMut;
 use std::rc::Rc;
 
 /// F1: Create a coroutine from a function
@@ -154,7 +159,7 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
         ));
     }
 
-    let _resume_value = args.get(1).cloned().unwrap_or(Value::Nil);
+    let resume_value = args.get(1).cloned().unwrap_or(Value::Nil);
 
     match &args[0] {
         Value::Coroutine(co) => {
@@ -163,6 +168,16 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
 
             match &borrowed.state {
                 CoroutineState::Created => {
+                    // Check if this closure yields and has source AST for CPS execution
+                    let use_cps = borrowed.closure.effect.may_yield()
+                        && borrowed.closure.source_ast.is_some();
+
+                    if use_cps {
+                        // Use CPS execution path
+                        return execute_coroutine_cps(co.clone(), borrowed, vm);
+                    }
+
+                    // Fall back to bytecode execution path
                     // First resume - start execution
                     borrowed.state = CoroutineState::Running;
 
@@ -186,11 +201,11 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
                     // Since a coroutine has no parameters, we need to allocate space for all locals
                     let num_locally_defined = num_locals.saturating_sub(num_captures);
 
-                    // Add empty cells for locally-defined variables
+                    // Add empty LocalCells for locally-defined variables
                     for _ in env.len()..num_captures + num_locally_defined {
-                        let empty_cell = Value::Cell(std::rc::Rc::new(std::cell::RefCell::new(
-                            Box::new(Value::Nil),
-                        )));
+                        let empty_cell = Value::LocalCell(std::rc::Rc::new(
+                            std::cell::RefCell::new(Box::new(Value::Nil)),
+                        ));
                         env.push(empty_cell);
                     }
 
@@ -226,6 +241,18 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
                     }
                 }
                 CoroutineState::Suspended => {
+                    // Check if we have a saved CPS continuation
+                    if let Some(continuation) = borrowed.saved_continuation.clone() {
+                        return resume_coroutine_cps(
+                            co.clone(),
+                            borrowed,
+                            continuation,
+                            resume_value,
+                            vm,
+                        );
+                    }
+
+                    // Fall back to bytecode resumption
                     // Resume from suspension
                     let context = borrowed
                         .saved_context
@@ -239,7 +266,7 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
 
                     // Resume from the saved context
                     let result =
-                        vm.resume_from_context(context, _resume_value, &bytecode, &constants);
+                        vm.resume_from_context(context, resume_value, &bytecode, &constants);
 
                     // Re-borrow to update state
                     let mut borrowed = co.borrow_mut();
@@ -269,6 +296,128 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
             "coroutine-resume requires a coroutine, got {}",
             other.type_name()
         )),
+    }
+}
+
+/// Execute a coroutine using the CPS path
+///
+/// This is used when the closure has a yielding effect and has source AST available.
+fn execute_coroutine_cps(
+    co: Rc<std::cell::RefCell<Coroutine>>,
+    mut borrowed: RefMut<Coroutine>,
+    vm: &mut VM,
+) -> Result<Value, String> {
+    borrowed.state = CoroutineState::Running;
+
+    // Get closure info
+    let closure = borrowed.closure.clone();
+    let closure_env = closure.env.clone();
+    let num_locals = closure.num_locals;
+    let num_captures = closure.num_captures;
+
+    // Get the AST from source_ast
+    let ast = closure
+        .source_ast
+        .as_ref()
+        .ok_or("Closure has no source AST for CPS execution")?;
+
+    // Set up the environment
+    let mut env = (*closure_env).clone();
+    let num_locally_defined = num_locals.saturating_sub(num_captures);
+
+    for _ in env.len()..num_captures + num_locally_defined {
+        let empty_cell = Value::LocalCell(std::rc::Rc::new(std::cell::RefCell::new(Box::new(
+            Value::Nil,
+        ))));
+        env.push(empty_cell);
+    }
+
+    let env_rc = std::rc::Rc::new(env);
+
+    // Transform the lambda body to CPS
+    let effect_ctx = EffectContext::new();
+    let transformer = CpsTransformer::new(&effect_ctx);
+    let cps_body = transformer.transform(&ast.body, Continuation::done());
+
+    // Release borrow before execution
+    drop(borrowed);
+
+    // Create interpreter and evaluate
+    let mut interpreter = CpsInterpreter::new(vm, env_rc.clone());
+    let initial_action = interpreter.eval(&cps_body)?;
+
+    // Run trampoline
+    let mut trampoline = Trampoline::new();
+    let result = trampoline.run_with_vm(initial_action, vm, &env_rc);
+
+    // Update coroutine state
+    let mut borrowed = co.borrow_mut();
+    match result {
+        TrampolineResult::Done(value) => {
+            borrowed.state = CoroutineState::Done;
+            borrowed.yielded_value = Some(value.clone());
+            borrowed.saved_continuation = None;
+            Ok(value)
+        }
+        TrampolineResult::Suspended {
+            value,
+            continuation,
+        } => {
+            borrowed.state = CoroutineState::Suspended;
+            borrowed.yielded_value = Some(value.clone());
+            borrowed.saved_continuation = Some(continuation);
+            Ok(value)
+        }
+        TrampolineResult::Error(e) => {
+            borrowed.state = CoroutineState::Error(e.clone());
+            Err(e)
+        }
+    }
+}
+
+/// Resume a coroutine using the CPS path
+///
+/// This is used when the coroutine was suspended with a saved CPS continuation.
+fn resume_coroutine_cps(
+    co: Rc<std::cell::RefCell<Coroutine>>,
+    mut borrowed: RefMut<Coroutine>,
+    continuation: Rc<Continuation>,
+    resume_value: Value,
+    vm: &mut VM,
+) -> Result<Value, String> {
+    borrowed.state = CoroutineState::Running;
+    let env = borrowed.closure.env.clone();
+
+    // Release borrow
+    drop(borrowed);
+
+    // Apply resume value to continuation
+    let mut trampoline = Trampoline::new();
+    let initial_action = Action::return_value(resume_value, continuation);
+    let result = trampoline.run_with_vm(initial_action, vm, &env);
+
+    // Update coroutine state
+    let mut borrowed = co.borrow_mut();
+    match result {
+        TrampolineResult::Done(value) => {
+            borrowed.state = CoroutineState::Done;
+            borrowed.yielded_value = Some(value.clone());
+            borrowed.saved_continuation = None;
+            Ok(value)
+        }
+        TrampolineResult::Suspended {
+            value,
+            continuation,
+        } => {
+            borrowed.state = CoroutineState::Suspended;
+            borrowed.yielded_value = Some(value.clone());
+            borrowed.saved_continuation = Some(continuation);
+            Ok(value)
+        }
+        TrampolineResult::Error(e) => {
+            borrowed.state = CoroutineState::Error(e.clone());
+            Err(e)
+        }
     }
 }
 

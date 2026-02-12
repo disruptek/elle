@@ -10,7 +10,7 @@ use elle::{compile, init_stdlib, read_str, register_primitives, SymbolTable, VM}
 use rustyline::error::ReadlineError;
 use std::env;
 use std::fs;
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 
 fn print_welcome() {
     println!("Elle v0.1.0 - Lisp Interpreter (type (help) for commands)");
