@@ -188,8 +188,17 @@ impl ExprCompiler {
                 // Check if it's a registered primitive
                 if let Some(name) = func_name {
                     if let Some(prim) = ctx.primitives.get(&name) {
-                        return Self::compile_primitive_call(ctx, prim, args);
+                        if *tail {
+                            return Self::compile_primitive_tail_call(ctx, prim, args);
+                        } else {
+                            return Self::compile_primitive_call(ctx, prim, args);
+                        }
                     }
+                }
+
+                // Check for closure tail call (any non-primitive function)
+                if *tail {
+                    return Self::compile_closure_tail_call(ctx, func, args);
                 }
 
                 // Fall back to existing handling (intrinsics for 1-2 args)
@@ -1209,6 +1218,137 @@ impl ExprCompiler {
         // 7. Get the result
         let result = ctx.builder.inst_results(call)[0];
         Ok(IrValue::I64(result))
+    }
+
+    /// Compile a tail call to a registered primitive using return_call_indirect
+    fn compile_primitive_tail_call(
+        ctx: &mut CompileContext,
+        prim: &super::primitive_registry::PrimitiveEntry,
+        args: &[Expr],
+    ) -> Result<IrValue, String> {
+        use cranelift_module::Module;
+
+        // 1. Allocate stack space for arguments array
+        let args_size = if args.is_empty() { 8 } else { args.len() * 8 };
+        let args_slot =
+            ctx.builder
+                .create_sized_stack_slot(cranelift::prelude::StackSlotData::new(
+                    cranelift::prelude::StackSlotKind::ExplicitSlot,
+                    args_size as u32,
+                ));
+
+        // 2. Compile each argument and store in the array
+        for (i, arg) in args.iter().enumerate() {
+            let val = Self::compile_expr_block(ctx, arg)?;
+            let val_i64 = Self::ir_value_to_i64(ctx.builder, val)?;
+            ctx.builder
+                .ins()
+                .stack_store(val_i64, args_slot, (i * 8) as i32);
+        }
+
+        // 3. Get pointer to args array
+        let args_ptr = ctx.builder.ins().stack_addr(types::I64, args_slot, 0);
+
+        // 4. Load the primitive function address
+        let func_addr = ctx
+            .builder
+            .ins()
+            .iconst(types::I64, prim.func_ptr as usize as i64);
+
+        // 5. Create the call signature: fn(i64, i64) -> i64
+        let mut sig = ctx.module.make_signature();
+        sig.params.push(AbiParam::new(types::I64)); // args_ptr
+        sig.params.push(AbiParam::new(types::I64)); // args_len
+        sig.returns.push(AbiParam::new(types::I64)); // result
+        let sig_ref = ctx.builder.import_signature(sig);
+
+        // 6. Tail call the primitive using return_call_indirect
+        let args_len = ctx.builder.ins().iconst(types::I64, args.len() as i64);
+        ctx.builder
+            .ins()
+            .return_call_indirect(sig_ref, func_addr, &[args_ptr, args_len]);
+
+        // 7. Create unreachable block (return_call_indirect doesn't return)
+        let unreachable = ctx.builder.create_block();
+        ctx.builder.switch_to_block(unreachable);
+        ctx.builder.seal_block(unreachable);
+
+        // Return dummy value (unreachable)
+        Ok(IrValue::I64(ctx.builder.ins().iconst(types::I64, 0)))
+    }
+
+    /// Compile a tail call to a closure (not a primitive)
+    fn compile_closure_tail_call(
+        ctx: &mut CompileContext,
+        func: &Expr,
+        args: &[Expr],
+    ) -> Result<IrValue, String> {
+        use cranelift_module::Module;
+
+        // 1. Compile the function expression to get the closure value
+        // For now, we can't compile arbitrary closures from JIT, so return an error
+        // This would require loading the closure from the environment or global scope
+        let callee_val = match func {
+            Expr::GlobalVar(_sym_id) => {
+                // GlobalVar would need to be loaded from the environment
+                // For now, we can't support this in JIT
+                return Err(
+                    "Closure tail calls to global variables not yet supported in JIT".to_string(),
+                );
+            }
+            _ => Self::compile_expr_block(ctx, func)?,
+        };
+        let callee_i64 = Self::ir_value_to_i64(ctx.builder, callee_val)?;
+
+        // 2. Allocate stack space for arguments array
+        let args_size = if args.is_empty() { 8 } else { args.len() * 8 };
+        let args_slot =
+            ctx.builder
+                .create_sized_stack_slot(cranelift::prelude::StackSlotData::new(
+                    cranelift::prelude::StackSlotKind::ExplicitSlot,
+                    args_size as u32,
+                ));
+
+        // 3. Compile each argument and store in the array
+        for (i, arg) in args.iter().enumerate() {
+            let val = Self::compile_expr_block(ctx, arg)?;
+            let val_i64 = Self::ir_value_to_i64(ctx.builder, val)?;
+            ctx.builder
+                .ins()
+                .stack_store(val_i64, args_slot, (i * 8) as i32);
+        }
+
+        // 4. Get pointer to args array
+        let args_ptr = ctx.builder.ins().stack_addr(types::I64, args_slot, 0);
+        let args_len = ctx.builder.ins().iconst(types::I64, args.len() as i64);
+
+        // 5. Get the runtime helper function address
+        let helper_addr = ctx.builder.ins().iconst(
+            types::I64,
+            super::runtime_helpers::jit_tail_call_closure as *const () as usize as i64,
+        );
+
+        // 6. Create signature: fn(callee: i64, args_ptr: i64, args_len: i64) -> i64
+        let mut sig = ctx.module.make_signature();
+        sig.params.push(AbiParam::new(types::I64)); // callee
+        sig.params.push(AbiParam::new(types::I64)); // args_ptr
+        sig.params.push(AbiParam::new(types::I64)); // args_len
+        sig.returns.push(AbiParam::new(types::I64)); // result
+        let sig_ref = ctx.builder.import_signature(sig);
+
+        // 7. Tail call the helper
+        ctx.builder.ins().return_call_indirect(
+            sig_ref,
+            helper_addr,
+            &[callee_i64, args_ptr, args_len],
+        );
+
+        // 8. Create unreachable block
+        let unreachable = ctx.builder.create_block();
+        ctx.builder.switch_to_block(unreachable);
+        ctx.builder.seal_block(unreachable);
+
+        Ok(IrValue::I64(ctx.builder.ins().iconst(types::I64, 0)))
     }
 }
 

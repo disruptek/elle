@@ -83,7 +83,7 @@ pub extern "C" fn jit_cdr(value_ptr: i64) -> i64 {
 
 /// Encode a Value as an i64 for JIT use
 /// Primitives are encoded directly, heap values return pointers
-fn encode_value_for_jit(value: &Value) -> i64 {
+pub fn encode_value_for_jit(value: &Value) -> i64 {
     match value {
         Value::Nil => 0,
         Value::Bool(b) => {
@@ -96,6 +96,98 @@ fn encode_value_for_jit(value: &Value) -> i64 {
         Value::Int(i) => *i,
         // For heap values (cons, etc.), return pointer to the value
         _ => value as *const Value as i64,
+    }
+}
+
+/// Decode an i64 back to a Value for JIT use
+/// This is the inverse of encode_value_for_jit
+pub fn decode_value_for_jit(encoded: i64) -> Value {
+    if encoded == 0 {
+        Value::Nil
+    } else if encoded == 1 {
+        Value::Bool(true)
+    } else if encoded > 1 && encoded < i64::MAX / 2 {
+        // Likely a small integer
+        Value::Int(encoded)
+    } else {
+        // Likely a pointer to a heap value
+        unsafe {
+            let ptr = encoded as *const Value;
+            if ptr.is_null() {
+                Value::Nil
+            } else {
+                (*ptr).clone()
+            }
+        }
+    }
+}
+
+/// Runtime helper for JIT tail calls to closures
+/// This function is called via return_call_indirect from JIT code
+///
+/// # Safety
+/// - callee_encoded must be a valid encoded Value (closure)
+/// - args_ptr must be a valid pointer to an array of args_len i64 values
+#[no_mangle]
+pub extern "C" fn jit_tail_call_closure(
+    callee_encoded: i64,
+    args_ptr: *const i64,
+    args_len: i64,
+) -> i64 {
+    // Decode callee
+    let callee = decode_value_for_jit(callee_encoded);
+
+    // Decode arguments
+    let args: Vec<Value> = if args_len > 0 && !args_ptr.is_null() {
+        unsafe {
+            (0..args_len as usize)
+                .map(|i| decode_value_for_jit(*args_ptr.add(i)))
+                .collect()
+        }
+    } else {
+        Vec::new()
+    };
+
+    // Dispatch based on callee type
+    match &callee {
+        Value::JitClosure(jc) if !jc.code_ptr.is_null() => {
+            // Native JIT closure - call directly
+            // The signature is: fn(args_ptr: *const i64, args_len: i64, env_ptr: *const i64) -> i64
+            let func: extern "C" fn(*const i64, i64, *const i64) -> i64 =
+                unsafe { std::mem::transmute(jc.code_ptr) };
+
+            // Encode args
+            let encoded_args: Vec<i64> = args.iter().map(encode_value_for_jit).collect();
+
+            // Encode env
+            let encoded_env: Vec<i64> = jc.env.iter().map(encode_value_for_jit).collect();
+
+            let result = func(encoded_args.as_ptr(), args_len, encoded_env.as_ptr());
+            result // Already encoded
+        }
+        Value::Closure(_c) => {
+            // For interpreted closures, we would need access to the VM
+            // For now, return an error encoded as nil
+            eprintln!("jit_tail_call_closure: Cannot tail-call interpreted closure from JIT");
+            0 // nil
+        }
+        Value::JitClosure(jc) => {
+            // JitClosure without code_ptr - fall back to source
+            if let Some(ref _source) = jc.source {
+                eprintln!("jit_tail_call_closure: Cannot tail-call closure without code_ptr");
+                0 // nil
+            } else {
+                eprintln!("jit_tail_call_closure: JitClosure has no code and no source");
+                0 // nil
+            }
+        }
+        _ => {
+            eprintln!(
+                "jit_tail_call_closure: Cannot tail-call non-closure: {:?}",
+                callee
+            );
+            0 // nil
+        }
     }
 }
 
