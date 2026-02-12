@@ -10,7 +10,7 @@
 //! - coroutine-next: Get next value from coroutine iterator
 
 use crate::value::{Coroutine, CoroutineState, Value};
-use crate::vm::VM;
+use crate::vm::{VmResult, VM};
 use std::rc::Rc;
 
 /// F1: Create a coroutine from a function
@@ -26,21 +26,17 @@ pub fn prim_make_coroutine(args: &[Value]) -> Result<Value, String> {
 
     match &args[0] {
         Value::Closure(c) => {
-            let coroutine = Coroutine {
-                closure: c.clone(),
-                state: CoroutineState::Created,
-                yielded_value: None,
-            };
-            Ok(Value::Coroutine(Rc::new(coroutine)))
+            let coroutine = Coroutine::new(c.clone());
+            Ok(Value::Coroutine(Rc::new(std::cell::RefCell::new(
+                coroutine,
+            ))))
         }
         Value::JitClosure(jc) => {
             if let Some(source) = &jc.source {
-                let coroutine = Coroutine {
-                    closure: source.clone(),
-                    state: CoroutineState::Created,
-                    yielded_value: None,
-                };
-                Ok(Value::Coroutine(Rc::new(coroutine)))
+                let coroutine = Coroutine::new(source.clone());
+                Ok(Value::Coroutine(Rc::new(std::cell::RefCell::new(
+                    coroutine,
+                ))))
             } else {
                 Err("JitClosure has no source for coroutine".to_string())
             }
@@ -65,7 +61,8 @@ pub fn prim_coroutine_status(args: &[Value]) -> Result<Value, String> {
 
     match &args[0] {
         Value::Coroutine(co) => {
-            let status = match &co.state {
+            let borrowed = co.borrow();
+            let status = match &borrowed.state {
                 CoroutineState::Created => "created",
                 CoroutineState::Running => "running",
                 CoroutineState::Suspended => "suspended",
@@ -93,7 +90,10 @@ pub fn prim_coroutine_done(args: &[Value]) -> Result<Value, String> {
     }
 
     match &args[0] {
-        Value::Coroutine(co) => Ok(Value::Bool(matches!(co.state, CoroutineState::Done))),
+        Value::Coroutine(co) => {
+            let borrowed = co.borrow();
+            Ok(Value::Bool(matches!(borrowed.state, CoroutineState::Done)))
+        }
         other => Err(format!(
             "coroutine-done? requires a coroutine, got {}",
             other.type_name()
@@ -113,7 +113,10 @@ pub fn prim_coroutine_value(args: &[Value]) -> Result<Value, String> {
     }
 
     match &args[0] {
-        Value::Coroutine(co) => Ok(co.yielded_value.clone().unwrap_or(Value::Nil)),
+        Value::Coroutine(co) => {
+            let borrowed = co.borrow();
+            Ok(borrowed.yielded_value.clone().unwrap_or(Value::Nil))
+        }
         other => Err(format!(
             "coroutine-value requires a coroutine, got {}",
             other.type_name()
@@ -155,38 +158,82 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
 
     match &args[0] {
         Value::Coroutine(co) => {
-            // We need to mutate the coroutine state
-            // Clone and update
-            let mut new_co = (**co).clone();
+            // Borrow mutably to update the coroutine state
+            let mut borrowed = co.borrow_mut();
 
-            match &new_co.state {
+            match &borrowed.state {
                 CoroutineState::Created => {
                     // First resume - start execution
-                    new_co.state = CoroutineState::Running;
+                    borrowed.state = CoroutineState::Running;
 
-                    // Execute the closure
-                    let result = vm.execute_bytecode(
-                        &new_co.closure.bytecode,
-                        &new_co.closure.constants,
-                        Some(&new_co.closure.env),
-                    );
+                    // Get closure info before releasing borrow
+                    let bytecode = borrowed.closure.bytecode.clone();
+                    let constants = borrowed.closure.constants.clone();
+                    let env = borrowed.closure.env.clone();
 
+                    // Release the borrow before calling vm.execute_bytecode_coroutine
+                    drop(borrowed);
+
+                    // Enter coroutine context
+                    vm.enter_coroutine(co.clone());
+
+                    // Execute the closure with coroutine support
+                    let result = vm.execute_bytecode_coroutine(&bytecode, &constants, Some(&env));
+
+                    // Exit coroutine context
+                    vm.exit_coroutine();
+
+                    // Re-borrow to update state
+                    let mut borrowed = co.borrow_mut();
                     match result {
-                        Ok(value) => {
-                            new_co.state = CoroutineState::Done;
-                            new_co.yielded_value = Some(value.clone());
+                        Ok(VmResult::Done(value)) => {
+                            borrowed.state = CoroutineState::Done;
+                            borrowed.yielded_value = Some(value.clone());
+                            Ok(value)
+                        }
+                        Ok(VmResult::Yielded(value)) => {
+                            // Coroutine yielded - state already updated by Yield instruction
+                            borrowed.yielded_value = Some(value.clone());
                             Ok(value)
                         }
                         Err(e) => {
-                            new_co.state = CoroutineState::Error(e.clone());
+                            borrowed.state = CoroutineState::Error(e.clone());
                             Err(e)
                         }
                     }
                 }
                 CoroutineState::Suspended => {
-                    // Resume from suspension - not yet fully implemented
-                    // For now, return an error
-                    Err("Resuming suspended coroutines not yet implemented".to_string())
+                    // Resume from suspension
+                    let context = borrowed
+                        .saved_context
+                        .clone()
+                        .ok_or("Suspended coroutine has no saved context")?;
+                    let constants = borrowed.closure.constants.clone();
+
+                    // Release the borrow before calling resume_from_context
+                    drop(borrowed);
+
+                    // Resume from the saved context
+                    let result = vm.resume_from_context(context, _resume_value, &constants);
+
+                    // Re-borrow to update state
+                    let mut borrowed = co.borrow_mut();
+                    match result {
+                        Ok(VmResult::Done(value)) => {
+                            borrowed.state = CoroutineState::Done;
+                            borrowed.yielded_value = Some(value.clone());
+                            Ok(value)
+                        }
+                        Ok(VmResult::Yielded(value)) => {
+                            // Coroutine yielded again - state already updated by Yield instruction
+                            borrowed.yielded_value = Some(value.clone());
+                            Ok(value)
+                        }
+                        Err(e) => {
+                            borrowed.state = CoroutineState::Error(e.clone());
+                            Err(e)
+                        }
+                    }
                 }
                 CoroutineState::Running => Err("Coroutine is already running".to_string()),
                 CoroutineState::Done => Err("Cannot resume completed coroutine".to_string()),
@@ -218,26 +265,32 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> Result<Value, String> {
         Value::Coroutine(co) => {
             // For now, just run the coroutine to completion
             // Full yield-from requires CPS integration
-            let current_co = (**co).clone();
-
             loop {
-                match &current_co.state {
+                let state = {
+                    let borrowed = co.borrow();
+                    borrowed.state.clone()
+                };
+
+                match &state {
                     CoroutineState::Created | CoroutineState::Suspended => {
                         // Resume the coroutine
-                        let result = prim_coroutine_resume(
-                            &[Value::Coroutine(Rc::new(current_co.clone()))],
-                            vm,
-                        )?;
+                        let result = prim_coroutine_resume(&[Value::Coroutine(co.clone())], vm)?;
 
-                        // Update state based on result
-                        if matches!(current_co.state, CoroutineState::Done) {
+                        // Check state after resume
+                        let new_state = {
+                            let borrowed = co.borrow();
+                            borrowed.state.clone()
+                        };
+
+                        if matches!(new_state, CoroutineState::Done) {
                             return Ok(result);
                         }
                         // If suspended, we should yield the value up
                         // For now, just continue
                     }
                     CoroutineState::Done => {
-                        return Ok(current_co.yielded_value.clone().unwrap_or(Value::Nil));
+                        let borrowed = co.borrow();
+                        return Ok(borrowed.yielded_value.clone().unwrap_or(Value::Nil));
                     }
                     CoroutineState::Error(e) => {
                         return Err(e.clone());
@@ -296,7 +349,12 @@ pub fn prim_coroutine_next(args: &[Value], vm: &mut VM) -> Result<Value, String>
 
     match &args[0] {
         Value::Coroutine(co) => {
-            if matches!(co.state, CoroutineState::Done) {
+            let is_done = {
+                let borrowed = co.borrow();
+                matches!(borrowed.state, CoroutineState::Done)
+            };
+
+            if is_done {
                 // Return (nil . #t) to indicate done
                 Ok(crate::value::cons(Value::Nil, Value::Bool(true)))
             } else {
@@ -353,7 +411,8 @@ mod tests {
         assert!(result.is_ok());
 
         if let Value::Coroutine(co) = result.unwrap() {
-            assert!(matches!(co.state, CoroutineState::Created));
+            let borrowed = co.borrow();
+            assert!(matches!(borrowed.state, CoroutineState::Created));
         } else {
             panic!("Expected coroutine");
         }
