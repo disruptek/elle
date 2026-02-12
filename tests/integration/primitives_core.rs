@@ -441,3 +441,29 @@ fn test_file_io_with_strings() {
     // Clean up
     let _ = fs::remove_file(&test_file);
 }
+
+// ============================================================================
+// SECTION 3: System Primitive Tests
+// ============================================================================
+// Tests for src/primitives/system.rs
+
+#[test]
+fn test_exit_error_too_many_args() {
+    // Test exit with too many arguments
+    let result = eval("(exit 1 2)");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("expected 0 or 1 argument"));
+}
+
+#[test]
+fn test_exit_error_wrong_type() {
+    // Test exit with wrong type (string instead of number)
+    let result = eval("(exit \"not-a-number\")");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("code must be a number"));
+}
+
+// Note: We can't test successful exit in the normal way because it kills the process.
+// These tests would need to be run as subprocess tests, which is beyond the scope
+// of the basic integration test framework. The exit primitive itself is tested
+// indirectly by the subprocess tests in the examples/ directory.

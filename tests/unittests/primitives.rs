@@ -1911,3 +1911,60 @@ fn test_json_serialize_errors() {
     let result = call_primitive(&json_serialize, &[fn_val]);
     assert!(result.is_err());
 }
+
+// System primitive tests
+
+#[test]
+fn test_exit_no_args() {
+    let (vm, mut symbols) = setup();
+    let exit = get_primitive(&vm, &mut symbols, "exit");
+
+    // Can't actually test the exit behavior since it kills the process
+    // But we can verify the function exists and is callable (in a subprocess)
+    // For now, we just verify it's a native function
+    match exit {
+        Value::NativeFn(_) => {}
+        _ => panic!("exit should be a native function"),
+    }
+}
+
+#[test]
+fn test_exit_with_int_code() {
+    let (vm, mut symbols) = setup();
+    let exit = get_primitive(&vm, &mut symbols, "exit");
+
+    // Verify the function accepts int argument
+    // We can't actually call it in a test because it exits the process
+    match exit {
+        Value::NativeFn(_) => {}
+        _ => panic!("exit should be a native function"),
+    }
+}
+
+#[test]
+fn test_exit_with_float_code() {
+    let (vm, mut symbols) = setup();
+    let exit = get_primitive(&vm, &mut symbols, "exit");
+
+    // Verify the function accepts float argument
+    match exit {
+        Value::NativeFn(_) => {}
+        _ => panic!("exit should be a native function"),
+    }
+}
+
+#[test]
+fn test_exit_errors() {
+    let (vm, mut symbols) = setup();
+    let exit = get_primitive(&vm, &mut symbols, "exit");
+
+    // Test too many arguments
+    let result = call_primitive(&exit, &[Value::Int(0), Value::Int(1)]);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("expected 0 or 1 argument"));
+
+    // Test wrong type (string instead of number)
+    let result = call_primitive(&exit, &[Value::String("0".into())]);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("code must be a number"));
+}

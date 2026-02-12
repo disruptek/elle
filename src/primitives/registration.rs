@@ -48,6 +48,7 @@ use super::structs::{
     prim_struct, prim_struct_del, prim_struct_get, prim_struct_has, prim_struct_keys,
     prim_struct_length, prim_struct_put, prim_struct_values,
 };
+use super::system::prim_exit;
 use super::table::{
     prim_table, prim_table_del, prim_table_get, prim_table_has as prim_table_has_key,
     prim_table_keys, prim_table_length, prim_table_put, prim_table_values,
@@ -318,6 +319,9 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
     register_fn(vm, symbols, "trace", prim_trace);
     register_fn(vm, symbols, "profile", prim_profile);
     register_fn(vm, symbols, "memory-usage", prim_memory_usage);
+
+    // System primitives
+    register_fn(vm, symbols, "exit", prim_exit);
 
     // File I/O primitives
     register_fn(vm, symbols, "slurp", prim_slurp);
