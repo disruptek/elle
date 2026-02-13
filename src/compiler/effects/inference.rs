@@ -62,16 +62,15 @@ impl EffectContext {
             Expr::Literal(_) => Effect::Pure,
 
             // Variables are pure (the value itself doesn't yield)
-            Expr::Var(sym_id, _, _) => self
-                .local_effects
-                .get(sym_id)
-                .copied()
-                .unwrap_or(Effect::Pure),
-            Expr::GlobalVar(sym_id) => self
-                .known_effects
-                .get(sym_id)
-                .copied()
-                .unwrap_or(Effect::Pure),
+            Expr::Var(var_ref) => {
+                use crate::binding::VarRef;
+                match var_ref {
+                    VarRef::Local { .. } | VarRef::Upvalue { .. } => Effect::Pure,
+                    VarRef::Global { sym } => {
+                        self.known_effects.get(sym).copied().unwrap_or(Effect::Pure)
+                    }
+                }
+            }
 
             // Conditionals: max of all branches
             Expr::If { cond, then, else_ } => {
@@ -203,30 +202,36 @@ impl EffectContext {
 
     /// Infer the effect of calling a function (public for CPS transform)
     pub fn infer_call_effect(&self, func: &Expr, args: &[Expr]) -> Effect {
+        use crate::binding::VarRef;
         match func {
-            Expr::GlobalVar(sym_id) => {
-                match self.known_effects.get(sym_id) {
-                    Some(Effect::Pure) => Effect::Pure,
-                    Some(Effect::Yields) => Effect::Yields,
-                    Some(Effect::Polymorphic(param_idx)) => {
-                        // Effect depends on the param_idx-th argument
-                        if let Some(arg) = args.get(*param_idx) {
-                            self.infer_arg_effect(arg)
-                        } else {
-                            Effect::Pure // Conservative default
+            Expr::Var(var_ref) => {
+                match var_ref {
+                    VarRef::Global { sym } => {
+                        match self.known_effects.get(sym) {
+                            Some(Effect::Pure) => Effect::Pure,
+                            Some(Effect::Yields) => Effect::Yields,
+                            Some(Effect::Polymorphic(param_idx)) => {
+                                // Effect depends on the param_idx-th argument
+                                if let Some(arg) = args.get(*param_idx) {
+                                    self.infer_arg_effect(arg)
+                                } else {
+                                    Effect::Pure // Conservative default
+                                }
+                            }
+                            // Unknown global function - assume pure
+                            // At runtime, we register effects from VM globals, so unknown
+                            // functions are likely builtins that weren't registered
+                            None => Effect::Pure,
                         }
                     }
-                    // Unknown global function - assume pure
-                    // At runtime, we register effects from VM globals, so unknown
-                    // functions are likely builtins that weren't registered
-                    None => Effect::Pure,
+                    VarRef::Local { .. } | VarRef::Upvalue { .. } => {
+                        self.local_effects
+                            .get(&crate::value::SymbolId(0)) // Placeholder - local vars don't have symbols
+                            .copied()
+                            .unwrap_or(Effect::Yields) // Unknown local variable, assume may yield (conservative)
+                    }
                 }
             }
-            Expr::Var(sym_id, _, _) => self
-                .local_effects
-                .get(sym_id)
-                .copied()
-                .unwrap_or(Effect::Yields), // Unknown local variable, assume may yield (conservative)
             Expr::Lambda { body, .. } => {
                 // Inline lambda - infer its body's effect
                 self.infer(body)
@@ -237,20 +242,23 @@ impl EffectContext {
 
     /// Infer the effect of a function argument (for polymorphic HOFs)
     fn infer_arg_effect(&self, arg: &Expr) -> Effect {
+        use crate::binding::VarRef;
         match arg {
             // If arg is a lambda, infer its body effect
             Expr::Lambda { body, .. } => self.infer(body),
             // If arg is a variable, look up its effect
-            Expr::GlobalVar(sym_id) => self
-                .known_effects
-                .get(sym_id)
-                .copied()
-                .unwrap_or(Effect::Pure),
-            Expr::Var(sym_id, _, _) => self
-                .local_effects
-                .get(sym_id)
-                .copied()
-                .unwrap_or(Effect::Pure),
+            Expr::Var(var_ref) => {
+                match var_ref {
+                    VarRef::Global { sym } => {
+                        self.known_effects.get(sym).copied().unwrap_or(Effect::Pure)
+                    }
+                    VarRef::Local { .. } | VarRef::Upvalue { .. } => self
+                        .local_effects
+                        .get(&crate::value::SymbolId(0)) // Placeholder
+                        .copied()
+                        .unwrap_or(Effect::Pure),
+                }
+            }
             // Otherwise, the argument expression's effect
             _ => self.infer(arg),
         }
@@ -335,7 +343,7 @@ mod tests {
         ctx.register_global(sym, Effect::Pure);
 
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(sym)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(sym))),
             args: vec![Expr::Literal(Value::Int(1))],
             tail: false,
         };
@@ -352,9 +360,9 @@ mod tests {
 
         // (f (g 1))
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(sym1)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(sym1))),
             args: vec![Expr::Call {
-                func: Box::new(Expr::GlobalVar(sym2)),
+                func: Box::new(Expr::Var(crate::binding::VarRef::global(sym2))),
                 args: vec![Expr::Literal(Value::Int(1))],
                 tail: false,
             }],
@@ -381,7 +389,8 @@ mod tests {
             params: vec![crate::value::SymbolId(1)],
             body: Box::new(Expr::Literal(Value::Int(42))),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
         // Lambda expression itself is pure (the effect is stored in the closure)
         assert_eq!(ctx.infer(&expr), Effect::Pure);
@@ -397,8 +406,8 @@ mod tests {
 
         // (map abs lst) - abs is pure, so map is pure
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(map_sym)),
-            args: vec![Expr::GlobalVar(abs_sym), Expr::Literal(Value::Nil)],
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(map_sym))),
+            args: vec![Expr::Var(crate::binding::VarRef::global(abs_sym)), Expr::Literal(Value::Nil)],
             tail: false,
         };
 
@@ -415,13 +424,14 @@ mod tests {
 
         // (map (fn (x) (+ x 1)) lst) - inline pure lambda
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(map_sym)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(map_sym))),
             args: vec![
                 Expr::Lambda {
                     params: vec![x_sym],
                     body: Box::new(Expr::Literal(Value::Int(1))),
                     captures: vec![],
-                    locals: vec![],
+                    num_captures: 0,
+                    num_locals: 1,
                 },
                 Expr::Literal(Value::Nil),
             ],
@@ -442,8 +452,8 @@ mod tests {
 
         // (map yielding-fn lst) - yielding-fn yields, so map yields
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(map_sym)),
-            args: vec![Expr::GlobalVar(yielding_fn_sym), Expr::Literal(Value::Nil)],
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(map_sym))),
+            args: vec![Expr::Var(crate::binding::VarRef::global(yielding_fn_sym)), Expr::Literal(Value::Nil)],
             tail: false,
         };
 
@@ -462,17 +472,18 @@ mod tests {
 
         // (map (fn (x) (yield x)) lst) - lambda body yields
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(map_sym)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(map_sym))),
             args: vec![
                 Expr::Lambda {
                     params: vec![x_sym],
                     body: Box::new(Expr::Call {
-                        func: Box::new(Expr::GlobalVar(yield_sym)),
-                        args: vec![Expr::Var(x_sym, 0, 0)],
+                        func: Box::new(Expr::Var(crate::binding::VarRef::global(yield_sym))),
+                        args: vec![Expr::Var(crate::binding::VarRef::local(0))],
                         tail: false,
                     }),
                     captures: vec![],
-                    locals: vec![],
+                    num_captures: 0,
+                    num_locals: 1,
                 },
                 Expr::Literal(Value::Nil),
             ],
@@ -493,8 +504,8 @@ mod tests {
 
         // (filter positive? lst) - positive? is pure, so filter is pure
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(filter_sym)),
-            args: vec![Expr::GlobalVar(positive_sym), Expr::Literal(Value::Nil)],
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(filter_sym))),
+            args: vec![Expr::Var(crate::binding::VarRef::global(positive_sym)), Expr::Literal(Value::Nil)],
             tail: false,
         };
 
@@ -511,9 +522,9 @@ mod tests {
 
         // (fold + 0 lst) - + is pure, so fold is pure
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(fold_sym)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(fold_sym))),
             args: vec![
-                Expr::GlobalVar(plus_sym),
+                Expr::Var(crate::binding::VarRef::global(plus_sym)),
                 Expr::Literal(Value::Int(0)),
                 Expr::Literal(Value::Nil),
             ],
@@ -533,8 +544,8 @@ mod tests {
 
         // (apply + (list 1 2)) - + is pure, so apply is pure
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(apply_sym)),
-            args: vec![Expr::GlobalVar(plus_sym), Expr::Literal(Value::Nil)],
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(apply_sym))),
+            args: vec![Expr::Var(crate::binding::VarRef::global(plus_sym)), Expr::Literal(Value::Nil)],
             tail: false,
         };
 
@@ -550,7 +561,7 @@ mod tests {
 
         // (map) - missing argument, should default to pure
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(map_sym)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(map_sym))),
             args: vec![],
             tail: false,
         };
@@ -566,7 +577,7 @@ mod tests {
         let ctx = EffectContext::with_symbols(&symbols);
 
         // Test infer_arg_effect directly
-        let arg = Expr::GlobalVar(abs_sym);
+        let arg = Expr::Var(crate::binding::VarRef::global(abs_sym));
         assert_eq!(ctx.infer_arg_effect(&arg), Effect::Pure);
     }
 
@@ -582,7 +593,8 @@ mod tests {
             params: vec![x_sym],
             body: Box::new(Expr::Literal(Value::Int(42))),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
         assert_eq!(ctx.infer_arg_effect(&arg), Effect::Pure);
     }

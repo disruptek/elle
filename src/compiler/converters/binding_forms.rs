@@ -128,11 +128,17 @@ pub fn convert_lambda(
         &locally_defined_vars,
     );
 
+    // Extract just the symbol IDs from captures
+    let capture_syms: Vec<SymbolId> = captures.iter().map(|(sym, _, _)| *sym).collect();
+    let num_captures = capture_syms.len();
+    let num_locals = num_captures + param_syms.len() + locally_defined_vars.len();
+
     Ok(Expr::Lambda {
         params: param_syms,
         body: adjusted_body,
-        captures,
-        locals: locally_defined_vars,
+        captures: capture_syms,
+        num_captures,
+        num_locals,
     })
 }
 

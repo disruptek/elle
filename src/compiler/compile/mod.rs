@@ -4,6 +4,7 @@ use super::analysis::analyze_mutated_vars;
 use super::ast::Expr;
 use super::bytecode::{Bytecode, Instruction};
 use super::effects::EffectContext;
+use crate::binding::VarRef;
 use crate::error::LocationMap;
 use crate::symbol::SymbolTable;
 use crate::value::{Closure, SymbolId, Value};
@@ -58,21 +59,26 @@ impl Compiler {
                 self.compile_literal(val);
             }
 
-            Expr::Var(_sym, depth, index) => {
-                // Variables in closure environment - access via LoadUpvalue
-                // depth indicates nesting level:
-                // 0 = current lambda's scope (parameters + captures)
-                // 1 = enclosing lambda's scope
-                // We add 1 to depth when using LoadUpvalue since it counts from current closure
-                self.bytecode.emit(Instruction::LoadUpvalue);
-                self.bytecode.emit_byte((*depth + 1) as u8);
-                self.bytecode.emit_byte(*index as u8);
-            }
-
-            Expr::GlobalVar(sym) => {
-                let idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                self.bytecode.emit(Instruction::LoadGlobal);
-                self.bytecode.emit_u16(idx);
+            Expr::Var(var_ref) => {
+                match var_ref {
+                    VarRef::Local { index } => {
+                        // Local variable in current frame
+                        self.bytecode.emit(Instruction::LoadUpvalue);
+                        self.bytecode.emit_byte(1); // depth = 1 (current closure)
+                        self.bytecode.emit_byte(*index as u8);
+                    }
+                    VarRef::Upvalue { index } => {
+                        // Captured variable from enclosing closure
+                        self.bytecode.emit(Instruction::LoadUpvalue);
+                        self.bytecode.emit_byte(1); // depth = 1
+                        self.bytecode.emit_byte(*index as u8);
+                    }
+                    VarRef::Global { sym } => {
+                        let idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                        self.bytecode.emit(Instruction::LoadGlobal);
+                        self.bytecode.emit_u16(idx);
+                    }
+                }
             }
 
             Expr::If { cond, then, else_ } => {
@@ -99,9 +105,10 @@ impl Compiler {
                 params,
                 body,
                 captures,
-                locals,
+                num_captures,
+                num_locals,
             } => {
-                self.compile_lambda(params, body, captures, locals);
+                self.compile_lambda(params, body, captures, *num_captures, *num_locals);
             }
 
             Expr::Let { bindings, body } => {
@@ -112,23 +119,24 @@ impl Compiler {
                 self.compile_letrec(bindings, body, tail);
             }
 
-            Expr::Set {
-                var,
-                depth: _,
-                index,
-                value,
-            } => {
+            Expr::Set { target, value } => {
                 self.compile_expr(value, false);
-                if *index != usize::MAX {
-                    // Variable is in closure environment (capture, param, or local)
-                    self.bytecode.emit(Instruction::StoreUpvalue);
-                    self.bytecode.emit_byte(1); // depth = 1 (current closure)
-                    self.bytecode.emit_byte(*index as u8);
-                } else {
-                    // Global variable
-                    let idx = self.bytecode.add_constant(Value::Symbol(*var));
-                    self.bytecode.emit(Instruction::StoreGlobal);
-                    self.bytecode.emit_u16(idx);
+                match target {
+                    VarRef::Local { index } => {
+                        self.bytecode.emit(Instruction::StoreUpvalue);
+                        self.bytecode.emit_byte(1);
+                        self.bytecode.emit_byte(*index as u8);
+                    }
+                    VarRef::Upvalue { index } => {
+                        self.bytecode.emit(Instruction::StoreUpvalue);
+                        self.bytecode.emit_byte(1);
+                        self.bytecode.emit_byte(*index as u8);
+                    }
+                    VarRef::Global { sym } => {
+                        let idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                        self.bytecode.emit(Instruction::StoreGlobal);
+                        self.bytecode.emit_u16(idx);
+                    }
                 }
             }
 
@@ -987,8 +995,9 @@ impl Compiler {
         &mut self,
         params: &[SymbolId],
         body: &Expr,
-        captures: &[(SymbolId, usize, usize)],
-        locals: &[SymbolId],
+        captures: &[SymbolId],
+        num_captures: usize,
+        num_locals: usize,
     ) {
         // Phase 4: Locally-defined variables are now part of the closure environment
         // The closure environment layout is: [captures..., parameters..., locals...]
@@ -1004,8 +1013,8 @@ impl Compiler {
             Compiler::new()
         };
         lambda_compiler.scope_depth = 0; // NOT inside a scope (Phase 4: no scope_stack for lambdas)
-        lambda_compiler.lambda_locals = locals.to_vec();
-        lambda_compiler.lambda_captures_len = captures.len();
+        lambda_compiler.lambda_locals = Vec::new(); // Will be computed from num_locals
+        lambda_compiler.lambda_captures_len = num_captures;
         lambda_compiler.lambda_params_len = params.len();
 
         // Compile the body directly (no scope management)
@@ -1031,8 +1040,8 @@ impl Compiler {
             bytecode: Rc::new(lambda_compiler.bytecode.instructions),
             arity: crate::value::Arity::Exact(params.len()),
             env: Rc::new(Vec::new()), // Will be populated by VM when closure is created
-            num_locals: params.len() + captures.len() + locals.len(),
-            num_captures: captures.len(),
+            num_locals,
+            num_captures,
             constants: Rc::new(lambda_compiler.bytecode.constants),
             source_ast,
             effect,
@@ -1040,12 +1049,12 @@ impl Compiler {
 
         let idx = self.bytecode.add_constant(Value::Closure(Rc::new(closure)));
 
-        if captures.is_empty() && locals.is_empty() {
+        if num_captures == 0 && num_locals == params.len() {
             // No captures AND no locals — just load the closure template directly as a constant
             // No need for MakeClosure instruction
             self.bytecode.emit(Instruction::LoadConst);
             self.bytecode.emit_u16(idx);
-        } else if captures.is_empty() {
+        } else if num_captures == 0 {
             // Has locals but no external captures — still need MakeClosure for closure env
             // so that nested lambdas can access locally-defined variables via LoadUpvalueRaw
             self.bytecode.emit(Instruction::MakeClosure);
@@ -1057,58 +1066,29 @@ impl Compiler {
             let mutated_vars = analyze_mutated_vars(body);
             let mutated_captures: HashSet<SymbolId> = captures
                 .iter()
-                .map(|(sym, _, _)| *sym)
+                .copied()
                 .filter(|sym| mutated_vars.contains(sym))
                 .collect();
 
-            // Sentinel value for let-bound variables that need to be captured from scope stack
-            const SCOPE_CAPTURE: usize = usize::MAX - 1;
-
             // Emit captured values onto the stack (in order)
             // These will be stored in the closure's environment by the VM
-            for (sym, depth, index) in captures {
-                if *index == usize::MAX {
-                    // This is a global variable - store the symbol itself, not the value
-                    // This allows us to look it up in the global scope at runtime
-                    let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                    self.bytecode.emit(Instruction::LoadConst);
-                    self.bytecode.emit_u16(sym_idx);
-                } else if *index == SCOPE_CAPTURE {
-                    // This is a let-bound variable - load its VALUE from the scope stack
-                    // at closure creation time (when the let scope is still active)
-                    let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                    self.bytecode.emit(Instruction::LoadGlobal);
-                    self.bytecode.emit_u16(sym_idx);
+            for (i, _sym) in captures.iter().enumerate() {
+                // Captures are loaded at closure creation time
+                // The index i corresponds to the capture's position in the parent environment
+                self.bytecode.emit(Instruction::LoadUpvalue);
+                self.bytecode.emit_byte(1); // depth = 1
+                self.bytecode.emit_byte(i as u8);
 
-                    // If this variable is mutated in the lambda body, wrap it in a cell
-                    if mutated_captures.contains(sym) {
-                        self.bytecode.emit(Instruction::MakeCell);
-                    }
-                } else {
-                    // This is a local variable from an outer scope
-                    // Load it using LoadUpvalueRaw with the resolved depth and index
-                    // depth is relative to the inner lambda's scope_stack
-                    // We need to adjust it to be relative to the current lambda's closure environment
-                    // depth=1 means one level up from the inner lambda (i.e., the outer lambda)
-                    // When we're compiling the outer lambda, we're inside the outer lambda's bytecode
-                    // So we need to adjust depth from 1 to 0 (the current closure)
-                    // Use LoadUpvalueRaw to preserve cells for shared mutable captures
-                    let adjusted_depth = if *depth > 0 { *depth - 1 } else { 0 };
-                    self.bytecode.emit(Instruction::LoadUpvalueRaw);
-                    self.bytecode.emit_byte((adjusted_depth + 1) as u8);
-                    self.bytecode.emit_byte(*index as u8);
-
-                    // If this variable is mutated in the lambda body, wrap it in a cell
-                    if mutated_captures.contains(sym) {
-                        self.bytecode.emit(Instruction::MakeCell);
-                    }
+                // If this variable is mutated in the lambda body, wrap it in a cell
+                if mutated_captures.contains(_sym) {
+                    self.bytecode.emit(Instruction::MakeCell);
                 }
             }
 
             // Create closure with captured values
             self.bytecode.emit(Instruction::MakeClosure);
             self.bytecode.emit_u16(idx);
-            self.bytecode.emit_byte(captures.len() as u8);
+            self.bytecode.emit_byte(num_captures as u8);
         }
     }
 
@@ -1234,16 +1214,17 @@ pub fn compile_with_metadata(
 pub fn compile_lambda_to_closure(
     params: &[SymbolId],
     body: &Expr,
-    captures: &[(SymbolId, usize, usize)],
-    locals: &[SymbolId],
+    captures: &[SymbolId],
+    num_captures: usize,
+    num_locals: usize,
     capture_values: Vec<Value>,
     effect: crate::compiler::effects::Effect,
 ) -> Result<Closure, String> {
     // Create a compiler for the lambda body
     let mut lambda_compiler = Compiler::new();
     lambda_compiler.scope_depth = 0;
-    lambda_compiler.lambda_locals = locals.to_vec();
-    lambda_compiler.lambda_captures_len = captures.len();
+    lambda_compiler.lambda_locals = Vec::new();
+    lambda_compiler.lambda_captures_len = num_captures;
     lambda_compiler.lambda_params_len = params.len();
 
     // Compile the body
@@ -1265,8 +1246,8 @@ pub fn compile_lambda_to_closure(
         bytecode: Rc::new(lambda_compiler.bytecode.instructions),
         arity: crate::value::Arity::Exact(params.len()),
         env: Rc::new(capture_values),
-        num_locals: params.len() + captures.len() + locals.len(),
-        num_captures: captures.len(),
+        num_locals,
+        num_captures,
         constants: Rc::new(lambda_compiler.bytecode.constants),
         source_ast,
         effect,
@@ -1285,11 +1266,8 @@ mod tests {
         // (fn (x) (+ x 1))
         let params = vec![crate::value::SymbolId(1)];
         let body = Box::new(Expr::Call {
-            func: Box::new(Expr::GlobalVar(crate::value::SymbolId(2))), // +
-            args: vec![
-                Expr::Var(crate::value::SymbolId(1), 0, 0),
-                Expr::Literal(Value::Int(1)),
-            ],
+            func: Box::new(Expr::Var(VarRef::global(crate::value::SymbolId(2)))), // +
+            args: vec![Expr::Var(VarRef::local(0)), Expr::Literal(Value::Int(1))],
             tail: false,
         });
 
@@ -1297,7 +1275,8 @@ mod tests {
             params: params.clone(),
             body: body.clone(),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
 
         let bytecode = compile(&expr);
@@ -1314,8 +1293,8 @@ mod tests {
         // (fn (x) (+ x 1))
         let params = vec![x_sym];
         let body = Box::new(Expr::Call {
-            func: Box::new(Expr::GlobalVar(plus_sym)),
-            args: vec![Expr::Var(x_sym, 0, 0), Expr::Literal(Value::Int(1))],
+            func: Box::new(Expr::Var(VarRef::global(plus_sym))),
+            args: vec![Expr::Var(VarRef::local(0)), Expr::Literal(Value::Int(1))],
             tail: false,
         });
 
@@ -1323,7 +1302,8 @@ mod tests {
             params: params.clone(),
             body: body.clone(),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1341,7 +1321,8 @@ mod tests {
             params: params.clone(),
             body: body.clone(),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
 
         let bytecode = compile(&expr);
@@ -1366,22 +1347,24 @@ mod tests {
         let inner_lambda = Expr::Lambda {
             params: vec![y_sym],
             body: Box::new(Expr::Call {
-                func: Box::new(Expr::GlobalVar(plus_sym)),
+                func: Box::new(Expr::Var(VarRef::global(plus_sym))),
                 args: vec![
-                    Expr::Var(x_sym, 1, 0), // x from outer scope
-                    Expr::Var(y_sym, 0, 0), // y from inner scope
+                    Expr::Var(VarRef::upvalue(0)), // x from outer scope
+                    Expr::Var(VarRef::local(0)),   // y from inner scope
                 ],
                 tail: false,
             }),
-            captures: vec![(x_sym, 1, 0)],
-            locals: vec![],
+            captures: vec![x_sym],
+            num_captures: 1,
+            num_locals: 2,
         };
 
         let outer_lambda = Expr::Lambda {
             params: vec![x_sym],
             body: Box::new(inner_lambda),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
 
         let bytecode = compile(&outer_lambda);
@@ -1401,8 +1384,8 @@ mod tests {
                 value: Box::new(Expr::Literal(Value::Int(1))),
             },
             Expr::Call {
-                func: Box::new(Expr::GlobalVar(plus_sym)),
-                args: vec![Expr::Var(x_sym, 0, 0), Expr::Var(y_sym, 0, 1)],
+                func: Box::new(Expr::Var(VarRef::global(plus_sym))),
+                args: vec![Expr::Var(VarRef::local(0)), Expr::Var(VarRef::local(1))],
                 tail: false,
             },
         ]));
@@ -1411,7 +1394,8 @@ mod tests {
             params: vec![x_sym],
             body,
             captures: vec![],
-            locals: vec![y_sym],
+            num_captures: 0,
+            num_locals: 2,
         };
 
         let bytecode = compile(&expr);
@@ -1429,12 +1413,13 @@ mod tests {
         let expr = Expr::Lambda {
             params: vec![x_sym],
             body: Box::new(Expr::Call {
-                func: Box::new(Expr::GlobalVar(plus_sym)),
-                args: vec![Expr::Var(x_sym, 0, 0), Expr::Literal(Value::Int(1))],
+                func: Box::new(Expr::Var(VarRef::global(plus_sym))),
+                args: vec![Expr::Var(VarRef::local(0)), Expr::Literal(Value::Int(1))],
                 tail: false,
             }),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1471,11 +1456,11 @@ mod tests {
         let expr = Expr::Lambda {
             params: vec![x_sym],
             body: Box::new(Expr::Call {
-                func: Box::new(Expr::GlobalVar(plus_sym)),
+                func: Box::new(Expr::Var(VarRef::global(plus_sym))),
                 args: vec![
                     Expr::Call {
-                        func: Box::new(Expr::GlobalVar(abs_sym)),
-                        args: vec![Expr::Var(x_sym, 0, 0)],
+                        func: Box::new(Expr::Var(VarRef::global(abs_sym))),
+                        args: vec![Expr::Var(VarRef::local(0))],
                         tail: false,
                     },
                     Expr::Literal(Value::Int(1)),
@@ -1483,7 +1468,8 @@ mod tests {
                 tail: false,
             }),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1515,12 +1501,13 @@ mod tests {
         let expr = Expr::Lambda {
             params: vec![x_sym],
             body: Box::new(Expr::Call {
-                func: Box::new(Expr::GlobalVar(plus_sym)),
-                args: vec![Expr::Var(x_sym, 0, 0), Expr::Literal(Value::Int(1))],
+                func: Box::new(Expr::Var(VarRef::global(plus_sym))),
+                args: vec![Expr::Var(VarRef::local(0)), Expr::Literal(Value::Int(1))],
                 tail: false,
             }),
             captures: vec![],
-            locals: vec![],
+            num_captures: 0,
+            num_locals: 1,
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1558,15 +1545,16 @@ mod tests {
         let expr = Expr::Lambda {
             params: vec![y_sym],
             body: Box::new(Expr::Call {
-                func: Box::new(Expr::GlobalVar(plus_sym)),
+                func: Box::new(Expr::Var(VarRef::global(plus_sym))),
                 args: vec![
-                    Expr::Var(x_sym, 1, 0), // x from outer scope
-                    Expr::Var(y_sym, 0, 0), // y from this scope
+                    Expr::Var(VarRef::upvalue(0)), // x from outer scope
+                    Expr::Var(VarRef::local(0)),   // y from this scope
                 ],
                 tail: false,
             }),
-            captures: vec![(x_sym, 1, 0)],
-            locals: vec![],
+            captures: vec![x_sym],
+            num_captures: 1,
+            num_locals: 2,
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1604,13 +1592,14 @@ mod tests {
                     value: Box::new(Expr::Literal(Value::Int(1))),
                 },
                 Expr::Call {
-                    func: Box::new(Expr::GlobalVar(plus_sym)),
-                    args: vec![Expr::Var(x_sym, 0, 0), Expr::Var(y_sym, 0, 1)],
+                    func: Box::new(Expr::Var(VarRef::global(plus_sym))),
+                    args: vec![Expr::Var(VarRef::local(0)), Expr::Var(VarRef::local(1))],
                     tail: false,
                 },
             ])),
             captures: vec![],
-            locals: vec![y_sym],
+            num_captures: 0,
+            num_locals: 2,
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));

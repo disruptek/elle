@@ -5,6 +5,7 @@
 //! are converted to continuation-passing style.
 
 use super::{Continuation, CpsExpr};
+use crate::binding::VarRef;
 use crate::compiler::ast::Expr;
 use crate::compiler::effects::{Effect, EffectContext};
 use crate::value::{SymbolId, Value};
@@ -57,12 +58,11 @@ impl<'a> CpsTransformer<'a> {
             | Expr::If { .. }
             | Expr::While { .. }
             | Expr::Lambda { .. }
-            | Expr::Var(..)
-            | Expr::GlobalVar(_)
+            | Expr::Var(_)
             | Expr::Literal(_) => {
                 // These expressions always go through transform_yielding
                 // which handles both pure and yielding cases
-                // Note: Var, GlobalVar, and Literal are included to ensure
+                // Note: Var and Literal are included to ensure
                 // they get proper CPS representation instead of being wrapped in Pure
                 self.transform_yielding(expr, cont)
             }
@@ -105,36 +105,17 @@ impl<'a> CpsTransformer<'a> {
             Expr::Literal(v) => CpsExpr::Literal(v.clone()),
 
             // Variables - check if CPS-local (from let/for)
-            Expr::Var(sym, depth, index) => {
-                if let Some(&cps_index) = self.local_indices.get(sym) {
-                    // CPS-local variable - use CPS index
-                    CpsExpr::Var {
-                        sym: *sym,
-                        depth: 0, // CPS locals are always depth 0
-                        index: cps_index,
+            Expr::Var(var_ref) => {
+                match var_ref {
+                    VarRef::Local { index } | VarRef::Upvalue { index } => {
+                        // CPS locals are indexed directly
+                        CpsExpr::Var {
+                            sym: SymbolId(0), // Symbol not needed for indexed access
+                            depth: 0,
+                            index: *index,
+                        }
                     }
-                } else {
-                    // Not a CPS local - use original indices (for captures, params)
-                    CpsExpr::Var {
-                        sym: *sym,
-                        depth: *depth,
-                        index: *index,
-                    }
-                }
-            }
-
-            Expr::GlobalVar(sym) => {
-                // Check if this is actually a CPS-local variable (from let/for)
-                // This happens when let-bound variables are represented as GlobalVar
-                // in the AST (for bytecode VM's scope stack lookup)
-                if let Some(&cps_index) = self.local_indices.get(sym) {
-                    CpsExpr::Var {
-                        sym: *sym,
-                        depth: 0,
-                        index: cps_index,
-                    }
-                } else {
-                    CpsExpr::GlobalVar(*sym)
+                    VarRef::Global { sym } => CpsExpr::GlobalVar(*sym),
                 }
             }
 
@@ -172,8 +153,9 @@ impl<'a> CpsTransformer<'a> {
                 params,
                 body,
                 captures,
-                ..
-            } => self.transform_lambda(params, body, captures, cont),
+                num_captures,
+                num_locals,
+            } => self.transform_lambda(params, body, captures, *num_captures, *num_locals, cont),
 
             // Internal define - treat like a let binding
             Expr::Define { name, value } => self.transform_define(*name, value, cont),
@@ -414,7 +396,9 @@ impl<'a> CpsTransformer<'a> {
         &mut self,
         params: &[SymbolId],
         body: &Expr,
-        captures: &[(SymbolId, usize, usize)],
+        captures: &[SymbolId],
+        num_captures: usize,
+        num_locals: usize,
         cont: Rc<Continuation>,
     ) -> CpsExpr {
         let body_effect = self.effect_ctx.infer(body);
@@ -427,7 +411,8 @@ impl<'a> CpsTransformer<'a> {
                     params: params.to_vec(),
                     body: Box::new(body.clone()),
                     captures: captures.to_vec(),
-                    locals: vec![], // Locals will be computed by the compiler
+                    num_captures,
+                    num_locals,
                 },
                 continuation: cont,
             }
@@ -438,25 +423,33 @@ impl<'a> CpsTransformer<'a> {
             let saved_locals = std::mem::take(&mut self.local_indices);
 
             // New scope: [captures..., params..., locals...]
-            self.next_local_index = captures.len() + params.len();
+            self.next_local_index = num_captures + params.len();
 
             // Register params in local_indices
             for (i, param) in params.iter().enumerate() {
-                self.local_indices.insert(*param, captures.len() + i);
+                self.local_indices.insert(*param, num_captures + i);
             }
 
             let body_cps = self.transform(body, Continuation::done());
-            let num_locals = self.next_local_index;
+            let computed_num_locals = self.next_local_index;
 
             // Restore state
             self.next_local_index = saved_index;
             self.local_indices = saved_locals;
 
+            // Convert captures from Vec<SymbolId> to Vec<(SymbolId, usize, usize)>
+            // The tuple format is (symbol, depth, index) - for CPS, we use placeholder values
+            let captures_tuple: Vec<(SymbolId, usize, usize)> = captures
+                .iter()
+                .enumerate()
+                .map(|(i, sym)| (*sym, 0, i))
+                .collect();
+
             CpsExpr::Lambda {
                 params: params.to_vec(),
                 body: Box::new(body_cps),
-                captures: captures.to_vec(),
-                num_locals,
+                captures: captures_tuple,
+                num_locals: computed_num_locals,
             }
         }
     }
@@ -632,7 +625,7 @@ mod tests {
         let mut transformer = CpsTransformer::new(&ctx);
 
         let expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(plus)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(plus))),
             args: vec![Expr::Literal(Value::Int(1)), Expr::Literal(Value::Int(2))],
             tail: false,
         };

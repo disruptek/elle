@@ -39,9 +39,13 @@ fn optimize_length_zero_check(expr: &mut Expr, symbols: &SymbolTable) {
             }
 
             // Check for the pattern: (= (length x) 0) or (= 0 (length x))
-            let should_optimize = if let Expr::GlobalVar(func_sym) = func.as_ref() {
-                if let Some("=") = symbols.name(*func_sym) {
-                    args.len() == 2
+            let should_optimize = if let Expr::Var(var_ref) = func.as_ref() {
+                if let crate::binding::VarRef::Global { sym } = var_ref {
+                    if let Some("=") = symbols.name(*sym) {
+                        args.len() == 2
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
@@ -139,11 +143,7 @@ fn optimize_length_zero_check(expr: &mut Expr, symbols: &SymbolTable) {
             optimize_length_zero_check(body, symbols);
         }
         // Leaf nodes - nothing to do
-        Expr::Literal(_)
-        | Expr::Var(..)
-        | Expr::GlobalVar(_)
-        | Expr::Import { .. }
-        | Expr::ModuleRef { .. } => {}
+        Expr::Literal(_) | Expr::Var(_) | Expr::Import { .. } | Expr::ModuleRef { .. } => {}
 
         Expr::Yield(expr) => {
             optimize_length_zero_check(expr, symbols);
@@ -165,20 +165,22 @@ fn try_optimize_length_zero(
 
     // Check if first arg is (length x)
     if let Expr::Call { func, args, .. } = maybe_length {
-        if let Expr::GlobalVar(func_sym) = func.as_ref() {
-            if let Some("length") = symbols.name(*func_sym) {
-                if args.len() == 1 {
-                    // Found the pattern! Transform to (empty? x)
-                    let empty_sym = symbols.get("empty?").unwrap_or_else(|| {
-                        // This shouldn't happen in practice since empty? is a builtin
-                        panic!("empty? symbol not found in symbol table")
-                    });
+        if let Expr::Var(var_ref) = func.as_ref() {
+            if let crate::binding::VarRef::Global { sym } = var_ref {
+                if let Some("length") = symbols.name(*sym) {
+                    if args.len() == 1 {
+                        // Found the pattern! Transform to (empty? x)
+                        let empty_sym = symbols.get("empty?").unwrap_or_else(|| {
+                            // This shouldn't happen in practice since empty? is a builtin
+                            panic!("empty? symbol not found in symbol table")
+                        });
 
-                    return Some(Expr::Call {
-                        func: Box::new(Expr::GlobalVar(empty_sym)),
-                        args: vec![args[0].clone()],
-                        tail: false,
-                    });
+                        return Some(Expr::Call {
+                            func: Box::new(Expr::Var(crate::binding::VarRef::global(empty_sym))),
+                            args: vec![args[0].clone()],
+                            tail: false,
+                        });
+                    }
                 }
             }
         }
@@ -201,11 +203,11 @@ mod tests {
 
         // Create (= (length x) 0)
         let mut expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(eq_sym)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(eq_sym))),
             args: vec![
                 Expr::Call {
-                    func: Box::new(Expr::GlobalVar(length_sym)),
-                    args: vec![Expr::GlobalVar(x_sym)],
+                    func: Box::new(Expr::Var(crate::binding::VarRef::global(length_sym))),
+                    args: vec![Expr::Var(crate::binding::VarRef::global(x_sym))],
                     tail: false,
                 },
                 Expr::Literal(Value::Int(0)),
@@ -218,9 +220,17 @@ mod tests {
         // Should be transformed to (empty? x)
         match expr {
             Expr::Call { func, args, .. } => {
-                assert!(matches!(func.as_ref(), Expr::GlobalVar(sym) if *sym == empty_sym));
+                if let Expr::Var(crate::binding::VarRef::Global { sym }) = func.as_ref() {
+                    assert_eq!(*sym, empty_sym);
+                } else {
+                    panic!("Expected Var(Global) for func");
+                }
                 assert_eq!(args.len(), 1);
-                assert!(matches!(&args[0], Expr::GlobalVar(sym) if *sym == x_sym));
+                if let Expr::Var(crate::binding::VarRef::Global { sym }) = &args[0] {
+                    assert_eq!(*sym, x_sym);
+                } else {
+                    panic!("Expected Var(Global) for arg");
+                }
             }
             _ => panic!("Expected Call expression"),
         }
@@ -236,12 +246,12 @@ mod tests {
 
         // Create (= 0 (length x))
         let mut expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(eq_sym)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(eq_sym))),
             args: vec![
                 Expr::Literal(Value::Int(0)),
                 Expr::Call {
-                    func: Box::new(Expr::GlobalVar(length_sym)),
-                    args: vec![Expr::GlobalVar(x_sym)],
+                    func: Box::new(Expr::Var(crate::binding::VarRef::global(length_sym))),
+                    args: vec![Expr::Var(crate::binding::VarRef::global(x_sym))],
                     tail: false,
                 },
             ],
@@ -253,9 +263,17 @@ mod tests {
         // Should be transformed to (empty? x)
         match expr {
             Expr::Call { func, args, .. } => {
-                assert!(matches!(func.as_ref(), Expr::GlobalVar(sym) if *sym == empty_sym));
+                if let Expr::Var(crate::binding::VarRef::Global { sym }) = func.as_ref() {
+                    assert_eq!(*sym, empty_sym);
+                } else {
+                    panic!("Expected Var(Global) for func");
+                }
                 assert_eq!(args.len(), 1);
-                assert!(matches!(&args[0], Expr::GlobalVar(sym) if *sym == x_sym));
+                if let Expr::Var(crate::binding::VarRef::Global { sym }) = &args[0] {
+                    assert_eq!(*sym, x_sym);
+                } else {
+                    panic!("Expected Var(Global) for arg");
+                }
             }
             _ => panic!("Expected Call expression"),
         }
@@ -270,11 +288,11 @@ mod tests {
 
         // Create (= (length x) 1) - should NOT be optimized
         let mut expr = Expr::Call {
-            func: Box::new(Expr::GlobalVar(eq_sym)),
+            func: Box::new(Expr::Var(crate::binding::VarRef::global(eq_sym))),
             args: vec![
                 Expr::Call {
-                    func: Box::new(Expr::GlobalVar(length_sym)),
-                    args: vec![Expr::GlobalVar(x_sym)],
+                    func: Box::new(Expr::Var(crate::binding::VarRef::global(length_sym))),
+                    args: vec![Expr::Var(crate::binding::VarRef::global(x_sym))],
                     tail: false,
                 },
                 Expr::Literal(Value::Int(1)),

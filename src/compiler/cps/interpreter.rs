@@ -9,6 +9,7 @@
 //! yield/resume cycles.
 
 use super::{Action, Continuation, CpsExpr};
+use crate::binding::VarRef;
 use crate::value::Value;
 use crate::vm::VM;
 use std::cell::RefCell;
@@ -543,28 +544,27 @@ impl<'a> CpsInterpreter<'a> {
         match expr {
             Expr::Literal(v) => Ok(v.clone()),
 
-            Expr::Var(sym, _depth, index) => {
-                // In CPS execution, environment is flat. Check env first, then globals.
-                let env = self.env.borrow();
-                if *index < env.len() {
-                    let val = env[*index].clone();
-                    drop(env);
-                    return Ok(unwrap_local_cell(val));
-                }
-                drop(env);
-                // Fall back to globals (for cases where variable resolution differs)
-                if let Some(val) = self.vm.globals.get(&sym.0) {
-                    return Ok(val.clone());
-                }
-                Err(format!("Variable {:?} not found at index {}", sym, index))
-            }
-
-            Expr::GlobalVar(sym) => {
-                // Check globals
-                if let Some(val) = self.vm.globals.get(&sym.0) {
-                    Ok(val.clone())
-                } else {
-                    Err(format!("Undefined global: {:?}", sym))
+            Expr::Var(var_ref) => {
+                match var_ref {
+                    VarRef::Local { index } | VarRef::Upvalue { index } => {
+                        // In CPS execution, environment is flat
+                        let env = self.env.borrow();
+                        if *index < env.len() {
+                            let val = env[*index].clone();
+                            drop(env);
+                            Ok(unwrap_local_cell(val))
+                        } else {
+                            Err(format!("Variable index {} out of bounds", index))
+                        }
+                    }
+                    VarRef::Global { sym } => {
+                        // Check globals
+                        if let Some(val) = self.vm.globals.get(&sym.0) {
+                            Ok(val.clone())
+                        } else {
+                            Err(format!("Undefined global: {:?}", sym))
+                        }
+                    }
                 }
             }
 
@@ -656,30 +656,29 @@ impl<'a> CpsInterpreter<'a> {
                 Ok(val)
             }
 
-            Expr::Set {
-                var: _,
-                depth,
-                index,
-                value,
-            } => {
+            Expr::Set { target, value } => {
                 let val = self.eval_pure_expr(value)?;
-                if *depth == 0 {
-                    let env = self.env.borrow();
-                    if *index < env.len() {
-                        let env_val = &env[*index];
-                        if let Value::LocalCell(cell) = env_val {
-                            **cell.borrow_mut() = val.clone();
+                match target {
+                    VarRef::Local { index } | VarRef::Upvalue { index } => {
+                        let mut env = self.env.borrow_mut();
+                        if *index < env.len() {
+                            env[*index] = val.clone();
                         }
+                        Ok(val)
+                    }
+                    VarRef::Global { sym } => {
+                        self.vm.globals.insert(sym.0, val.clone());
+                        Ok(val)
                     }
                 }
-                Ok(val)
             }
 
             Expr::Lambda {
                 params,
                 body,
                 captures,
-                locals,
+                num_captures,
+                num_locals,
             } => {
                 // Compile the lambda to bytecode
                 use crate::compiler::compile::compile_lambda_to_closure;
@@ -688,9 +687,9 @@ impl<'a> CpsInterpreter<'a> {
                 // Build capture values from current environment
                 let env_borrowed = self.env.borrow();
                 let mut capture_values = Vec::new();
-                for (_sym, _depth, index) in captures {
-                    if *index < env_borrowed.len() {
-                        capture_values.push(env_borrowed[*index].clone());
+                for i in 0..*num_captures {
+                    if i < env_borrowed.len() {
+                        capture_values.push(env_borrowed[i].clone());
                     } else {
                         capture_values.push(Value::Nil);
                     }
@@ -702,7 +701,8 @@ impl<'a> CpsInterpreter<'a> {
                     params,
                     body,
                     captures,
-                    locals,
+                    *num_captures,
+                    *num_locals,
                     capture_values,
                     Effect::Pure,
                 )?;

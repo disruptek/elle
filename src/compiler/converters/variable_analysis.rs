@@ -108,23 +108,11 @@ pub fn adjust_var_indices(
     }
 
     match expr {
-        Expr::Var(sym_id, _depth, index) => {
-            // Variables are adjusted based on their scope:
-            // 1. Captures: map to position in captures list (0..captures.len()-1)
-            // 2. Parameters: map to captures.len() + position
-            // 3. Locals: map to captures.len() + params.len() + position
-            if let Some(cap_pos) = capture_map.get(sym_id) {
-                // This variable is a capture - map to its position in the captures list
-                *index = *cap_pos;
-            } else if let Some(param_pos) = param_map.get(sym_id) {
-                // This variable is a parameter - map to captures.len() + position
-                *index = captures.len() + param_pos;
-            } else if let Some(local_pos) = locals_map.get(sym_id) {
-                // This variable is defined locally within lambda body
-                // Map to captures.len() + params.len() + position
-                *index = captures.len() + params.len() + local_pos;
-            }
-            // If not found in any map, it's likely a global or error - leave as is
+        Expr::Var(_varref) => {
+            // With VarRef, we don't need to adjust indices anymore.
+            // The VarRef was created correctly during parsing based on the scope stack.
+            // The closure environment layout is handled by the compiler backend.
+            // This function is now a no-op for Var nodes.
         }
         Expr::If { cond, then, else_ } => {
             adjust_var_indices(cond, captures, params, locals);
@@ -173,20 +161,9 @@ pub fn adjust_var_indices(
             }
             adjust_var_indices(body, captures, params, locals);
         }
-        Expr::Set {
-            var,
-            depth: _,
-            index,
-            value,
-        } => {
-            // Remap the target variable index, same as Expr::Var
-            if let Some(cap_pos) = capture_map.get(var) {
-                *index = *cap_pos;
-            } else if let Some(param_pos) = param_map.get(var) {
-                *index = captures.len() + param_pos;
-            } else if let Some(local_pos) = locals_map.get(var) {
-                *index = captures.len() + params.len() + local_pos;
-            }
+        Expr::Set { target: _, value } => {
+            // With VarRef, the target is already correctly resolved.
+            // No adjustment needed.
             adjust_var_indices(value, captures, params, locals);
         }
         Expr::While { cond, body } => {
