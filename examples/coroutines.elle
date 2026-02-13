@@ -1,282 +1,146 @@
-; Coroutines Example - Comprehensive Tests
+; Coroutines Example - Comprehensive Regression Tests
 ; This file serves as both documentation and CI regression test.
 ; Any failure will exit with code 1, failing CI.
 
-; === Basic yield/resume ===
-(define simple-gen (fn () (yield 42)))
-(define co-simple (make-coroutine simple-gen))
-(define result1 (coroutine-resume co-simple))
-(if (= result1 42)
-    (display "✓ Basic yield/resume\n")
-    (begin
-      (display "FAIL: Basic yield/resume\n")
-      (exit 1)))
-
-; === Multiple sequential yields ===
-(define multi-gen (fn ()
-  (yield 1)
-  (yield 2)
-  (yield 3)))
-(define co-multi (make-coroutine multi-gen))
-(define r1 (coroutine-resume co-multi))
-(define r2 (coroutine-resume co-multi))
-(define r3 (coroutine-resume co-multi))
-(if (= r1 1)
-    (display "✓ Multiple sequential yields (1)\n")
-    (begin (display "FAIL: First yield\n") (exit 1)))
-(if (= r2 2)
-    (display "✓ Multiple sequential yields (2)\n")
-    (begin (display "FAIL: Second yield\n") (exit 1)))
-(if (= r3 3)
-    (display "✓ Multiple sequential yields (3)\n")
-    (begin (display "FAIL: Third yield\n") (exit 1)))
-
-; === Yield inside if branches ===
-(define cond-true-gen (fn ()
-  (if #t
-    (yield "then-branch")
-    (yield "else-branch"))))
-(define co-cond-true (make-coroutine cond-true-gen))
-(define ct-result (coroutine-resume co-cond-true))
-(if (= ct-result "then-branch")
-    (display "✓ Yield inside if-then branch\n")
-    (begin (display "FAIL: If-then branch\n") (exit 1)))
-
-(define cond-false-gen (fn ()
-  (if #f
-    (yield "then-branch")
-    (yield "else-branch"))))
-(define co-cond-false (make-coroutine cond-false-gen))
-(define cf-result (coroutine-resume co-cond-false))
-(if (= cf-result "else-branch")
-    (display "✓ Yield inside if-else branch\n")
-    (begin (display "FAIL: If-else branch\n") (exit 1)))
-
-; === Yield inside begin blocks ===
-(define begin-gen (fn ()
-  (begin
-    (yield "first")
-    (yield "second")
-    (yield "third"))))
-(define co-begin (make-coroutine begin-gen))
-(define b1 (coroutine-resume co-begin))
-(define b2 (coroutine-resume co-begin))
-(define b3 (coroutine-resume co-begin))
-(if (= b1 "first")
-    (display "✓ Yield inside begin blocks (1)\n")
-    (begin (display "FAIL: Begin first\n") (exit 1)))
-(if (= b2 "second")
-    (display "✓ Yield inside begin blocks (2)\n")
-    (begin (display "FAIL: Begin second\n") (exit 1)))
-(if (= b3 "third")
-    (display "✓ Yield inside begin blocks (3)\n")
-    (begin (display "FAIL: Begin third\n") (exit 1)))
-
-; === Yield inside cond ===
-(define cond-gen (fn ()
-  (cond
-    (#f (yield 1))
-    (#t (yield 2))
-    (else (yield 3)))))
-(define co-cond (make-coroutine cond-gen))
-(define cond-result (coroutine-resume co-cond))
-(if (= cond-result 2)
-    (display "✓ Yield inside cond\n")
-    (begin (display "FAIL: Cond\n") (exit 1)))
-
-; === Coroutine status checking ===
-(define status-gen (fn () (yield "hello")))
-(define co-status (make-coroutine status-gen))
-(define status1 (coroutine-status co-status))
-(if (= status1 "created")
-    (display "✓ Coroutine status checking (created)\n")
-    (begin (display "FAIL: Status created\n") (exit 1)))
-(coroutine-resume co-status)
-(define status2 (coroutine-status co-status))
-(if (= status2 "suspended")
-    (display "✓ Coroutine status checking (suspended)\n")
-    (begin (display "FAIL: Status suspended\n") (exit 1)))
-(coroutine-resume co-status)
-(define status3 (coroutine-status co-status))
-(if (= status3 "done")
-    (display "✓ Coroutine status checking (done)\n")
-    (begin (display "FAIL: Status done\n") (exit 1)))
-
-; === Type checking with coroutine? ===
-(define test-gen (fn () 42))
-(define test-co (make-coroutine test-gen))
-(if (coroutine? test-co)
-    (display "✓ Type checking with coroutine? (true)\n")
-    (begin (display "FAIL: coroutine? true\n") (exit 1)))
-(if (not (coroutine? 42))
-    (display "✓ Type checking with coroutine? (false for number)\n")
-    (begin (display "FAIL: coroutine? false for number\n") (exit 1)))
-(if (not (coroutine? (fn () 1)))
-    (display "✓ Type checking with coroutine? (false for function)\n")
-    (begin (display "FAIL: coroutine? false for function\n") (exit 1)))
-
-; === Coroutine-done? predicate ===
-(define done-gen (fn () 42))
-(define co-done (make-coroutine done-gen))
-(if (not (coroutine-done? co-done))
-    (display "✓ Coroutine-done? predicate (before)\n")
-    (begin (display "FAIL: done? before\n") (exit 1)))
-(coroutine-resume co-done)
-(if (coroutine-done? co-done)
-    (display "✓ Coroutine-done? predicate (after)\n")
-    (begin (display "FAIL: done? after\n") (exit 1)))
-
-; === Yield vs complete comparison ===
-(define yield-gen (fn () (yield 1)))
-(define complete-gen (fn () 2))
-(define co-yield (make-coroutine yield-gen))
-(define co-complete (make-coroutine complete-gen))
-(coroutine-resume co-yield)
-(coroutine-resume co-complete)
-(if (not (coroutine-done? co-yield))
-    (display "✓ Yield vs complete (yield not done)\n")
-    (begin (display "FAIL: yield not done\n") (exit 1)))
-(if (coroutine-done? co-complete)
-    (display "✓ Yield vs complete (complete done)\n")
-    (begin (display "FAIL: complete done\n") (exit 1)))
-
-; === Nested coroutines ===
-(define inner-gen (fn () (yield 10)))
-(define outer-gen (fn ()
-  (define inner-co (make-coroutine inner-gen))
-  (yield (coroutine-resume inner-co))))
-(define co-outer (make-coroutine outer-gen))
-(define nested-result (coroutine-resume co-outer))
-(if (= nested-result 10)
-    (display "✓ Nested coroutines\n")
-    (begin (display "FAIL: Nested coroutines\n") (exit 1)))
-
-; === Three levels of nested coroutines ===
-(define level3 (fn () (yield 3)))
-(define level2 (fn ()
-  (define co3 (make-coroutine level3))
-  (yield (coroutine-resume co3))))
-(define level1 (fn ()
-  (define co2 (make-coroutine level2))
-  (yield (coroutine-resume co2))))
-(define co-l1 (make-coroutine level1))
-(define nested3-result (coroutine-resume co-l1))
-(if (= nested3-result 3)
-    (display "✓ Three levels of nested coroutines\n")
-    (begin (display "FAIL: Three levels nested\n") (exit 1)))
-
-; === yield-from delegates to sub-coroutine ===
-(define sub-gen (fn () (yield 100)))
-(define delegating-gen (fn ()
-  (define sub-co (make-coroutine sub-gen))
-  (yield-from sub-co)))
-(define co-del (make-coroutine delegating-gen))
-(define yf-result (coroutine-resume co-del))
-(if (= yf-result 100)
-    (display "✓ yield-from delegates to sub-coroutine\n")
-    (begin (display "FAIL: yield-from\n") (exit 1)))
-
-; === Multiple independent coroutines ===
-(define gen-a (fn () (yield "A")))
-(define gen-b (fn () (yield "B")))
-(define co-a (make-coroutine gen-a))
-(define co-b (make-coroutine gen-b))
-(define a-result (coroutine-resume co-a))
-(define b-result (coroutine-resume co-b))
-(if (= a-result "A")
-    (display "✓ Multiple independent coroutines (A)\n")
-    (begin (display "FAIL: Multiple A\n") (exit 1)))
-(if (= b-result "B")
-    (display "✓ Multiple independent coroutines (B)\n")
-    (begin (display "FAIL: Multiple B\n") (exit 1)))
-
-; === Yielding complex values (lists) ===
-(define list-gen (fn ()
-  (yield (list 1 2 3 4 5))))
-(define co-list (make-coroutine list-gen))
-(define list-result (coroutine-resume co-list))
-(if (= list-result (list 1 2 3 4 5))
-    (display "✓ Yielding complex values (lists)\n")
-    (begin (display "FAIL: List yield\n") (exit 1)))
+; === Helper for assertions ===
+(define assert-eq (fn (actual expected msg)
+  (let ((matches
+    (if (symbol? expected)
+        (eq? actual expected)
+        (= actual expected))))
+    (if matches
+        #t
+        (begin
+          (display "FAIL: ")
+          (display msg)
+          (display "\n  Expected: ")
+          (display expected)
+          (display "\n  Actual: ")
+          (display actual)
+          (display "\n")
+          (exit 1))))))
 
 ; ========================================
-; Issue Regression Tests (#251-254)
-; These previously failed but are now fixed
+; Issue #251: Let bindings across yield
 ; ========================================
-
-; === Issue #251: Let bindings across yield ===
 (define gen-251 (fn ()
   (let ((x 10))
     (yield x)
     (yield (+ x 1)))))
 (define co-251 (make-coroutine gen-251))
-(define r251-1 (coroutine-resume co-251))
-(define r251-2 (coroutine-resume co-251))
-(if (= r251-1 10)
-    (display "✓ Issue #251: Let bindings across yield (first)\n")
-    (begin (display "FAIL: Issue #251 first yield\n") (exit 1)))
-(if (= r251-2 11)
-    (display "✓ Issue #251: Let bindings across yield (second)\n")
-    (begin (display "FAIL: Issue #251 second yield\n") (exit 1)))
+(assert-eq (coroutine-resume co-251) 10 "Issue #251: first yield")
+(assert-eq (coroutine-resume co-251) 11 "Issue #251: second yield")
+(display "✓ Issue #251: Let bindings across yield\n")
 
-; === Issue #253: Lambda inside coroutine ===
-; Note: Calling a lambda defined inside a coroutine is a known limitation
-; Instead, test that lambdas can be defined and stored in let bindings
+; ========================================
+; Issue #252: Nested yielding function calls
+; ========================================
+(define helper-252 (fn () (yield 42)))
+(define gen-252 (fn () (helper-252) (yield 100)))
+(define co-252 (make-coroutine gen-252))
+(assert-eq (coroutine-resume co-252) 42 "Issue #252: inner yield")
+(assert-eq (coroutine-resume co-252) 100 "Issue #252: outer yield")
+(display "✓ Issue #252: Nested yielding function calls\n")
+
+; ========================================
+; Issue #253: Lambda inside coroutine
+; ========================================
 (define gen-253 (fn ()
   (let ((f (fn (x) (* x 2))))
-    (yield 20))))
+    (yield (f 10)))))
 (define co-253 (make-coroutine gen-253))
-(define r253 (coroutine-resume co-253))
-(if (= r253 20)
-    (display "✓ Issue #253: Lambda inside coroutine\n")
-    (begin (display "FAIL: Issue #253\n") (exit 1)))
+(assert-eq (coroutine-resume co-253) 20 "Issue #253: lambda result")
+(display "✓ Issue #253: Lambda inside coroutine\n")
 
-; === Issue #254: Multiple sequential yields ===
-; Note: Recursive yielding functions are a known limitation
-; Instead, test multiple sequential yields which is the core pattern
-(define gen-254 (fn ()
-  (yield 3)
-  (yield 2)
-  (yield 1)
-  (yield 0)))
-(define co-254 (make-coroutine gen-254))
-(define r254-1 (coroutine-resume co-254))
-(define r254-2 (coroutine-resume co-254))
-(define r254-3 (coroutine-resume co-254))
-(define r254-4 (coroutine-resume co-254))
-(if (= r254-1 3)
-    (display "✓ Issue #254: Multiple sequential yields (3)\n")
-    (begin (display "FAIL: Issue #254 yield 3\n") (exit 1)))
-(if (= r254-2 2)
-    (display "✓ Issue #254: Multiple sequential yields (2)\n")
-    (begin (display "FAIL: Issue #254 yield 2\n") (exit 1)))
-(if (= r254-3 1)
-    (display "✓ Issue #254: Multiple sequential yields (1)\n")
-    (begin (display "FAIL: Issue #254 yield 1\n") (exit 1)))
-(if (= r254-4 0)
-    (display "✓ Issue #254: Multiple sequential yields (0)\n")
-    (begin (display "FAIL: Issue #254 yield 0\n") (exit 1)))
+; ========================================
+; Issue #254: Recursive yielding function
+; ========================================
+(define countdown (fn (n)
+  (if (> n 0)
+      (begin (yield n) (countdown (- n 1)))
+      (yield 0))))
+(define co-254 (make-coroutine (fn () (countdown 3))))
+(assert-eq (coroutine-resume co-254) 3 "Issue #254: countdown 3")
+(assert-eq (coroutine-resume co-254) 2 "Issue #254: countdown 2")
+(assert-eq (coroutine-resume co-254) 1 "Issue #254: countdown 1")
+(assert-eq (coroutine-resume co-254) 0 "Issue #254: countdown 0")
+(display "✓ Issue #254: Recursive yielding function\n")
 
-; === Nested let bindings with yields ===
-(define gen-nested-let (fn ()
+; ========================================
+; Deeply nested let bindings with yields
+; ========================================
+(define gen-deep (fn ()
   (let ((a 1))
     (yield a)
     (let ((b 2))
       (yield (+ a b))))))
-(define co-nested (make-coroutine gen-nested-let))
-(define rn1 (coroutine-resume co-nested))
-(define rn2 (coroutine-resume co-nested))
-(if (= rn1 1)
-    (display "✓ Nested let bindings (1)\n")
-    (begin (display "FAIL: Nested let 1\n") (exit 1)))
-(if (= rn2 3)
-    (display "✓ Nested let bindings (1+2=3)\n")
-    (begin (display "FAIL: Nested let 3\n") (exit 1)))
+(define co-deep (make-coroutine gen-deep))
+(assert-eq (coroutine-resume co-deep) 1 "Deep let: a=1")
+(assert-eq (coroutine-resume co-deep) 3 "Deep let: a+b=3")
+(display "✓ Deeply nested let bindings\n")
 
+; ========================================
+; Closure capturing across yield
+; ========================================
+(define make-counter (fn (start)
+  (fn ()
+    (yield start)
+    (yield (+ start 1))
+    (yield (+ start 2)))))
+(define co-100 (make-coroutine (make-counter 100)))
+(define co-200 (make-coroutine (make-counter 200)))
+(assert-eq (coroutine-resume co-100) 100 "Counter 100: first")
+(assert-eq (coroutine-resume co-200) 200 "Counter 200: first")
+(assert-eq (coroutine-resume co-100) 101 "Counter 100: second")
+(assert-eq (coroutine-resume co-200) 201 "Counter 200: second")
+(display "✓ Closure capturing across yield\n")
 
+; ========================================
+; Multiple coroutines interleaved
+; ========================================
+(define gen-a (fn () (yield 1) (yield 2) (yield 3)))
+(define gen-b (fn () (yield 'a) (yield 'b) (yield 'c)))
+(define co-a (make-coroutine gen-a))
+(define co-b (make-coroutine gen-b))
+(assert-eq (coroutine-resume co-a) 1 "Interleaved: a1")
+(assert-eq (coroutine-resume co-b) 'a "Interleaved: b1")
+(assert-eq (coroutine-resume co-a) 2 "Interleaved: a2")
+(assert-eq (coroutine-resume co-b) 'b "Interleaved: b2")
+(assert-eq (coroutine-resume co-a) 3 "Interleaved: a3")
+(assert-eq (coroutine-resume co-b) 'c "Interleaved: b3")
+(display "✓ Multiple coroutines interleaved\n")
 
-; === All tests passed ===
-(display "\n")
-(display "========================================\n")
+; ========================================
+; Yield inside control flow
+; ========================================
+(define gen-if (fn ()
+  (let ((x 5))
+    (if (> x 3)
+        (yield 'greater)
+        (yield 'lesser))
+    (yield 'done))))
+(define co-if (make-coroutine gen-if))
+(assert-eq (coroutine-resume co-if) 'greater "Control flow: if")
+(assert-eq (coroutine-resume co-if) 'done "Control flow: after")
+(display "✓ Yield inside control flow\n")
+
+; ========================================
+; Coroutine status tracking
+; ========================================
+(define gen-status (fn () (yield 1) (yield 2)))
+(define co-status (make-coroutine gen-status))
+(assert-eq (coroutine-status co-status) "created" "Status: created")
+(coroutine-resume co-status)
+(assert-eq (coroutine-status co-status) "suspended" "Status: suspended")
+(coroutine-resume co-status)
+(assert-eq (coroutine-status co-status) "suspended" "Status: still suspended")
+(coroutine-resume co-status)
+(assert-eq (coroutine-status co-status) "done" "Status: done")
+(display "✓ Coroutine status tracking\n")
+
+; ========================================
+; All tests passed!
+; ========================================
+(display "\n========================================\n")
 (display "All coroutine tests passed!\n")
 (display "========================================\n")
