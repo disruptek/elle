@@ -111,13 +111,26 @@
 (display "✓ Interleaved coroutines maintain independent state\n")
 
 ; ========================================
-; 5. Quoted symbols in yield (Issue #260)
+; 5. Quoted symbols in yield (Issue #260 - FIXED)
 ; ========================================
 (display "\n=== 5. Quoted Symbols ===\n")
 
-; Note: Issue #260 - quoted symbols in yield are treated as exceptions
-; This test documents the current limitation
-(display "✓ Quoted symbols test skipped (Issue #260 - known limitation)\n")
+(define symbol-gen (fn ()
+  (yield 'hello)
+  (yield 'world)
+  (yield '(a b c))))
+
+(define co-sym (make-coroutine symbol-gen))
+(define sym1 (coroutine-resume co-sym))
+(assert-true (symbol? sym1) "Yielded symbol is a symbol")
+(assert-eq sym1 'hello "Symbol value is correct")
+
+(define sym2 (coroutine-resume co-sym))
+(assert-eq sym2 'world "Second symbol correct")
+
+(define lst (coroutine-resume co-sym))
+(assert-true (list? lst) "Yielded list is a list")
+(display "✓ Quoted symbols and lists yield correctly\n")
 
 ; ========================================
 ; 6. Coroutine value tracking

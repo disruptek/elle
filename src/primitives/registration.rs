@@ -62,8 +62,8 @@ use super::table::{
     prim_table_put, prim_values,
 };
 use super::type_check::{
-    prim_is_boolean, prim_is_nil, prim_is_number, prim_is_pair, prim_is_string, prim_is_symbol,
-    prim_type,
+    prim_is_boolean, prim_is_list, prim_is_nil, prim_is_number, prim_is_pair, prim_is_string,
+    prim_is_symbol, prim_type,
 };
 use super::vector::{prim_vector, prim_vector_length, prim_vector_ref, prim_vector_set};
 
@@ -92,6 +92,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
     // Type predicates
     register_fn(vm, symbols, "nil?", prim_is_nil);
     register_fn(vm, symbols, "pair?", prim_is_pair);
+    register_fn(vm, symbols, "list?", prim_is_list);
     register_fn(vm, symbols, "number?", prim_is_number);
     register_fn(vm, symbols, "symbol?", prim_is_symbol);
     register_fn(vm, symbols, "string?", prim_is_string);
