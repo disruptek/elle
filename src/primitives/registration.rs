@@ -50,7 +50,8 @@ use super::string::{
     prim_string_contains, prim_string_downcase, prim_string_ends_with, prim_string_index,
     prim_string_join, prim_string_length, prim_string_replace, prim_string_split,
     prim_string_starts_with, prim_string_to_float, prim_string_to_int, prim_string_trim,
-    prim_string_upcase, prim_substring, prim_to_float, prim_to_int, prim_to_string,
+    prim_string_upcase, prim_substring, prim_symbol_to_string, prim_to_float, prim_to_int,
+    prim_to_string,
 };
 use super::structs::{
     prim_struct, prim_struct_del, prim_struct_get, prim_struct_has, prim_struct_keys,
@@ -76,6 +77,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
 
     // Comparisons
     register_fn(vm, symbols, "=", prim_eq);
+    register_fn(vm, symbols, "eq?", prim_eq); // Alias for =
     register_fn(vm, symbols, "<", prim_lt);
     register_fn(vm, symbols, ">", prim_gt);
     register_fn(vm, symbols, "<=", prim_le);
@@ -143,6 +145,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) {
     register_fn(vm, symbols, "string-ends-with?", prim_string_ends_with);
     register_fn(vm, symbols, "string-join", prim_string_join);
     register_fn(vm, symbols, "number->string", prim_number_to_string);
+    register_vm_aware_fn(vm, symbols, "symbol->string", prim_symbol_to_string);
 
     // List utilities
     register_fn(vm, symbols, "nth", prim_nth);
