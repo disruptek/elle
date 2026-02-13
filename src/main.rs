@@ -176,6 +176,9 @@ fn run_source(
     while let Some(result) = reader.try_read(symbols) {
         match result {
             Ok(value) => {
+                // Get the location of this top-level form before compiling
+                let form_location = reader.get_current_location();
+
                 // Compile
                 let expr = match value_to_expr(&value, symbols) {
                     Ok(e) => e,
@@ -187,6 +190,9 @@ fn run_source(
                 };
 
                 let bytecode = compile(&expr);
+
+                // Set the current source location for error reporting
+                vm.set_current_source_loc(Some(form_location));
 
                 // Execute
                 match vm.execute(&bytecode) {

@@ -219,3 +219,45 @@ fn test_assertion_pattern_catches_errors() {
     .unwrap();
     assert_eq!(result, Value::Int(3));
 }
+
+#[test]
+fn test_source_location_tracking() {
+    // Verify that source location is set on the VM
+    let mut vm = elle::VM::new();
+    let loc = elle::reader::SourceLoc::new("test.lisp", 1, 1);
+    vm.set_current_source_loc(Some(loc.clone()));
+    
+    // Verify it was set
+    assert_eq!(vm.get_current_source_loc(), Some(&loc));
+}
+
+#[test]
+fn test_undefined_variable_exception_has_location() {
+    // When an undefined variable exception is raised, it should have location info
+    let mut vm = elle::VM::new();
+    let mut symbols = SymbolTable::new();
+    elle::register_primitives(&mut vm, &mut symbols);
+    
+    // Set a source location
+    let loc = elle::reader::SourceLoc::new("test.lisp", 5, 10);
+    vm.set_current_source_loc(Some(loc.clone()));
+    
+    // Execute code that triggers undefined-variable exception
+    let value = elle::read_str("undefined-var", &mut symbols).unwrap();
+    let expr = elle::compiler::converters::value_to_expr(&value, &mut symbols).unwrap();
+    let bytecode = elle::compile(&expr);
+    
+    // Execute and check that exception was set
+    let _ = vm.execute(&bytecode);
+    
+    // Verify exception was set
+    assert!(vm.current_exception.is_some());
+    let exc = vm.current_exception.as_ref().unwrap();
+    
+    // Verify exception has location
+    assert!(exc.location.is_some());
+    let exc_loc = exc.location.as_ref().unwrap();
+    assert_eq!(exc_loc.file, "test.lisp");
+    assert_eq!(exc_loc.line, 5);
+    assert_eq!(exc_loc.col, 10);
+}

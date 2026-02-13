@@ -30,6 +30,9 @@ impl VM {
                     let mut cond = crate::value::Condition::new(6);
                     cond.set_field(0, Value::Int(*n as i64));
                     cond.set_field(1, Value::Int(arg_count as i64));
+                    if let Some(loc) = self.current_source_loc.clone() {
+                        cond.location = Some(loc);
+                    }
                     self.current_exception = Some(std::rc::Rc::new(cond));
                     return false;
                 }
@@ -39,6 +42,9 @@ impl VM {
                     let mut cond = crate::value::Condition::new(6);
                     cond.set_field(0, Value::Int(*n as i64));
                     cond.set_field(1, Value::Int(arg_count as i64));
+                    if let Some(loc) = self.current_source_loc.clone() {
+                        cond.location = Some(loc);
+                    }
                     self.current_exception = Some(std::rc::Rc::new(cond));
                     return false;
                 }
@@ -48,6 +54,9 @@ impl VM {
                     let mut cond = crate::value::Condition::new(6);
                     cond.set_field(0, Value::Int(*min as i64));
                     cond.set_field(1, Value::Int(arg_count as i64));
+                    if let Some(loc) = self.current_source_loc.clone() {
+                        cond.location = Some(loc);
+                    }
                     self.current_exception = Some(std::rc::Rc::new(cond));
                     return false;
                 }

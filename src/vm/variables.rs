@@ -27,6 +27,9 @@ pub fn handle_load_global(
             // Signal undefined-variable exception (ID 5)
             let mut cond = Condition::new(5);
             cond.set_field(0, Value::Symbol(sym_id)); // Store the symbol
+            if let Some(loc) = vm.current_source_loc.clone() {
+                cond.location = Some(loc);
+            }
             vm.current_exception = Some(Rc::new(cond));
             vm.stack.push(Value::Nil); // Push placeholder
             return Ok(());
@@ -119,6 +122,9 @@ pub fn handle_load_upvalue(
                         // Signal undefined-variable exception (ID 5)
                         let mut cond = Condition::new(5);
                         cond.set_field(0, Value::Symbol(sym)); // Store the symbol
+                        if let Some(loc) = vm.current_source_loc.clone() {
+                            cond.location = Some(loc);
+                        }
                         vm.current_exception = Some(Rc::new(cond));
                         vm.stack.push(Value::Nil); // Push placeholder
                         return Ok(());
