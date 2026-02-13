@@ -3,7 +3,8 @@
 //! The trampoline is the runtime loop that drives CPS execution.
 //! It repeatedly processes Actions until completion or yield.
 
-use super::{Action, Continuation};
+use super::{Action, Continuation, CpsInterpreter, CpsTransformer};
+use crate::compiler::effects::EffectContext;
 use crate::value::Value;
 use crate::vm::VM;
 use std::cell::RefCell;
@@ -295,7 +296,22 @@ impl Trampoline {
                     args,
                     continuation,
                 } => {
-                    // Execute call via VM, detecting yields
+                    // Check if this is a yielding closure with source AST
+                    // If so, use CPS execution to properly handle nested yields
+                    if let Value::Closure(closure) = &func {
+                        if closure.effect.may_yield() && closure.source_ast.is_some() {
+                            // Use CPS execution for yielding closures
+                            match execute_cps_call(closure, &args, continuation.clone(), vm) {
+                                Ok(action) => {
+                                    current_action = action;
+                                    continue;
+                                }
+                                Err(e) => return TrampolineResult::Error(e),
+                            }
+                        }
+                    }
+
+                    // Fall back to bytecode execution for non-yielding or non-CPS closures
                     match call_value_with_vm_result(&func, &args, vm) {
                         Ok(crate::vm::VmResult::Done(result)) => {
                             current_action = Action::return_value(result, continuation);
@@ -339,9 +355,15 @@ impl Trampoline {
         match cont.as_ref() {
             Continuation::Done => Action::Done(value),
 
-            Continuation::CallReturn { saved_env: _, next } => {
-                // Restore environment and continue
-                Action::return_value(value, next.clone())
+            Continuation::CallReturn { saved_env, next } => {
+                // Restore caller's environment and continue
+                // We wrap the next continuation with the saved environment
+                // so that subsequent evaluation uses the caller's environment
+                let wrapped_next = Rc::new(Continuation::WithEnv {
+                    env: saved_env.clone(),
+                    inner: next.clone(),
+                });
+                Action::return_value(value, wrapped_next)
             }
 
             Continuation::Apply { cont_fn } => {
@@ -575,6 +597,79 @@ impl Trampoline {
             // For other continuation types, fall back to the basic apply
             _ => self.apply_continuation(value, cont),
         }
+    }
+}
+
+/// Execute a CPS call for a yielding closure
+///
+/// This transforms the closure's body to CPS and executes it, properly
+/// chaining the return continuation so that yields work correctly.
+fn execute_cps_call(
+    closure: &crate::value::Closure,
+    args: &[Value],
+    return_cont: Rc<Continuation>,
+    vm: &mut VM,
+) -> Result<Action, String> {
+    // Get the AST from source_ast
+    let ast = closure
+        .source_ast
+        .as_ref()
+        .ok_or("Closure has no source AST for CPS execution")?;
+
+    // Build the callee's environment
+    let mut new_env = Vec::new();
+    new_env.extend((*closure.env).iter().cloned());
+    new_env.extend(args.iter().cloned());
+
+    // Add local cells for locally-defined variables
+    let num_params = match closure.arity {
+        crate::value::Arity::Exact(n) => n,
+        crate::value::Arity::AtLeast(n) => n,
+        crate::value::Arity::Range(min, _) => min,
+    };
+    let num_locally_defined = closure
+        .num_locals
+        .saturating_sub(num_params + closure.num_captures);
+
+    for _ in 0..num_locally_defined {
+        let empty_cell = Value::LocalCell(std::rc::Rc::new(std::cell::RefCell::new(Box::new(
+            Value::Nil,
+        ))));
+        new_env.push(empty_cell);
+    }
+
+    let callee_env = Rc::new(RefCell::new(new_env));
+
+    // Create effect context and register effects from VM globals
+    // This allows the CPS transformer to know which functions yield
+    let mut effect_ctx = EffectContext::new();
+    register_global_effects(&mut effect_ctx, vm);
+
+    // Transform the lambda body to CPS with the return continuation
+    // The return continuation will restore the caller's environment when the callee completes
+    let mut transformer = CpsTransformer::new(&effect_ctx);
+    let cps_body = transformer.transform(&ast.body, return_cont);
+
+    // Create interpreter with callee's environment and evaluate
+    let mut interpreter = CpsInterpreter::new(vm, callee_env);
+    interpreter.eval(&cps_body)
+}
+
+/// Register effects of global functions from VM globals
+///
+/// This scans the VM's globals and registers the effect of each closure.
+/// Native functions are assumed to be pure.
+fn register_global_effects(effect_ctx: &mut EffectContext, vm: &VM) {
+    use crate::compiler::effects::Effect;
+    use crate::value::SymbolId;
+
+    for (&sym_id, value) in &vm.globals {
+        let effect = match value {
+            Value::Closure(c) => c.effect,
+            Value::NativeFn(_) | Value::VmAwareFn(_) => Effect::Pure,
+            _ => continue, // Skip non-function values
+        };
+        effect_ctx.register_global(SymbolId(sym_id), effect);
     }
 }
 

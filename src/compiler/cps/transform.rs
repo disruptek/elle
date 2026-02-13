@@ -415,41 +415,36 @@ impl<'a> CpsTransformer<'a> {
         params: &[SymbolId],
         body: &Expr,
         captures: &[(SymbolId, usize, usize)],
-        _cont: Rc<Continuation>,
+        cont: Rc<Continuation>,
     ) -> CpsExpr {
         let body_effect = self.effect_ctx.infer(body);
 
-        // Save current state
-        let saved_index = self.next_local_index;
-        let saved_locals = std::mem::take(&mut self.local_indices);
-
-        // New scope: [captures..., params..., locals...]
-        self.next_local_index = captures.len() + params.len();
-
-        // Register params in local_indices
-        for (i, param) in params.iter().enumerate() {
-            self.local_indices.insert(*param, captures.len() + i);
-        }
-
         if body_effect.is_pure() {
-            // Pure lambda - no transform needed, but still need num_locals
-            let num_locals = self.next_local_index;
-
-            // Restore state
-            self.next_local_index = saved_index;
-            self.local_indices = saved_locals;
-
-            CpsExpr::Lambda {
-                params: params.to_vec(),
-                body: Box::new(CpsExpr::Pure {
-                    expr: body.clone(),
-                    continuation: Continuation::done(),
-                }),
-                captures: captures.to_vec(),
-                num_locals,
+            // Pure lambda - keep as pure expression
+            // The lambda will be compiled to bytecode and executed normally
+            CpsExpr::Pure {
+                expr: Expr::Lambda {
+                    params: params.to_vec(),
+                    body: Box::new(body.clone()),
+                    captures: captures.to_vec(),
+                    locals: vec![], // Locals will be computed by the compiler
+                },
+                continuation: cont,
             }
         } else {
             // Yielding lambda - transform body
+            // Save current state
+            let saved_index = self.next_local_index;
+            let saved_locals = std::mem::take(&mut self.local_indices);
+
+            // New scope: [captures..., params..., locals...]
+            self.next_local_index = captures.len() + params.len();
+
+            // Register params in local_indices
+            for (i, param) in params.iter().enumerate() {
+                self.local_indices.insert(*param, captures.len() + i);
+            }
+
             let body_cps = self.transform(body, Continuation::done());
             let num_locals = self.next_local_index;
 

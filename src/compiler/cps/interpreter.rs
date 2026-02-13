@@ -253,9 +253,13 @@ impl<'a> CpsInterpreter<'a> {
                             let resume_cont = if remaining.is_empty() {
                                 yield_cont
                             } else {
-                                let remaining_cont = Rc::new(Continuation::CpsSequence {
-                                    remaining,
-                                    next: continuation.clone(),
+                                // Wrap remaining_cont with current env so it can access local variables
+                                let remaining_cont = Rc::new(Continuation::WithEnv {
+                                    env: self.env.clone(),
+                                    inner: Rc::new(Continuation::CpsSequence {
+                                        remaining,
+                                        next: continuation.clone(),
+                                    }),
                                 });
                                 update_continuation_next(yield_cont, remaining_cont)
                             };
@@ -666,6 +670,41 @@ impl<'a> CpsInterpreter<'a> {
                     }
                 }
                 Ok(val)
+            }
+
+            Expr::Lambda {
+                params,
+                body,
+                captures,
+                locals,
+            } => {
+                // Compile the lambda to bytecode
+                use crate::compiler::compile::compile_lambda_to_closure;
+                use crate::compiler::effects::Effect;
+
+                // Build capture values from current environment
+                let env_borrowed = self.env.borrow();
+                let mut capture_values = Vec::new();
+                for (_sym, _depth, index) in captures {
+                    if *index < env_borrowed.len() {
+                        capture_values.push(env_borrowed[*index].clone());
+                    } else {
+                        capture_values.push(Value::Nil);
+                    }
+                }
+                drop(env_borrowed);
+
+                // Compile the lambda
+                let closure = compile_lambda_to_closure(
+                    params,
+                    body,
+                    captures,
+                    locals,
+                    capture_values,
+                    Effect::Pure,
+                )?;
+
+                Ok(Value::Closure(Rc::new(closure)))
             }
 
             _ => Err(format!(

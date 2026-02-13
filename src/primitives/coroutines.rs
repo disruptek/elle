@@ -169,8 +169,18 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
             match &borrowed.state {
                 CoroutineState::Created => {
                     // Check if this closure yields and has source AST for CPS execution
-                    let use_cps = borrowed.closure.effect.may_yield()
-                        && borrowed.closure.source_ast.is_some();
+                    // We re-infer the effect at runtime because the closure might call
+                    // functions that weren't defined at compile time
+                    let use_cps = if borrowed.closure.source_ast.is_some() {
+                        // Re-infer effect with current global definitions
+                        let mut effect_ctx = EffectContext::new();
+                        register_global_effects(&mut effect_ctx, vm);
+                        let ast = borrowed.closure.source_ast.as_ref().unwrap();
+                        let runtime_effect = effect_ctx.infer(&ast.body);
+                        runtime_effect.may_yield()
+                    } else {
+                        borrowed.closure.effect.may_yield()
+                    };
 
                     if use_cps {
                         // Use CPS execution path
@@ -335,8 +345,11 @@ fn execute_coroutine_cps(
     // Use RefCell for shared mutable environment
     let env_rc = std::rc::Rc::new(std::cell::RefCell::new(env));
 
+    // Create effect context and register effects from VM globals
+    let mut effect_ctx = EffectContext::new();
+    register_global_effects(&mut effect_ctx, vm);
+
     // Transform the lambda body to CPS
-    let effect_ctx = EffectContext::new();
     let mut transformer = CpsTransformer::new(&effect_ctx);
     let cps_body = transformer.transform(&ast.body, Continuation::done());
 
@@ -440,6 +453,24 @@ fn resume_coroutine_cps(
             borrowed.state = CoroutineState::Error(e.clone());
             Err(e)
         }
+    }
+}
+
+/// Register effects of global functions from VM globals
+///
+/// This scans the VM's globals and registers the effect of each closure.
+/// Native functions are assumed to be pure.
+fn register_global_effects(effect_ctx: &mut EffectContext, vm: &VM) {
+    use crate::compiler::effects::Effect;
+    use crate::value::SymbolId;
+
+    for (&sym_id, value) in &vm.globals {
+        let effect = match value {
+            Value::Closure(c) => c.effect,
+            Value::NativeFn(_) | Value::VmAwareFn(_) => Effect::Pure,
+            _ => continue, // Skip non-function values
+        };
+        effect_ctx.register_global(SymbolId(sym_id), effect);
     }
 }
 
