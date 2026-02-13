@@ -171,11 +171,10 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> Result<Value, Strin
                     // Check if this closure yields and has source AST for CPS execution
                     // We re-infer the effect at runtime because the closure might call
                     // functions that weren't defined at compile time
-                    let use_cps = if borrowed.closure.source_ast.is_some() {
+                    let use_cps = if let Some(ast) = &borrowed.closure.source_ast {
                         // Re-infer effect with current global definitions
                         let mut effect_ctx = EffectContext::new();
                         register_global_effects(&mut effect_ctx, vm);
-                        let ast = borrowed.closure.source_ast.as_ref().unwrap();
                         let runtime_effect = effect_ctx.infer(&ast.body);
                         runtime_effect.may_yield()
                     } else {

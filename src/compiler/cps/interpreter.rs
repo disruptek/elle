@@ -391,7 +391,7 @@ impl<'a> CpsInterpreter<'a> {
                 // This is a temporary solution until we have proper CPS closure support
                 let closure = create_cps_closure(
                     params.clone(),
-                    body.clone(),
+                    *body.clone(),
                     closure_env,
                     *num_locals,
                     captures.len(),
@@ -787,7 +787,7 @@ fn value_to_list(val: &Value) -> Result<Vec<Value>, String> {
 /// This is a placeholder - proper implementation needs CPS body storage
 fn create_cps_closure(
     _params: Vec<crate::value::SymbolId>,
-    _body: Box<CpsExpr>,
+    _body: CpsExpr,
     env: Vec<Value>,
     num_locals: usize,
     num_captures: usize,
