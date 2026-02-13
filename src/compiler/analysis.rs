@@ -4,23 +4,192 @@ use crate::value::SymbolId;
 use std::collections::HashSet;
 
 /// Analyze which variables from a given set are actually used in an expression
-/// NOTE: With VarRef, this analysis is now done during parsing.
-/// This function is kept for compatibility but returns an empty set.
+/// Returns the subset of candidates that are actually referenced as upvalues
 pub fn analyze_capture_usage(
-    _expr: &Expr,
+    expr: &Expr,
     _local_bindings: &HashSet<SymbolId>,
-    _candidates: &HashSet<SymbolId>,
+    candidates: &HashSet<SymbolId>,
 ) -> HashSet<SymbolId> {
-    // With VarRef, capture analysis happens at parse time
-    HashSet::new()
+    let mut used = HashSet::new();
+    collect_used_captures(expr, candidates, &mut used);
+    used
+}
+
+fn collect_used_captures(
+    expr: &Expr,
+    candidates: &HashSet<SymbolId>,
+    used: &mut HashSet<SymbolId>,
+) {
+    match expr {
+        Expr::Var(var_ref) => {
+            if let VarRef::Upvalue { sym, .. } = var_ref {
+                if candidates.contains(sym) {
+                    used.insert(*sym);
+                }
+            }
+        }
+        Expr::If { cond, then, else_ } => {
+            collect_used_captures(cond, candidates, used);
+            collect_used_captures(then, candidates, used);
+            collect_used_captures(else_, candidates, used);
+        }
+        Expr::Cond { clauses, else_body } => {
+            for (test, body) in clauses {
+                collect_used_captures(test, candidates, used);
+                collect_used_captures(body, candidates, used);
+            }
+            if let Some(else_expr) = else_body {
+                collect_used_captures(else_expr, candidates, used);
+            }
+        }
+        Expr::Begin(exprs) | Expr::Block(exprs) | Expr::And(exprs) | Expr::Or(exprs) => {
+            for e in exprs {
+                collect_used_captures(e, candidates, used);
+            }
+        }
+        Expr::Call { func, args, .. } => {
+            collect_used_captures(func, candidates, used);
+            for arg in args {
+                collect_used_captures(arg, candidates, used);
+            }
+        }
+        Expr::Lambda { body, .. } => {
+            collect_used_captures(body, candidates, used);
+        }
+        Expr::Let { bindings, body } | Expr::Letrec { bindings, body } => {
+            for (_, e) in bindings {
+                collect_used_captures(e, candidates, used);
+            }
+            collect_used_captures(body, candidates, used);
+        }
+        Expr::Set { value, .. } => {
+            collect_used_captures(value, candidates, used);
+        }
+        Expr::Define { value, .. } => {
+            collect_used_captures(value, candidates, used);
+        }
+        Expr::While { cond, body } => {
+            collect_used_captures(cond, candidates, used);
+            collect_used_captures(body, candidates, used);
+        }
+        Expr::For { iter, body, .. } => {
+            collect_used_captures(iter, candidates, used);
+            collect_used_captures(body, candidates, used);
+        }
+        _ => {}
+    }
 }
 
 /// Analyze free variables in an expression
-/// NOTE: With VarRef, free variable analysis is done during parsing.
-/// This function is kept for compatibility but returns an empty set.
-pub fn analyze_free_vars(_expr: &Expr, _local_bindings: &HashSet<SymbolId>) -> HashSet<SymbolId> {
-    // With VarRef, free variable analysis happens at parse time
-    HashSet::new()
+/// Collects all VarRef::Upvalue symbols that need to be captured
+pub fn analyze_free_vars(expr: &Expr, local_bindings: &HashSet<SymbolId>) -> HashSet<SymbolId> {
+    let mut free_vars = HashSet::new();
+    collect_free_vars(expr, local_bindings, &mut free_vars);
+    free_vars
+}
+
+fn collect_free_vars(
+    expr: &Expr,
+    local_bindings: &HashSet<SymbolId>,
+    free_vars: &mut HashSet<SymbolId>,
+) {
+    match expr {
+        Expr::Var(var_ref) => {
+            // Upvalues are free variables that need to be captured
+            if let VarRef::Upvalue { sym, .. } = var_ref {
+                if !local_bindings.contains(sym) {
+                    free_vars.insert(*sym);
+                }
+            }
+        }
+        Expr::If { cond, then, else_ } => {
+            collect_free_vars(cond, local_bindings, free_vars);
+            collect_free_vars(then, local_bindings, free_vars);
+            collect_free_vars(else_, local_bindings, free_vars);
+        }
+        Expr::Cond { clauses, else_body } => {
+            for (test, body) in clauses {
+                collect_free_vars(test, local_bindings, free_vars);
+                collect_free_vars(body, local_bindings, free_vars);
+            }
+            if let Some(else_expr) = else_body {
+                collect_free_vars(else_expr, local_bindings, free_vars);
+            }
+        }
+        Expr::Begin(exprs) | Expr::Block(exprs) | Expr::And(exprs) | Expr::Or(exprs) => {
+            for e in exprs {
+                collect_free_vars(e, local_bindings, free_vars);
+            }
+        }
+        Expr::Call { func, args, .. } => {
+            collect_free_vars(func, local_bindings, free_vars);
+            for arg in args {
+                collect_free_vars(arg, local_bindings, free_vars);
+            }
+        }
+        Expr::Lambda { body, .. } => {
+            // Don't recurse into nested lambdas - they have their own captures
+            // But we do need to check the body for upvalues
+            collect_free_vars(body, local_bindings, free_vars);
+        }
+        Expr::Let { bindings, body } | Expr::Letrec { bindings, body } => {
+            for (_, expr) in bindings {
+                collect_free_vars(expr, local_bindings, free_vars);
+            }
+            collect_free_vars(body, local_bindings, free_vars);
+        }
+        Expr::Set { value, .. } => {
+            collect_free_vars(value, local_bindings, free_vars);
+        }
+        Expr::Define { value, .. } => {
+            collect_free_vars(value, local_bindings, free_vars);
+        }
+        Expr::While { cond, body } => {
+            collect_free_vars(cond, local_bindings, free_vars);
+            collect_free_vars(body, local_bindings, free_vars);
+        }
+        Expr::For { iter, body, .. } => {
+            collect_free_vars(iter, local_bindings, free_vars);
+            collect_free_vars(body, local_bindings, free_vars);
+        }
+        Expr::Match {
+            value,
+            patterns,
+            default,
+        } => {
+            collect_free_vars(value, local_bindings, free_vars);
+            for (_, body) in patterns {
+                collect_free_vars(body, local_bindings, free_vars);
+            }
+            if let Some(d) = default {
+                collect_free_vars(d, local_bindings, free_vars);
+            }
+        }
+        Expr::Yield(e) => {
+            collect_free_vars(e, local_bindings, free_vars);
+        }
+        Expr::Try {
+            body,
+            catch,
+            finally,
+        } => {
+            collect_free_vars(body, local_bindings, free_vars);
+            if let Some((_, h)) = catch {
+                collect_free_vars(h, local_bindings, free_vars);
+            }
+            if let Some(f) = finally {
+                collect_free_vars(f, local_bindings, free_vars);
+            }
+        }
+        Expr::Throw { value } => {
+            collect_free_vars(value, local_bindings, free_vars);
+        }
+        Expr::Literal(_) | Expr::Quote(_) | Expr::Quasiquote(_) => {
+            // No free variables in literals
+        }
+        // Handle any other variants that might exist
+        _ => {}
+    }
 }
 
 /// Analyze which locally-defined variables in an expression are referenced by nested lambdas

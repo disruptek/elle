@@ -108,11 +108,38 @@ pub fn adjust_var_indices(
     }
 
     match expr {
-        Expr::Var(_varref) => {
-            // With VarRef, we don't need to adjust indices anymore.
-            // The VarRef was created correctly during parsing based on the scope stack.
-            // The closure environment layout is handled by the compiler backend.
-            // This function is now a no-op for Var nodes.
+        Expr::Var(varref) => {
+            use crate::binding::VarRef;
+            // Adjust VarRef indices based on the closure environment layout.
+            // The closure environment is [captures..., parameters..., locals...]
+            match varref {
+                VarRef::Upvalue { sym, index } => {
+                    // Upvalues need to be mapped to their position in the captures array.
+                    // Look up the symbol in the capture map to get the correct index.
+                    if let Some(&cap_pos) = capture_map.get(sym) {
+                        *index = cap_pos;
+                    }
+                    // If not found in captures, it might be a global that was incorrectly
+                    // marked as upvalue - leave the index as-is
+                }
+                VarRef::Local { index } => {
+                    // Local variables in the current lambda need to be adjusted.
+                    // The index was set during parsing based on the scope stack position.
+                    // We need to map it to the closure environment layout:
+                    // [captures..., parameters..., locals...]
+                    //
+                    // During parsing, local_index was the position in the scope's symbol list.
+                    // We need to determine if this is a parameter or a locally-defined variable.
+                    //
+                    // For now, we assume the index is already correct for parameters
+                    // (they're at positions 0..params.len()-1 in the scope).
+                    // We adjust by adding captures.len() to account for the closure layout.
+                    *index = captures.len() + *index;
+                }
+                VarRef::LetBound { .. } | VarRef::Global { .. } => {
+                    // These don't need adjustment
+                }
+            }
         }
         Expr::If { cond, then, else_ } => {
             adjust_var_indices(cond, captures, params, locals);

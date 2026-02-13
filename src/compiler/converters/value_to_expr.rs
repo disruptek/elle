@@ -55,10 +55,10 @@ pub fn value_to_expr_with_scope(
 
                         if has_intervening_lambda {
                             // Inside a lambda that needs to capture this variable
-                            return Ok(Expr::Var(VarRef::upvalue(local_index)));
+                            return Ok(Expr::Var(VarRef::upvalue(*id, local_index)));
                         } else {
-                            // Direct access to let-bound variable
-                            return Ok(Expr::Var(VarRef::local(local_index)));
+                            // Direct access to let-bound variable - use symbol for scope stack lookup
+                            return Ok(Expr::Var(VarRef::let_bound(*id)));
                         }
                     } else {
                         // Lambda parameter or capture
@@ -67,7 +67,7 @@ pub fn value_to_expr_with_scope(
                             return Ok(Expr::Var(VarRef::local(local_index)));
                         } else {
                             // Outer lambda's scope - needs capture
-                            return Ok(Expr::Var(VarRef::upvalue(local_index)));
+                            return Ok(Expr::Var(VarRef::upvalue(*id, local_index)));
                         }
                     }
                 }
@@ -570,22 +570,32 @@ pub fn mark_tail_calls(expr: &mut Expr, in_tail: bool) {
 
 /// Look up a variable for set! and return the appropriate VarRef
 fn lookup_var_for_set(var: crate::value::SymbolId, scope_stack: &[ScopeEntry]) -> VarRef {
-    for (reverse_idx, scope_entry) in scope_stack.iter().enumerate().rev() {
+    for (idx, scope_entry) in scope_stack.iter().enumerate().rev() {
         if let Some(local_index) = scope_entry.symbols.iter().position(|sym| sym == &var) {
-            let depth = scope_stack.len() - 1 - reverse_idx;
             if scope_entry.scope_type == ScopeType::Let {
-                // Let-bound variable - treat as local if in current frame, otherwise upvalue
-                if depth == 0 {
-                    return VarRef::local(local_index);
+                // Let-bound variable - check for intervening lambda
+                let mut has_intervening_lambda = false;
+                for scope in scope_stack.iter().skip(idx + 1) {
+                    if scope.scope_type == ScopeType::Function {
+                        has_intervening_lambda = true;
+                        break;
+                    }
+                }
+
+                if has_intervening_lambda {
+                    // Inside a lambda that captures this variable
+                    return VarRef::upvalue(var, local_index);
                 } else {
-                    return VarRef::upvalue(local_index);
+                    // Direct access to let-bound variable
+                    return VarRef::let_bound(var);
                 }
             } else {
                 // Function scope variable
+                let depth = scope_stack.len() - 1 - idx;
                 if depth == 0 {
                     return VarRef::local(local_index);
                 } else {
-                    return VarRef::upvalue(local_index);
+                    return VarRef::upvalue(var, local_index);
                 }
             }
         }

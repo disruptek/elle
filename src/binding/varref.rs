@@ -8,13 +8,18 @@ use crate::value::SymbolId;
 /// A resolved variable reference - all resolution happens at compile time
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VarRef {
-    /// Local variable in current activation frame
+    /// Local variable in current activation frame (inside a lambda)
     /// index is offset in frame's locals array: [params..., locals...]
     Local { index: usize },
 
+    /// Let-bound variable (outside a lambda, in a let/block scope)
+    /// sym is used for runtime lookup in the scope stack
+    LetBound { sym: SymbolId },
+
     /// Captured variable from enclosing closure
-    /// index is offset in closure's captures array
-    Upvalue { index: usize },
+    /// sym is the original symbol (used during index adjustment)
+    /// index is offset in closure's captures array (set during adjust_var_indices)
+    Upvalue { sym: SymbolId, index: usize },
 
     /// Global/top-level binding
     /// sym is used for runtime lookup in globals HashMap
@@ -32,14 +37,20 @@ pub struct ResolvedVar {
 }
 
 impl VarRef {
-    /// Create a local variable reference
+    /// Create a local variable reference (inside lambda)
     pub fn local(index: usize) -> Self {
         VarRef::Local { index }
     }
 
+    /// Create a let-bound variable reference (outside lambda)
+    pub fn let_bound(sym: SymbolId) -> Self {
+        VarRef::LetBound { sym }
+    }
+
     /// Create an upvalue (captured) variable reference
-    pub fn upvalue(index: usize) -> Self {
-        VarRef::Upvalue { index }
+    /// The index is a placeholder that will be adjusted later during capture resolution
+    pub fn upvalue(sym: SymbolId, index: usize) -> Self {
+        VarRef::Upvalue { sym, index }
     }
 
     /// Create a global variable reference
@@ -50,6 +61,11 @@ impl VarRef {
     /// Check if this is a local variable
     pub fn is_local(&self) -> bool {
         matches!(self, VarRef::Local { .. })
+    }
+
+    /// Check if this is a let-bound variable
+    pub fn is_let_bound(&self) -> bool {
+        matches!(self, VarRef::LetBound { .. })
     }
 
     /// Check if this is an upvalue (captured variable)
@@ -90,11 +106,12 @@ mod tests {
 
     #[test]
     fn test_varref_upvalue() {
-        let v = VarRef::upvalue(3);
+        let sym = SymbolId(5);
+        let v = VarRef::upvalue(sym, 3);
         assert!(!v.is_local());
         assert!(v.is_upvalue());
         assert!(!v.is_global());
-        assert_eq!(v, VarRef::Upvalue { index: 3 });
+        assert_eq!(v, VarRef::Upvalue { sym, index: 3 });
     }
 
     #[test]

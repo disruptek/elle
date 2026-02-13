@@ -146,16 +146,20 @@ impl ExprCompiler {
         match expr {
             Expr::Literal(val) => Self::compile_literal(ctx, val),
             Expr::Var(var_ref) => match var_ref {
-                VarRef::Local { index } | VarRef::Upvalue { index } => {
+                VarRef::Local { index } | VarRef::Upvalue { index, .. } => {
                     Self::compile_var(ctx, crate::value::SymbolId(0), 0, *index)
                 }
-                VarRef::Global { sym } => Self::compile_var(ctx, *sym, 0, 0),
+                VarRef::LetBound { sym } | VarRef::Global { sym } => {
+                    Self::compile_var(ctx, *sym, 0, 0)
+                }
             },
             Expr::Set { target, value } => match target {
-                VarRef::Local { index } | VarRef::Upvalue { index } => {
+                VarRef::Local { index } | VarRef::Upvalue { index, .. } => {
                     Self::compile_set(ctx, crate::value::SymbolId(0), 0, *index, value)
                 }
-                VarRef::Global { sym } => Self::compile_set(ctx, *sym, 0, 0, value),
+                VarRef::LetBound { sym } | VarRef::Global { sym } => {
+                    Self::compile_set(ctx, *sym, 0, 0, value)
+                }
             },
             Expr::Begin(exprs) => Self::compile_begin(ctx, exprs),
             Expr::If { cond, then, else_ } => Self::compile_if(ctx, cond, then, else_),

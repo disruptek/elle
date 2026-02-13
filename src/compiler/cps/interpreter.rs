@@ -546,7 +546,7 @@ impl<'a> CpsInterpreter<'a> {
 
             Expr::Var(var_ref) => {
                 match var_ref {
-                    VarRef::Local { index } | VarRef::Upvalue { index } => {
+                    VarRef::Local { index } | VarRef::Upvalue { index, .. } => {
                         // In CPS execution, environment is flat
                         let env = self.env.borrow();
                         if *index < env.len() {
@@ -557,12 +557,13 @@ impl<'a> CpsInterpreter<'a> {
                             Err(format!("Variable index {} out of bounds", index))
                         }
                     }
-                    VarRef::Global { sym } => {
-                        // Check globals
+                    VarRef::LetBound { sym } | VarRef::Global { sym } => {
+                        // Check globals (let-bound vars are handled via scope stack in bytecode VM,
+                        // but in CPS interpreter we treat them as globals)
                         if let Some(val) = self.vm.globals.get(&sym.0) {
                             Ok(val.clone())
                         } else {
-                            Err(format!("Undefined global: {:?}", sym))
+                            Err(format!("Undefined variable: {:?}", sym))
                         }
                     }
                 }
@@ -659,14 +660,14 @@ impl<'a> CpsInterpreter<'a> {
             Expr::Set { target, value } => {
                 let val = self.eval_pure_expr(value)?;
                 match target {
-                    VarRef::Local { index } | VarRef::Upvalue { index } => {
+                    VarRef::Local { index } | VarRef::Upvalue { index, .. } => {
                         let mut env = self.env.borrow_mut();
                         if *index < env.len() {
                             env[*index] = val.clone();
                         }
                         Ok(val)
                     }
-                    VarRef::Global { sym } => {
+                    VarRef::LetBound { sym } | VarRef::Global { sym } => {
                         self.vm.globals.insert(sym.0, val.clone());
                         Ok(val)
                     }

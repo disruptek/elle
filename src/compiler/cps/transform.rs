@@ -107,7 +107,7 @@ impl<'a> CpsTransformer<'a> {
             // Variables - check if CPS-local (from let/for)
             Expr::Var(var_ref) => {
                 match var_ref {
-                    VarRef::Local { index } | VarRef::Upvalue { index } => {
+                    VarRef::Local { index } | VarRef::Upvalue { index, .. } => {
                         // CPS locals are indexed directly
                         CpsExpr::Var {
                             sym: SymbolId(0), // Symbol not needed for indexed access
@@ -115,7 +115,7 @@ impl<'a> CpsTransformer<'a> {
                             index: *index,
                         }
                     }
-                    VarRef::Global { sym } => CpsExpr::GlobalVar(*sym),
+                    VarRef::LetBound { sym } | VarRef::Global { sym } => CpsExpr::GlobalVar(*sym),
                 }
             }
 

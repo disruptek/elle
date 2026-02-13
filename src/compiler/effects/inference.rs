@@ -65,7 +65,9 @@ impl EffectContext {
             Expr::Var(var_ref) => {
                 use crate::binding::VarRef;
                 match var_ref {
-                    VarRef::Local { .. } | VarRef::Upvalue { .. } => Effect::Pure,
+                    VarRef::Local { .. } | VarRef::Upvalue { .. } | VarRef::LetBound { .. } => {
+                        Effect::Pure
+                    }
                     VarRef::Global { sym } => {
                         self.known_effects.get(sym).copied().unwrap_or(Effect::Pure)
                     }
@@ -224,7 +226,7 @@ impl EffectContext {
                             None => Effect::Pure,
                         }
                     }
-                    VarRef::Local { .. } | VarRef::Upvalue { .. } => {
+                    VarRef::Local { .. } | VarRef::Upvalue { .. } | VarRef::LetBound { .. } => {
                         self.local_effects
                             .get(&crate::value::SymbolId(0)) // Placeholder - local vars don't have symbols
                             .copied()
@@ -252,7 +254,7 @@ impl EffectContext {
                     VarRef::Global { sym } => {
                         self.known_effects.get(sym).copied().unwrap_or(Effect::Pure)
                     }
-                    VarRef::Local { .. } | VarRef::Upvalue { .. } => self
+                    VarRef::Local { .. } | VarRef::Upvalue { .. } | VarRef::LetBound { .. } => self
                         .local_effects
                         .get(&crate::value::SymbolId(0)) // Placeholder
                         .copied()
@@ -407,7 +409,10 @@ mod tests {
         // (map abs lst) - abs is pure, so map is pure
         let expr = Expr::Call {
             func: Box::new(Expr::Var(crate::binding::VarRef::global(map_sym))),
-            args: vec![Expr::Var(crate::binding::VarRef::global(abs_sym)), Expr::Literal(Value::Nil)],
+            args: vec![
+                Expr::Var(crate::binding::VarRef::global(abs_sym)),
+                Expr::Literal(Value::Nil),
+            ],
             tail: false,
         };
 
@@ -453,7 +458,10 @@ mod tests {
         // (map yielding-fn lst) - yielding-fn yields, so map yields
         let expr = Expr::Call {
             func: Box::new(Expr::Var(crate::binding::VarRef::global(map_sym))),
-            args: vec![Expr::Var(crate::binding::VarRef::global(yielding_fn_sym)), Expr::Literal(Value::Nil)],
+            args: vec![
+                Expr::Var(crate::binding::VarRef::global(yielding_fn_sym)),
+                Expr::Literal(Value::Nil),
+            ],
             tail: false,
         };
 
@@ -505,7 +513,10 @@ mod tests {
         // (filter positive? lst) - positive? is pure, so filter is pure
         let expr = Expr::Call {
             func: Box::new(Expr::Var(crate::binding::VarRef::global(filter_sym))),
-            args: vec![Expr::Var(crate::binding::VarRef::global(positive_sym)), Expr::Literal(Value::Nil)],
+            args: vec![
+                Expr::Var(crate::binding::VarRef::global(positive_sym)),
+                Expr::Literal(Value::Nil),
+            ],
             tail: false,
         };
 
@@ -545,7 +556,10 @@ mod tests {
         // (apply + (list 1 2)) - + is pure, so apply is pure
         let expr = Expr::Call {
             func: Box::new(Expr::Var(crate::binding::VarRef::global(apply_sym))),
-            args: vec![Expr::Var(crate::binding::VarRef::global(plus_sym)), Expr::Literal(Value::Nil)],
+            args: vec![
+                Expr::Var(crate::binding::VarRef::global(plus_sym)),
+                Expr::Literal(Value::Nil),
+            ],
             tail: false,
         };
 

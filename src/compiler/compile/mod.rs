@@ -62,12 +62,18 @@ impl Compiler {
             Expr::Var(var_ref) => {
                 match var_ref {
                     VarRef::Local { index } => {
-                        // Local variable in current frame
+                        // Local variable in current lambda frame (closure environment)
                         self.bytecode.emit(Instruction::LoadUpvalue);
                         self.bytecode.emit_byte(1); // depth = 1 (current closure)
                         self.bytecode.emit_byte(*index as u8);
                     }
-                    VarRef::Upvalue { index } => {
+                    VarRef::LetBound { sym } => {
+                        // Let-bound variable - use LoadGlobal which checks scope stack first
+                        let idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                        self.bytecode.emit(Instruction::LoadGlobal);
+                        self.bytecode.emit_u16(idx);
+                    }
+                    VarRef::Upvalue { index, .. } => {
                         // Captured variable from enclosing closure
                         self.bytecode.emit(Instruction::LoadUpvalue);
                         self.bytecode.emit_byte(1); // depth = 1
@@ -123,11 +129,19 @@ impl Compiler {
                 self.compile_expr(value, false);
                 match target {
                     VarRef::Local { index } => {
+                        // Local variable in lambda frame
                         self.bytecode.emit(Instruction::StoreUpvalue);
                         self.bytecode.emit_byte(1);
                         self.bytecode.emit_byte(*index as u8);
                     }
-                    VarRef::Upvalue { index } => {
+                    VarRef::LetBound { sym } => {
+                        // Let-bound variable - use StoreGlobal which checks scope stack first
+                        let idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                        self.bytecode.emit(Instruction::StoreGlobal);
+                        self.bytecode.emit_u16(idx);
+                    }
+                    VarRef::Upvalue { index, .. } => {
+                        // Captured variable from enclosing closure
                         self.bytecode.emit(Instruction::StoreUpvalue);
                         self.bytecode.emit_byte(1);
                         self.bytecode.emit_byte(*index as u8);
@@ -1072,15 +1086,16 @@ impl Compiler {
 
             // Emit captured values onto the stack (in order)
             // These will be stored in the closure's environment by the VM
-            for (i, _sym) in captures.iter().enumerate() {
+            for sym in captures.iter() {
                 // Captures are loaded at closure creation time
-                // The index i corresponds to the capture's position in the parent environment
-                self.bytecode.emit(Instruction::LoadUpvalue);
-                self.bytecode.emit_byte(1); // depth = 1
-                self.bytecode.emit_byte(i as u8);
+                // Use LoadGlobal which checks scope stack first, then globals
+                // This handles both let-bound variables and closure captures
+                let idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                self.bytecode.emit(Instruction::LoadGlobal);
+                self.bytecode.emit_u16(idx);
 
                 // If this variable is mutated in the lambda body, wrap it in a cell
-                if mutated_captures.contains(_sym) {
+                if mutated_captures.contains(sym) {
                     self.bytecode.emit(Instruction::MakeCell);
                 }
             }
@@ -1349,8 +1364,8 @@ mod tests {
             body: Box::new(Expr::Call {
                 func: Box::new(Expr::Var(VarRef::global(plus_sym))),
                 args: vec![
-                    Expr::Var(VarRef::upvalue(0)), // x from outer scope
-                    Expr::Var(VarRef::local(0)),   // y from inner scope
+                    Expr::Var(VarRef::upvalue(x_sym, 0)), // x from outer scope
+                    Expr::Var(VarRef::local(0)),          // y from inner scope
                 ],
                 tail: false,
             }),
@@ -1547,8 +1562,8 @@ mod tests {
             body: Box::new(Expr::Call {
                 func: Box::new(Expr::Var(VarRef::global(plus_sym))),
                 args: vec![
-                    Expr::Var(VarRef::upvalue(0)), // x from outer scope
-                    Expr::Var(VarRef::local(0)),   // y from this scope
+                    Expr::Var(VarRef::upvalue(x_sym, 0)), // x from outer scope
+                    Expr::Var(VarRef::local(0)),          // y from this scope
                 ],
                 tail: false,
             }),
