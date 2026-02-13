@@ -58,6 +58,25 @@ fn print_help() {
     println!();
 }
 
+/// Format a runtime error with symbol resolution
+fn format_runtime_error(error: &str, symbols: &SymbolTable) -> String {
+    // Check for SymbolId pattern and resolve it
+    if let Some(start) = error.find("SymbolId(") {
+        if let Some(end) = error[start..].find(')') {
+            let id_str = &error[start + 9..start + end];
+            if let Ok(id) = id_str.parse::<u32>() {
+                let name = symbols
+                    .name(elle::value::SymbolId(id))
+                    .unwrap_or("<unknown>");
+                let before = &error[..start];
+                let after = &error[start + end + 1..];
+                return format!("{}'{}'{}", before, name, after);
+            }
+        }
+    }
+    error.to_string()
+}
+
 fn run_stdin(vm: &mut VM, symbols: &mut SymbolTable) -> Result<(), String> {
     let mut contents = String::new();
     io::stdin()
@@ -171,15 +190,11 @@ fn run_source(
 
                 // Execute
                 match vm.execute(&bytecode) {
-                    Ok(result) => {
-                        // Only print non-nil results (even in stdin mode)
-                        // This avoids printing nil for side-effect functions like display
-                        if !result.is_nil() {
-                            println!("⟹ {:?}", result);
-                        }
+                    Ok(_result) => {
+                        // Script mode is silent except for explicit output (display, etc.)
                     }
                     Err(e) => {
-                        eprintln!("✗ Runtime error: {}", e);
+                        eprintln!("✗ Runtime error: {}", format_runtime_error(&e, symbols));
                         had_runtime_error = true;
                     }
                 }
@@ -266,7 +281,7 @@ fn run_repl(vm: &mut VM, symbols: &mut SymbolTable) -> bool {
                                 }
                             }
                             Err(e) => {
-                                eprintln!("✗ Runtime error: {}", e);
+                                eprintln!("✗ Runtime error: {}", format_runtime_error(&e, symbols));
                                 had_errors = true;
                             }
                         }
@@ -393,7 +408,7 @@ fn run_repl_fallback(vm: &mut VM, symbols: &mut SymbolTable) -> bool {
                         }
                     }
                     Err(e) => {
-                        eprintln!("✗ Runtime error: {}", e);
+                        eprintln!("✗ Runtime error: {}", format_runtime_error(&e, symbols));
                         had_errors = true;
                     }
                 }
