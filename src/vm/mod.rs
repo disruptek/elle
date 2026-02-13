@@ -890,7 +890,16 @@ impl VM {
                 } else {
                     // No handler for this exception - propagate as error
                     if let Some(exc) = &self.current_exception {
-                        return Err(format!("Unhandled exception: {}", exc.exception_id));
+                        // Include field 0 info if it contains a symbol (for undefined-variable)
+                        let details = if let Some(Value::Symbol(sym_id)) = exc.get_field(0) {
+                            format!(" (SymbolId({}))", sym_id.0)
+                        } else {
+                            String::new()
+                        };
+                        return Err(format!(
+                            "Unhandled exception: {}{}",
+                            exc.exception_id, details
+                        ));
                     }
                     return Err("Unhandled exception".to_string());
                 }
