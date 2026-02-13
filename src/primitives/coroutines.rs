@@ -357,6 +357,7 @@ fn execute_coroutine_cps(
             borrowed.state = CoroutineState::Done;
             borrowed.yielded_value = Some(value.clone());
             borrowed.saved_continuation = None;
+            borrowed.saved_env = None;
             Ok(value)
         }
         TrampolineResult::Suspended {
@@ -366,6 +367,8 @@ fn execute_coroutine_cps(
             borrowed.state = CoroutineState::Suspended;
             borrowed.yielded_value = Some(value.clone());
             borrowed.saved_continuation = Some(continuation);
+            // Save the environment so local variables persist across yields
+            borrowed.saved_env = Some(env_rc.clone());
             Ok(value)
         }
         TrampolineResult::Error(e) => {
@@ -386,7 +389,11 @@ fn resume_coroutine_cps(
     vm: &mut VM,
 ) -> Result<Value, String> {
     borrowed.state = CoroutineState::Running;
-    let env = borrowed.closure.env.clone();
+    // Use saved environment if available, otherwise use closure's environment
+    let env = borrowed
+        .saved_env
+        .clone()
+        .unwrap_or_else(|| borrowed.closure.env.clone());
 
     // Release borrow
     drop(borrowed);
@@ -403,6 +410,7 @@ fn resume_coroutine_cps(
             borrowed.state = CoroutineState::Done;
             borrowed.yielded_value = Some(value.clone());
             borrowed.saved_continuation = None;
+            borrowed.saved_env = None;
             Ok(value)
         }
         TrampolineResult::Suspended {
@@ -412,6 +420,7 @@ fn resume_coroutine_cps(
             borrowed.state = CoroutineState::Suspended;
             borrowed.yielded_value = Some(value.clone());
             borrowed.saved_continuation = Some(continuation);
+            // Keep the saved environment
             Ok(value)
         }
         TrampolineResult::Error(e) => {

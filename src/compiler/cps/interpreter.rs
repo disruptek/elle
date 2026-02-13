@@ -10,6 +10,60 @@ use crate::vm::VM;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+/// Update a continuation's "next" field to chain with another continuation
+/// This is used when a yielding construct (like while) is inside a sequence
+fn update_continuation_next(
+    cont: Rc<Continuation>,
+    new_next: Rc<Continuation>,
+) -> Rc<Continuation> {
+    match cont.as_ref() {
+        Continuation::Done => {
+            // If the continuation is done, just use the new next
+            new_next
+        }
+        Continuation::CpsWhile {
+            cond,
+            body,
+            next: _,
+        } => {
+            // Update the while loop's next to chain with new_next
+            Rc::new(Continuation::CpsWhile {
+                cond: cond.clone(),
+                body: body.clone(),
+                next: new_next,
+            })
+        }
+        Continuation::CpsWhileBody {
+            body_cont,
+            cond,
+            body,
+            next: _,
+        } => {
+            // Update the while body's next to chain with new_next
+            Rc::new(Continuation::CpsWhileBody {
+                body_cont: body_cont.clone(),
+                cond: cond.clone(),
+                body: body.clone(),
+                next: new_next,
+            })
+        }
+        Continuation::CpsSequence { remaining, next: _ } => {
+            // Update the sequence's next to chain with new_next
+            Rc::new(Continuation::CpsSequence {
+                remaining: remaining.clone(),
+                next: new_next,
+            })
+        }
+        _ => {
+            // For other continuation types, wrap in CpsSequenceAfterYield
+            Rc::new(Continuation::CpsSequenceAfterYield {
+                yield_cont: cont,
+                remaining_cont: new_next,
+            })
+        }
+    }
+}
+
 /// CPS interpreter state
 pub struct CpsInterpreter<'a> {
     vm: &'a mut VM,
@@ -67,14 +121,16 @@ impl<'a> CpsInterpreter<'a> {
                 }
             }
 
-            CpsExpr::Yield { value } => {
+            CpsExpr::Yield {
+                value,
+                continuation,
+            } => {
                 // Evaluate the value expression
                 let val_action = self.eval(value)?;
                 match val_action {
                     Action::Done(val) => {
-                        // Yield the value with a done continuation
-                        // The actual continuation is managed by the caller
-                        Ok(Action::yield_value(val, Continuation::done()))
+                        // Yield the value with the continuation for resumption
+                        Ok(Action::yield_value(val, continuation.clone()))
                     }
                     other => Ok(other), // Propagate other actions
                 }
@@ -139,21 +195,55 @@ impl<'a> CpsInterpreter<'a> {
                     return Ok(Action::return_value(Value::Nil, continuation.clone()));
                 }
 
-                // Evaluate all but the last expression for side effects
-                for expr in &exprs[..exprs.len() - 1] {
+                // Evaluate expressions one by one, capturing remaining on yield
+                for (i, expr) in exprs.iter().enumerate() {
                     let action = self.eval(expr)?;
-                    // If any expression yields or errors, propagate it
-                    if !action.is_done() {
-                        return Ok(action);
+
+                    match action {
+                        Action::Done(_) => {
+                            // Continue to next expression
+                            // (value is discarded unless this is the last expression)
+                            if i == exprs.len() - 1 {
+                                if let Action::Done(val) = action {
+                                    return Ok(Action::return_value(val, continuation.clone()));
+                                }
+                            }
+                        }
+                        Action::Yield {
+                            value,
+                            continuation: yield_cont,
+                        } => {
+                            // Yield happened - capture remaining expressions
+                            let remaining = exprs[i + 1..].to_vec();
+
+                            // Create a continuation that will:
+                            // 1. First, continue with yield_cont (e.g., continue a while loop)
+                            // 2. Then, evaluate remaining expressions
+                            // 3. Finally, continue with the outer continuation
+                            let resume_cont = if remaining.is_empty() {
+                                // No more expressions - use the yield's continuation
+                                yield_cont
+                            } else {
+                                // Create a continuation that evaluates remaining expressions
+                                let remaining_cont = Rc::new(Continuation::CpsSequence {
+                                    remaining,
+                                    next: continuation.clone(),
+                                });
+
+                                // Update yield_cont's "next" to include remaining expressions
+                                // This ensures that when the yielding construct completes,
+                                // it continues with the remaining expressions
+                                update_continuation_next(yield_cont, remaining_cont)
+                            };
+
+                            return Ok(Action::yield_value(value, resume_cont));
+                        }
+                        other => return Ok(other), // Propagate errors, calls, etc.
                     }
                 }
 
-                // Evaluate last expression and apply continuation
-                let last_action = self.eval(&exprs[exprs.len() - 1])?;
-                match last_action {
-                    Action::Done(val) => Ok(Action::return_value(val, continuation.clone())),
-                    other => Ok(other),
-                }
+                // Should not reach here
+                Ok(Action::return_value(Value::Nil, continuation.clone()))
             }
 
             CpsExpr::If {
@@ -195,9 +285,37 @@ impl<'a> CpsInterpreter<'a> {
                     // Evaluate body
                     let body_action = self.eval(body)?;
 
-                    // If body yields, propagate it
-                    if let Action::Yield { .. } = body_action {
-                        return Ok(body_action);
+                    // If body yields, capture the while loop state
+                    if let Action::Yield {
+                        value,
+                        continuation: body_cont,
+                    } = body_action
+                    {
+                        // The body_cont is the continuation for the rest of the body
+                        // We need to chain: body_cont -> loop again -> outer continuation
+                        // Create a continuation that will continue the while loop
+                        let while_cont = Rc::new(Continuation::CpsWhile {
+                            cond: cond.clone(),
+                            body: body.clone(),
+                            next: continuation.clone(),
+                        });
+
+                        // Chain the body continuation with the while continuation
+                        let chained_cont = if body_cont.is_done() {
+                            // Body is done after yield, continue with while loop
+                            while_cont
+                        } else {
+                            // Body has more to do, then continue with while loop
+                            // Use CpsWhileBody to handle this
+                            Rc::new(Continuation::CpsWhileBody {
+                                body_cont,
+                                cond: cond.clone(),
+                                body: body.clone(),
+                                next: continuation.clone(),
+                            })
+                        };
+
+                        return Ok(Action::yield_value(value, chained_cont));
                     }
                 }
                 Ok(Action::return_value(Value::Nil, continuation.clone()))
@@ -345,6 +463,10 @@ impl<'a> CpsInterpreter<'a> {
                 if let Some(val) = self.locals.get(sym) {
                     return Ok(val.clone());
                 }
+                // Check globals (for variables defined via define in coroutines)
+                if let Some(val) = self.vm.globals.get(&sym.0) {
+                    return Ok(val.clone());
+                }
                 // Then check closure environment
                 if *depth == 0 && *index < self.env.len() {
                     let val = self.env[*index].clone();
@@ -470,6 +592,9 @@ impl<'a> CpsInterpreter<'a> {
                 // Check locals first
                 if self.locals.contains_key(var) {
                     self.locals.insert(*var, val.clone());
+                } else if self.vm.globals.contains_key(&var.0) {
+                    // Update in globals (for variables defined via define in coroutines)
+                    self.vm.set_global(var.0, val.clone());
                 } else if *depth == 0 && *index < self.env.len() {
                     // Update in environment (if it's a LocalCell)
                     let env_val = &self.env[*index];
@@ -606,6 +731,7 @@ mod tests {
 
         let expr = CpsExpr::Yield {
             value: Box::new(CpsExpr::Literal(Value::Int(42))),
+            continuation: Continuation::done(),
         };
         let result = interp.eval(&expr).unwrap();
 

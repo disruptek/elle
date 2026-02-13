@@ -298,6 +298,9 @@ pub struct Coroutine {
     pub saved_context: Option<CoroutineContext>,
     /// Saved CPS continuation for resumption (CPS path)
     pub saved_continuation: Option<Rc<crate::compiler::cps::Continuation>>,
+    /// Saved execution environment for CPS resumption
+    /// This preserves local variables across yields
+    pub saved_env: Option<Rc<Vec<Value>>>,
 }
 
 impl Coroutine {
@@ -309,6 +312,7 @@ impl Coroutine {
             yielded_value: None,
             saved_context: None,
             saved_continuation: None,
+            saved_env: None,
         }
     }
 }
