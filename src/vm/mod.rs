@@ -450,24 +450,24 @@ impl VM {
                             // Validate argument count
                             if !self.check_arity(&closure.arity, args.len()) {
                                 // Exception was set, check it before returning
-                                if self.current_exception.is_some() && !self.handling_exception {
-                                    if self.exception_handlers.is_empty() {
-                                        // No handler for this exception - propagate as error
-                                        if let Some(exc) = &self.current_exception {
-                                            let details = if let Some(Value::Symbol(sym_id)) =
-                                                exc.get_field(0)
-                                            {
+                                if self.current_exception.is_some()
+                                    && !self.handling_exception
+                                    && self.exception_handlers.is_empty()
+                                {
+                                    // No handler for this exception - propagate as error
+                                    if let Some(exc) = &self.current_exception {
+                                        let details =
+                                            if let Some(Value::Symbol(sym_id)) = exc.get_field(0) {
                                                 format!(" (SymbolId({}))", sym_id.0)
                                             } else {
                                                 String::new()
                                             };
-                                            return Err(format!(
-                                                "Unhandled exception: {}{}",
-                                                exc.exception_id, details
-                                            ));
-                                        }
-                                        return Err("Unhandled exception".to_string());
+                                        return Err(format!(
+                                            "Unhandled exception: {}{}",
+                                            exc.exception_id, details
+                                        ));
                                     }
+                                    return Err("Unhandled exception".to_string());
                                 }
                                 return Ok(VmResult::Done(Value::Nil));
                             }
@@ -516,24 +516,24 @@ impl VM {
                             // Validate argument count
                             if !self.check_arity(&jit_closure.arity, args.len()) {
                                 // Exception was set, check it before returning
-                                if self.current_exception.is_some() && !self.handling_exception {
-                                    if self.exception_handlers.is_empty() {
-                                        // No handler for this exception - propagate as error
-                                        if let Some(exc) = &self.current_exception {
-                                            let details = if let Some(Value::Symbol(sym_id)) =
-                                                exc.get_field(0)
-                                            {
+                                if self.current_exception.is_some()
+                                    && !self.handling_exception
+                                    && self.exception_handlers.is_empty()
+                                {
+                                    // No handler for this exception - propagate as error
+                                    if let Some(exc) = &self.current_exception {
+                                        let details =
+                                            if let Some(Value::Symbol(sym_id)) = exc.get_field(0) {
                                                 format!(" (SymbolId({}))", sym_id.0)
                                             } else {
                                                 String::new()
                                             };
-                                            return Err(format!(
-                                                "Unhandled exception: {}{}",
-                                                exc.exception_id, details
-                                            ));
-                                        }
-                                        return Err("Unhandled exception".to_string());
+                                        return Err(format!(
+                                            "Unhandled exception: {}{}",
+                                            exc.exception_id, details
+                                        ));
                                     }
+                                    return Err("Unhandled exception".to_string());
                                 }
                                 return Ok(VmResult::Done(Value::Nil));
                             } else if !jit_closure.code_ptr.is_null() {
