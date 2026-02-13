@@ -759,7 +759,7 @@ fn test_coroutine_state_not_stuck_running_on_cps_error() {
                     Value::Symbol(_) => {
                         // This is fine - the error was caught as a symbol
                     }
-                    other => {
+                    _other => {
                         // Some other error type, which is fine
                     }
                 }
