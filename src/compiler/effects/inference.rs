@@ -216,19 +216,19 @@ impl EffectContext {
                             Effect::Pure // Conservative default
                         }
                     }
-                    None => Effect::Pure, // Unknown function, assume pure
+                    None => Effect::Yields, // Unknown function, assume may yield (conservative)
                 }
             }
             Expr::Var(sym_id, _, _) => self
                 .local_effects
                 .get(sym_id)
                 .copied()
-                .unwrap_or(Effect::Pure),
+                .unwrap_or(Effect::Yields), // Unknown variable, assume may yield (conservative)
             Expr::Lambda { body, .. } => {
                 // Inline lambda - infer its body's effect
                 self.infer(body)
             }
-            _ => Effect::Pure,
+            _ => Effect::Yields, // Unknown expression, assume may yield (conservative)
         }
     }
 

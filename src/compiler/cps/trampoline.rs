@@ -6,6 +6,7 @@
 use super::{Action, Continuation};
 use crate::value::Value;
 use crate::vm::VM;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 /// Result of trampoline execution
@@ -230,6 +231,12 @@ impl Trampoline {
                 // from the non-VM path
                 Action::error("CpsSequenceAfterYield continuation requires VM access")
             }
+
+            Continuation::WithEnv { env: _, inner } => {
+                // WithEnv requires VM access for proper environment handling
+                // In the non-VM path, just continue with inner
+                Action::return_value(value, inner.clone())
+            }
         }
     }
 
@@ -246,7 +253,7 @@ impl Trampoline {
         &mut self,
         initial_action: Action,
         vm: &mut VM,
-        env: &Rc<Vec<Value>>,
+        env: &Rc<RefCell<Vec<Value>>>,
     ) -> TrampolineResult {
         let mut current_action = initial_action;
         self.step_count = 0;
@@ -288,10 +295,17 @@ impl Trampoline {
                     args,
                     continuation,
                 } => {
-                    // Execute call via VM
-                    match call_value_with_vm(&func, &args, vm) {
-                        Ok(result) => {
+                    // Execute call via VM, detecting yields
+                    match call_value_with_vm_result(&func, &args, vm) {
+                        Ok(crate::vm::VmResult::Done(result)) => {
                             current_action = Action::return_value(result, continuation);
+                        }
+                        Ok(crate::vm::VmResult::Yielded(value)) => {
+                            // Yield happened - propagate it up
+                            return TrampolineResult::Suspended {
+                                value,
+                                continuation,
+                            };
                         }
                         Err(e) => return TrampolineResult::Error(e),
                     }
@@ -320,7 +334,7 @@ impl Trampoline {
         value: Value,
         cont: Rc<Continuation>,
         vm: &mut VM,
-        env: &Rc<Vec<Value>>,
+        env: &Rc<RefCell<Vec<Value>>>,
     ) -> Action {
         match cont.as_ref() {
             Continuation::Done => Action::Done(value),
@@ -550,6 +564,14 @@ impl Trampoline {
                 }
             }
 
+            Continuation::WithEnv {
+                env: saved_env,
+                inner,
+            } => {
+                // Continue with restored environment
+                self.apply_continuation_with_vm(value, inner.clone(), vm, saved_env)
+            }
+
             // For other continuation types, fall back to the basic apply
             _ => self.apply_continuation(value, cont),
         }
@@ -591,6 +613,64 @@ fn call_value_with_vm(func: &Value, args: &[Value], vm: &mut VM) -> Result<Value
         Value::NativeFn(f) => f(args),
 
         Value::VmAwareFn(f) => f(args, vm),
+
+        _ => Err(format!("Cannot call {}", func.type_name())),
+    }
+}
+
+/// Call a value with VM access, returning VmResult to detect yields
+fn call_value_with_vm_result(
+    func: &Value,
+    args: &[Value],
+    vm: &mut VM,
+) -> Result<crate::vm::VmResult, String> {
+    match func {
+        Value::Closure(closure) => {
+            // Build environment
+            let mut new_env = Vec::new();
+            new_env.extend((*closure.env).iter().cloned());
+            new_env.extend(args.iter().cloned());
+
+            // Add local cells
+            let num_params = match closure.arity {
+                crate::value::Arity::Exact(n) => n,
+                crate::value::Arity::AtLeast(n) => n,
+                crate::value::Arity::Range(min, _) => min,
+            };
+            let num_locally_defined = closure
+                .num_locals
+                .saturating_sub(num_params + closure.num_captures);
+
+            for _ in 0..num_locally_defined {
+                let empty_cell = Value::LocalCell(std::rc::Rc::new(std::cell::RefCell::new(
+                    Box::new(Value::Nil),
+                )));
+                new_env.push(empty_cell);
+            }
+
+            let env_rc = std::rc::Rc::new(new_env);
+
+            // Execute - use coroutine-aware path if in a coroutine
+            if vm.in_coroutine() {
+                vm.execute_bytecode_coroutine(&closure.bytecode, &closure.constants, Some(&env_rc))
+            } else {
+                // For non-coroutine calls, wrap the result
+                match vm.execute_bytecode(&closure.bytecode, &closure.constants, Some(&env_rc)) {
+                    Ok(v) => Ok(crate::vm::VmResult::Done(v)),
+                    Err(e) => Err(e),
+                }
+            }
+        }
+
+        Value::NativeFn(f) => match f(args) {
+            Ok(v) => Ok(crate::vm::VmResult::Done(v)),
+            Err(e) => Err(e),
+        },
+
+        Value::VmAwareFn(f) => match f(args, vm) {
+            Ok(v) => Ok(crate::vm::VmResult::Done(v)),
+            Err(e) => Err(e),
+        },
 
         _ => Err(format!("Cannot call {}", func.type_name())),
     }

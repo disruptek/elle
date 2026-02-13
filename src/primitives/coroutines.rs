@@ -321,7 +321,7 @@ fn execute_coroutine_cps(
         .as_ref()
         .ok_or("Closure has no source AST for CPS execution")?;
 
-    // Set up the environment
+    // Set up the environment with RefCell for mutability
     let mut env = (*closure_env).clone();
     let num_locally_defined = num_locals.saturating_sub(num_captures);
 
@@ -332,15 +332,19 @@ fn execute_coroutine_cps(
         env.push(empty_cell);
     }
 
-    let env_rc = std::rc::Rc::new(env);
+    // Use RefCell for shared mutable environment
+    let env_rc = std::rc::Rc::new(std::cell::RefCell::new(env));
 
     // Transform the lambda body to CPS
     let effect_ctx = EffectContext::new();
-    let transformer = CpsTransformer::new(&effect_ctx);
+    let mut transformer = CpsTransformer::new(&effect_ctx);
     let cps_body = transformer.transform(&ast.body, Continuation::done());
 
     // Release borrow before execution
     drop(borrowed);
+
+    // Push coroutine onto stack so bytecode VM knows we're in a coroutine context
+    vm.coroutine_stack.push(co.clone());
 
     // Create interpreter and evaluate
     let mut interpreter = CpsInterpreter::new(vm, env_rc.clone());
@@ -349,6 +353,9 @@ fn execute_coroutine_cps(
     // Run trampoline
     let mut trampoline = Trampoline::new();
     let result = trampoline.run_with_vm(initial_action, vm, &env_rc);
+
+    // Pop coroutine from stack
+    vm.coroutine_stack.pop();
 
     // Update coroutine state
     let mut borrowed = co.borrow_mut();
@@ -389,19 +396,25 @@ fn resume_coroutine_cps(
     vm: &mut VM,
 ) -> Result<Value, String> {
     borrowed.state = CoroutineState::Running;
-    // Use saved environment if available, otherwise use closure's environment
-    let env = borrowed
-        .saved_env
-        .clone()
-        .unwrap_or_else(|| borrowed.closure.env.clone());
+    // Use saved environment if available, otherwise create from closure's environment
+    let env = borrowed.saved_env.clone().unwrap_or_else(|| {
+        // Convert immutable closure env to mutable RefCell env
+        Rc::new(std::cell::RefCell::new((*borrowed.closure.env).clone()))
+    });
 
     // Release borrow
     drop(borrowed);
+
+    // Push coroutine onto stack so bytecode VM knows we're in a coroutine context
+    vm.coroutine_stack.push(co.clone());
 
     // Apply resume value to continuation
     let mut trampoline = Trampoline::new();
     let initial_action = Action::return_value(resume_value, continuation);
     let result = trampoline.run_with_vm(initial_action, vm, &env);
+
+    // Pop coroutine from stack
+    vm.coroutine_stack.pop();
 
     // Update coroutine state
     let mut borrowed = co.borrow_mut();
