@@ -63,6 +63,10 @@ pub fn handle_define_local(
 /// Handle MakeCell instruction - wraps a value in a cell for shared mutable access
 /// Pops value from stack, wraps it in a cell, pushes the cell
 /// Idempotent: if the value is already a cell, it is not double-wrapped
+///
+/// Uses LocalCell (not Cell) because MakeCell is emitted by the compiler for
+/// mutable captured variables, which should auto-unwrap on LoadUpvalue.
+/// User-created cells via `box` use a different code path.
 pub fn handle_make_cell(vm: &mut VM) -> Result<(), String> {
     let value = vm.stack.pop().ok_or("Stack underflow")?;
     match value {
@@ -71,8 +75,9 @@ pub fn handle_make_cell(vm: &mut VM) -> Result<(), String> {
             vm.stack.push(value);
         }
         _ => {
-            // Use Cell (not LocalCell) for MakeCell instruction - this is for user-created cells
-            let cell = Value::Cell(std::rc::Rc::new(std::cell::RefCell::new(Box::new(value))));
+            // Use LocalCell for compiler-generated cells (mutable captures)
+            // LocalCell is auto-unwrapped by LoadUpvalue, unlike user Cell from `box`
+            let cell = Value::LocalCell(std::rc::Rc::new(std::cell::RefCell::new(Box::new(value))));
             vm.stack.push(cell);
         }
     }
