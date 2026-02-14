@@ -110,14 +110,10 @@ impl<'a> CpsInterpreter<'a> {
                 depth: _,
                 index,
             } => {
-                // In CPS execution, the environment is flat - all captures, params, and locals
-                // are at their assigned indices. The 'depth' field is a bytecode compiler
-                // artifact for nested scope resolution that doesn't apply here.
                 let env = self.env.borrow();
                 if *index < env.len() {
                     let val = env[*index].clone();
                     drop(env);
-                    // Unwrap LocalCell if needed
                     let unwrapped = unwrap_local_cell(val);
                     Ok(Action::done(unwrapped))
                 } else {
@@ -405,12 +401,27 @@ impl<'a> CpsInterpreter<'a> {
                 let env_borrowed = self.env.borrow();
                 let mut closure_env = Vec::with_capacity(*num_locals);
                 for (sym, _depth, index) in captures {
-                    // First try to load from environment by index
-                    let value = if *index < env_borrowed.len() {
+                    // Load captured value
+                    // For LetBound variables, index is 0 (a placeholder) - we need to look up by symbol
+                    // For Upvalue/Local, we have a valid index into the parent environment
+                    let value = if *index == 0 {
+                        // This might be a LetBound variable - try scope stack first, then env[0]
+                        if let Some(val) = self.vm.scope_stack.get(sym.0) {
+                            val.clone()
+                        } else if let Some(val) = self.vm.globals.get(&sym.0) {
+                            val.clone()
+                        } else if !env_borrowed.is_empty() {
+                            env_borrowed[0].clone()
+                        } else {
+                            Value::Nil
+                        }
+                    } else if *index < env_borrowed.len() {
                         env_borrowed[*index].clone()
                     } else {
-                        // If index is out of bounds, try loading from globals by symbol
-                        if let Some(val) = self.vm.globals.get(&sym.0) {
+                        // Index out of bounds - try loading by symbol
+                        if let Some(val) = self.vm.scope_stack.get(sym.0) {
+                            val.clone()
+                        } else if let Some(val) = self.vm.globals.get(&sym.0) {
                             val.clone()
                         } else {
                             Value::Nil

@@ -39,19 +39,12 @@ fn optimize_length_zero_check(expr: &mut Expr, symbols: &SymbolTable) {
             }
 
             // Check for the pattern: (= (length x) 0) or (= 0 (length x))
-            let should_optimize = if let Expr::Var(var_ref) = func.as_ref() {
-                if let crate::binding::VarRef::Global { sym } = var_ref {
-                    if let Some("=") = symbols.name(*sym) {
-                        args.len() == 2
-                    } else {
-                        false
-                    }
+            let should_optimize =
+                if let Expr::Var(crate::binding::VarRef::Global { sym }) = func.as_ref() {
+                    matches!(symbols.name(*sym), Some("=")) && args.len() == 2
                 } else {
                     false
-                }
-            } else {
-                false
-            };
+                };
 
             if should_optimize {
                 // Try both orderings: (= (length x) 0) and (= 0 (length x))
@@ -165,23 +158,19 @@ fn try_optimize_length_zero(
 
     // Check if first arg is (length x)
     if let Expr::Call { func, args, .. } = maybe_length {
-        if let Expr::Var(var_ref) = func.as_ref() {
-            if let crate::binding::VarRef::Global { sym } = var_ref {
-                if let Some("length") = symbols.name(*sym) {
-                    if args.len() == 1 {
-                        // Found the pattern! Transform to (empty? x)
-                        let empty_sym = symbols.get("empty?").unwrap_or_else(|| {
-                            // This shouldn't happen in practice since empty? is a builtin
-                            panic!("empty? symbol not found in symbol table")
-                        });
+        if let Expr::Var(crate::binding::VarRef::Global { sym }) = func.as_ref() {
+            if matches!(symbols.name(*sym), Some("length")) && args.len() == 1 {
+                // Found the pattern! Transform to (empty? x)
+                let empty_sym = symbols.get("empty?").unwrap_or_else(|| {
+                    // This shouldn't happen in practice since empty? is a builtin
+                    panic!("empty? symbol not found in symbol table")
+                });
 
-                        return Some(Expr::Call {
-                            func: Box::new(Expr::Var(crate::binding::VarRef::global(empty_sym))),
-                            args: vec![args[0].clone()],
-                            tail: false,
-                        });
-                    }
-                }
+                return Some(Expr::Call {
+                    func: Box::new(Expr::Var(crate::binding::VarRef::global(empty_sym))),
+                    args: vec![args[0].clone()],
+                    tail: false,
+                });
             }
         }
     }

@@ -1138,28 +1138,45 @@ impl Compiler {
             // Emit captured values onto the stack (in order)
             // These will be stored in the closure's environment by the VM
             for capture_info in captures.iter() {
+                // Check if this is a locally-defined variable that hasn't been initialized yet
+                // (in the CURRENT lambda, not the enclosing lambda)
+                if let Some(_idx) = locals.iter().position(|s| *s == capture_info.sym) {
+                    // This is a forward reference - we need to create a cell that will be updated later
+                    // Push nil as a placeholder
+                    let nil_idx = self.bytecode.add_constant(Value::Nil);
+                    self.bytecode.emit(Instruction::LoadConst);
+                    self.bytecode.emit_u16(nil_idx);
+                    // Wrap in a cell so it can be updated later
+                    self.bytecode.emit(Instruction::MakeCell);
+                    continue;
+                }
+
                 // Find where this symbol lives in the current (enclosing) closure's environment
-                let env_index = if let Some(idx) = self
+                let (env_index, from_locals) = if let Some(idx) = self
                     .lambda_capture_syms
                     .iter()
                     .position(|s| *s == capture_info.sym)
                 {
                     // Found in enclosing lambda's captures
-                    idx
+                    (idx, false)
                 } else if let Some(idx) = self
                     .lambda_param_syms
                     .iter()
                     .position(|s| *s == capture_info.sym)
                 {
                     // Found in enclosing lambda's params
-                    self.lambda_captures_len + idx
+                    (self.lambda_captures_len + idx, false)
                 } else if let Some(idx) = self
                     .lambda_locals
                     .iter()
                     .position(|s| *s == capture_info.sym)
                 {
                     // Found in enclosing lambda's locally-defined variables
-                    self.lambda_captures_len + self.lambda_params_len + idx
+                    // Use LoadUpvalueRaw to capture the cell itself (for self-recursion)
+                    (
+                        self.lambda_captures_len + self.lambda_params_len + idx,
+                        true,
+                    )
                 } else {
                     // Not found in enclosing closure - use LoadGlobal
                     match &capture_info.source {
@@ -1168,7 +1185,11 @@ impl Compiler {
                             self.bytecode.emit(Instruction::LoadGlobal);
                             self.bytecode.emit_u16(sym_idx);
 
-                            if mutated_captures.contains(&capture_info.sym) {
+                            // Only create a new cell if this capture is mutated AND wasn't already
+                            // wrapped in a cell by the let binding (scope_mutated_vars contains it)
+                            if mutated_captures.contains(&capture_info.sym)
+                                && !self.scope_mutated_vars.contains(&capture_info.sym)
+                            {
                                 self.bytecode.emit(Instruction::MakeCell);
                             }
                             continue;
@@ -1176,17 +1197,26 @@ impl Compiler {
                         VarRef::Local { index } => {
                             // Local in enclosing scope - use the index directly
                             // (This handles locally-defined variables)
-                            self.lambda_captures_len + self.lambda_params_len + *index
+                            // Use LoadUpvalueRaw to capture the cell itself (for self-recursion)
+                            (
+                                self.lambda_captures_len + self.lambda_params_len + *index,
+                                true,
+                            )
                         }
                         _ => {
                             // Fallback - shouldn't happen
-                            0
+                            (0, false)
                         }
                     }
                 };
 
                 // Load from enclosing closure's environment
-                self.bytecode.emit(Instruction::LoadUpvalue);
+                if from_locals {
+                    // Use LoadUpvalueRaw to capture the cell itself (for self-recursion)
+                    self.bytecode.emit(Instruction::LoadUpvalueRaw);
+                } else {
+                    self.bytecode.emit(Instruction::LoadUpvalue);
+                }
                 self.bytecode.emit_byte(1);
                 self.bytecode.emit_byte(env_index as u8);
 

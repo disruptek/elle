@@ -117,7 +117,7 @@ impl<'a> CpsTransformer<'a> {
                     }
                     VarRef::LetBound { sym } => {
                         // Check if this let-bound variable is a CPS local (from let/for)
-                        if let Some(&index) = self.local_indices.get(&sym) {
+                        if let Some(&index) = self.local_indices.get(sym) {
                             CpsExpr::Var {
                                 sym: *sym,
                                 depth: 0,

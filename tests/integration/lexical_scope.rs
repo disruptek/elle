@@ -192,7 +192,6 @@ fn test_set_on_locally_defined_capture() {
 }
 
 #[test]
-#[ignore] // Known limitation: multiple closures sharing mutable captures
 fn test_multiple_closures_share_mutable_capture() {
     let code = r#"
         (let ((x 0))
@@ -204,7 +203,6 @@ fn test_multiple_closures_share_mutable_capture() {
 }
 
 #[test]
-#[ignore] // Known limitation: nested mutable captures with mixed scopes
 fn test_nested_mutable_captures() {
     let code = r#"
         (let ((x 0))
@@ -230,7 +228,6 @@ fn test_mutable_capture_across_lambda_levels() {
 }
 
 #[test]
-#[ignore] // Known limitation: multiple mutable captures across different closures
 fn test_multiple_mutable_captures() {
     let code = r#"
         (let ((x 0) (y 0))
@@ -247,7 +244,6 @@ fn test_multiple_mutable_captures() {
 // ============================================================================
 
 #[test]
-#[ignore] // Known limitation: coroutine captures from deeply nested let bindings
 fn test_coroutine_captures_from_nested_let() {
     let code = r#"
         (let ((x 10))
@@ -271,7 +267,6 @@ fn test_coroutine_captures_lambda_param() {
 }
 
 #[test]
-#[ignore] // Known limitation: coroutine captures across multiple lambda levels
 fn test_coroutine_captures_multiple_levels() {
     let code = r#"
         ((fn (a)
@@ -366,7 +361,6 @@ fn test_capture_in_conditional() {
 }
 
 #[test]
-#[ignore] // Known limitation: mutable capture in repeated function calls
 fn test_capture_in_loop_body() {
     let code = r#"
         (let ((x 0))
@@ -464,10 +458,9 @@ fn test_capture_with_define_in_lambda() {
 }
 
 #[test]
-#[ignore] // Known limitation: mutual recursion with captured let bindings
 fn test_mutual_recursion_with_captures() {
     let code = r#"
-        (let ((limit 3))
+        (let ((limit 4))
           (begin
             (define is-even (fn (n) (if (= n 0) #t (is-odd (- n 1)))))
             (define is-odd (fn (n) (if (= n 0) #f (is-even (- n 1)))))

@@ -103,17 +103,13 @@ fn collect_free_vars(
     free_vars: &mut HashSet<SymbolId>,
 ) {
     match expr {
-        Expr::Var(var_ref) => {
+        Expr::Var(VarRef::Upvalue { sym, .. } | VarRef::LetBound { sym }) => {
             // Upvalues and LetBound variables are free variables that need to be captured
-            match var_ref {
-                VarRef::Upvalue { sym, .. } | VarRef::LetBound { sym } => {
-                    if !local_bindings.contains(sym) {
-                        free_vars.insert(*sym);
-                    }
-                }
-                _ => {}
+            if !local_bindings.contains(sym) {
+                free_vars.insert(*sym);
             }
         }
+        Expr::Var(_) => {}
         Expr::If { cond, then, else_ } => {
             collect_free_vars(cond, local_bindings, free_vars);
             collect_free_vars(then, local_bindings, free_vars);

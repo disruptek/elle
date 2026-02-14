@@ -134,7 +134,7 @@ pub fn adjust_var_indices(
                     // For now, we assume the index is already correct for parameters
                     // (they're at positions 0..params.len()-1 in the scope).
                     // We adjust by adding captures.len() to account for the closure layout.
-                    *index = captures.len() + *index;
+                    *index += captures.len();
                 }
                 VarRef::LetBound { sym } => {
                     // If this let-bound variable is captured, convert to Upvalue
@@ -199,9 +199,33 @@ pub fn adjust_var_indices(
             }
             adjust_var_indices(body, captures, params, locals);
         }
-        Expr::Set { target: _, value } => {
-            // With VarRef, the target is already correctly resolved.
-            // No adjustment needed.
+        Expr::Set { target, value } => {
+            use crate::binding::VarRef;
+            // Adjust the target VarRef just like we do for Expr::Var
+            match target {
+                VarRef::Upvalue { sym, index, .. } => {
+                    if let Some(&cap_pos) = capture_map.get(sym) {
+                        *index = cap_pos;
+                    }
+                }
+                VarRef::Local { index } => {
+                    // Local variables need to be adjusted by adding captures.len()
+                    *index += captures.len();
+                }
+                VarRef::LetBound { sym } => {
+                    // If this let-bound variable is captured, convert to Upvalue
+                    if let Some(&cap_pos) = capture_map.get(sym) {
+                        *target = VarRef::Upvalue {
+                            sym: *sym,
+                            index: cap_pos,
+                            is_param: false,
+                        };
+                    }
+                }
+                VarRef::Global { .. } => {
+                    // Globals don't need adjustment
+                }
+            }
             adjust_var_indices(value, captures, params, locals);
         }
         Expr::While { cond, body } => {
@@ -248,6 +272,9 @@ pub fn adjust_var_indices(
         }
         Expr::DefMacro { body, .. } => {
             adjust_var_indices(body, captures, params, locals);
+        }
+        Expr::Yield(value) => {
+            adjust_var_indices(value, captures, params, locals);
         }
         // Literals, GlobalVar, etc. don't need adjustment
         _ => {}

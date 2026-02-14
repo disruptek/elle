@@ -1317,31 +1317,26 @@ impl ExprCompiler {
 
         // 1. Compile the function expression to get the closure value
         let callee_i64 = match func {
-            Expr::Var(var_ref) => {
-                if let crate::binding::VarRef::Global { sym } = var_ref {
-                    // Load global variable via runtime helper
-                    let helper_addr = ctx.builder.ins().iconst(
-                        types::I64,
-                        super::runtime_helpers::jit_load_global as *const () as usize as i64,
-                    );
+            Expr::Var(crate::binding::VarRef::Global { sym }) => {
+                // Load global variable via runtime helper
+                let helper_addr = ctx.builder.ins().iconst(
+                    types::I64,
+                    super::runtime_helpers::jit_load_global as *const () as usize as i64,
+                );
 
-                    // Create signature: fn(sym_id: i64) -> i64
-                    let mut sig = ctx.module.make_signature();
-                    sig.params.push(AbiParam::new(types::I64)); // sym_id
-                    sig.returns.push(AbiParam::new(types::I64)); // result
-                    let sig_ref = ctx.builder.import_signature(sig);
+                // Create signature: fn(sym_id: i64) -> i64
+                let mut sig = ctx.module.make_signature();
+                sig.params.push(AbiParam::new(types::I64)); // sym_id
+                sig.returns.push(AbiParam::new(types::I64)); // result
+                let sig_ref = ctx.builder.import_signature(sig);
 
-                    // Call jit_load_global
-                    let sym_id_val = ctx.builder.ins().iconst(types::I64, sym.0 as i64);
-                    let call = ctx
-                        .builder
-                        .ins()
-                        .call_indirect(sig_ref, helper_addr, &[sym_id_val]);
-                    ctx.builder.inst_results(call)[0]
-                } else {
-                    let callee_val = Self::compile_expr_block(ctx, func)?;
-                    Self::ir_value_to_i64(ctx.builder, callee_val)?
-                }
+                // Call jit_load_global
+                let sym_id_val = ctx.builder.ins().iconst(types::I64, sym.0 as i64);
+                let call = ctx
+                    .builder
+                    .ins()
+                    .call_indirect(sig_ref, helper_addr, &[sym_id_val]);
+                ctx.builder.inst_results(call)[0]
             }
             _ => {
                 let callee_val = Self::compile_expr_block(ctx, func)?;
