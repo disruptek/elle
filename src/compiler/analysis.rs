@@ -21,13 +21,19 @@ fn collect_used_captures(
     used: &mut HashSet<SymbolId>,
 ) {
     match expr {
-        Expr::Var(var_ref) => {
-            if let VarRef::Upvalue { sym, .. } = var_ref {
+        Expr::Var(var_ref) => match var_ref {
+            VarRef::Upvalue { sym, .. } => {
                 if candidates.contains(sym) {
                     used.insert(*sym);
                 }
             }
-        }
+            VarRef::LetBound { sym } => {
+                if candidates.contains(sym) {
+                    used.insert(*sym);
+                }
+            }
+            _ => {}
+        },
         Expr::If { cond, then, else_ } => {
             collect_used_captures(cond, candidates, used);
             collect_used_captures(then, candidates, used);
@@ -75,6 +81,9 @@ fn collect_used_captures(
         Expr::For { iter, body, .. } => {
             collect_used_captures(iter, candidates, used);
             collect_used_captures(body, candidates, used);
+        }
+        Expr::Yield(e) => {
+            collect_used_captures(e, candidates, used);
         }
         _ => {}
     }

@@ -115,7 +115,20 @@ impl<'a> CpsTransformer<'a> {
                             index: *index,
                         }
                     }
-                    VarRef::LetBound { sym } | VarRef::Global { sym } => CpsExpr::GlobalVar(*sym),
+                    VarRef::LetBound { sym } => {
+                        // Check if this let-bound variable is a CPS local (from let/for)
+                        if let Some(&index) = self.local_indices.get(&sym) {
+                            CpsExpr::Var {
+                                sym: *sym,
+                                depth: 0,
+                                index,
+                            }
+                        } else {
+                            // Not a CPS local - treat as global
+                            CpsExpr::GlobalVar(*sym)
+                        }
+                    }
+                    VarRef::Global { sym } => CpsExpr::GlobalVar(*sym),
                 }
             }
 
@@ -438,11 +451,17 @@ impl<'a> CpsTransformer<'a> {
             self.local_indices = saved_locals;
 
             // Convert captures from Vec<CaptureInfo> to Vec<(SymbolId, usize, usize)>
-            // The tuple format is (symbol, depth, index) - for CPS, we use placeholder values
+            // The tuple format is (symbol, depth, index) - extract from CaptureInfo.source
             let captures_tuple: Vec<(SymbolId, usize, usize)> = captures
                 .iter()
-                .enumerate()
-                .map(|(i, c)| (c.sym, 0, i))
+                .map(|c| {
+                    use crate::binding::VarRef;
+                    let index = match &c.source {
+                        VarRef::Local { index } | VarRef::Upvalue { index, .. } => *index,
+                        VarRef::LetBound { .. } | VarRef::Global { .. } => 0, // Will be loaded from globals
+                    };
+                    (c.sym, 0, index)
+                })
                 .collect();
 
             CpsExpr::Lambda {

@@ -98,7 +98,9 @@ pub fn convert_lambda(
                         VarRef::local(local_index)
                     } else {
                         // In enclosing closure - use upvalue
-                        VarRef::upvalue(*sym, local_index, true) // true = this is a param capture
+                        // Check if this is actually a parameter or a locally-defined variable
+                        let is_param = param_syms.contains(sym);
+                        VarRef::upvalue(*sym, local_index, is_param)
                     };
                     return CaptureInfo { sym: *sym, source };
                 }

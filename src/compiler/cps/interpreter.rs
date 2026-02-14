@@ -131,11 +131,34 @@ impl<'a> CpsInterpreter<'a> {
             }
 
             CpsExpr::GlobalVar(sym) => {
-                // Check globals
-                if let Some(val) = self.vm.globals.get(&sym.0) {
-                    Ok(Action::done(val.clone()))
+                // First check if this is a captured let-bound variable
+                // by looking in the closure environment
+                let env = self.env.borrow();
+                if !env.is_empty() {
+                    // If we have a closure environment, check if the variable might be captured
+                    // For now, we'll try to find it in the globals first, then fall back to checking
+                    // if it's a let-bound variable that should be in the scope stack
+                    drop(env);
+
+                    // Check globals
+                    if let Some(val) = self.vm.globals.get(&sym.0) {
+                        Ok(Action::done(val.clone()))
+                    } else {
+                        // Try to load from scope stack (for let-bound variables)
+                        if let Some(val) = self.vm.scope_stack.get(sym.0) {
+                            Ok(Action::done(val.clone()))
+                        } else {
+                            Err(format!("Undefined global: {:?}", sym))
+                        }
+                    }
                 } else {
-                    Err(format!("Undefined global: {:?}", sym))
+                    drop(env);
+                    // Check globals
+                    if let Some(val) = self.vm.globals.get(&sym.0) {
+                        Ok(Action::done(val.clone()))
+                    } else {
+                        Err(format!("Undefined global: {:?}", sym))
+                    }
                 }
             }
 
@@ -381,12 +404,19 @@ impl<'a> CpsInterpreter<'a> {
                 // Build closure env from captures
                 let env_borrowed = self.env.borrow();
                 let mut closure_env = Vec::with_capacity(*num_locals);
-                for (_sym, _depth, index) in captures {
-                    if *index < env_borrowed.len() {
-                        closure_env.push(env_borrowed[*index].clone());
+                for (sym, _depth, index) in captures {
+                    // First try to load from environment by index
+                    let value = if *index < env_borrowed.len() {
+                        env_borrowed[*index].clone()
                     } else {
-                        closure_env.push(Value::Nil);
-                    }
+                        // If index is out of bounds, try loading from globals by symbol
+                        if let Some(val) = self.vm.globals.get(&sym.0) {
+                            val.clone()
+                        } else {
+                            Value::Nil
+                        }
+                    };
+                    closure_env.push(value);
                 }
                 drop(env_borrowed);
 
@@ -681,20 +711,33 @@ impl<'a> CpsInterpreter<'a> {
                 num_locals,
                 ..
             } => {
-                let num_captures = captures.len();
                 // Compile the lambda to bytecode
                 use crate::compiler::compile::compile_lambda_to_closure;
                 use crate::compiler::effects::Effect;
 
-                // Build capture values from current environment
+                // Build capture values using the source information from CaptureInfo
                 let env_borrowed = self.env.borrow();
                 let mut capture_values = Vec::new();
-                for i in 0..num_captures {
-                    if i < env_borrowed.len() {
-                        capture_values.push(env_borrowed[i].clone());
-                    } else {
-                        capture_values.push(Value::Nil);
-                    }
+                for capture_info in captures.iter() {
+                    use crate::binding::VarRef;
+                    let value = match &capture_info.source {
+                        VarRef::Local { index } | VarRef::Upvalue { index, .. } => {
+                            if *index < env_borrowed.len() {
+                                env_borrowed[*index].clone()
+                            } else {
+                                Value::Nil
+                            }
+                        }
+                        VarRef::LetBound { sym } | VarRef::Global { sym } => {
+                            // Look up in globals
+                            if let Some(val) = self.vm.globals.get(&sym.0) {
+                                val.clone()
+                            } else {
+                                Value::Nil
+                            }
+                        }
+                    };
+                    capture_values.push(value);
                 }
                 drop(env_borrowed);
 

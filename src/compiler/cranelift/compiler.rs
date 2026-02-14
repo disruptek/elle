@@ -147,7 +147,8 @@ impl ExprCompiler {
             Expr::Literal(val) => Self::compile_literal(ctx, val),
             Expr::Var(var_ref) => match var_ref {
                 VarRef::Local { index } | VarRef::Upvalue { index, .. } => {
-                    Self::compile_var(ctx, crate::value::SymbolId(0), 0, *index)
+                    let depth = ctx.scope_manager.current_depth();
+                    Self::compile_var(ctx, crate::value::SymbolId(0), depth, *index)
                 }
                 VarRef::LetBound { sym } | VarRef::Global { sym } => {
                     Self::compile_var(ctx, *sym, 0, 0)
@@ -155,7 +156,8 @@ impl ExprCompiler {
             },
             Expr::Set { target, value } => match target {
                 VarRef::Local { index } | VarRef::Upvalue { index, .. } => {
-                    Self::compile_set(ctx, crate::value::SymbolId(0), 0, *index, value)
+                    let depth = ctx.scope_manager.current_depth();
+                    Self::compile_set(ctx, crate::value::SymbolId(0), depth, *index, value)
                 }
                 VarRef::LetBound { sym } | VarRef::Global { sym } => {
                     Self::compile_set(ctx, *sym, 0, 0, value)
