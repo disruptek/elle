@@ -1,7 +1,7 @@
 mod utils;
 
 use super::analysis::analyze_mutated_vars;
-use super::ast::Expr;
+use super::ast::{CaptureInfo, Expr};
 use super::bytecode::{Bytecode, Instruction};
 use super::effects::EffectContext;
 use crate::binding::VarRef;
@@ -111,10 +111,9 @@ impl Compiler {
                 params,
                 body,
                 captures,
-                num_captures,
                 num_locals,
             } => {
-                self.compile_lambda(params, body, captures, *num_captures, *num_locals);
+                self.compile_lambda(params, body, captures, *num_locals);
             }
 
             Expr::Let { bindings, body } => {
@@ -1009,10 +1008,10 @@ impl Compiler {
         &mut self,
         params: &[SymbolId],
         body: &Expr,
-        captures: &[SymbolId],
-        num_captures: usize,
+        captures: &[CaptureInfo],
         num_locals: usize,
     ) {
+        let num_captures = captures.len();
         // Phase 4: Locally-defined variables are now part of the closure environment
         // The closure environment layout is: [captures..., parameters..., locals...]
         // Each local is pre-allocated as a cell in the environment
@@ -1046,7 +1045,7 @@ impl Compiler {
         let source_ast = Some(Rc::new(crate::value::JitLambda {
             params: params.to_vec(),
             body: Box::new(body.clone()),
-            captures: captures.to_vec(),
+            captures: captures.iter().map(|c| c.sym).collect(),
             effect,
         }));
 
@@ -1080,22 +1079,47 @@ impl Compiler {
             let mutated_vars = analyze_mutated_vars(body);
             let mutated_captures: HashSet<SymbolId> = captures
                 .iter()
-                .copied()
+                .map(|c| c.sym)
                 .filter(|sym| mutated_vars.contains(sym))
                 .collect();
 
             // Emit captured values onto the stack (in order)
             // These will be stored in the closure's environment by the VM
-            for sym in captures.iter() {
-                // Captures are loaded at closure creation time
-                // Use LoadGlobal which checks scope stack first, then globals
-                // This handles both let-bound variables and closure captures
-                let idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                self.bytecode.emit(Instruction::LoadGlobal);
-                self.bytecode.emit_u16(idx);
+            for capture_info in captures.iter() {
+                // Load the captured variable from its source location
+                match &capture_info.source {
+                    VarRef::Local { index } => {
+                        // Load from current frame's local
+                        self.bytecode.emit(Instruction::LoadLocal);
+                        self.bytecode.emit_byte(*index as u8);
+                    }
+                    VarRef::Upvalue {
+                        index, is_param, ..
+                    } => {
+                        // Load from enclosing closure's environment
+                        // If is_param is true, the index is the param position and we need to
+                        // add the enclosing lambda's capture count to get the actual env index.
+                        // self.lambda_captures_len is our current lambda's captures, which equals
+                        // the enclosing lambda's capture count (since we're compiling within it).
+                        let adjusted_index = if *is_param {
+                            self.lambda_captures_len + *index
+                        } else {
+                            *index
+                        };
+                        self.bytecode.emit(Instruction::LoadUpvalue);
+                        self.bytecode.emit_byte(1);
+                        self.bytecode.emit_byte(adjusted_index as u8);
+                    }
+                    VarRef::LetBound { sym } | VarRef::Global { sym } => {
+                        // Load from globals/scope stack
+                        let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                        self.bytecode.emit(Instruction::LoadGlobal);
+                        self.bytecode.emit_u16(sym_idx);
+                    }
+                }
 
                 // If this variable is mutated in the lambda body, wrap it in a cell
-                if mutated_captures.contains(sym) {
+                if mutated_captures.contains(&capture_info.sym) {
                     self.bytecode.emit(Instruction::MakeCell);
                 }
             }
@@ -1229,12 +1253,12 @@ pub fn compile_with_metadata(
 pub fn compile_lambda_to_closure(
     params: &[SymbolId],
     body: &Expr,
-    captures: &[SymbolId],
-    num_captures: usize,
+    captures: &[CaptureInfo],
     num_locals: usize,
     capture_values: Vec<Value>,
     effect: crate::compiler::effects::Effect,
 ) -> Result<Closure, String> {
+    let num_captures = captures.len();
     // Create a compiler for the lambda body
     let mut lambda_compiler = Compiler::new();
     lambda_compiler.scope_depth = 0;
@@ -1252,7 +1276,7 @@ pub fn compile_lambda_to_closure(
     let source_ast = Some(Rc::new(crate::value::JitLambda {
         params: params.to_vec(),
         body: Box::new(body.clone()),
-        captures: captures.to_vec(),
+        captures: captures.iter().map(|c| c.sym).collect(),
         effect,
     }));
 
@@ -1290,7 +1314,6 @@ mod tests {
             params: params.clone(),
             body: body.clone(),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
 
@@ -1317,7 +1340,6 @@ mod tests {
             params: params.clone(),
             body: body.clone(),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
 
@@ -1336,7 +1358,6 @@ mod tests {
             params: params.clone(),
             body: body.clone(),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
 
@@ -1364,13 +1385,15 @@ mod tests {
             body: Box::new(Expr::Call {
                 func: Box::new(Expr::Var(VarRef::global(plus_sym))),
                 args: vec![
-                    Expr::Var(VarRef::upvalue(x_sym, 0)), // x from outer scope
-                    Expr::Var(VarRef::local(0)),          // y from inner scope
+                    Expr::Var(VarRef::upvalue(x_sym, 0, false)), // x from outer scope
+                    Expr::Var(VarRef::local(0)),                 // y from inner scope
                 ],
                 tail: false,
             }),
-            captures: vec![x_sym],
-            num_captures: 1,
+            captures: vec![CaptureInfo {
+                sym: x_sym,
+                source: VarRef::local(0), // x is local in outer scope
+            }],
             num_locals: 2,
         };
 
@@ -1378,7 +1401,6 @@ mod tests {
             params: vec![x_sym],
             body: Box::new(inner_lambda),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
 
@@ -1409,7 +1431,6 @@ mod tests {
             params: vec![x_sym],
             body,
             captures: vec![],
-            num_captures: 0,
             num_locals: 2,
         };
 
@@ -1433,7 +1454,6 @@ mod tests {
                 tail: false,
             }),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
 
@@ -1483,7 +1503,6 @@ mod tests {
                 tail: false,
             }),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
 
@@ -1521,7 +1540,6 @@ mod tests {
                 tail: false,
             }),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
 
@@ -1562,13 +1580,15 @@ mod tests {
             body: Box::new(Expr::Call {
                 func: Box::new(Expr::Var(VarRef::global(plus_sym))),
                 args: vec![
-                    Expr::Var(VarRef::upvalue(x_sym, 0)), // x from outer scope
-                    Expr::Var(VarRef::local(0)),          // y from this scope
+                    Expr::Var(VarRef::upvalue(x_sym, 0, false)), // x from outer scope
+                    Expr::Var(VarRef::local(0)),                 // y from this scope
                 ],
                 tail: false,
             }),
-            captures: vec![x_sym],
-            num_captures: 1,
+            captures: vec![CaptureInfo {
+                sym: x_sym,
+                source: VarRef::global(x_sym), // x from outer scope (simulated as global for test)
+            }],
             num_locals: 2,
         };
 
@@ -1613,7 +1633,6 @@ mod tests {
                 },
             ])),
             captures: vec![],
-            num_captures: 0,
             num_locals: 2,
         };
 

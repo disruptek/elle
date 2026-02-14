@@ -431,7 +431,6 @@ mod tests {
             params: vec![],
             body: Box::new(Expr::Literal(Value::Int(1))),
             captures: vec![],
-            num_captures: 0,
             num_locals: 0,
         };
         assert!(!is_jit_compilable(&expr));

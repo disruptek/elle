@@ -127,10 +127,15 @@ fn collect_free_vars(
                 collect_free_vars(arg, local_bindings, free_vars);
             }
         }
-        Expr::Lambda { body, .. } => {
-            // Don't recurse into nested lambdas - they have their own captures
-            // But we do need to check the body for upvalues
-            collect_free_vars(body, local_bindings, free_vars);
+        Expr::Lambda { captures, .. } => {
+            // Nested lambdas have their own captures already computed.
+            // We need to propagate those captures as free variables of THIS scope
+            // (unless they're already local to this scope).
+            for capture_info in captures {
+                if !local_bindings.contains(&capture_info.sym) {
+                    free_vars.insert(capture_info.sym);
+                }
+            }
         }
         Expr::Let { bindings, body } | Expr::Letrec { bindings, body } => {
             for (_, expr) in bindings {

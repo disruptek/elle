@@ -79,7 +79,6 @@ fn test_nested_lambda_variable_scope() {
                     params: inner_params,
                     body: inner_body,
                     captures: _,
-                    num_captures: _,
                     num_locals: _,
                 } => {
                     assert_eq!(inner_params.len(), 1); // (y)

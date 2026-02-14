@@ -6,7 +6,7 @@
 
 use super::{Continuation, CpsExpr};
 use crate::binding::VarRef;
-use crate::compiler::ast::Expr;
+use crate::compiler::ast::{CaptureInfo, Expr};
 use crate::compiler::effects::{Effect, EffectContext};
 use crate::value::{SymbolId, Value};
 use std::collections::HashMap;
@@ -153,9 +153,8 @@ impl<'a> CpsTransformer<'a> {
                 params,
                 body,
                 captures,
-                num_captures,
                 num_locals,
-            } => self.transform_lambda(params, body, captures, *num_captures, *num_locals, cont),
+            } => self.transform_lambda(params, body, captures, *num_locals, cont),
 
             // Internal define - treat like a let binding
             Expr::Define { name, value } => self.transform_define(*name, value, cont),
@@ -396,11 +395,11 @@ impl<'a> CpsTransformer<'a> {
         &mut self,
         params: &[SymbolId],
         body: &Expr,
-        captures: &[SymbolId],
-        num_captures: usize,
+        captures: &[CaptureInfo],
         num_locals: usize,
         cont: Rc<Continuation>,
     ) -> CpsExpr {
+        let num_captures = captures.len();
         let body_effect = self.effect_ctx.infer(body);
 
         if body_effect.is_pure() {
@@ -411,7 +410,6 @@ impl<'a> CpsTransformer<'a> {
                     params: params.to_vec(),
                     body: Box::new(body.clone()),
                     captures: captures.to_vec(),
-                    num_captures,
                     num_locals,
                 },
                 continuation: cont,
@@ -437,12 +435,12 @@ impl<'a> CpsTransformer<'a> {
             self.next_local_index = saved_index;
             self.local_indices = saved_locals;
 
-            // Convert captures from Vec<SymbolId> to Vec<(SymbolId, usize, usize)>
+            // Convert captures from Vec<CaptureInfo> to Vec<(SymbolId, usize, usize)>
             // The tuple format is (symbol, depth, index) - for CPS, we use placeholder values
             let captures_tuple: Vec<(SymbolId, usize, usize)> = captures
                 .iter()
                 .enumerate()
-                .map(|(i, sym)| (*sym, 0, i))
+                .map(|(i, c)| (c.sym, 0, i))
                 .collect();
 
             CpsExpr::Lambda {

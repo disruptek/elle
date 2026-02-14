@@ -2,6 +2,13 @@ use crate::binding::VarRef;
 use crate::reader::SourceLoc;
 use crate::value::{SymbolId, Value};
 
+/// Information about a captured variable, including where to find it
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaptureInfo {
+    pub sym: SymbolId,
+    pub source: VarRef,
+}
+
 /// AST representation after macro expansion and analysis
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprWithLoc {
@@ -61,9 +68,8 @@ pub enum Expr {
     Lambda {
         params: Vec<SymbolId>,
         body: Box<Expr>,
-        captures: Vec<SymbolId>, // Just the symbol IDs of captured variables
-        num_captures: usize,     // Number of captures (for env layout)
-        num_locals: usize,       // Total slots needed: captures + params + locals
+        captures: Vec<CaptureInfo>,
+        num_locals: usize,
     },
 
     /// Let binding

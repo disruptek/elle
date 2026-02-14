@@ -678,9 +678,9 @@ impl<'a> CpsInterpreter<'a> {
                 params,
                 body,
                 captures,
-                num_captures,
                 num_locals,
             } => {
+                let num_captures = captures.len();
                 // Compile the lambda to bytecode
                 use crate::compiler::compile::compile_lambda_to_closure;
                 use crate::compiler::effects::Effect;
@@ -688,7 +688,7 @@ impl<'a> CpsInterpreter<'a> {
                 // Build capture values from current environment
                 let env_borrowed = self.env.borrow();
                 let mut capture_values = Vec::new();
-                for i in 0..*num_captures {
+                for i in 0..num_captures {
                     if i < env_borrowed.len() {
                         capture_values.push(env_borrowed[i].clone());
                     } else {
@@ -702,7 +702,6 @@ impl<'a> CpsInterpreter<'a> {
                     params,
                     body,
                     captures,
-                    *num_captures,
                     *num_locals,
                     capture_values,
                     Effect::Pure,

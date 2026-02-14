@@ -55,7 +55,7 @@ pub fn value_to_expr_with_scope(
 
                         if has_intervening_lambda {
                             // Inside a lambda that needs to capture this variable
-                            return Ok(Expr::Var(VarRef::upvalue(*id, local_index)));
+                            return Ok(Expr::Var(VarRef::upvalue(*id, local_index, false)));
                         } else {
                             // Direct access to let-bound variable - use symbol for scope stack lookup
                             return Ok(Expr::Var(VarRef::let_bound(*id)));
@@ -67,7 +67,7 @@ pub fn value_to_expr_with_scope(
                             return Ok(Expr::Var(VarRef::local(local_index)));
                         } else {
                             // Outer lambda's scope - needs capture
-                            return Ok(Expr::Var(VarRef::upvalue(*id, local_index)));
+                            return Ok(Expr::Var(VarRef::upvalue(*id, local_index, false)));
                         }
                     }
                 }
@@ -584,7 +584,7 @@ fn lookup_var_for_set(var: crate::value::SymbolId, scope_stack: &[ScopeEntry]) -
 
                 if has_intervening_lambda {
                     // Inside a lambda that captures this variable
-                    return VarRef::upvalue(var, local_index);
+                    return VarRef::upvalue(var, local_index, false);
                 } else {
                     // Direct access to let-bound variable
                     return VarRef::let_bound(var);
@@ -595,7 +595,7 @@ fn lookup_var_for_set(var: crate::value::SymbolId, scope_stack: &[ScopeEntry]) -
                 if depth == 0 {
                     return VarRef::local(local_index);
                 } else {
-                    return VarRef::upvalue(var, local_index);
+                    return VarRef::upvalue(var, local_index, false);
                 }
             }
         }

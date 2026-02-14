@@ -19,7 +19,11 @@ pub enum VarRef {
     /// Captured variable from enclosing closure
     /// sym is the original symbol (used during index adjustment)
     /// index is offset in closure's captures array (set during adjust_var_indices)
-    Upvalue { sym: SymbolId, index: usize },
+    Upvalue {
+        sym: SymbolId,
+        index: usize,
+        is_param: bool,
+    },
 
     /// Global/top-level binding
     /// sym is used for runtime lookup in globals HashMap
@@ -49,8 +53,12 @@ impl VarRef {
 
     /// Create an upvalue (captured) variable reference
     /// The index is a placeholder that will be adjusted later during capture resolution
-    pub fn upvalue(sym: SymbolId, index: usize) -> Self {
-        VarRef::Upvalue { sym, index }
+    pub fn upvalue(sym: SymbolId, index: usize, is_param: bool) -> Self {
+        VarRef::Upvalue {
+            sym,
+            index,
+            is_param,
+        }
     }
 
     /// Create a global variable reference
@@ -107,11 +115,18 @@ mod tests {
     #[test]
     fn test_varref_upvalue() {
         let sym = SymbolId(5);
-        let v = VarRef::upvalue(sym, 3);
+        let v = VarRef::upvalue(sym, 3, false);
         assert!(!v.is_local());
         assert!(v.is_upvalue());
         assert!(!v.is_global());
-        assert_eq!(v, VarRef::Upvalue { sym, index: 3 });
+        assert_eq!(
+            v,
+            VarRef::Upvalue {
+                sym,
+                index: 3,
+                is_param: false
+            }
+        );
     }
 
     #[test]

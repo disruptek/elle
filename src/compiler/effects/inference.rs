@@ -391,7 +391,6 @@ mod tests {
             params: vec![crate::value::SymbolId(1)],
             body: Box::new(Expr::Literal(Value::Int(42))),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
         // Lambda expression itself is pure (the effect is stored in the closure)
@@ -435,7 +434,6 @@ mod tests {
                     params: vec![x_sym],
                     body: Box::new(Expr::Literal(Value::Int(1))),
                     captures: vec![],
-                    num_captures: 0,
                     num_locals: 1,
                 },
                 Expr::Literal(Value::Nil),
@@ -490,7 +488,6 @@ mod tests {
                         tail: false,
                     }),
                     captures: vec![],
-                    num_captures: 0,
                     num_locals: 1,
                 },
                 Expr::Literal(Value::Nil),
@@ -607,7 +604,6 @@ mod tests {
             params: vec![x_sym],
             body: Box::new(Expr::Literal(Value::Int(42))),
             captures: vec![],
-            num_captures: 0,
             num_locals: 1,
         };
         assert_eq!(ctx.infer_arg_effect(&arg), Effect::Pure);

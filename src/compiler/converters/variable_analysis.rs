@@ -113,7 +113,7 @@ pub fn adjust_var_indices(
             // Adjust VarRef indices based on the closure environment layout.
             // The closure environment is [captures..., parameters..., locals...]
             match varref {
-                VarRef::Upvalue { sym, index } => {
+                VarRef::Upvalue { sym, index, .. } => {
                     // Upvalues need to be mapped to their position in the captures array.
                     // Look up the symbol in the capture map to get the correct index.
                     if let Some(&cap_pos) = capture_map.get(sym) {

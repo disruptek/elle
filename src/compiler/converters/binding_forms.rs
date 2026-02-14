@@ -1,7 +1,9 @@
 use super::super::analysis::{analyze_capture_usage, analyze_free_vars};
+use super::super::ast::CaptureInfo;
 use super::super::ast::Expr;
 use super::variable_analysis::{adjust_var_indices, pre_register_defines};
 use super::{ScopeEntry, ScopeType};
+use crate::binding::VarRef;
 use crate::symbol::SymbolTable;
 use crate::value::{SymbolId, Value};
 use std::collections::HashSet;
@@ -81,29 +83,31 @@ pub fn convert_lambda(
     let mut sorted_free_vars: Vec<_> = free_vars.iter().copied().collect();
     sorted_free_vars.sort(); // Deterministic ordering
 
-    // Sentinel value for let-bound variables that need to be captured from scope stack
-    const SCOPE_CAPTURE: usize = usize::MAX - 1;
-
-    let captures: Vec<_> = sorted_free_vars
+    let captures: Vec<CaptureInfo> = sorted_free_vars
         .iter()
         .map(|sym| {
-            // Look up in scope stack to determine if global or local
-            for (reverse_idx, scope_entry) in scope_stack.iter().enumerate().rev() {
+            // Look up in scope stack to determine source VarRef
+            let current_scope_idx = scope_stack.len() - 1;
+            for (scope_idx, scope_entry) in scope_stack.iter().enumerate() {
                 if let Some(local_index) = scope_entry.symbols.iter().position(|s| s == sym) {
-                    // Check if this is a Let scope or Function scope
-                    if scope_entry.scope_type == ScopeType::Let {
-                        // Let-bound variables need to be captured from runtime scope stack
-                        // Use SCOPE_CAPTURE sentinel to indicate this
-                        return (*sym, 0, SCOPE_CAPTURE);
+                    let source = if scope_entry.scope_type == ScopeType::Let {
+                        // Let-bound variable - needs runtime scope stack lookup
+                        VarRef::let_bound(*sym)
+                    } else if scope_idx == current_scope_idx {
+                        // In current frame (shouldn't happen for captures, but handle it)
+                        VarRef::local(local_index)
                     } else {
-                        // Function scope - use closure environment
-                        let depth = scope_stack.len() - 1 - reverse_idx;
-                        return (*sym, depth, local_index);
-                    }
+                        // In enclosing closure - use upvalue
+                        VarRef::upvalue(*sym, local_index, true) // true = this is a param capture
+                    };
+                    return CaptureInfo { sym: *sym, source };
                 }
             }
             // If not found in scope stack, it's a global variable
-            (*sym, 0, usize::MAX)
+            CaptureInfo {
+                sym: *sym,
+                source: VarRef::global(*sym),
+            }
         })
         .collect();
 
@@ -111,33 +115,34 @@ pub fn convert_lambda(
     scope_stack.pop();
 
     // Dead capture elimination: filter out captures that aren't actually used in the body
-    let candidates: HashSet<SymbolId> = captures.iter().map(|(sym, _, _)| *sym).collect();
+    let candidates: HashSet<SymbolId> = captures.iter().map(|c| c.sym).collect();
     let actually_used = analyze_capture_usage(&body, &local_bindings, &candidates);
-    let captures: Vec<_> = captures
+    let captures: Vec<CaptureInfo> = captures
         .into_iter()
-        .filter(|(sym, _, _)| actually_used.contains(sym))
+        .filter(|c| actually_used.contains(&c.sym))
         .collect();
 
     // Adjust variable indices in body to account for closure environment layout
     // The closure environment is [captures..., parameters..., locals...]
     let mut adjusted_body = body;
+    let capture_tuples: Vec<(SymbolId, usize, usize)> = captures
+        .iter()
+        .enumerate()
+        .map(|(i, c)| (c.sym, 0, i))
+        .collect();
     adjust_var_indices(
         &mut adjusted_body,
-        &captures,
+        &capture_tuples,
         &param_syms,
         &locally_defined_vars,
     );
 
-    // Extract just the symbol IDs from captures
-    let capture_syms: Vec<SymbolId> = captures.iter().map(|(sym, _, _)| *sym).collect();
-    let num_captures = capture_syms.len();
-    let num_locals = num_captures + param_syms.len() + locally_defined_vars.len();
+    let num_locals = captures.len() + param_syms.len() + locally_defined_vars.len();
 
     Ok(Expr::Lambda {
         params: param_syms,
         body: adjusted_body,
-        captures: capture_syms,
-        num_captures,
+        captures,
         num_locals,
     })
 }

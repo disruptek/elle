@@ -66,7 +66,6 @@ pub fn convert_match_expr(
                         params: pattern_vars,
                         body: Box::new(body_expr),
                         captures: Vec::new(),
-                        num_captures: 0,
                         num_locals: num_vars,
                     }
                 } else {
