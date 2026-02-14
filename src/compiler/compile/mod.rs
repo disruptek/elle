@@ -1113,6 +1113,13 @@ impl Compiler {
                 {
                     // Found in enclosing lambda's params
                     self.lambda_captures_len + idx
+                } else if let Some(idx) = self
+                    .lambda_locals
+                    .iter()
+                    .position(|s| *s == capture_info.sym)
+                {
+                    // Found in enclosing lambda's locally-defined variables
+                    self.lambda_captures_len + self.lambda_params_len + idx
                 } else {
                     // Not found in enclosing closure - use LoadGlobal
                     match &capture_info.source {

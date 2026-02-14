@@ -219,13 +219,19 @@ pub fn analyze_mutated_vars(expr: &Expr) -> HashSet<SymbolId> {
     let mut mutated = HashSet::new();
 
     match expr {
-        Expr::Set { target, .. } => {
-            // Extract symbol from target if it's global
-            if let VarRef::Global { sym } = target {
-                mutated.insert(*sym);
+        Expr::Set { target, value } => {
+            // Extract symbol from target VarRef
+            match target {
+                VarRef::Global { sym } | VarRef::LetBound { sym } | VarRef::Upvalue { sym, .. } => {
+                    mutated.insert(*sym);
+                }
+                VarRef::Local { .. } => {
+                    // Local mutations don't need tracking for captures
+                    // (they're parameters, not captured variables)
+                }
             }
-            // For local/upvalue, we don't have the symbol directly
-            // The mutation tracking should happen at parse time
+            // Also analyze the value expression
+            mutated.extend(analyze_mutated_vars(value));
         }
 
         Expr::If { cond, then, else_ } => {
