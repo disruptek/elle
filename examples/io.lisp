@@ -5,40 +5,7 @@
 ;; Note: Uses relative paths (./elle_example_*) to work in any environment,
 ;; including CI systems.
 
-;;; ============================================================================
-; Load shared assertions library
-;;; ============================================================================
-(define assert-equal
-  (fn (actual expected label)
-    (if (= actual expected)
-      (begin
-        (display "[PASS] ")
-        (display label)
-        (newline)
-        #t)
-      (begin
-        (display "[FAIL] ")
-        (display label)
-        (display " - Expected: ")
-        (display expected)
-        (display ", Got: ")
-        (display actual)
-        (newline)
-        #f))))
-
-(define assert-true
-  (fn (value label)
-    (if value
-      (begin
-        (display "[PASS] ")
-        (display label)
-        (newline)
-        #t)
-      (begin
-        (display "[FAIL] ")
-        (display label)
-        (newline)
-        #f))))
+(import-file "./examples/assertions.lisp")
 
 (begin
   ;; Cleanup from previous runs

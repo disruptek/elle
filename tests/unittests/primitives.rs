@@ -1301,6 +1301,7 @@ fn test_import_file_with_valid_file() {
 
     // Set VM context for file loading
     ffi_primitives::set_vm_context(&mut vm as *mut VM);
+    ffi_primitives::set_symbol_table(&mut symbols as *mut SymbolTable);
 
     // Test loading an existing file
     let import_file = get_primitive(&vm, &mut symbols, "import-file");
@@ -1350,6 +1351,7 @@ fn test_import_file_circular_dependency_prevention() {
 
     // Set VM context
     ffi_primitives::set_vm_context(&mut vm as *mut VM);
+    ffi_primitives::set_symbol_table(&mut symbols as *mut SymbolTable);
 
     let import_file = get_primitive(&vm, &mut symbols, "import-file");
 

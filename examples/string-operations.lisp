@@ -1,34 +1,6 @@
 ; String operations examples
 
-; Load shared assertions library
-; Load shared assertions library
-(define assert-eq (fn (actual expected msg)
-  "Assert that actual equals expected"
-  (if (= actual expected)
-      #t
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display "\n  Expected: ")
-        (display expected)
-        (display "\n  Actual: ")
-        (display actual)
-        (display "\n")
-        (exit 1)))))
-
-(define assert-string-eq (fn (actual expected msg)
-  "Assert that two strings are equal"
-  (if (= actual expected)
-      #t
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display "\n  Expected: ")
-        (display expected)
-        (display "\n  Actual: ")
-        (display actual)
-        (display "\n")
-        (exit 1)))))
+(import-file "./examples/assertions.lisp")
 
 ; string-split: Split string on delimiter
 (display "=== string-split ===")

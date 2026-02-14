@@ -13,20 +13,7 @@
 ; ->> (thread-last): Inserts the value as the LAST argument to each form
 ; Example: (->> 5 (+ 10) (* 2)) expands to (* 2 (+ 10 5)) = 30
 
-; Load shared assertions library
-; Load shared assertions library
-(define assert-eq (fn (actual expected msg)
-  (if (= actual expected)
-      #t
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display "\n  Expected: ")
-        (display expected)
-        (display "\n  Actual: ")
-        (display actual)
-        (display "\n")
-        (exit 1)))))
+(import-file "./examples/assertions.lisp")
 
 (define demo-thread-first
   (fn ()

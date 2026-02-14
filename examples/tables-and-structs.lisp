@@ -1,48 +1,6 @@
 ; Tables and Structs Example
 
-; Load shared assertions library
-; Load shared assertions library
-(define assert-eq (fn (actual expected msg)
-  (if (= actual expected)
-    (begin
-      (display "[PASS] ")
-      (display msg)
-      (newline))
-    (begin
-      (display "[FAIL] ")
-      (display msg)
-      (display " - Expected: ")
-      (display expected)
-      (display ", Got: ")
-      (display actual)
-      (newline)
-      (exit 1)))))
-
-(define assert-true (fn (val msg)
-  (if val
-    (begin
-      (display "[PASS] ")
-      (display msg)
-      (newline))
-    (begin
-      (display "[FAIL] ")
-      (display msg)
-      (display " - Expected true, got false")
-      (newline)
-      (exit 1)))))
-
-(define assert-false (fn (val msg)
-  (if (not val)
-    (begin
-      (display "[PASS] ")
-      (display msg)
-      (newline))
-    (begin
-      (display "[FAIL] ")
-      (display msg)
-      (display " - Expected false, got true")
-      (newline)
-      (exit 1)))))
+(import-file "./examples/assertions.lisp")
 
 (display "=== Testing Tables (Mutable Hash Maps) ===")
 (newline)

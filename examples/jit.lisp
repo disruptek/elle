@@ -1,6 +1,8 @@
 ;; JIT Compilation Examples
 ;; Demonstrates on-demand JIT compilation and each loops with JIT support
 
+(import-file "./examples/assertions.lisp")
+
 ;; ============================================================================
 ;; PART 1: JIT Compilation Basics
 ;; ============================================================================
@@ -30,20 +32,6 @@
 ;; ============================================================================
 ;; PART 2: Each Loops with JIT Compilation Support
 ;; ============================================================================
-
-; Load shared assertions library
-(define assert-eq (fn (actual expected msg)
-  (if (= actual expected)
-      #t
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display "\n  Expected: ")
-        (display expected)
-        (display "\n  Actual: ")
-        (display actual)
-        (display "\n")
-        (exit 1)))))
 
 (display "\n=== Each Loops with JIT Support ===")
 (newline)

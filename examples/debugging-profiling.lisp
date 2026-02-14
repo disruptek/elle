@@ -7,29 +7,7 @@
 ; - Identifying performance characteristics
 ; - Assertions verifying tools work
 
-; === Helper for assertions ===
-(define assert-eq (fn (actual expected msg)
-  (let ((matches
-    (if (symbol? expected)
-        (eq? actual expected)
-        (= actual expected))))
-    (if matches
-        #t
-        (begin
-          (display "FAIL: ")
-          (display msg)
-          (display "\n  Expected: ")
-          (display expected)
-          (display "\n  Actual: ")
-          (display actual)
-          (display "\n")
-          (exit 1))))))
-
-(define assert-true (fn (val msg)
-  (assert-eq val #t msg)))
-
-(define assert-false (fn (val msg)
-  (assert-eq val #f msg)))
+(import-file "./examples/assertions.lisp")
 
 ; ========================================
 ; 1. debug-print: Debug output

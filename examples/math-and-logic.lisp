@@ -1,37 +1,6 @@
 ; Math and Logic Operations - Comprehensive guide covering arithmetic, math functions, predicates, and logical operations
 
-; Load shared assertions library
-(define assert-eq (fn (actual expected msg)
-  "Assert that actual equals expected (using = for numbers, eq? for symbols)"
-  (let ((matches
-    (if (symbol? expected)
-        (eq? actual expected)
-        (= actual expected))))
-    (if matches
-        #t
-        (begin
-          (display "FAIL: ")
-          (display msg)
-          (display "\n  Expected: ")
-          (display expected)
-          (display "\n  Actual: ")
-          (display actual)
-          (display "\n")
-          (exit 1))))))
-
-(define assert-true (fn (val msg)
-  "Assert that val is #t"
-  (if val
-      #t
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (newline)
-        (exit 1)))))
-
-(define assert-false (fn (val msg)
-  "Assert that val is #f"
-  (assert-eq val #f msg)))
+(import-file "./examples/assertions.lisp")
 
 ;; ============================================================================
 ;; SECTION 1: Basic Arithmetic Operations

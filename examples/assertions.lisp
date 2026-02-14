@@ -1,17 +1,23 @@
 ;; Elle Assertions Library
 ;;
 ;; Shared assertion helpers for all examples. Load this file with:
-;;   ; Load shared assertions library
+;;   (import-file "./examples/assertions.lisp")
 ;;
 ;; Functions:
 ;;   - assert-eq(actual, expected, msg)
 ;;     Assert that actual equals expected (using = for numbers, eq? for symbols)
+;;   - assert-equal(actual, expected, msg)
+;;     Alias for assert-eq
 ;;   - assert-true(val, msg)
 ;;     Assert that val is #t
 ;;   - assert-false(val, msg)
 ;;     Assert that val is #f
 ;;   - assert-list-eq(actual, expected, msg)
 ;;     Assert that two lists are equal (same length and elements)
+;;   - assert-not-nil(val, msg)
+;;     Assert that val is not nil
+;;   - assert-string-eq(actual, expected, msg)
+;;     Assert that two strings are equal
 ;;
 ;; All assertions crash with exit code 1 on failure, making examples
 ;; act as contracts for the implementation.
@@ -72,5 +78,36 @@
         (display (length expected))
         (display "\n  Actual length: ")
         (display (length actual))
+        (display "\n")
+        (exit 1)))))
+
+;; Alias for assert-eq (some examples use assert-equal)
+(define assert-equal assert-eq)
+
+;; Assert that a value is not nil
+(define assert-not-nil (fn (val msg)
+  "Assert that val is not nil"
+  (if (not (eq? val nil))
+      #t
+      (begin
+        (display "FAIL: ")
+        (display msg)
+        (display "\n  Expected: not nil")
+        (display "\n  Actual: nil")
+        (display "\n")
+        (exit 1)))))
+
+;; Assert that two strings are equal
+(define assert-string-eq (fn (actual expected msg)
+  "Assert that two strings are equal"
+  (if (= actual expected)
+      #t
+      (begin
+        (display "FAIL: ")
+        (display msg)
+        (display "\n  Expected: ")
+        (display expected)
+        (display "\n  Actual: ")
+        (display actual)
         (display "\n")
         (exit 1)))))

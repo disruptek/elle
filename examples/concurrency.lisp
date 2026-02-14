@@ -11,41 +11,11 @@
 ;;; 3. join blocks until the thread completes and returns the result
 ;;; 4. Closures that capture mutable values (tables) cannot be spawned
 
-;;; ============================================================================
-; Load shared assertions library
-; Load shared assertions library
-;;; ============================================================================
-(define assert-equal
-  (fn (actual expected label)
-    (if (= actual expected)
-      (begin
-        (display "[PASS] ")
-        (display label)
-        (newline)
-        #t)
-      (begin
-        (display "[FAIL] ")
-        (display label)
-        (display " - Expected: ")
-        (display expected)
-        (display ", Got: ")
-        (display actual)
-        (newline)
-        #f))))
+(import-file "./examples/assertions.lisp")
 
-(define assert-true
-  (fn (value label)
-    (if value
-      (begin
-        (display "[PASS] ")
-        (display label)
-        (newline)
-        #t)
-      (begin
-        (display "[FAIL] ")
-        (display label)
-        (newline)
-        #f))))
+;; Note: concurrency.lisp uses assert-equal and assert-true which are
+;; defined in assertions.lisp. We need to adapt the calls to use the
+;; standard assertion interface.
 
 (display "=== Elle Concurrency Example: spawn and join ===")
 (newline)

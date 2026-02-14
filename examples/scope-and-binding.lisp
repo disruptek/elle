@@ -1,71 +1,15 @@
-;; Scope and Binding in Elle Lisp
-;; Comprehensive guide covering:
-;; - Binding forms (let, let*, function parameters)
-;; - Lexical scoping and scope isolation
-;; - Shadowing rules
-;; - Global scope, function scope, let-bindings
-;; - Loop scoping, closures, nested functions
-;; - Scope hierarchy and best practices
+; Scope and Binding in Elle
+;
+; This example demonstrates:
+; - Global scope and variable binding
+; - Local scope with let
+; - Function scope and parameters
+; - Shadowing and scope resolution
+; - Closure scope and variable capture
+; - Dynamic scope patterns
+; - Assertions verifying scope behavior
 
-; === Assertion Helpers ===
-(define assert-eq (fn (actual expected msg)
-  "Assert that actual equals expected (using = for numbers, eq? for symbols)"
-  (let ((matches
-    (if (symbol? expected)
-        (eq? actual expected)
-        (= actual expected))))
-    (if matches
-        #t
-        (begin
-          (display "FAIL: ")
-          (display msg)
-          (display "\n  Expected: ")
-          (display expected)
-          (display "\n  Actual: ")
-          (display actual)
-          (display "\n")
-          (exit 1))))))
-
-(define assert-true (fn (val msg)
-  "Assert that val is #t"
-  (assert-eq val #t msg)))
-
-(define assert-false (fn (val msg)
-  "Assert that val is #f"
-  (assert-eq val #f msg)))
-
-(define assert-list-eq (fn (actual expected msg)
-  "Assert that two lists are equal (same length and elements)"
-  (if (= (length actual) (length expected))
-      ; Check each element - use a simple loop approach
-      (let ((check-all (fn (index)
-        (if (>= index (length actual))
-            #t
-            (if (if (symbol? (nth index expected))
-                    (eq? (nth index actual) (nth index expected))
-                    (= (nth index actual) (nth index expected)))
-                (check-all (+ index 1))
-                (begin
-                  (display "FAIL: ")
-                  (display msg)
-                  (display "\n  Element at index ")
-                  (display index)
-                  (display " differs\n  Expected: ")
-                  (display (nth index expected))
-                  (display "\n  Actual: ")
-                  (display (nth index actual))
-                  (display "\n")
-                  (exit 1)))))))
-        (check-all 0))
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display "\n  Expected length: ")
-        (display (length expected))
-        (display "\n  Actual length: ")
-        (display (length actual))
-        (display "\n")
-        (exit 1)))))
+(import-file "./examples/assertions.lisp")
 
 (display "=== Scope and Binding ===")
 (newline)

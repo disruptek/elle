@@ -1,71 +1,13 @@
-; Comprehensive types demonstration - All atomic types and type checking
-; Covers: keywords, symbols, numbers, strings, booleans, nil
-; Type predicates: nil?, pair?, list?, number?, symbol?, string?, boolean?
-; Type conversions: int, float, string, string->int, string->float, etc.
+; Type System in Elle
+;
+; This example demonstrates Elle's type system:
+; - type-of: Get the type of any value
+; - Type predicates: number?, symbol?, string?, list?, vector?, table?, closure?, coroutine?
+; - Type conversions: string, number, symbol
+; - Type checking patterns
+; - Assertions verifying type operations
 
-; Load shared assertions library
-(define assert-eq (fn (actual expected msg)
-  "Assert that actual equals expected (using = for numbers, eq? for symbols)"
-  (let ((matches
-    (if (symbol? expected)
-        (eq? actual expected)
-        (= actual expected))))
-    (if matches
-        #t
-        (begin
-          (display "FAIL: ")
-          (display msg)
-          (display "\n  Expected: ")
-          (display expected)
-          (display "\n  Actual: ")
-          (display actual)
-          (display "\n")
-          (exit 1))))))
-
-(define assert-true (fn (val msg)
-  "Assert that val is #t"
-  (assert-eq val #t msg)))
-
-(define assert-false (fn (val msg)
-  "Assert that val is #f"
-  (assert-eq val #f msg)))
-
-(define assert-list-eq (fn (actual expected msg)
-  "Assert that two lists are equal (same length and elements)"
-  (if (= (length actual) (length expected))
-      ; Check each element - use a simple loop approach
-      (let ((check-all (fn (index)
-        (if (>= index (length actual))
-            #t
-            (if (if (symbol? (nth index expected))
-                    (eq? (nth index actual) (nth index expected))
-                    (= (nth index actual) (nth index expected)))
-                (check-all (+ index 1))
-                (begin
-                  (display "FAIL: ")
-                  (display msg)
-                  (display "\n  Element at index ")
-                  (display index)
-                  (display " differs\n  Expected: ")
-                  (display (nth index expected))
-                  (display "\n  Actual: ")
-                  (display (nth index actual))
-                  (display "\n")
-                  (exit 1)))))))
-        (check-all 0))
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display "\n  Expected length: ")
-        (display (length expected))
-        (display "\n  Actual length: ")
-        (display (length actual))
-        (display "\n")
-        (exit 1)))))
-
-;; ============================================================================
-;; SECTION 1: Keywords
-;; ============================================================================
+(import-file "./examples/assertions.lisp")
 
 (display "=== Keywords ===\n")
 

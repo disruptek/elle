@@ -1,36 +1,7 @@
 #!/usr/bin/env elle
 ;; JSON parsing and serialization examples
 
-; Load shared assertions library
-; Load shared assertions library
-(define assert-eq (fn (actual expected msg)
-  (if (= actual expected)
-    (begin
-      (display "[PASS] ")
-      (display msg)
-      (newline))
-    (begin
-      (display "[FAIL] ")
-      (display msg)
-      (display " - Expected: ")
-      (display expected)
-      (display ", Got: ")
-      (display actual)
-      (newline)
-      (exit 1)))))
-
-(define assert-true (fn (val msg)
-  (if val
-    (begin
-      (display "[PASS] ")
-      (display msg)
-      (newline))
-    (begin
-      (display "[FAIL] ")
-      (display msg)
-      (display " - Expected true, got false")
-      (newline)
-      (exit 1)))))
+(import-file "./examples/assertions.lisp")
 
 ;; Example 1: Parse various JSON types
 (display "=== Example 1: Parsing JSON ===")

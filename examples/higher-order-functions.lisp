@@ -1,34 +1,6 @@
 ;; Higher-Order Functions in Elle
 
-; Load shared assertions library
-; Load shared assertions library
-(define assert-eq (fn (actual expected msg)
-  "Assert that actual equals expected"
-  (if (= actual expected)
-      #t
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display "\n  Expected: ")
-        (display expected)
-        (display "\n  Actual: ")
-        (display actual)
-        (display "\n")
-        (exit 1)))))
-
-(define assert-list-eq (fn (actual expected msg)
-  "Assert that two lists are equal"
-  (if (eq? actual expected)
-      #t
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display "\n  Expected: ")
-        (display expected)
-        (display "\n  Actual: ")
-        (display actual)
-        (display "\n")
-        (exit 1)))))
+(import-file "./examples/assertions.lisp")
 
 (display "=== Higher-Order Functions in Elle ===")
 (newline)

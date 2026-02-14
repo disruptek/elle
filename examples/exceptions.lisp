@@ -1,39 +1,6 @@
 ;; Exception Handling in Elle Lisp
 
-; Load shared assertions library
-; Load shared assertions library
-;; ============================================================================
-(define assert-equal
-  (fn (actual expected label)
-    (if (= actual expected)
-      (begin
-        (display "[PASS] ")
-        (display label)
-        (newline)
-        #t)
-      (begin
-        (display "[FAIL] ")
-        (display label)
-        (display " - Expected: ")
-        (display expected)
-        (display ", Got: ")
-        (display actual)
-        (newline)
-        #f))))
-
-(define assert-true
-  (fn (value label)
-    (if value
-      (begin
-        (display "[PASS] ")
-        (display label)
-        (newline)
-        #t)
-      (begin
-        (display "[FAIL] ")
-        (display label)
-        (newline)
-        #f))))
+(import-file "./examples/assertions.lisp")
 
 ;; ============================================================================
 ;; Basic Exception Creation and Inspection
