@@ -95,11 +95,14 @@ fn collect_free_vars(
 ) {
     match expr {
         Expr::Var(var_ref) => {
-            // Upvalues are free variables that need to be captured
-            if let VarRef::Upvalue { sym, .. } = var_ref {
-                if !local_bindings.contains(sym) {
-                    free_vars.insert(*sym);
+            // Upvalues and LetBound variables are free variables that need to be captured
+            match var_ref {
+                VarRef::Upvalue { sym, .. } | VarRef::LetBound { sym } => {
+                    if !local_bindings.contains(sym) {
+                        free_vars.insert(*sym);
+                    }
                 }
+                _ => {}
             }
         }
         Expr::If { cond, then, else_ } => {
@@ -138,10 +141,17 @@ fn collect_free_vars(
             }
         }
         Expr::Let { bindings, body } | Expr::Letrec { bindings, body } => {
+            // Collect free vars from binding expressions (using original local_bindings)
             for (_, expr) in bindings {
                 collect_free_vars(expr, local_bindings, free_vars);
             }
-            collect_free_vars(body, local_bindings, free_vars);
+            // Create extended local_bindings that includes the let-bound variables
+            // This ensures nested lambdas' captures of these variables don't propagate up
+            let mut extended_bindings = local_bindings.clone();
+            for (sym, _) in bindings {
+                extended_bindings.insert(*sym);
+            }
+            collect_free_vars(body, &extended_bindings, free_vars);
         }
         Expr::Set { value, .. } => {
             collect_free_vars(value, local_bindings, free_vars);

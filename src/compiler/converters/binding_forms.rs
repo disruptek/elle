@@ -144,6 +144,7 @@ pub fn convert_lambda(
         body: adjusted_body,
         captures,
         num_locals,
+        locals: locally_defined_vars,
     })
 }
 

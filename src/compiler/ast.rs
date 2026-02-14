@@ -70,6 +70,8 @@ pub enum Expr {
         body: Box<Expr>,
         captures: Vec<CaptureInfo>,
         num_locals: usize,
+        /// Locally-defined variable symbols (from define statements in body)
+        locals: Vec<SymbolId>,
     },
 
     /// Let binding

@@ -432,6 +432,7 @@ mod tests {
             body: Box::new(Expr::Literal(Value::Int(1))),
             captures: vec![],
             num_locals: 0,
+            locals: vec![],
         };
         assert!(!is_jit_compilable(&expr));
     }

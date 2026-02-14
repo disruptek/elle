@@ -67,6 +67,7 @@ pub fn convert_match_expr(
                         body: Box::new(body_expr),
                         captures: Vec::new(),
                         num_locals: num_vars,
+                        locals: vec![],
                     }
                 } else {
                     // No variables to bind

@@ -21,6 +21,9 @@ struct Compiler {
     lambda_locals: Vec<SymbolId>,
     lambda_captures_len: usize,
     lambda_params_len: usize,
+    // Track current lambda's capture and param symbols for nested lambda compilation
+    lambda_capture_syms: Vec<SymbolId>,
+    lambda_param_syms: Vec<SymbolId>,
     // Phase 2: Symbol table and effect context for effect inference
     symbol_table: Option<Rc<SymbolTable>>,
     effect_context: EffectContext,
@@ -35,6 +38,8 @@ impl Compiler {
             lambda_locals: Vec::new(),
             lambda_captures_len: 0,
             lambda_params_len: 0,
+            lambda_capture_syms: Vec::new(),
+            lambda_param_syms: Vec::new(),
             symbol_table: None,
             effect_context: EffectContext::new(),
         }
@@ -48,6 +53,8 @@ impl Compiler {
             lambda_locals: Vec::new(),
             lambda_captures_len: 0,
             lambda_params_len: 0,
+            lambda_capture_syms: Vec::new(),
+            lambda_param_syms: Vec::new(),
             symbol_table: Some(symbol_table.clone()),
             effect_context: EffectContext::with_symbols(&symbol_table),
         }
@@ -112,8 +119,9 @@ impl Compiler {
                 body,
                 captures,
                 num_locals,
+                locals,
             } => {
-                self.compile_lambda(params, body, captures, *num_locals);
+                self.compile_lambda(params, body, captures, *num_locals, locals);
             }
 
             Expr::Let { bindings, body } => {
@@ -1010,6 +1018,7 @@ impl Compiler {
         body: &Expr,
         captures: &[CaptureInfo],
         num_locals: usize,
+        locals: &[SymbolId],
     ) {
         let num_captures = captures.len();
         // Phase 4: Locally-defined variables are now part of the closure environment
@@ -1026,9 +1035,12 @@ impl Compiler {
             Compiler::new()
         };
         lambda_compiler.scope_depth = 0; // NOT inside a scope (Phase 4: no scope_stack for lambdas)
-        lambda_compiler.lambda_locals = Vec::new(); // Will be computed from num_locals
+        lambda_compiler.lambda_locals = locals.to_vec(); // Locally-defined symbols
         lambda_compiler.lambda_captures_len = num_captures;
         lambda_compiler.lambda_params_len = params.len();
+        // Track this lambda's capture and param symbols for nested lambda compilation
+        lambda_compiler.lambda_capture_syms = captures.iter().map(|c| c.sym).collect();
+        lambda_compiler.lambda_param_syms = params.to_vec();
 
         // Compile the body directly (no scope management)
         lambda_compiler.compile_expr(body, true);
@@ -1086,39 +1098,51 @@ impl Compiler {
             // Emit captured values onto the stack (in order)
             // These will be stored in the closure's environment by the VM
             for capture_info in captures.iter() {
-                // Load the captured variable from its source location
-                match &capture_info.source {
-                    VarRef::Local { index } => {
-                        // Load from current frame's local
-                        self.bytecode.emit(Instruction::LoadLocal);
-                        self.bytecode.emit_byte(*index as u8);
-                    }
-                    VarRef::Upvalue {
-                        index, is_param, ..
-                    } => {
-                        // Load from enclosing closure's environment
-                        // If is_param is true, the index is the param position and we need to
-                        // add the enclosing lambda's capture count to get the actual env index.
-                        // self.lambda_captures_len is our current lambda's captures, which equals
-                        // the enclosing lambda's capture count (since we're compiling within it).
-                        let adjusted_index = if *is_param {
-                            self.lambda_captures_len + *index
-                        } else {
-                            *index
-                        };
-                        self.bytecode.emit(Instruction::LoadUpvalue);
-                        self.bytecode.emit_byte(1);
-                        self.bytecode.emit_byte(adjusted_index as u8);
-                    }
-                    VarRef::LetBound { sym } | VarRef::Global { sym } => {
-                        // Load from globals/scope stack
-                        let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                        self.bytecode.emit(Instruction::LoadGlobal);
-                        self.bytecode.emit_u16(sym_idx);
-                    }
-                }
+                // Find where this symbol lives in the current (enclosing) closure's environment
+                let env_index = if let Some(idx) = self
+                    .lambda_capture_syms
+                    .iter()
+                    .position(|s| *s == capture_info.sym)
+                {
+                    // Found in enclosing lambda's captures
+                    idx
+                } else if let Some(idx) = self
+                    .lambda_param_syms
+                    .iter()
+                    .position(|s| *s == capture_info.sym)
+                {
+                    // Found in enclosing lambda's params
+                    self.lambda_captures_len + idx
+                } else {
+                    // Not found in enclosing closure - use LoadGlobal
+                    match &capture_info.source {
+                        VarRef::LetBound { sym } | VarRef::Global { sym } => {
+                            let sym_idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                            self.bytecode.emit(Instruction::LoadGlobal);
+                            self.bytecode.emit_u16(sym_idx);
 
-                // If this variable is mutated in the lambda body, wrap it in a cell
+                            if mutated_captures.contains(&capture_info.sym) {
+                                self.bytecode.emit(Instruction::MakeCell);
+                            }
+                            continue;
+                        }
+                        VarRef::Local { index } => {
+                            // Local in enclosing scope - use the index directly
+                            // (This handles locally-defined variables)
+                            self.lambda_captures_len + self.lambda_params_len + *index
+                        }
+                        _ => {
+                            // Fallback - shouldn't happen
+                            0
+                        }
+                    }
+                };
+
+                // Load from enclosing closure's environment
+                self.bytecode.emit(Instruction::LoadUpvalue);
+                self.bytecode.emit_byte(1);
+                self.bytecode.emit_byte(env_index as u8);
+
                 if mutated_captures.contains(&capture_info.sym) {
                     self.bytecode.emit(Instruction::MakeCell);
                 }
@@ -1315,6 +1339,7 @@ mod tests {
             body: body.clone(),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
 
         let bytecode = compile(&expr);
@@ -1341,6 +1366,7 @@ mod tests {
             body: body.clone(),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1359,6 +1385,7 @@ mod tests {
             body: body.clone(),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
 
         let bytecode = compile(&expr);
@@ -1395,6 +1422,7 @@ mod tests {
                 source: VarRef::local(0), // x is local in outer scope
             }],
             num_locals: 2,
+            locals: vec![],
         };
 
         let outer_lambda = Expr::Lambda {
@@ -1402,6 +1430,7 @@ mod tests {
             body: Box::new(inner_lambda),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
 
         let bytecode = compile(&outer_lambda);
@@ -1432,6 +1461,7 @@ mod tests {
             body,
             captures: vec![],
             num_locals: 2,
+            locals: vec![],
         };
 
         let bytecode = compile(&expr);
@@ -1455,6 +1485,7 @@ mod tests {
             }),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1504,6 +1535,7 @@ mod tests {
             }),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1541,6 +1573,7 @@ mod tests {
             }),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1590,6 +1623,7 @@ mod tests {
                 source: VarRef::global(x_sym), // x from outer scope (simulated as global for test)
             }],
             num_locals: 2,
+            locals: vec![],
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));
@@ -1634,6 +1668,7 @@ mod tests {
             ])),
             captures: vec![],
             num_locals: 2,
+            locals: vec![],
         };
 
         let bytecode = compile_with_symbols(&expr, Rc::new(symbols));

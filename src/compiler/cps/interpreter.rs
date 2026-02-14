@@ -679,6 +679,7 @@ impl<'a> CpsInterpreter<'a> {
                 body,
                 captures,
                 num_locals,
+                ..
             } => {
                 let num_captures = captures.len();
                 // Compile the lambda to bytecode

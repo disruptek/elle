@@ -136,8 +136,19 @@ pub fn adjust_var_indices(
                     // We adjust by adding captures.len() to account for the closure layout.
                     *index = captures.len() + *index;
                 }
-                VarRef::LetBound { .. } | VarRef::Global { .. } => {
-                    // These don't need adjustment
+                VarRef::LetBound { sym } => {
+                    // If this let-bound variable is captured, convert to Upvalue
+                    if let Some(&cap_pos) = capture_map.get(sym) {
+                        *varref = VarRef::Upvalue {
+                            sym: *sym,
+                            index: cap_pos,
+                            is_param: false,
+                        };
+                    }
+                    // Otherwise leave as LetBound for runtime lookup
+                }
+                VarRef::Global { .. } => {
+                    // Globals don't need adjustment
                 }
             }
         }

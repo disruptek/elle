@@ -392,6 +392,7 @@ mod tests {
             body: Box::new(Expr::Literal(Value::Int(42))),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
         // Lambda expression itself is pure (the effect is stored in the closure)
         assert_eq!(ctx.infer(&expr), Effect::Pure);
@@ -435,6 +436,7 @@ mod tests {
                     body: Box::new(Expr::Literal(Value::Int(1))),
                     captures: vec![],
                     num_locals: 1,
+            locals: vec![],
                 },
                 Expr::Literal(Value::Nil),
             ],
@@ -489,6 +491,7 @@ mod tests {
                     }),
                     captures: vec![],
                     num_locals: 1,
+            locals: vec![],
                 },
                 Expr::Literal(Value::Nil),
             ],
@@ -605,6 +608,7 @@ mod tests {
             body: Box::new(Expr::Literal(Value::Int(42))),
             captures: vec![],
             num_locals: 1,
+            locals: vec![],
         };
         assert_eq!(ctx.infer_arg_effect(&arg), Effect::Pure);
     }

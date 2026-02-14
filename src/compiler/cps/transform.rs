@@ -154,6 +154,7 @@ impl<'a> CpsTransformer<'a> {
                 body,
                 captures,
                 num_locals,
+                ..
             } => self.transform_lambda(params, body, captures, *num_locals, cont),
 
             // Internal define - treat like a let binding
@@ -411,6 +412,7 @@ impl<'a> CpsTransformer<'a> {
                     body: Box::new(body.clone()),
                     captures: captures.to_vec(),
                     num_locals,
+                    locals: vec![], // TODO: propagate locals if needed
                 },
                 continuation: cont,
             }
