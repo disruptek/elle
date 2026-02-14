@@ -96,6 +96,16 @@ pub fn prim_length(args: &[Value]) -> Result<Value, String> {
         // For structs: get field count (Rc<BTreeMap>)
         Value::Struct(s) => Ok(Value::Int(s.len() as i64)),
 
+        // For symbols: get the length of the symbol name
+        Value::Symbol(sid) => {
+            // Get the symbol name from the symbol table context
+            if let Some(name) = get_keyword_name(*sid) {
+                Ok(Value::Int(name.len() as i64))
+            } else {
+                Err(format!("Unable to resolve symbol name for id {:?}", sid))
+            }
+        }
+
         // For keywords: get the length of the keyword name
         Value::Keyword(kid) => {
             // Get the keyword name from the symbol table context
@@ -108,7 +118,7 @@ pub fn prim_length(args: &[Value]) -> Result<Value, String> {
 
         // Other types are not sequences
         _ => Err(format!(
-            "length requires a collection type (list, string, vector, table, struct, or keyword), got {}",
+            "length requires a collection type (list, string, vector, table, struct, symbol, or keyword), got {}",
             args[0].type_name()
         )),
     }
