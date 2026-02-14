@@ -340,3 +340,98 @@ pub fn analyze_mutated_vars(expr: &Expr) -> HashSet<SymbolId> {
 
     mutated
 }
+
+/// Analyze which variables are mutated within lambda bodies in an expression
+/// This is used to determine which captured variables need cell boxing across multiple closures
+pub fn analyze_lambda_mutations(expr: &Expr) -> HashSet<SymbolId> {
+    let mut mutated = HashSet::new();
+    collect_lambda_mutations(expr, &mut mutated);
+    mutated
+}
+
+fn collect_lambda_mutations(expr: &Expr, mutated: &mut HashSet<SymbolId>) {
+    match expr {
+        Expr::Lambda { body, .. } => {
+            // Collect mutations from this lambda's body
+            mutated.extend(analyze_mutated_vars(body));
+        }
+        Expr::Let { bindings, body } => {
+            // Analyze mutations in binding expressions (which may contain lambdas)
+            for (_, expr) in bindings {
+                collect_lambda_mutations(expr, mutated);
+            }
+            // Analyze mutations in body
+            collect_lambda_mutations(body, mutated);
+        }
+        Expr::Letrec { bindings, body } => {
+            // Analyze mutations in binding expressions
+            for (_, expr) in bindings {
+                collect_lambda_mutations(expr, mutated);
+            }
+            // Analyze mutations in body
+            collect_lambda_mutations(body, mutated);
+        }
+        Expr::Begin(exprs) | Expr::Block(exprs) => {
+            for e in exprs {
+                collect_lambda_mutations(e, mutated);
+            }
+        }
+        Expr::If { cond, then, else_ } => {
+            collect_lambda_mutations(cond, mutated);
+            collect_lambda_mutations(then, mutated);
+            collect_lambda_mutations(else_, mutated);
+        }
+        Expr::Call { func, args, .. } => {
+            collect_lambda_mutations(func, mutated);
+            for arg in args {
+                collect_lambda_mutations(arg, mutated);
+            }
+        }
+        Expr::Match {
+            value,
+            patterns,
+            default,
+        } => {
+            collect_lambda_mutations(value, mutated);
+            for (_, expr) in patterns {
+                collect_lambda_mutations(expr, mutated);
+            }
+            if let Some(default_expr) = default {
+                collect_lambda_mutations(default_expr, mutated);
+            }
+        }
+        Expr::Try {
+            body,
+            catch,
+            finally,
+        } => {
+            collect_lambda_mutations(body, mutated);
+            if let Some((_, handler)) = catch {
+                collect_lambda_mutations(handler, mutated);
+            }
+            if let Some(finally_expr) = finally {
+                collect_lambda_mutations(finally_expr, mutated);
+            }
+        }
+        Expr::While { cond, body } => {
+            collect_lambda_mutations(cond, mutated);
+            collect_lambda_mutations(body, mutated);
+        }
+        Expr::For { iter, body, .. } => {
+            collect_lambda_mutations(iter, mutated);
+            collect_lambda_mutations(body, mutated);
+        }
+        Expr::Cond { clauses, else_body } => {
+            for (test, body) in clauses {
+                collect_lambda_mutations(test, mutated);
+                collect_lambda_mutations(body, mutated);
+            }
+            if let Some(else_expr) = else_body {
+                collect_lambda_mutations(else_expr, mutated);
+            }
+        }
+        _ => {
+            // Other expression types don't contain lambdas
+        }
+    }
+}

@@ -1,6 +1,6 @@
 mod utils;
 
-use super::analysis::analyze_mutated_vars;
+use super::analysis::{analyze_lambda_mutations, analyze_mutated_vars};
 use super::ast::{CaptureInfo, Expr};
 use super::bytecode::{Bytecode, Instruction};
 use super::effects::EffectContext;
@@ -27,6 +27,9 @@ struct Compiler {
     // Phase 2: Symbol table and effect context for effect inference
     symbol_table: Option<Rc<SymbolTable>>,
     effect_context: EffectContext,
+    // Track variables that are mutated across all closures in the current scope
+    // This ensures all closures that capture these variables wrap them in cells
+    scope_mutated_vars: HashSet<SymbolId>,
 }
 
 impl Compiler {
@@ -42,6 +45,7 @@ impl Compiler {
             lambda_param_syms: Vec::new(),
             symbol_table: None,
             effect_context: EffectContext::new(),
+            scope_mutated_vars: HashSet::new(),
         }
     }
 
@@ -57,6 +61,7 @@ impl Compiler {
             lambda_param_syms: Vec::new(),
             symbol_table: Some(symbol_table.clone()),
             effect_context: EffectContext::with_symbols(&symbol_table),
+            scope_mutated_vars: HashSet::new(),
         }
     }
 
@@ -933,6 +938,15 @@ impl Compiler {
         // All binding expressions are evaluated BEFORE any variables are defined,
         // so bindings cannot see each other (only outer scope).
 
+        // Analyze which variables are mutated across all closures in the let bindings and body
+        // This ensures all closures that capture these variables wrap them in cells
+        let mut bindings_mutated = HashSet::new();
+        for (_var, expr) in bindings {
+            bindings_mutated.extend(analyze_lambda_mutations(expr));
+        }
+        bindings_mutated.extend(analyze_lambda_mutations(body));
+        let old_scope_mutated = std::mem::replace(&mut self.scope_mutated_vars, bindings_mutated);
+
         // First, compile ALL binding expressions (values go on stack)
         // This happens BEFORE the let scope is pushed, so bindings see outer scope only
         for (_var, expr) in bindings {
@@ -946,7 +960,14 @@ impl Compiler {
         // Define all variables in reverse order (since values are on stack in LIFO order)
         // Stack has: [val1, val2, val3, ...] with val_n on top
         // We define in reverse so that var_n gets val_n, var_(n-1) gets val_(n-1), etc.
+        // Create a set of binding variables for filtering
+        let binding_vars: HashSet<SymbolId> = bindings.iter().map(|(var, _)| *var).collect();
         for (var, _expr) in bindings.iter().rev() {
+            // If this variable is mutated by any closure in the let body, wrap it in a cell
+            // Only wrap if it's a binding in this let (not a local variable in a nested lambda)
+            if self.scope_mutated_vars.contains(var) && binding_vars.contains(var) {
+                self.bytecode.emit(Instruction::MakeCell);
+            }
             let idx = self.bytecode.add_constant(Value::Symbol(*var));
             self.bytecode.emit(Instruction::DefineLocal);
             self.bytecode.emit_u16(idx);
@@ -959,10 +980,21 @@ impl Compiler {
 
         // Pop the let scope
         self.bytecode.emit(Instruction::PopScope);
+
+        // Restore the old scope_mutated_vars
+        self.scope_mutated_vars = old_scope_mutated;
     }
 
     /// Compile a letrec binding expression where bindings are mutually visible
     fn compile_letrec(&mut self, bindings: &[(SymbolId, Expr)], body: &Expr, tail: bool) {
+        // Analyze which variables are mutated across all closures in the letrec bindings and body
+        let mut bindings_mutated = HashSet::new();
+        for (_var, expr) in bindings {
+            bindings_mutated.extend(analyze_lambda_mutations(expr));
+        }
+        bindings_mutated.extend(analyze_lambda_mutations(body));
+        let old_scope_mutated = std::mem::replace(&mut self.scope_mutated_vars, bindings_mutated);
+
         // Letrec creates a scope where all bindings are mutually visible
         // Pre-declare all binding names as nil, then update them with their values
         self.bytecode.emit(Instruction::PushScope);
@@ -990,6 +1022,9 @@ impl Compiler {
 
         self.scope_depth -= 1;
         self.bytecode.emit(Instruction::PopScope);
+
+        // Restore the old scope_mutated_vars
+        self.scope_mutated_vars = old_scope_mutated;
     }
 
     /// Compile a function call expression
@@ -1089,10 +1124,15 @@ impl Compiler {
             // Has captures — emit capture loads + MakeClosure as before
             // First, analyze which variables are mutated in the lambda body
             let mutated_vars = analyze_mutated_vars(body);
+            // Also include variables that are mutated across all closures in the current scope
+            let all_mutated_vars: HashSet<SymbolId> = mutated_vars
+                .union(&self.scope_mutated_vars)
+                .copied()
+                .collect();
             let mutated_captures: HashSet<SymbolId> = captures
                 .iter()
                 .map(|c| c.sym)
-                .filter(|sym| mutated_vars.contains(sym))
+                .filter(|sym| all_mutated_vars.contains(sym))
                 .collect();
 
             // Emit captured values onto the stack (in order)
