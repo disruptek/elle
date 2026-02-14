@@ -56,13 +56,13 @@ pub fn convert_lambda(
 
     // Identify which variables in the lambda scope are defined in the lambda body
     // (as opposed to being parameters)
-    let mut locally_defined_vars: Vec<SymbolId> = lambda_scope
+    // Collect locally-defined variables in source order (the order they appear in the scope)
+    // DO NOT sort - the order must match the scope symbols for correct index mapping
+    let locally_defined_vars: Vec<SymbolId> = lambda_scope
         .iter()
         .filter(|var| !param_syms.contains(var))
         .copied()
         .collect();
-    // Sort for deterministic ordering
-    locally_defined_vars.sort();
 
     // Analyze free variables that need to be captured
     // IMPORTANT: Do this BEFORE popping scope_stack, so locally-defined

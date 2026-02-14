@@ -479,3 +479,60 @@ fn test_capture_across_define_boundary() {
     "#;
     assert_eq!(eval(code).unwrap(), Value::Int(10));
 }
+
+// ============================================================================
+// SECTION 7: Regression Tests for Locally-Defined Variables
+// ============================================================================
+
+#[test]
+fn test_self_recursive_function_via_define_inside_fn() {
+    // Bug 1: Self-recursive function defined inside fn body
+    let code = r#"
+        ((fn (n)
+           (begin
+             (define fact (fn (x) (if (= x 0) 1 (* x (fact (- x 1))))))
+             (fact n))) 6)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::Int(720));
+}
+
+#[test]
+fn test_nested_lambda_capturing_locally_defined_variable() {
+    // Bug 2: Nested lambda capturing locally-defined variable
+    let code = r#"
+        ((fn ()
+           (begin
+             (define x 42)
+             (define f (fn () x))
+             (f))))
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::Int(42));
+}
+
+#[test]
+fn test_multiple_closures_sharing_mutable_state_via_define() {
+    // Bug 3: Multiple closures sharing mutable state via define
+    let code = r#"
+        ((fn (initial)
+           (begin
+             (define value initial)
+             (define getter (fn () value))
+             (define setter (fn (new-val) (set! value new-val)))
+             (setter 42)
+             (getter))) 0)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::Int(42));
+}
+
+#[test]
+fn test_mutual_recursion_via_define_inside_fn() {
+    // Mutual recursion via define inside fn
+    let code = r#"
+        ((fn ()
+           (begin
+             (define is-even (fn (n) (if (= n 0) #t (is-odd (- n 1)))))
+             (define is-odd (fn (n) (if (= n 0) #f (is-even (- n 1)))))
+             (is-even 8))))
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::Bool(true));
+}

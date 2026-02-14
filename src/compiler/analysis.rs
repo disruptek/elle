@@ -68,7 +68,21 @@ fn collect_used_captures(
             }
             collect_used_captures(body, candidates, used);
         }
-        Expr::Set { value, .. } => {
+        Expr::Set { target, value } => {
+            // Check if the target is a captured variable
+            match target {
+                VarRef::Upvalue { sym, .. } => {
+                    if candidates.contains(sym) {
+                        used.insert(*sym);
+                    }
+                }
+                VarRef::LetBound { sym } => {
+                    if candidates.contains(sym) {
+                        used.insert(*sym);
+                    }
+                }
+                _ => {}
+            }
             collect_used_captures(value, candidates, used);
         }
         Expr::Define { value, .. } => {
@@ -158,7 +172,16 @@ fn collect_free_vars(
             }
             collect_free_vars(body, &extended_bindings, free_vars);
         }
-        Expr::Set { value, .. } => {
+        Expr::Set { target, value } => {
+            // Check if the target is a free variable
+            match target {
+                VarRef::Upvalue { sym, .. } | VarRef::LetBound { sym } => {
+                    if !local_bindings.contains(sym) {
+                        free_vars.insert(*sym);
+                    }
+                }
+                _ => {}
+            }
             collect_free_vars(value, local_bindings, free_vars);
         }
         Expr::Define { value, .. } => {

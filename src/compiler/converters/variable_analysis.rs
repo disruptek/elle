@@ -182,10 +182,37 @@ pub fn adjust_var_indices(
                 adjust_var_indices(arg, captures, params, locals);
             }
         }
-        Expr::Lambda { .. } => {
-            // Don't adjust nested lambda bodies at all - they have already been fully processed
-            // with their own capture scopes, parameters, and indices when they were parsed.
-            // Recursing into them would incorrectly adjust already-correct indices.
+        Expr::Lambda {
+            captures: nested_captures,
+            ..
+        } => {
+            // Adjust upvalue indices in nested lambda captures to match the enclosing
+            // closure's environment layout. The captures were created with indices from
+            // the enclosing scope's symbol list, but they need to be adjusted to match
+            // the enclosing closure's environment layout: [captures..., parameters..., locals...]
+            for capture_info in nested_captures.iter_mut() {
+                if let crate::binding::VarRef::Upvalue { sym, index, .. } = &mut capture_info.source
+                {
+                    // Look up this symbol in the enclosing closure's environment
+                    // The enclosing closure's environment layout is [captures..., parameters..., locals...]
+
+                    // First, check if it's in the captures list
+                    if let Some(&cap_pos) = capture_map.get(sym) {
+                        *index = cap_pos;
+                    } else if let Some(param_pos) = params.iter().position(|p| p == sym) {
+                        // It's a parameter of the enclosing closure
+                        *index = captures.len() + param_pos;
+                    } else if let Some(local_pos) = locals.iter().position(|l| l == sym) {
+                        // It's a locally-defined variable of the enclosing closure
+                        *index = captures.len() + params.len() + local_pos;
+                    }
+                    // If not found in any of these, leave the index as-is (it might be a global)
+                }
+            }
+
+            // DO NOT recursively adjust the nested lambda's body here!
+            // The nested lambda's body was already adjusted when the nested lambda was parsed.
+            // Adjusting it again would cause indices to be incremented multiple times.
         }
         Expr::Let { bindings, body } => {
             for (_, expr) in bindings {
