@@ -40,10 +40,10 @@ fn test_string_length_empty() {
 
 #[test]
 fn test_string_length_unicode() {
-    // Unicode characters (emoji is 4 bytes in UTF-8)
+    // Unicode characters (emoji is 1 character, 4 bytes in UTF-8)
     let result = eval("(length \"hello🌍\")");
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), Value::Int(9)); // 5 ASCII + 4 bytes for emoji
+    assert_eq!(result.unwrap(), Value::Int(6)); // 5 ASCII characters + 1 emoji character
 }
 
 #[test]

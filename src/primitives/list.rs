@@ -85,7 +85,7 @@ pub fn prim_length(args: &[Value]) -> Result<Value, String> {
         }
 
         // For strings: get character count
-        Value::String(s) => Ok(Value::Int(s.len() as i64)),
+        Value::String(s) => Ok(Value::Int(s.chars().count() as i64)),
 
         // For vectors: get length (Rc<Vec<Value>>)
         Value::Vector(v) => Ok(Value::Int(v.len() as i64)),
@@ -100,7 +100,7 @@ pub fn prim_length(args: &[Value]) -> Result<Value, String> {
         Value::Symbol(sid) => {
             // Get the symbol name from the symbol table context
             if let Some(name) = get_keyword_name(*sid) {
-                Ok(Value::Int(name.len() as i64))
+                Ok(Value::Int(name.chars().count() as i64))
             } else {
                 Err(format!("Unable to resolve symbol name for id {:?}", sid))
             }
@@ -110,7 +110,7 @@ pub fn prim_length(args: &[Value]) -> Result<Value, String> {
         Value::Keyword(kid) => {
             // Get the keyword name from the symbol table context
             if let Some(name) = get_keyword_name(*kid) {
-                Ok(Value::Int(name.len() as i64))
+                Ok(Value::Int(name.chars().count() as i64))
             } else {
                 Err(format!("Unable to resolve keyword name for id {:?}", kid))
             }
