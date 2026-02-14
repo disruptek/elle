@@ -178,7 +178,6 @@ impl FunctionCallCompiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::SymbolId;
 
     #[test]
     fn test_constant_fold_add() {
