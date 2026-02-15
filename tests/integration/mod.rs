@@ -141,3 +141,7 @@ mod catchable_exceptions {
 mod lexical_scope {
     include!("lexical_scope.rs");
 }
+
+mod new_pipeline {
+    include!("new_pipeline.rs");
+}
