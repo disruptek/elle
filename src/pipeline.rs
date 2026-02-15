@@ -51,12 +51,12 @@ pub fn compile_all_new(
 ) -> Result<Vec<CompileResult>, String> {
     let syntaxes = read_syntax_all(source)?;
     let mut expander = Expander::new();
+    let mut analyzer = Analyzer::new(symbols);
     let mut results = Vec::new();
 
     for syntax in syntaxes {
         let expanded = expander.expand(syntax)?;
 
-        let mut analyzer = Analyzer::new(symbols);
         let analysis = analyzer.analyze(&expanded)?;
 
         let mut lowerer = Lowerer::new().with_bindings(analysis.bindings);

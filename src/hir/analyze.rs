@@ -115,7 +115,8 @@ impl<'a> Analyzer<'a> {
     /// Analyze a syntax tree into HIR
     pub fn analyze(&mut self, syntax: &Syntax) -> Result<AnalysisResult, String> {
         let hir = self.analyze_expr(syntax)?;
-        let bindings = std::mem::take(&mut self.ctx.bindings);
+        // Clone bindings instead of taking them, so they persist across multiple analyze() calls
+        let bindings = self.ctx.bindings.clone();
         Ok(AnalysisResult { hir, bindings })
     }
 
