@@ -21,6 +21,7 @@ fn get_primitive(vm: &VM, symbols: &mut SymbolTable, name: &str) -> Value {
     vm.get_global(id.0).unwrap().clone()
 }
 
+#[allow(clippy::result_large_err)]
 fn call_primitive(prim: &Value, args: &[Value]) -> Result<Value, LError> {
     match prim {
         Value::NativeFn(f) => f(args),
