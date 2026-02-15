@@ -108,20 +108,19 @@ impl Emitter {
             LirInstr::LoadGlobal { dst, sym } => {
                 // Add symbol to constants
                 let const_idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                self.bytecode.emit(Instruction::LoadConst);
-                self.bytecode.emit_u16(const_idx);
+                // LoadGlobal reads the symbol index directly from bytecode
                 self.bytecode.emit(Instruction::LoadGlobal);
+                self.bytecode.emit_u16(const_idx);
                 self.push_reg(*dst);
             }
 
             LirInstr::StoreGlobal { sym, src } => {
                 self.ensure_on_top(*src);
                 let const_idx = self.bytecode.add_constant(Value::Symbol(*sym));
-                self.bytecode.emit(Instruction::LoadConst);
-                self.bytecode.emit_u16(const_idx);
-                // Stack now has: value symbol (top)
-                // StoreGlobal expects value on stack, symbol on stack
+                // StoreGlobal reads the symbol index directly from bytecode
+                // Stack should have the value on top
                 self.bytecode.emit(Instruction::StoreGlobal);
+                self.bytecode.emit_u16(const_idx);
                 self.pop();
             }
 
@@ -146,7 +145,8 @@ impl Emitter {
             }
 
             LirInstr::Call { dst, func, args } => {
-                // Push args first, then func
+                // Call expects: [arg1, arg2, ..., argN, func] on stack
+                // So we push args first, then func
                 for arg in args {
                     self.ensure_on_top(*arg);
                 }

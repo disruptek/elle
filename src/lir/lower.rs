@@ -272,11 +272,13 @@ impl Lowerer {
                 args,
                 is_tail,
             } => {
-                let func_reg = self.lower_expr(func)?;
+                // Lower arguments first, then function
+                // This ensures the stack is in the right order for the Call instruction
                 let mut arg_regs = Vec::new();
                 for arg in args {
                     arg_regs.push(self.lower_expr(arg)?);
                 }
+                let func_reg = self.lower_expr(func)?;
 
                 if *is_tail {
                     self.emit(LirInstr::TailCall {
@@ -616,13 +618,8 @@ impl Lowerer {
     }
 
     fn emit_const(&mut self, c: LirConst) -> Result<Reg, String> {
-        let idx = self.current_func.constants.len();
-        self.current_func.constants.push(c);
         let dst = self.fresh_reg();
-        self.emit(LirInstr::Const {
-            dst,
-            value: LirConst::Int(idx as i64),
-        }); // Use index
+        self.emit(LirInstr::Const { dst, value: c });
         Ok(dst)
     }
 

@@ -216,4 +216,14 @@ mod tests {
         // but compilation should succeed
         let _ = result;
     }
+
+    #[test]
+    fn test_eval_addition() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(+ 1 2)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(3)),
+            Err(e) => panic!("Expected Ok(3), got Err: {}", e),
+        }
+    }
 }
