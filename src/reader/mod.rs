@@ -1,13 +1,16 @@
 mod lexer;
 mod parser;
+mod syntax_parser;
 mod token;
 
 // Re-export public API
 pub use lexer::Lexer;
 pub use parser::Reader;
+pub use syntax_parser::SyntaxReader;
 pub use token::{OwnedToken, SourceLoc, Token, TokenWithLoc};
 
 use crate::symbol::SymbolTable;
+use crate::syntax::Syntax;
 use crate::value::Value;
 
 /// Main public entry point for reading Lisp code from a string
@@ -35,6 +38,44 @@ pub fn read_str(input: &str, symbols: &mut SymbolTable) -> Result<Value, String>
 
     let mut reader = Reader::with_locations(tokens, locations);
     reader.read(symbols)
+}
+
+/// Read a single Syntax form from a string (symbol-table-free)
+pub fn read_syntax(input: &str) -> Result<Syntax, String> {
+    let mut lexer = Lexer::new(input);
+    let mut tokens = Vec::new();
+    let mut locations = Vec::new();
+
+    while let Some(token_with_loc) = lexer.next_token_with_loc()? {
+        tokens.push(OwnedToken::from(token_with_loc.token));
+        locations.push(token_with_loc.loc);
+    }
+
+    if tokens.is_empty() {
+        return Err("No input".to_string());
+    }
+
+    let mut reader = SyntaxReader::new(tokens, locations);
+    reader.read()
+}
+
+/// Read all Syntax forms from a string (symbol-table-free)
+pub fn read_syntax_all(input: &str) -> Result<Vec<Syntax>, String> {
+    let mut lexer = Lexer::new(input);
+    let mut tokens = Vec::new();
+    let mut locations = Vec::new();
+
+    while let Some(token_with_loc) = lexer.next_token_with_loc()? {
+        tokens.push(OwnedToken::from(token_with_loc.token));
+        locations.push(token_with_loc.loc);
+    }
+
+    if tokens.is_empty() {
+        return Err("No input".to_string());
+    }
+
+    let mut reader = SyntaxReader::new(tokens, locations);
+    reader.read_all()
 }
 
 #[cfg(test)]

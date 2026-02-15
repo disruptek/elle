@@ -45,6 +45,7 @@ pub mod reader;
 pub mod repl;
 pub mod resident_compiler;
 pub mod symbol;
+pub mod syntax;
 pub mod value;
 pub mod vm;
 
@@ -57,7 +58,8 @@ pub use compiler::{
 };
 pub use error::{RuntimeError, SourceLoc};
 pub use primitives::{init_stdlib, register_primitives};
-pub use reader::{read_str, Lexer, Reader};
+pub use reader::{read_str, read_syntax, read_syntax_all, Lexer, Reader, SyntaxReader};
 pub use symbol::SymbolTable;
+pub use syntax::Syntax;
 pub use value::{list, Value};
 pub use vm::VM;

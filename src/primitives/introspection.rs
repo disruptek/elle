@@ -18,7 +18,9 @@ pub fn prim_exception_id(args: &[Value]) -> LResult<Value> {
 /// Get a field value from a Condition by field ID
 pub fn prim_condition_field(args: &[Value]) -> LResult<Value> {
     if args.len() != 2 {
-        return Err("condition-field expects 2 arguments (condition field-id)".to_string().into());
+        return Err("condition-field expects 2 arguments (condition field-id)"
+            .to_string()
+            .into());
     }
 
     let field_id = args[1].as_int()? as u32;
@@ -27,14 +29,18 @@ pub fn prim_condition_field(args: &[Value]) -> LResult<Value> {
             Some(val) => Ok(val.clone()),
             None => Ok(Value::Nil),
         },
-        _ => Err("condition-field expects a Condition as first argument".to_string().into()),
+        _ => Err("condition-field expects a Condition as first argument"
+            .to_string()
+            .into()),
     }
 }
 
 /// Check if a Condition matches a given exception type ID
 pub fn prim_condition_matches_type(args: &[Value]) -> LResult<Value> {
     if args.len() != 2 {
-        return Err("condition-matches-type expects 2 arguments".to_string().into());
+        return Err("condition-matches-type expects 2 arguments"
+            .to_string()
+            .into());
     }
 
     let exception_type_id = args[1].as_int()? as u32;
@@ -46,7 +52,11 @@ pub fn prim_condition_matches_type(args: &[Value]) -> LResult<Value> {
                 exception_type_id,
             )))
         }
-        _ => Err("condition-matches-type expects a Condition as first argument".to_string().into()),
+        _ => Err(
+            "condition-matches-type expects a Condition as first argument"
+                .to_string()
+                .into(),
+        ),
     }
 }
 
