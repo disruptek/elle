@@ -44,9 +44,7 @@ where
                 let symbols = unsafe { &mut *p };
                 f(symbols)
             }
-            None => Err("macro primitives: symbol table not available"
-                .to_string()
-                .into()),
+            None => Err("macro primitives: symbol table not available".into()),
         }
     })
 }
@@ -110,7 +108,7 @@ pub fn prim_expand_macro(args: &[Value]) -> LResult<Value> {
 
     // First element should be a symbol (the macro name)
     let macro_sym = match &list[0] {
-        Value::Symbol(id) => id.clone(),
+        Value::Symbol(id) => *id,
         _ => {
             return Err("expand-macro: first element must be a symbol (macro name)"
                 .to_string()

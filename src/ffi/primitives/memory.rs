@@ -17,22 +17,22 @@ use crate::vm::VM;
 /// - owner: :elle or :c
 pub fn prim_register_allocation(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 4 {
-        return Err("register-allocation requires exactly 4 arguments".to_string().into());
+        return Err("register-allocation requires exactly 4 arguments".into());
     }
 
     let ptr = match &args[0] {
         Value::Int(id) => *id as *const std::ffi::c_void,
-        _ => return Err("ptr must be an integer".to_string().into()),
+        _ => return Err("ptr must be an integer".into()),
     };
 
     let type_name = match &args[1] {
         Value::String(s) => s.as_ref(),
-        _ => return Err("type-name must be a string".to_string().into()),
+        _ => return Err("type-name must be a string".into()),
     };
 
     let size = match &args[2] {
         Value::Int(s) => *s as usize,
-        _ => return Err("size must be an integer".to_string().into()),
+        _ => return Err("size must be an integer".into()),
     };
 
     let owner = match &args[3] {
@@ -40,9 +40,9 @@ pub fn prim_register_allocation(_vm: &mut VM, args: &[Value]) -> Result<Value, S
             "elle" => MemoryOwner::Elle,
             "c" => MemoryOwner::C,
             "shared" => MemoryOwner::Shared,
-            _ => return Err("owner must be 'elle', 'c', or 'shared'".to_string().into()),
+            _ => return Err("owner must be 'elle', 'c', or 'shared'".into()),
         },
-        _ => return Err("owner must be a string".to_string().into()),
+        _ => return Err("owner must be a string".into()),
     };
 
     let alloc_id = register_allocation(ptr, type_name, size, owner);
@@ -68,7 +68,7 @@ pub fn prim_memory_stats(_vm: &mut VM, _args: &[Value]) -> Result<Value, String>
 /// Type checks a value against expected C type.
 pub fn prim_type_check(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
-        return Err("type-check requires exactly 2 arguments".to_string().into());
+        return Err("type-check requires exactly 2 arguments".into());
     }
 
     let value = &args[0];
@@ -85,7 +85,7 @@ pub fn prim_type_check(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
 /// Checks if a value represents a null pointer.
 pub fn prim_null_pointer(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
     if args.is_empty() {
-        return Err("null-pointer? requires at least 1 argument".to_string().into());
+        return Err("null-pointer? requires at least 1 argument".into());
     }
 
     let is_null = NullPointerChecker::is_null(&args[0]);
@@ -108,7 +108,7 @@ pub fn prim_ffi_last_error(_vm: &mut VM, _args: &[Value]) -> Result<Value, Strin
 /// Note: In a full implementation, this would catch segfaults.
 pub fn prim_with_ffi_safety_checks(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
     if args.is_empty() {
-        return Err("with-ffi-safety-checks requires at least 1 argument".to_string().into());
+        return Err("with-ffi-safety-checks requires at least 1 argument".into());
     }
 
     // In a full implementation, this would:
@@ -135,7 +135,7 @@ pub fn prim_memory_stats_wrapper(_args: &[Value]) -> crate::error::LResult<Value
 
 pub fn prim_type_check_wrapper(args: &[Value]) -> crate::error::LResult<Value> {
     if args.len() != 2 {
-        return Err("type-check requires 2 arguments".to_string().into());
+        return Err("type-check requires 2 arguments".into());
     }
 
     let value = &args[0];
@@ -149,7 +149,7 @@ pub fn prim_type_check_wrapper(args: &[Value]) -> crate::error::LResult<Value> {
 
 pub fn prim_null_pointer_wrapper(args: &[Value]) -> crate::error::LResult<Value> {
     if args.is_empty() {
-        return Err("null-pointer? requires at least 1 argument".to_string().into());
+        return Err("null-pointer? requires at least 1 argument".into());
     }
 
     let is_null = NullPointerChecker::is_null(&args[0]);
@@ -165,7 +165,7 @@ pub fn prim_ffi_last_error_wrapper(_args: &[Value]) -> crate::error::LResult<Val
 
 pub fn prim_with_ffi_safety_checks_wrapper(args: &[Value]) -> crate::error::LResult<Value> {
     if args.is_empty() {
-        return Err("with-ffi-safety-checks requires at least 1 argument".to_string().into());
+        return Err("with-ffi-safety-checks requires at least 1 argument".into());
     }
     Ok(args[0].clone())
 }

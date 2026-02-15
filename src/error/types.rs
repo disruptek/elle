@@ -12,20 +12,15 @@ pub struct StackFrame {
 }
 
 /// Source of stack trace — supports deferred capture
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum TraceSource {
     /// No trace available
+    #[default]
     None,
     /// Captured from bytecode VM
     Vm(Vec<StackFrame>),
     /// Captured from CPS continuation chain (future)
     Cps(Vec<StackFrame>),
-}
-
-impl Default for TraceSource {
-    fn default() -> Self {
-        TraceSource::None
-    }
 }
 
 /// Unified error type for Elle
