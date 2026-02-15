@@ -14,6 +14,14 @@ use crate::symbol::SymbolTable;
 use crate::syntax::{Span, Syntax, SyntaxKind};
 use std::collections::HashMap;
 
+/// Result of HIR analysis
+pub struct AnalysisResult {
+    /// The analyzed HIR expression
+    pub hir: Hir,
+    /// Binding metadata from analysis
+    pub bindings: HashMap<BindingId, BindingInfo>,
+}
+
 /// Analysis context tracking scopes and bindings
 pub struct AnalysisContext {
     /// All bindings in the program
@@ -99,8 +107,10 @@ impl<'a> Analyzer<'a> {
     }
 
     /// Analyze a syntax tree into HIR
-    pub fn analyze(&mut self, syntax: &Syntax) -> Result<Hir, String> {
-        self.analyze_expr(syntax)
+    pub fn analyze(&mut self, syntax: &Syntax) -> Result<AnalysisResult, String> {
+        let hir = self.analyze_expr(syntax)?;
+        let bindings = std::mem::take(&mut self.ctx.bindings);
+        Ok(AnalysisResult { hir, bindings })
     }
 
     fn analyze_expr(&mut self, syntax: &Syntax) -> Result<Hir, String> {
@@ -1111,9 +1121,9 @@ mod tests {
         let mut analyzer = Analyzer::new(&mut symbols);
 
         let syntax = make_int(42);
-        let hir = analyzer.analyze(&syntax).unwrap();
+        let result = analyzer.analyze(&syntax).unwrap();
 
-        match hir.kind {
+        match result.hir.kind {
             HirKind::Int(n) => assert_eq!(n, 42),
             _ => panic!("Expected Int"),
         }
@@ -1131,8 +1141,8 @@ mod tests {
             make_int(2),
         ]);
 
-        let hir = analyzer.analyze(&syntax).unwrap();
-        assert!(matches!(hir.kind, HirKind::If { .. }));
+        let result = analyzer.analyze(&syntax).unwrap();
+        assert!(matches!(result.hir.kind, HirKind::If { .. }));
     }
 
     #[test]
@@ -1146,8 +1156,8 @@ mod tests {
             make_symbol("x"),
         ]);
 
-        let hir = analyzer.analyze(&syntax).unwrap();
-        assert!(matches!(hir.kind, HirKind::Let { .. }));
+        let result = analyzer.analyze(&syntax).unwrap();
+        assert!(matches!(result.hir.kind, HirKind::Let { .. }));
     }
 
     #[test]
@@ -1161,8 +1171,8 @@ mod tests {
             make_symbol("x"),
         ]);
 
-        let hir = analyzer.analyze(&syntax).unwrap();
-        assert!(matches!(hir.kind, HirKind::Lambda { .. }));
+        let result = analyzer.analyze(&syntax).unwrap();
+        assert!(matches!(result.hir.kind, HirKind::Lambda { .. }));
     }
 
     #[test]
@@ -1172,8 +1182,8 @@ mod tests {
 
         let syntax = make_list(vec![make_symbol("+"), make_int(1), make_int(2)]);
 
-        let hir = analyzer.analyze(&syntax).unwrap();
-        assert!(matches!(hir.kind, HirKind::Call { .. }));
+        let result = analyzer.analyze(&syntax).unwrap();
+        assert!(matches!(result.hir.kind, HirKind::Call { .. }));
     }
 
     #[test]

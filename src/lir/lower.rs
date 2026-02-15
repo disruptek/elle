@@ -1,7 +1,7 @@
 //! HIR to LIR lowering
 
 use super::types::*;
-use crate::hir::{BindingId, Hir, HirKind};
+use crate::hir::{BindingId, BindingInfo, BindingKind, Hir, HirKind};
 use std::collections::HashMap;
 
 /// Lowers HIR to LIR
@@ -20,6 +20,8 @@ pub struct Lowerer {
     nested_functions: Vec<(u32, Hir)>,
     /// Next function ID for nested closures
     next_func_id: u32,
+    /// Binding metadata from analysis
+    bindings: HashMap<BindingId, BindingInfo>,
 }
 
 impl Lowerer {
@@ -32,7 +34,14 @@ impl Lowerer {
             binding_to_slot: HashMap::new(),
             nested_functions: Vec::new(),
             next_func_id: 0,
+            bindings: HashMap::new(),
         }
+    }
+
+    /// Set binding info from analysis
+    pub fn with_bindings(mut self, bindings: HashMap<BindingId, BindingInfo>) -> Self {
+        self.bindings = bindings;
+        self
     }
 
     /// Lower a HIR expression to LIR
@@ -116,9 +125,18 @@ impl Lowerer {
                     let dst = self.fresh_reg();
                     self.emit(LirInstr::LoadLocal { dst, slot });
                     Ok(dst)
+                } else if let Some(info) = self.bindings.get(binding_id) {
+                    match info.kind {
+                        BindingKind::Global => {
+                            let sym = info.name;
+                            let dst = self.fresh_reg();
+                            self.emit(LirInstr::LoadGlobal { dst, sym });
+                            Ok(dst)
+                        }
+                        _ => Err(format!("Unbound variable: {:?}", binding_id)),
+                    }
                 } else {
-                    // Treat as global (shouldn't happen if HIR is well-formed)
-                    Err(format!("Unbound variable: {:?}", binding_id))
+                    Err(format!("Unknown binding: {:?}", binding_id))
                 }
             }
 
@@ -285,6 +303,21 @@ impl Lowerer {
                         slot,
                         src: value_reg,
                     });
+                } else if let Some(info) = self.bindings.get(target) {
+                    let sym = info.name;
+                    match info.kind {
+                        BindingKind::Global => {
+                            self.emit(LirInstr::StoreGlobal {
+                                sym,
+                                src: value_reg,
+                            });
+                        }
+                        _ => {
+                            return Err(format!("Cannot set unbound variable: {:?}", target));
+                        }
+                    }
+                } else {
+                    return Err(format!("Unknown binding: {:?}", target));
                 }
                 Ok(value_reg)
             }

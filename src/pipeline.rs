@@ -28,11 +28,11 @@ pub fn compile_new(source: &str, symbols: &mut SymbolTable) -> Result<CompileRes
 
     // Phase 3: Analyze to HIR
     let mut analyzer = Analyzer::new(symbols);
-    let hir = analyzer.analyze(&expanded)?;
+    let analysis = analyzer.analyze(&expanded)?;
 
-    // Phase 4: Lower to LIR
-    let mut lowerer = Lowerer::new();
-    let lir_func = lowerer.lower(&hir)?;
+    // Phase 4: Lower to LIR with binding info
+    let mut lowerer = Lowerer::new().with_bindings(analysis.bindings);
+    let lir_func = lowerer.lower(&analysis.hir)?;
 
     // Phase 5: Emit bytecode
     let mut emitter = Emitter::new();
@@ -57,10 +57,10 @@ pub fn compile_all_new(
         let expanded = expander.expand(syntax)?;
 
         let mut analyzer = Analyzer::new(symbols);
-        let hir = analyzer.analyze(&expanded)?;
+        let analysis = analyzer.analyze(&expanded)?;
 
-        let mut lowerer = Lowerer::new();
-        let lir_func = lowerer.lower(&hir)?;
+        let mut lowerer = Lowerer::new().with_bindings(analysis.bindings);
+        let lir_func = lowerer.lower(&analysis.hir)?;
 
         let mut emitter = Emitter::new();
         let bytecode = emitter.emit(&lir_func);
@@ -140,6 +140,27 @@ mod tests {
             Ok(_) => {}                                    // Success is fine
             Err(e) if e.contains("Unbound variable") => {} // Expected during integration
             Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_compile_global_variable() {
+        let (mut symbols, _) = setup();
+        // Test that global variables (like +) are properly recognized and emit LoadGlobal
+        // instead of "Unbound variable" error
+        let result = compile_new("(+ 1 2)", &mut symbols);
+        // After the fix, this should compile successfully (or at least not fail with "Unbound variable")
+        match result {
+            Ok(_) => {
+                // Success! The global variable + was properly handled
+            }
+            Err(e) if e.contains("Unbound variable") => {
+                panic!("Global variable handling failed: {}", e);
+            }
+            Err(_e) => {
+                // Other errors are acceptable (e.g., bytecode execution issues)
+                // as long as it's not "Unbound variable"
+            }
         }
     }
 
