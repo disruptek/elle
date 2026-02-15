@@ -142,6 +142,20 @@ impl Expander {
                     template.scopes.clone(),
                 )
             }
+            // Handle Unquote directly in templates (templates are implicitly quasiquoted)
+            SyntaxKind::Unquote(inner) => {
+                // Substitute inside the unquote and unwrap
+                self.substitute(inner, params, args)
+            }
+            SyntaxKind::UnquoteSplicing(inner) => {
+                // Substitute inside - splicing handled elsewhere
+                let substituted = self.substitute(inner, params, args);
+                Syntax::with_scopes(
+                    SyntaxKind::UnquoteSplicing(Box::new(substituted)),
+                    template.span.clone(),
+                    template.scopes.clone(),
+                )
+            }
             _ => template.clone(),
         }
     }
