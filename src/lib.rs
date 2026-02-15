@@ -44,6 +44,7 @@ pub mod ffi;
 pub mod formatter;
 pub mod hir;
 pub mod lir;
+pub mod pipeline;
 pub mod primitives;
 pub mod reader;
 pub mod repl;
@@ -61,6 +62,7 @@ pub use compiler::{
     JitExecutor,
 };
 pub use error::{RuntimeError, SourceLoc};
+pub use pipeline::{compile_all_new, compile_new, eval_new, CompileResult};
 pub use primitives::{init_stdlib, register_primitives};
 pub use reader::{read_str, Lexer, Reader};
 pub use symbol::SymbolTable;
