@@ -224,7 +224,7 @@ impl VM {
                         Value::NativeFn(f) => {
                             let result = match f(&args) {
                                 Ok(val) => val,
-                                Err(msg) if msg == "Division by zero" => {
+                                Err(e) if e.to_string().contains("Division by zero") => {
                                     // Create a division-by-zero exception
                                     let mut cond = crate::value::Condition::new(4);
                                     // Try to set dividend and divisor if we have the arguments
@@ -236,7 +236,7 @@ impl VM {
                                     // Push Nil to keep stack consistent
                                     Value::Nil
                                 }
-                                Err(e) => return Err(e),
+                                Err(e) => return Err(e.to_string()),
                             };
                             self.stack.push(result);
                         }
@@ -441,10 +441,12 @@ impl VM {
 
                     match func {
                         Value::NativeFn(f) => {
-                            return f(&args).map(VmResult::Done);
+                            return f(&args).map(VmResult::Done).map_err(|e| e.to_string());
                         }
                         Value::VmAwareFn(f) => {
-                            return f(&args, self).map(VmResult::Done);
+                            return f(&args, self)
+                                .map(VmResult::Done)
+                                .map_err(|e| e.to_string());
                         }
                         Value::Closure(closure) => {
                             // Validate argument count
