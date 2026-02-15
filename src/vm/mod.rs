@@ -168,6 +168,10 @@ impl VM {
                     stack::handle_dup(self)?;
                 }
 
+                Instruction::DupN => {
+                    stack::handle_dup_n(self, bytecode, &mut ip)?;
+                }
+
                 // Variable access
                 Instruction::LoadGlobal => {
                     variables::handle_load_global(self, bytecode, &mut ip, constants)?;

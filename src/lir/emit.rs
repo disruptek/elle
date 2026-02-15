@@ -22,6 +22,9 @@ pub struct Emitter {
     stack: Vec<Reg>,
     /// Register to stack position mapping (for finding values)
     reg_to_stack: HashMap<Reg, usize>,
+    /// Stack depth at branch points (label_id -> depth)
+    /// Used to reset stack state at control flow merge points
+    branch_stack_depth: HashMap<u32, usize>,
 }
 
 impl Emitter {
@@ -32,6 +35,7 @@ impl Emitter {
             pending_jumps: Vec::new(),
             stack: Vec::new(),
             reg_to_stack: HashMap::new(),
+            branch_stack_depth: HashMap::new(),
         }
     }
 
@@ -42,6 +46,7 @@ impl Emitter {
         self.pending_jumps.clear();
         self.stack.clear();
         self.reg_to_stack.clear();
+        self.branch_stack_depth.clear();
 
         // First pass: record label offsets (simplified - emit all blocks in order)
         // Second pass handled inline since we emit sequentially
@@ -75,6 +80,7 @@ impl Emitter {
         let saved_pending_jumps = std::mem::take(&mut self.pending_jumps);
         let saved_stack = std::mem::take(&mut self.stack);
         let saved_reg_to_stack = std::mem::take(&mut self.reg_to_stack);
+        let saved_branch_stack_depth = std::mem::take(&mut self.branch_stack_depth);
 
         // Emit the nested function
         let result = self.emit(func);
@@ -85,6 +91,7 @@ impl Emitter {
         self.pending_jumps = saved_pending_jumps;
         self.stack = saved_stack;
         self.reg_to_stack = saved_reg_to_stack;
+        self.branch_stack_depth = saved_branch_stack_depth;
 
         result
     }
@@ -414,6 +421,9 @@ impl Emitter {
                 self.bytecode.emit_i16(0); // placeholder - will be patched
                 self.pending_jumps.push((pos, Label(*label_id)));
                 self.pop();
+                // Save stack depth for the else branch (jump target)
+                // At runtime, if we jump here, the then branch was skipped
+                self.branch_stack_depth.insert(*label_id, self.stack.len());
             }
 
             LirInstr::JumpInline { label_id } => {
@@ -421,12 +431,24 @@ impl Emitter {
                 let pos = self.bytecode.current_pos();
                 self.bytecode.emit_i16(0); // placeholder - will be patched
                 self.pending_jumps.push((pos, Label(*label_id)));
+                // Save stack depth for the merge point
+                // At runtime, if we jump here, the else branch was skipped
+                self.branch_stack_depth.insert(*label_id, self.stack.len());
             }
 
             LirInstr::LabelMarker { label_id } => {
                 // Record the current bytecode position for this label
                 self.label_offsets
                     .insert(Label(*label_id), self.bytecode.current_pos());
+
+                // If this label is a jump target, reset stack to the expected depth
+                // This handles control flow merge points (e.g., end of if expressions)
+                if let Some(&expected_depth) = self.branch_stack_depth.get(label_id) {
+                    // Reset stack to the expected depth
+                    while self.stack.len() > expected_depth {
+                        self.pop();
+                    }
+                }
             }
         }
     }
@@ -524,23 +546,26 @@ impl Emitter {
     }
 
     fn ensure_on_top(&mut self, reg: Reg) {
-        // If register value isn't on stack, we need to reload it
-        // This is a simplified approach - a real implementation would
-        // track spills and reloads more carefully
-
         if let Some(&pos) = self.reg_to_stack.get(&reg) {
-            // Value is on stack at position pos
-            // If not on top, we'd need to shuffle
-            // For simplicity, we duplicate if needed
-            if pos != self.stack.len() - 1 {
-                // Value is not on top - would need stack manipulation
-                // For now, assume linear execution keeps values accessible
+            let stack_top = self.stack.len().saturating_sub(1);
+            if pos != stack_top {
+                // Value is not on top - duplicate it to the top using DupN
+                let offset = stack_top - pos;
+                self.bytecode.emit(Instruction::DupN);
+                self.bytecode.emit_byte(offset as u8);
+                // Track the duplicated value
+                self.stack.push(reg);
+                // Update reg_to_stack to point to the new top position
+                self.reg_to_stack.insert(reg, self.stack.len() - 1);
             }
+            // else: already on top, nothing to do
         } else {
-            // Register not on stack - this shouldn't happen in well-formed LIR
-            // Emit nil as fallback
-            self.bytecode.emit(Instruction::Nil);
-            self.push_reg(reg);
+            // Register not tracked - this can happen after control flow merges
+            // where the stack state is uncertain. Assume the value is already
+            // on top of the stack (this is the case for if/and/or expressions
+            // where each branch leaves its result on top).
+            // This is a fallback for compatibility; ideally the LIR would
+            // use phi nodes or a single result register for control flow.
         }
     }
 }

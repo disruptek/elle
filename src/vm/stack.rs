@@ -35,3 +35,18 @@ pub fn handle_dup(vm: &mut VM) -> Result<(), String> {
     vm.stack.push(val);
     Ok(())
 }
+
+pub fn handle_dup_n(vm: &mut VM, bytecode: &[u8], ip: &mut usize) -> Result<(), String> {
+    let offset = vm.read_u8(bytecode, ip) as usize;
+    let stack_len = vm.stack.len();
+    if offset >= stack_len {
+        return Err(format!(
+            "DupN offset {} out of bounds (stack size {})",
+            offset, stack_len
+        ));
+    }
+    let idx = stack_len - 1 - offset;
+    let val = vm.stack[idx].clone();
+    vm.stack.push(val);
+    Ok(())
+}

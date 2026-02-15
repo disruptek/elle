@@ -34,6 +34,10 @@ pub enum Instruction {
     /// Duplicate top of stack
     Dup,
 
+    /// Duplicate value at offset from top of stack (offset u8)
+    /// offset 0 = top, offset 1 = second from top, etc.
+    DupN,
+
     /// Function call (arg_count)
     Call,
 
