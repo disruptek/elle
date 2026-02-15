@@ -223,11 +223,33 @@ impl Emitter {
 
             LirInstr::Call { dst, func, args } => {
                 // Call expects: [arg1, arg2, ..., argN, func] on stack
-                // So we push args first, then func
-                for arg in args {
-                    self.ensure_on_top(*arg);
+                // Check if values are already in the correct positions at the top of the stack
+                let total_values = args.len() + 1; // args + func
+                let stack_len = self.stack.len();
+
+                // Check if all values are already in place
+                let mut all_in_place = stack_len >= total_values;
+                if all_in_place {
+                    let base = stack_len - total_values;
+                    for (i, arg) in args.iter().enumerate() {
+                        if self.reg_to_stack.get(arg) != Some(&(base + i)) {
+                            all_in_place = false;
+                            break;
+                        }
+                    }
+                    if all_in_place && self.reg_to_stack.get(func) != Some(&(base + args.len())) {
+                        all_in_place = false;
+                    }
                 }
-                self.ensure_on_top(*func);
+
+                if !all_in_place {
+                    // Values are not in place, need to duplicate them to the top
+                    for arg in args {
+                        self.ensure_on_top(*arg);
+                    }
+                    self.ensure_on_top(*func);
+                }
+
                 self.bytecode.emit(Instruction::Call);
                 self.bytecode.emit_byte(args.len() as u8);
                 // Pop func and args, push result
@@ -239,10 +261,30 @@ impl Emitter {
             }
 
             LirInstr::TailCall { func, args } => {
-                for arg in args {
-                    self.ensure_on_top(*arg);
+                // Check if values are already in the correct positions at the top of the stack
+                let total_values = args.len() + 1; // args + func
+                let stack_len = self.stack.len();
+
+                let mut all_in_place = stack_len >= total_values;
+                if all_in_place {
+                    let base = stack_len - total_values;
+                    for (i, arg) in args.iter().enumerate() {
+                        if self.reg_to_stack.get(arg) != Some(&(base + i)) {
+                            all_in_place = false;
+                            break;
+                        }
+                    }
+                    if all_in_place && self.reg_to_stack.get(func) != Some(&(base + args.len())) {
+                        all_in_place = false;
+                    }
                 }
-                self.ensure_on_top(*func);
+
+                if !all_in_place {
+                    for arg in args {
+                        self.ensure_on_top(*arg);
+                    }
+                    self.ensure_on_top(*func);
+                }
                 self.bytecode.emit(Instruction::TailCall);
                 self.bytecode.emit_byte(args.len() as u8);
             }
