@@ -52,8 +52,22 @@ impl Expander {
     pub fn expand(&mut self, syntax: Syntax) -> Result<Syntax, String> {
         match &syntax.kind {
             SyntaxKind::List(items) if !items.is_empty() => {
-                // Check if first element is a symbol naming a macro
+                // Check if first element is a symbol
                 if let Some(name) = items[0].as_symbol() {
+                    // Handle defmacro specially - register and return nil
+                    if name == "defmacro" || name == "define-macro" {
+                        return self.handle_defmacro(items, &syntax.span);
+                    }
+
+                    // Handle threading macros
+                    if name == "->" {
+                        return self.handle_thread_first(items, &syntax.span);
+                    }
+                    if name == "->>" {
+                        return self.handle_thread_last(items, &syntax.span);
+                    }
+
+                    // Check if it's a macro call
                     if let Some(macro_def) = self.macros.get(name).cloned() {
                         return self.expand_macro_call(&macro_def, &items[1..], &syntax);
                     }
@@ -72,6 +86,53 @@ impl Expander {
             }
             _ => Ok(syntax),
         }
+    }
+
+    /// Handle (defmacro name (params...) body) or (define-macro name (params...) body)
+    fn handle_defmacro(&mut self, items: &[Syntax], span: &Span) -> Result<Syntax, String> {
+        // Syntax: (defmacro name (params...) body)
+        if items.len() != 4 {
+            return Err(format!(
+                "{}: defmacro requires exactly 3 arguments (name, parameters, body)",
+                span
+            ));
+        }
+
+        // Get macro name
+        let name = items[1]
+            .as_symbol()
+            .ok_or_else(|| format!("{}: macro name must be a symbol", span))?
+            .to_string();
+
+        // Get parameter list
+        let params_syntax = items[2]
+            .as_list()
+            .ok_or_else(|| format!("{}: macro parameters must be a list", span))?;
+
+        let params: Vec<String> = params_syntax
+            .iter()
+            .map(|p| {
+                p.as_symbol()
+                    .ok_or_else(|| format!("{}: macro parameter must be a symbol", span))
+                    .map(|s| s.to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Get the body template
+        let template = items[3].clone();
+
+        // Create and register the macro
+        let macro_def = MacroDef {
+            name: name.clone(),
+            params,
+            template,
+            definition_scope: ScopeId(0), // Top-level scope
+        };
+
+        self.define_macro(macro_def);
+
+        // Return nil - the macro definition itself doesn't produce code
+        Ok(Syntax::new(SyntaxKind::Nil, span.clone()))
     }
 
     fn expand_macro_call(
@@ -239,6 +300,72 @@ impl Expander {
         };
 
         syntax
+    }
+
+    /// Handle thread-first macro: (-> value form1 form2 ...)
+    /// Inserts value as the FIRST argument to each form
+    fn handle_thread_first(&mut self, items: &[Syntax], span: &Span) -> Result<Syntax, String> {
+        if items.len() < 2 {
+            return Err(format!("{}: -> requires at least a value", span));
+        }
+
+        // Start with the initial value
+        let mut result = items[1].clone();
+
+        // Thread through each form
+        for form in &items[2..] {
+            result = match &form.kind {
+                SyntaxKind::List(form_items) if !form_items.is_empty() => {
+                    // Insert result as first argument: (f a b) becomes (f result a b)
+                    let mut new_items = vec![form_items[0].clone(), result];
+                    new_items.extend(form_items[1..].iter().cloned());
+                    Syntax::new(SyntaxKind::List(new_items), span.clone())
+                }
+                SyntaxKind::Symbol(_) => {
+                    // Bare symbol: f becomes (f result)
+                    Syntax::new(SyntaxKind::List(vec![form.clone(), result]), span.clone())
+                }
+                _ => {
+                    return Err(format!("{}: -> form must be a list or symbol", span));
+                }
+            };
+        }
+
+        // Recursively expand the result
+        self.expand(result)
+    }
+
+    /// Handle thread-last macro: (->> value form1 form2 ...)
+    /// Inserts value as the LAST argument to each form
+    fn handle_thread_last(&mut self, items: &[Syntax], span: &Span) -> Result<Syntax, String> {
+        if items.len() < 2 {
+            return Err(format!("{}: ->> requires at least a value", span));
+        }
+
+        // Start with the initial value
+        let mut result = items[1].clone();
+
+        // Thread through each form
+        for form in &items[2..] {
+            result = match &form.kind {
+                SyntaxKind::List(form_items) if !form_items.is_empty() => {
+                    // Insert result as last argument: (f a b) becomes (f a b result)
+                    let mut new_items = form_items.to_vec();
+                    new_items.push(result);
+                    Syntax::new(SyntaxKind::List(new_items), span.clone())
+                }
+                SyntaxKind::Symbol(_) => {
+                    // Bare symbol: f becomes (f result)
+                    Syntax::new(SyntaxKind::List(vec![form.clone(), result]), span.clone())
+                }
+                _ => {
+                    return Err(format!("{}: ->> form must be a list or symbol", span));
+                }
+            };
+        }
+
+        // Recursively expand the result
+        self.expand(result)
     }
 
     fn expand_list(
@@ -551,5 +678,96 @@ mod tests {
             "Result should contain 'x': {}",
             result_str
         );
+    }
+
+    #[test]
+    fn test_defmacro_registration() {
+        let mut expander = Expander::new();
+        let span = Span::new(0, 5, 1, 1);
+
+        // Define a macro using defmacro: (defmacro double (x) (* x 2))
+        let defmacro_form = Syntax::new(
+            SyntaxKind::List(vec![
+                Syntax::new(SyntaxKind::Symbol("defmacro".to_string()), span.clone()),
+                Syntax::new(SyntaxKind::Symbol("double".to_string()), span.clone()),
+                Syntax::new(
+                    SyntaxKind::List(vec![Syntax::new(
+                        SyntaxKind::Symbol("x".to_string()),
+                        span.clone(),
+                    )]),
+                    span.clone(),
+                ),
+                Syntax::new(
+                    SyntaxKind::List(vec![
+                        Syntax::new(SyntaxKind::Symbol("*".to_string()), span.clone()),
+                        Syntax::new(SyntaxKind::Symbol("x".to_string()), span.clone()),
+                        Syntax::new(SyntaxKind::Int(2), span.clone()),
+                    ]),
+                    span.clone(),
+                ),
+            ]),
+            span.clone(),
+        );
+
+        let result = expander.expand(defmacro_form);
+        assert!(result.is_ok());
+        let expanded = result.unwrap();
+        // defmacro should expand to nil
+        assert_eq!(expanded.to_string(), "nil");
+
+        // Now use the macro: (double 21)
+        let macro_call = Syntax::new(
+            SyntaxKind::List(vec![
+                Syntax::new(SyntaxKind::Symbol("double".to_string()), span.clone()),
+                Syntax::new(SyntaxKind::Int(21), span.clone()),
+            ]),
+            span,
+        );
+
+        let result = expander.expand(macro_call);
+        assert!(result.is_ok());
+        let expanded = result.unwrap();
+        // Should expand to (* 21 2)
+        assert_eq!(expanded.to_string(), "(* 21 2)");
+    }
+
+    #[test]
+    fn test_defmacro_invalid_syntax() {
+        let mut expander = Expander::new();
+        let span = Span::new(0, 5, 1, 1);
+
+        // defmacro with wrong number of arguments
+        let defmacro_form = Syntax::new(
+            SyntaxKind::List(vec![
+                Syntax::new(SyntaxKind::Symbol("defmacro".to_string()), span.clone()),
+                Syntax::new(SyntaxKind::Symbol("double".to_string()), span.clone()),
+            ]),
+            span.clone(),
+        );
+
+        let result = expander.expand(defmacro_form);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("requires exactly 3 arguments"));
+    }
+
+    #[test]
+    fn test_defmacro_non_symbol_name() {
+        let mut expander = Expander::new();
+        let span = Span::new(0, 5, 1, 1);
+
+        // defmacro with non-symbol name
+        let defmacro_form = Syntax::new(
+            SyntaxKind::List(vec![
+                Syntax::new(SyntaxKind::Symbol("defmacro".to_string()), span.clone()),
+                Syntax::new(SyntaxKind::Int(42), span.clone()),
+                Syntax::new(SyntaxKind::List(vec![]), span.clone()),
+                Syntax::new(SyntaxKind::Symbol("x".to_string()), span.clone()),
+            ]),
+            span.clone(),
+        );
+
+        let result = expander.expand(defmacro_form);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("macro name must be a symbol"));
     }
 }
