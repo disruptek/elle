@@ -18,25 +18,19 @@ use crate::vm::VM;
 /// - arg-values: List of argument values to pass
 pub fn prim_call_c_function(vm: &VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 5 {
-        return Err("call-c-function requires exactly 5 arguments"
-            .to_string()
-            .into());
+        return Err("call-c-function requires exactly 5 arguments".into());
     }
 
     // Parse library ID
     let lib_id = match &args[0] {
         Value::LibHandle(LibHandle(id)) => *id,
-        _ => return Err("First argument must be a library handle".to_string().into()),
+        _ => return Err("First argument must be a library handle".into()),
     };
 
     // Parse function name
     let func_name = match &args[1] {
         Value::String(s) => s.as_ref(),
-        _ => {
-            return Err("Second argument must be a function name string"
-                .to_string()
-                .into())
-        }
+        _ => return Err("Second argument must be a function name string".into()),
     };
 
     // Parse return type
@@ -52,22 +46,14 @@ pub fn prim_call_c_function(vm: &VM, args: &[Value]) -> Result<Value, String> {
                 .map(parse_ctype)
                 .collect::<Result<Vec<_>, _>>()?
         }
-        _ => {
-            return Err("Fourth argument must be a list of argument types"
-                .to_string()
-                .into())
-        }
+        _ => return Err("Fourth argument must be a list of argument types".into()),
     };
 
     // Parse argument values
     let arg_values = match &args[4] {
         Value::Nil => vec![],
         Value::Cons(_) => args[4].list_to_vec()?,
-        _ => {
-            return Err("Fifth argument must be a list of argument values"
-                .to_string()
-                .into())
-        }
+        _ => return Err("Fifth argument must be a list of argument values".into()),
     };
 
     // Check argument count matches
@@ -106,17 +92,13 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> crate::error::LResult<Val
     // Parse library ID
     let lib_id = match &args[0] {
         Value::LibHandle(LibHandle(id)) => *id,
-        _ => return Err("First argument must be a library handle".to_string().into()),
+        _ => return Err("First argument must be a library handle".into()),
     };
 
     // Parse function name
     let func_name = match &args[1] {
         Value::String(s) => s.as_ref(),
-        _ => {
-            return Err("Second argument must be a function name string"
-                .to_string()
-                .into())
-        }
+        _ => return Err("Second argument must be a function name string".into()),
     };
 
     // Parse return type
@@ -132,22 +114,14 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> crate::error::LResult<Val
                 .map(parse_ctype)
                 .collect::<Result<Vec<_>, _>>()?
         }
-        _ => {
-            return Err("Fourth argument must be a list of argument types"
-                .to_string()
-                .into())
-        }
+        _ => return Err("Fourth argument must be a list of argument types".into()),
     };
 
     // Parse argument values
     let arg_values = match &args[4] {
         Value::Nil => vec![],
         Value::Cons(_) => args[4].list_to_vec()?,
-        _ => {
-            return Err("Fifth argument must be a list of argument values"
-                .to_string()
-                .into())
-        }
+        _ => return Err("Fifth argument must be a list of argument values".into()),
     };
 
     // Check argument count matches

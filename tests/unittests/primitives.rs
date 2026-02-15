@@ -437,7 +437,7 @@ fn test_throw() {
     // throw with string message should produce error
     let result = call_primitive(&throw_fn, &[Value::String("Test error".into())]);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().to_string(), "Test error");
+    assert_eq!(result.unwrap_err().to_string(), "Error: Test error");
 }
 
 #[test]

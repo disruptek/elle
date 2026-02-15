@@ -13,10 +13,8 @@ pub fn prim_map(args: &[Value]) -> LResult<Value> {
     match &args[0] {
         Value::NativeFn(f) => {
             let vec = args[1].list_to_vec()?;
-            let results: Result<Vec<Value>, LError> = vec
-                .iter()
-                .map(|v| f(std::slice::from_ref(v)).map_err(|e| e.into()))
-                .collect();
+            let results: Result<Vec<Value>, LError> =
+                vec.iter().map(|v| f(std::slice::from_ref(v))).collect();
             Ok(list(results?))
         }
         Value::Closure(_) => Err(

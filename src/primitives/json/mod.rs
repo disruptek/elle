@@ -25,7 +25,7 @@ pub fn prim_json_parse(args: &[Value]) -> LResult<Value> {
     };
 
     let mut parser = JsonParser::new(json_str);
-    parser.parse().map_err(|e| LError::from(e))
+    parser.parse().map_err(LError::from)
 }
 
 /// Serialize an Elle value to compact JSON
@@ -36,7 +36,7 @@ pub fn prim_json_serialize(args: &[Value]) -> LResult<Value> {
             .into());
     }
 
-    let json_str = serialize_value(&args[0]).map_err(|e| LError::from(e))?;
+    let json_str = serialize_value(&args[0]).map_err(LError::from)?;
     Ok(Value::String(Rc::from(json_str)))
 }
 
@@ -48,7 +48,7 @@ pub fn prim_json_serialize_pretty(args: &[Value]) -> LResult<Value> {
             .into());
     }
 
-    let json_str = serialize_value_pretty(&args[0], 0).map_err(|e| LError::from(e))?;
+    let json_str = serialize_value_pretty(&args[0], 0).map_err(LError::from)?;
     Ok(Value::String(Rc::from(json_str)))
 }
 
