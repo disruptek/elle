@@ -6,7 +6,7 @@ mod token;
 // Re-export public API
 pub use lexer::Lexer;
 pub use parser::Reader;
-pub use syntax_parser::SyntaxParser;
+pub use syntax_parser::SyntaxReader;
 pub use token::{OwnedToken, SourceLoc, Token, TokenWithLoc};
 
 use crate::symbol::SymbolTable;
@@ -62,8 +62,8 @@ pub fn read_syntax(input: &str) -> Result<Syntax, String> {
         return Err("No input".to_string());
     }
 
-    let mut parser = SyntaxParser::new(tokens, locations);
-    parser.parse()
+    let mut parser = SyntaxReader::new(tokens, locations);
+    parser.read()
 }
 
 /// Parse source code into multiple Syntax trees
@@ -88,8 +88,8 @@ pub fn read_syntax_all(input: &str) -> Result<Vec<Syntax>, String> {
         return Ok(Vec::new());
     }
 
-    let mut parser = SyntaxParser::new(tokens, locations);
-    parser.parse_all()
+    let mut parser = SyntaxReader::new(tokens, locations);
+    parser.read_all()
 }
 
 #[cfg(test)]
