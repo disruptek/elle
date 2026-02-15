@@ -8,7 +8,11 @@ use std::rc::Rc;
 /// (struct key1 val1 key2 val2 ...)
 pub fn prim_struct(args: &[Value]) -> LResult<Value> {
     if !args.len().is_multiple_of(2) {
-        return Err("struct requires an even number of arguments (key-value pairs)".to_string().into());
+        return Err(
+            "struct requires an even number of arguments (key-value pairs)"
+                .to_string()
+                .into(),
+        );
     }
 
     let mut map = BTreeMap::new();
@@ -25,7 +29,11 @@ pub fn prim_struct(args: &[Value]) -> LResult<Value> {
 /// `(struct-get struct key [default])`
 pub fn prim_struct_get(args: &[Value]) -> LResult<Value> {
     if args.len() < 2 || args.len() > 3 {
-        return Err("struct-get requires 2 or 3 arguments (struct, key, [default])".to_string().into());
+        return Err(
+            "struct-get requires 2 or 3 arguments (struct, key, [default])"
+                .to_string()
+                .into(),
+        );
     }
 
     let s = args[0].as_struct()?;
@@ -43,7 +51,11 @@ pub fn prim_struct_get(args: &[Value]) -> LResult<Value> {
 /// (struct-put struct key value) returns a new struct
 pub fn prim_struct_put(args: &[Value]) -> LResult<Value> {
     if args.len() != 3 {
-        return Err("struct-put requires exactly 3 arguments (struct, key, value)".to_string().into());
+        return Err(
+            "struct-put requires exactly 3 arguments (struct, key, value)"
+                .to_string()
+                .into(),
+        );
     }
 
     let s = args[0].as_struct()?;
@@ -59,7 +71,9 @@ pub fn prim_struct_put(args: &[Value]) -> LResult<Value> {
 /// (struct-del struct key) returns a new struct
 pub fn prim_struct_del(args: &[Value]) -> LResult<Value> {
     if args.len() != 2 {
-        return Err("struct-del requires exactly 2 arguments (struct, key)".to_string().into());
+        return Err("struct-del requires exactly 2 arguments (struct, key)"
+            .to_string()
+            .into());
     }
 
     let s = args[0].as_struct()?;
@@ -74,7 +88,9 @@ pub fn prim_struct_del(args: &[Value]) -> LResult<Value> {
 /// (struct-keys struct)
 pub fn prim_struct_keys(args: &[Value]) -> LResult<Value> {
     if args.len() != 1 {
-        return Err("struct-keys requires exactly 1 argument (struct)".to_string().into());
+        return Err("struct-keys requires exactly 1 argument (struct)"
+            .to_string()
+            .into());
     }
 
     let s = args[0].as_struct()?;
@@ -97,7 +113,9 @@ pub fn prim_struct_keys(args: &[Value]) -> LResult<Value> {
 /// (struct-values struct)
 pub fn prim_struct_values(args: &[Value]) -> LResult<Value> {
     if args.len() != 1 {
-        return Err("struct-values requires exactly 1 argument (struct)".to_string().into());
+        return Err("struct-values requires exactly 1 argument (struct)"
+            .to_string()
+            .into());
     }
 
     let s = args[0].as_struct()?;
@@ -109,7 +127,9 @@ pub fn prim_struct_values(args: &[Value]) -> LResult<Value> {
 /// (struct-has? struct key)
 pub fn prim_struct_has(args: &[Value]) -> LResult<Value> {
     if args.len() != 2 {
-        return Err("struct-has? requires exactly 2 arguments (struct, key)".to_string().into());
+        return Err("struct-has? requires exactly 2 arguments (struct, key)"
+            .to_string()
+            .into());
     }
 
     let s = args[0].as_struct()?;
@@ -122,7 +142,9 @@ pub fn prim_struct_has(args: &[Value]) -> LResult<Value> {
 /// (struct-length struct)
 pub fn prim_struct_length(args: &[Value]) -> LResult<Value> {
     if args.len() != 1 {
-        return Err("struct-length requires exactly 1 argument (struct)".to_string().into());
+        return Err("struct-length requires exactly 1 argument (struct)"
+            .to_string()
+            .into());
     }
 
     let s = args[0].as_struct()?;

@@ -9,7 +9,9 @@ use std::rc::Rc;
 /// Signal a condition (silent - just propagates)
 pub fn prim_signal(args: &[Value]) -> LResult<Value> {
     if args.is_empty() {
-        return Err("signal requires at least 1 argument (condition ID)".to_string().into());
+        return Err("signal requires at least 1 argument (condition ID)"
+            .to_string()
+            .into());
     }
 
     // First arg should be the exception ID
@@ -29,7 +31,9 @@ pub fn prim_signal(args: &[Value]) -> LResult<Value> {
 
             Ok(Value::Condition(Rc::new(condition)))
         }
-        _ => Err("signal: first argument must be an integer (exception ID)".to_string().into()),
+        _ => Err("signal: first argument must be an integer (exception ID)"
+            .to_string()
+            .into()),
     }
 }
 
