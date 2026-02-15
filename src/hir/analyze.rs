@@ -446,6 +446,9 @@ impl<'a> Analyzer<'a> {
         let sym = self.symbols.intern(name);
         let value = self.analyze_expr(&items[2])?;
 
+        // Register the binding in the current scope so that subsequent set! can find it
+        self.bind(name, BindingKind::Global);
+
         Ok(Hir::new(
             HirKind::Define {
                 name: sym,

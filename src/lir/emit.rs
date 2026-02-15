@@ -70,11 +70,11 @@ impl Emitter {
     /// Emit bytecode from a nested LIR function (for closures)
     fn emit_nested_function(&mut self, func: &LirFunction) -> Bytecode {
         // Save current state
-        let saved_bytecode = std::mem::replace(&mut self.bytecode, Bytecode::new());
-        let saved_label_offsets = std::mem::replace(&mut self.label_offsets, HashMap::new());
-        let saved_pending_jumps = std::mem::replace(&mut self.pending_jumps, Vec::new());
-        let saved_stack = std::mem::replace(&mut self.stack, Vec::new());
-        let saved_reg_to_stack = std::mem::replace(&mut self.reg_to_stack, HashMap::new());
+        let saved_bytecode = std::mem::take(&mut self.bytecode);
+        let saved_label_offsets = std::mem::take(&mut self.label_offsets);
+        let saved_pending_jumps = std::mem::take(&mut self.pending_jumps);
+        let saved_stack = std::mem::take(&mut self.stack);
+        let saved_reg_to_stack = std::mem::take(&mut self.reg_to_stack);
 
         // Emit the nested function
         let result = self.emit(func);
