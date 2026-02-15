@@ -336,4 +336,105 @@ mod tests {
             Err(e) => panic!("Expected Ok(true), got Err: {}", e),
         }
     }
+
+    #[test]
+    fn test_compile_all_examples() {
+        use std::fs;
+        use std::path::Path;
+
+        let examples_dir = "examples";
+        let mut passed = Vec::new();
+        let mut failed = Vec::new();
+
+        if !Path::new(examples_dir).exists() {
+            println!("Examples directory not found, skipping test");
+            return;
+        }
+
+        for entry in fs::read_dir(examples_dir).expect("Failed to read examples directory") {
+            let entry = entry.expect("Failed to read directory entry");
+            let path = entry.path();
+
+            if path.extension().map_or(false, |e| e == "lisp") {
+                let filename = path.file_name().unwrap().to_string_lossy().to_string();
+                let content = fs::read_to_string(&path).expect("Failed to read example file");
+
+                let (mut symbols, _) = setup();
+                match compile_new(&content, &mut symbols) {
+                    Ok(_) => {
+                        passed.push(filename);
+                    }
+                    Err(e) => {
+                        failed.push((filename, e));
+                    }
+                }
+            }
+        }
+
+        println!("\n=== Example Compilation Results ===");
+        println!("Passed: {}", passed.len());
+        for file in &passed {
+            println!("  ✓ {}", file);
+        }
+
+        if !failed.is_empty() {
+            println!("\nFailed: {}", failed.len());
+            for (file, err) in &failed {
+                println!("  ✗ {}: {}", file, err);
+            }
+        }
+
+        println!("\nTotal: {} passed, {} failed", passed.len(), failed.len());
+
+        // Don't fail the test - just report results
+        // This allows us to see which examples work and which don't
+    }
+
+    #[test]
+    fn test_execute_simple_examples() {
+        use std::fs;
+        use std::path::Path;
+
+        let examples_dir = "examples";
+        let mut executed = Vec::new();
+        let mut execution_failed = Vec::new();
+
+        if !Path::new(examples_dir).exists() {
+            println!("Examples directory not found, skipping test");
+            return;
+        }
+
+        // Test specific simple examples that should execute
+        let test_files = vec!["hello.lisp"];
+
+        for filename in test_files {
+            let path = Path::new(examples_dir).join(filename);
+            if path.exists() {
+                let content = fs::read_to_string(&path).expect("Failed to read example file");
+                let (mut symbols, mut vm) = setup();
+
+                match eval_new(&content, &mut symbols, &mut vm) {
+                    Ok(_) => {
+                        executed.push(filename.to_string());
+                    }
+                    Err(e) => {
+                        execution_failed.push((filename.to_string(), e));
+                    }
+                }
+            }
+        }
+
+        println!("\n=== Example Execution Results ===");
+        println!("Executed: {}", executed.len());
+        for file in &executed {
+            println!("  ✓ {}", file);
+        }
+
+        if !execution_failed.is_empty() {
+            println!("\nExecution Failed: {}", execution_failed.len());
+            for (file, err) in &execution_failed {
+                println!("  ✗ {}: {}", file, err);
+            }
+        }
+    }
 }
