@@ -79,6 +79,11 @@ pub enum LirInstr {
     // === Constants ===
     /// Load a constant into a register
     Const { dst: Reg, value: LirConst },
+    /// Load a Value constant into a register
+    ValueConst {
+        dst: Reg,
+        value: crate::value::Value,
+    },
 
     // === Variables ===
     /// Load from local slot

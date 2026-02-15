@@ -24,6 +24,44 @@ fn format_value(value: &Value) -> String {
             // Fallback if symbol table is not available
             format!("Symbol({})", id.0)
         }
+        Value::Cons(cons) => {
+            // Format lists with proper symbol resolution
+            let mut result = String::from("(");
+            let mut current = Value::Cons(cons.clone());
+            let mut first = true;
+            while let Value::Cons(ref c) = current {
+                if !first {
+                    result.push(' ');
+                }
+                first = false;
+                result.push_str(&format_value(&c.first));
+                match &c.rest {
+                    Value::Nil => break,
+                    Value::Cons(_) => {
+                        current = c.rest.clone();
+                    }
+                    other => {
+                        result.push_str(" . ");
+                        result.push_str(&format_value(other));
+                        break;
+                    }
+                }
+            }
+            result.push(')');
+            result
+        }
+        Value::Vector(vec) => {
+            // Format vectors with proper symbol resolution
+            let mut result = String::from("[");
+            for (i, v) in vec.iter().enumerate() {
+                if i > 0 {
+                    result.push(' ');
+                }
+                result.push_str(&format_value(v));
+            }
+            result.push(']');
+            result
+        }
         _ => format!("{}", value),
     }
 }

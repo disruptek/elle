@@ -162,8 +162,11 @@ impl<'a> Analyzer<'a> {
                 Ok(Hir::new(HirKind::Begin(args), span, effect))
             }
 
-            // Quote - preserve as Syntax
-            SyntaxKind::Quote(inner) => Ok(Hir::pure(HirKind::Quote((**inner).clone()), span)),
+            // Quote - convert to Value at analysis time
+            SyntaxKind::Quote(inner) => {
+                let value = (**inner).to_value(self.symbols);
+                Ok(Hir::pure(HirKind::Quote(value), span))
+            }
 
             // Quasiquote, Unquote, UnquoteSplicing should have been expanded
             SyntaxKind::Quasiquote(_) | SyntaxKind::Unquote(_) | SyntaxKind::UnquoteSplicing(_) => {
@@ -199,7 +202,8 @@ impl<'a> Analyzer<'a> {
                             if items.len() != 2 {
                                 return Err(format!("{}: quote requires 1 argument", span));
                             }
-                            return Ok(Hir::pure(HirKind::Quote(items[1].clone()), span));
+                            let value = items[1].to_value(self.symbols);
+                            return Ok(Hir::pure(HirKind::Quote(value), span));
                         }
                         "yield" => return self.analyze_yield(items, span),
                         "try" => return self.analyze_try(items, span),

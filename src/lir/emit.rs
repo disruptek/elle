@@ -132,6 +132,13 @@ impl Emitter {
                 self.push_reg(*dst);
             }
 
+            LirInstr::ValueConst { dst, value } => {
+                let const_idx = self.bytecode.add_constant(value.clone());
+                self.bytecode.emit(Instruction::LoadConst);
+                self.bytecode.emit_u16(const_idx);
+                self.push_reg(*dst);
+            }
+
             LirInstr::LoadLocal { dst, slot } => {
                 self.bytecode.emit(Instruction::LoadLocal);
                 self.bytecode.emit_byte(0); // depth 0 for now

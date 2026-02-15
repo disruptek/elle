@@ -820,10 +820,9 @@ impl Lowerer {
                 Ok(dst)
             }
 
-            HirKind::Quote(_syntax) => {
-                // Quote produces a runtime value - for now, just emit nil
-                // Full implementation would compile syntax to value construction
-                self.emit_const(LirConst::Nil)
+            HirKind::Quote(value) => {
+                // Quote produces the pre-computed Value as a constant
+                self.emit_value_const(value.clone())
             }
 
             HirKind::Throw(value) => {
@@ -937,6 +936,12 @@ impl Lowerer {
     fn emit_const(&mut self, c: LirConst) -> Result<Reg, String> {
         let dst = self.fresh_reg();
         self.emit(LirInstr::Const { dst, value: c });
+        Ok(dst)
+    }
+
+    fn emit_value_const(&mut self, value: crate::value::Value) -> Result<Reg, String> {
+        let dst = self.fresh_reg();
+        self.emit(LirInstr::ValueConst { dst, value });
         Ok(dst)
     }
 

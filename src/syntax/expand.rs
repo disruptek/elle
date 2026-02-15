@@ -38,6 +38,16 @@ impl Expander {
         id
     }
 
+    /// Create a symbol syntax node
+    fn make_symbol(&self, name: &str, span: Span) -> Syntax {
+        Syntax::new(SyntaxKind::Symbol(name.to_string()), span)
+    }
+
+    /// Create a list syntax node
+    fn make_list(&self, items: Vec<Syntax>, span: Span) -> Syntax {
+        Syntax::new(SyntaxKind::List(items), span)
+    }
+
     /// Expand all macros in a syntax tree
     pub fn expand(&mut self, syntax: Syntax) -> Result<Syntax, String> {
         match &syntax.kind {
@@ -57,13 +67,8 @@ impl Expander {
                 Ok(syntax)
             }
             SyntaxKind::Quasiquote(inner) => {
-                // Expand unquotes inside quasiquote
-                let expanded = self.expand_quasiquote(inner)?;
-                Ok(Syntax::with_scopes(
-                    SyntaxKind::Quasiquote(Box::new(expanded)),
-                    syntax.span,
-                    syntax.scopes,
-                ))
+                // Convert quasiquote to code that builds the structure
+                self.quasiquote_to_code(inner, 1, &syntax.span)
             }
             _ => Ok(syntax),
         }
@@ -266,37 +271,132 @@ impl Expander {
         ))
     }
 
-    fn expand_quasiquote(&mut self, syntax: &Syntax) -> Result<Syntax, String> {
+    /// Convert quasiquote to code that constructs the value at runtime
+    /// depth tracks nesting level for nested quasiquotes
+    fn quasiquote_to_code(
+        &mut self,
+        syntax: &Syntax,
+        depth: usize,
+        span: &Span,
+    ) -> Result<Syntax, String> {
         match &syntax.kind {
-            SyntaxKind::Unquote(inner) => {
-                // Expand the unquoted expression
-                self.expand((**inner).clone())
-            }
-            SyntaxKind::List(items) => {
-                let mut result = Vec::new();
-                for item in items {
-                    match &item.kind {
-                        SyntaxKind::UnquoteSplicing(inner) => {
-                            // Expand and mark for splicing (actual splicing at runtime)
-                            let expanded = self.expand((**inner).clone())?;
-                            result.push(Syntax::with_scopes(
-                                SyntaxKind::UnquoteSplicing(Box::new(expanded)),
-                                item.span.clone(),
-                                item.scopes.clone(),
-                            ));
-                        }
-                        _ => {
-                            result.push(self.expand_quasiquote(item)?);
-                        }
-                    }
-                }
-                Ok(Syntax::with_scopes(
-                    SyntaxKind::List(result),
-                    syntax.span.clone(),
-                    syntax.scopes.clone(),
+            // Unquote at depth 1 - evaluate the expression
+            SyntaxKind::Unquote(inner) if depth == 1 => self.expand((**inner).clone()),
+
+            // Nested unquote - decrease depth
+            SyntaxKind::Unquote(inner) if depth > 1 => {
+                let expanded = self.quasiquote_to_code(inner, depth - 1, span)?;
+                // Wrap in (list (quote unquote) expanded)
+                Ok(self.make_list(
+                    vec![
+                        self.make_symbol("list", span.clone()),
+                        self.make_list(
+                            vec![
+                                self.make_symbol("quote", span.clone()),
+                                self.make_symbol("unquote", span.clone()),
+                            ],
+                            span.clone(),
+                        ),
+                        expanded,
+                    ],
+                    span.clone(),
                 ))
             }
-            _ => Ok(syntax.clone()),
+
+            // Nested quasiquote - increase depth
+            SyntaxKind::Quasiquote(inner) => {
+                let expanded = self.quasiquote_to_code(inner, depth + 1, span)?;
+                Ok(self.make_list(
+                    vec![
+                        self.make_symbol("list", span.clone()),
+                        self.make_list(
+                            vec![
+                                self.make_symbol("quote", span.clone()),
+                                self.make_symbol("quasiquote", span.clone()),
+                            ],
+                            span.clone(),
+                        ),
+                        expanded,
+                    ],
+                    span.clone(),
+                ))
+            }
+
+            // List - process elements, handling unquote-splicing
+            SyntaxKind::List(items) => self.quasiquote_list_to_code(items, depth, span),
+
+            // Everything else gets quoted
+            _ => Ok(self.make_list(
+                vec![self.make_symbol("quote", span.clone()), syntax.clone()],
+                span.clone(),
+            )),
+        }
+    }
+
+    /// Convert a quasiquoted list to code
+    fn quasiquote_list_to_code(
+        &mut self,
+        items: &[Syntax],
+        depth: usize,
+        span: &Span,
+    ) -> Result<Syntax, String> {
+        if items.is_empty() {
+            return Ok(self.make_list(
+                vec![
+                    self.make_symbol("quote", span.clone()),
+                    self.make_list(vec![], span.clone()),
+                ],
+                span.clone(),
+            ));
+        }
+
+        // Check if any element is unquote-splicing
+        let has_splice = items
+            .iter()
+            .any(|item| matches!(item.kind, SyntaxKind::UnquoteSplicing(_)));
+
+        if has_splice {
+            // Need to use append for splicing
+            let mut segments = Vec::new();
+            let mut current_segment = Vec::new();
+
+            for item in items {
+                if let SyntaxKind::UnquoteSplicing(inner) = &item.kind {
+                    // Flush current segment
+                    if !current_segment.is_empty() {
+                        let mut list_call = vec![self.make_symbol("list", span.clone())];
+                        list_call.append(&mut current_segment);
+                        segments.push(self.make_list(list_call, span.clone()));
+                    }
+                    // Add spliced expression
+                    if depth == 1 {
+                        segments.push(self.expand((**inner).clone())?);
+                    } else {
+                        segments.push(self.quasiquote_to_code(inner, depth - 1, span)?);
+                    }
+                } else {
+                    current_segment.push(self.quasiquote_to_code(item, depth, span)?);
+                }
+            }
+
+            // Flush remaining segment
+            if !current_segment.is_empty() {
+                let mut list_call = vec![self.make_symbol("list", span.clone())];
+                list_call.extend(current_segment);
+                segments.push(self.make_list(list_call, span.clone()));
+            }
+
+            // Build (append seg1 seg2 ...)
+            let mut append_call = vec![self.make_symbol("append", span.clone())];
+            append_call.extend(segments);
+            Ok(self.make_list(append_call, span.clone()))
+        } else {
+            // Simple case - just use list
+            let mut list_call = vec![self.make_symbol("list", span.clone())];
+            for item in items {
+                list_call.push(self.quasiquote_to_code(item, depth, span)?);
+            }
+            Ok(self.make_list(list_call, span.clone()))
         }
     }
 }
@@ -304,5 +404,152 @@ impl Expander {
 impl Default for Expander {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_quasiquote_simple_list() {
+        let mut expander = Expander::new();
+        let span = Span::new(0, 10, 1, 1);
+
+        // `(a b c)
+        let items = vec![
+            Syntax::new(SyntaxKind::Symbol("a".to_string()), span.clone()),
+            Syntax::new(SyntaxKind::Symbol("b".to_string()), span.clone()),
+            Syntax::new(SyntaxKind::Symbol("c".to_string()), span.clone()),
+        ];
+        let syntax = Syntax::new(
+            SyntaxKind::Quasiquote(Box::new(Syntax::new(SyntaxKind::List(items), span.clone()))),
+            span.clone(),
+        );
+
+        let result = expander.expand(syntax).unwrap();
+        // Should expand to (list (quote a) (quote b) (quote c))
+        let result_str = result.to_string();
+        assert!(
+            result_str.contains("list"),
+            "Result should contain 'list': {}",
+            result_str
+        );
+        assert!(
+            result_str.contains("quote"),
+            "Result should contain 'quote': {}",
+            result_str
+        );
+    }
+
+    #[test]
+    fn test_quasiquote_with_unquote() {
+        let mut expander = Expander::new();
+        let span = Span::new(0, 10, 1, 1);
+
+        // `(a ,x b)
+        let items = vec![
+            Syntax::new(SyntaxKind::Symbol("a".to_string()), span.clone()),
+            Syntax::new(
+                SyntaxKind::Unquote(Box::new(Syntax::new(
+                    SyntaxKind::Symbol("x".to_string()),
+                    span.clone(),
+                ))),
+                span.clone(),
+            ),
+            Syntax::new(SyntaxKind::Symbol("b".to_string()), span.clone()),
+        ];
+        let syntax = Syntax::new(
+            SyntaxKind::Quasiquote(Box::new(Syntax::new(SyntaxKind::List(items), span.clone()))),
+            span.clone(),
+        );
+
+        let result = expander.expand(syntax).unwrap();
+        let result_str = result.to_string();
+        assert!(
+            result_str.contains("list"),
+            "Result should contain 'list': {}",
+            result_str
+        );
+        assert!(
+            result_str.contains("quote"),
+            "Result should contain 'quote': {}",
+            result_str
+        );
+        assert!(
+            result_str.contains("x"),
+            "Result should contain 'x': {}",
+            result_str
+        );
+    }
+
+    #[test]
+    fn test_quasiquote_with_splicing() {
+        let mut expander = Expander::new();
+        let span = Span::new(0, 10, 1, 1);
+
+        // `(a ,@xs b)
+        let items = vec![
+            Syntax::new(SyntaxKind::Symbol("a".to_string()), span.clone()),
+            Syntax::new(
+                SyntaxKind::UnquoteSplicing(Box::new(Syntax::new(
+                    SyntaxKind::Symbol("xs".to_string()),
+                    span.clone(),
+                ))),
+                span.clone(),
+            ),
+            Syntax::new(SyntaxKind::Symbol("b".to_string()), span.clone()),
+        ];
+        let syntax = Syntax::new(
+            SyntaxKind::Quasiquote(Box::new(Syntax::new(SyntaxKind::List(items), span.clone()))),
+            span.clone(),
+        );
+
+        let result = expander.expand(syntax).unwrap();
+        let result_str = result.to_string();
+        assert!(
+            result_str.contains("append"),
+            "Result should contain 'append': {}",
+            result_str
+        );
+        assert!(
+            result_str.contains("list"),
+            "Result should contain 'list': {}",
+            result_str
+        );
+        assert!(
+            result_str.contains("xs"),
+            "Result should contain 'xs': {}",
+            result_str
+        );
+    }
+
+    #[test]
+    fn test_quasiquote_non_list() {
+        let mut expander = Expander::new();
+        let span = Span::new(0, 5, 1, 1);
+
+        // `x
+        let syntax = Syntax::new(
+            SyntaxKind::Quasiquote(Box::new(Syntax::new(
+                SyntaxKind::Symbol("x".to_string()),
+                span.clone(),
+            ))),
+            span.clone(),
+        );
+
+        let result = expander.expand(syntax).unwrap();
+        let result_str = result.to_string();
+        // Should expand to (quote x)
+        assert!(
+            result_str.contains("quote"),
+            "Result should contain 'quote': {}",
+            result_str
+        );
+        assert!(
+            result_str.contains("x"),
+            "Result should contain 'x': {}",
+            result_str
+        );
     }
 }

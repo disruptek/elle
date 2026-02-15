@@ -3,8 +3,8 @@
 use super::binding::{BindingId, CaptureInfo};
 use super::pattern::HirPattern;
 use crate::compiler::effects::Effect;
-use crate::syntax::{Span, Syntax};
-use crate::value::SymbolId;
+use crate::syntax::Span;
+use crate::value::{SymbolId, Value};
 
 /// HIR expression with source location and effect
 #[derive(Debug, Clone)]
@@ -161,8 +161,8 @@ pub enum HirKind {
     Yield(Box<Hir>),
 
     // === Quote ===
-    /// Quote preserves Syntax (not HIR) since it's unevaluated
-    Quote(Syntax),
+    /// Quote stores a pre-computed Value (converted at analysis time)
+    Quote(Value),
 
     // === Module System ===
     Module {
