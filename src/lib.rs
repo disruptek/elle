@@ -40,6 +40,7 @@ pub mod compiler;
 pub mod error;
 pub mod ffi;
 pub mod formatter;
+pub mod hir;
 pub mod primitives;
 pub mod reader;
 pub mod repl;
