@@ -47,6 +47,7 @@ pub mod reader;
 pub mod repl;
 pub mod resident_compiler;
 pub mod symbol;
+pub mod syntax;
 pub mod value;
 pub mod vm;
 
