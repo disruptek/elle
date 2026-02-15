@@ -431,10 +431,45 @@ impl Emitter {
             }
 
             LirInstr::Move { dst, src } => {
-                // Duplicate the value
+                // Move is a logical copy - dst now refers to the same value as src.
+                // We don't emit any bytecode; we just update the register tracking.
+                // This works because in LIR, Move is used to copy a value to a result
+                // register, and the source is typically not used again.
+                //
+                // If src is tracked, dst now refers to the same stack position.
+                // If src is not tracked (e.g., after control flow merge), we assume
+                // the value is on top of the stack and track dst there.
+                if let Some(&pos) = self.reg_to_stack.get(src) {
+                    // dst now refers to the same stack position as src
+                    self.reg_to_stack.insert(*dst, pos);
+                    // Update the stack to show dst at this position
+                    if pos < self.stack.len() {
+                        self.stack[pos] = *dst;
+                    }
+                } else {
+                    // src not tracked - assume value is on top of stack
+                    // This can happen after control flow merges
+                    if !self.stack.is_empty() {
+                        let top = self.stack.len() - 1;
+                        self.stack[top] = *dst;
+                        self.reg_to_stack.insert(*dst, top);
+                    }
+                }
+            }
+
+            LirInstr::Dup { dst, src } => {
+                // Duplicate the value - actually emit a Dup instruction.
+                // This creates a new copy on the stack.
                 self.ensure_on_top(*src);
                 self.bytecode.emit(Instruction::Dup);
                 self.push_reg(*dst);
+            }
+
+            LirInstr::Pop { src } => {
+                // Pop the value from the stack (discard it).
+                self.ensure_on_top(*src);
+                self.bytecode.emit(Instruction::Pop);
+                self.pop();
             }
 
             LirInstr::Yield { dst, value } => {

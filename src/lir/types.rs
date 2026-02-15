@@ -157,7 +157,15 @@ pub enum LirInstr {
 
     // === Control Flow Helpers ===
     /// Copy a register (for phi-like operations)
+    /// This is a logical copy - dst now refers to the same value as src.
+    /// No bytecode is emitted; this just updates register tracking.
     Move { dst: Reg, src: Reg },
+    /// Duplicate a register's value on the stack.
+    /// Unlike Move, this actually emits a Dup instruction.
+    /// Use this when you need both the original and a copy.
+    Dup { dst: Reg, src: Reg },
+    /// Pop a register's value from the stack (discard it).
+    Pop { src: Reg },
     /// Inline conditional jump (for if expressions)
     JumpIfFalseInline { cond: Reg, label_id: u32 },
     /// Inline unconditional jump (for if expressions)

@@ -740,18 +740,29 @@ impl Lowerer {
                 for (i, expr) in exprs.iter().enumerate() {
                     let expr_reg = self.lower_expr(expr)?;
 
-                    // Move result to result_reg
-                    self.emit(LirInstr::Move {
-                        dst: result_reg,
-                        src: expr_reg,
-                    });
-
-                    // If not last expression, check and potentially short-circuit
                     if i < exprs.len() - 1 {
+                        // Not the last expression - need to handle short-circuit
+                        // Dup the value: one copy for potential return, one for the test
+                        self.emit(LirInstr::Dup {
+                            dst: result_reg,
+                            src: expr_reg,
+                        });
+
                         // If false, jump to exit (short-circuit)
+                        // This pops expr_reg, but result_reg (the dup) remains
                         self.emit(LirInstr::JumpIfFalseInline {
                             cond: expr_reg,
                             label_id: exit_label_id,
+                        });
+
+                        // If we didn't short-circuit, pop the duplicate
+                        // (we'll compute a new result in the next iteration)
+                        self.emit(LirInstr::Pop { src: result_reg });
+                    } else {
+                        // Last expression - just move to result_reg
+                        self.emit(LirInstr::Move {
+                            dst: result_reg,
+                            src: expr_reg,
                         });
                     }
                 }
@@ -777,29 +788,43 @@ impl Lowerer {
                 for (i, expr) in exprs.iter().enumerate() {
                     let expr_reg = self.lower_expr(expr)?;
 
-                    // Move result to result_reg
-                    self.emit(LirInstr::Move {
-                        dst: result_reg,
-                        src: expr_reg,
-                    });
-
-                    // If not last expression, check and potentially short-circuit
                     if i < exprs.len() - 1 {
+                        // Not the last expression - need to handle short-circuit
+                        // Dup the value: one copy for potential return, one for the test
+                        self.emit(LirInstr::Dup {
+                            dst: result_reg,
+                            src: expr_reg,
+                        });
+
                         // If true, jump to exit (short-circuit)
                         // We use JumpIfFalseInline to skip to next, then JumpInline to exit
                         let next_label_id = self.next_label;
                         self.next_label += 1;
 
+                        // If false, jump to next (don't short-circuit)
+                        // This pops expr_reg, but result_reg (the dup) remains
                         self.emit(LirInstr::JumpIfFalseInline {
                             cond: expr_reg,
                             label_id: next_label_id,
                         });
+
                         // If we get here, expr was true, jump to exit
                         self.emit(LirInstr::JumpInline {
                             label_id: exit_label_id,
                         });
+
+                        // Next label - we didn't short-circuit
                         self.emit(LirInstr::LabelMarker {
                             label_id: next_label_id,
+                        });
+
+                        // Pop the duplicate (we'll compute a new result in the next iteration)
+                        self.emit(LirInstr::Pop { src: result_reg });
+                    } else {
+                        // Last expression - just move to result_reg
+                        self.emit(LirInstr::Move {
+                            dst: result_reg,
+                            src: expr_reg,
                         });
                     }
                 }
