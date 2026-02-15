@@ -182,6 +182,16 @@ pub enum LirInstr {
     PushHandler { handler_label: Label },
     /// Pop exception handler
     PopHandler,
+    /// Check if exception occurred
+    CheckException,
+    /// Match exception against handler exception ID (produces boolean result)
+    MatchException { dst: Reg, exception_id: u16 },
+    /// Bind caught exception to variable (by symbol name)
+    BindException { var_name: SymbolId },
+    /// Load current exception onto stack
+    LoadException { dst: Reg },
+    /// Clear current exception state
+    ClearException,
     /// Throw exception
     Throw { value: Reg },
 }

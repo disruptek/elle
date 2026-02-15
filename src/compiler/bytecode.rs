@@ -153,6 +153,9 @@ pub enum Instruction {
     /// Bind caught exception to variable (var_symbol_id u16)
     BindException,
 
+    /// Load current exception onto stack
+    LoadException,
+
     /// Clear current exception state
     ClearException,
 

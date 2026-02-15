@@ -844,6 +844,16 @@ impl VM {
                     }
                 }
 
+                Instruction::LoadException => {
+                    // Load current exception onto stack
+                    if let Some(exc) = &self.current_exception {
+                        self.stack.push(Value::Condition(exc.clone()));
+                    } else {
+                        // No exception - push nil (shouldn't happen in normal flow)
+                        self.stack.push(Value::Nil);
+                    }
+                }
+
                 Instruction::ClearException => {
                     // Clear current exception
                     self.current_exception = None;

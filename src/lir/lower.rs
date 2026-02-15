@@ -931,7 +931,92 @@ impl Lowerer {
                 // Simplified: just evaluate value, ignore patterns
                 self.lower_expr(value)
             }
-            HirKind::HandlerCase { body, .. } => self.lower_expr(body),
+            HirKind::HandlerCase { body, handlers } => {
+                let result_reg = self.fresh_reg();
+
+                // Labels
+                let handler_start_label = self.next_label;
+                self.next_label += 1;
+                let end_label = self.next_label;
+                self.next_label += 1;
+
+                // Emit PushHandler pointing to handler code
+                self.emit(LirInstr::PushHandler {
+                    handler_label: Label(handler_start_label),
+                });
+
+                // Compile protected body
+                let body_reg = self.lower_expr(body)?;
+                self.emit(LirInstr::Move {
+                    dst: result_reg,
+                    src: body_reg,
+                });
+
+                // Success path: pop handler and jump to end
+                self.emit(LirInstr::PopHandler);
+                self.emit(LirInstr::JumpInline {
+                    label_id: end_label,
+                });
+
+                // Handler code starts here
+                self.emit(LirInstr::LabelMarker {
+                    label_id: handler_start_label,
+                });
+                self.emit(LirInstr::CheckException);
+
+                // Compile each handler clause
+                for (exception_id, var_id, handler_body) in handlers.iter() {
+                    let next_handler_label = self.next_label;
+                    self.next_label += 1;
+
+                    // Match exception type
+                    let match_result = self.fresh_reg();
+                    self.emit(LirInstr::MatchException {
+                        dst: match_result,
+                        exception_id: *exception_id as u16,
+                    });
+                    self.emit(LirInstr::JumpIfFalseInline {
+                        cond: match_result,
+                        label_id: next_handler_label,
+                    });
+
+                    // Allocate slot for the exception variable and store exception to it
+                    let var_slot = self.allocate_slot(*var_id);
+
+                    // Load the current exception and store to local
+                    let exc_reg = self.fresh_reg();
+                    self.emit(LirInstr::LoadException { dst: exc_reg });
+                    self.emit(LirInstr::StoreLocal {
+                        slot: var_slot,
+                        src: exc_reg,
+                    });
+
+                    // Compile handler body (now can find var_id via LoadLocal)
+                    let handler_reg = self.lower_expr(handler_body)?;
+                    self.emit(LirInstr::Move {
+                        dst: result_reg,
+                        src: handler_reg,
+                    });
+
+                    // Jump to end
+                    self.emit(LirInstr::JumpInline {
+                        label_id: end_label,
+                    });
+
+                    // Next handler label
+                    self.emit(LirInstr::LabelMarker {
+                        label_id: next_handler_label,
+                    });
+                }
+
+                // End label
+                self.emit(LirInstr::LabelMarker {
+                    label_id: end_label,
+                });
+                self.emit(LirInstr::ClearException);
+
+                Ok(result_reg)
+            }
             HirKind::HandlerBind { body, .. } => self.lower_expr(body),
             HirKind::Module { body, .. } => self.lower_expr(body),
             HirKind::Import { .. } => self.emit_const(LirConst::Nil),
