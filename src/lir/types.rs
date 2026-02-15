@@ -87,6 +87,8 @@ pub enum LirInstr {
     StoreLocal { slot: u16, src: Reg },
     /// Load from capture
     LoadCapture { dst: Reg, index: u16 },
+    /// Store to capture (handles cells automatically)
+    StoreCapture { index: u16, src: Reg },
     /// Load global by symbol
     LoadGlobal { dst: Reg, sym: SymbolId },
     /// Store global by symbol

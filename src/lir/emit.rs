@@ -147,6 +147,14 @@ impl Emitter {
                 self.push_reg(*dst);
             }
 
+            LirInstr::StoreCapture { index, src } => {
+                self.ensure_on_top(*src);
+                self.bytecode.emit(Instruction::StoreUpvalue);
+                self.bytecode.emit_byte(0); // depth (currently unused)
+                self.bytecode.emit_byte(*index as u8);
+                self.pop();
+            }
+
             LirInstr::LoadGlobal { dst, sym } => {
                 // Add symbol to constants
                 let const_idx = self.bytecode.add_constant(Value::Symbol(*sym));

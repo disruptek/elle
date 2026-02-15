@@ -22,6 +22,9 @@ pub struct Lowerer {
     in_lambda: bool,
     /// Number of captured variables (for lambda context)
     num_captures: u16,
+    /// Set of bindings that are upvalues (captures/parameters in lambda)
+    /// These use LoadCapture/StoreCapture, not LoadLocal/StoreLocal
+    upvalue_bindings: std::collections::HashSet<BindingId>,
 }
 
 impl Lowerer {
@@ -35,6 +38,7 @@ impl Lowerer {
             bindings: HashMap::new(),
             in_lambda: false,
             num_captures: 0,
+            upvalue_bindings: std::collections::HashSet::new(),
         }
     }
 
@@ -71,7 +75,7 @@ impl Lowerer {
         params: &[BindingId],
         captures: &[crate::hir::CaptureInfo],
         body: &Hir,
-        num_locals: u16,
+        _num_locals: u16,
     ) -> Result<LirFunction, String> {
         // Save state
         let saved_func = std::mem::replace(
@@ -84,10 +88,13 @@ impl Lowerer {
         let saved_bindings = std::mem::take(&mut self.binding_to_slot);
         let saved_in_lambda = self.in_lambda;
         let saved_num_captures = self.num_captures;
+        let saved_upvalue_bindings = std::mem::take(&mut self.upvalue_bindings);
 
         self.next_reg = 0;
         self.next_label = 1;
-        self.current_func.num_locals = num_locals;
+        // Start with 0 locals - they will be allocated as we encounter LocalDefine
+        // The num_locals from HIR is just a hint for the total count
+        self.current_func.num_locals = 0;
         self.in_lambda = true;
         self.num_captures = captures.len() as u16;
 
@@ -100,12 +107,14 @@ impl Lowerer {
         // Bind captured variables to upvalue indices
         for (i, cap) in captures.iter().enumerate() {
             self.binding_to_slot.insert(cap.binding, i as u16);
+            self.upvalue_bindings.insert(cap.binding);
         }
 
         // Bind parameters to upvalue indices
         for (i, param) in params.iter().enumerate() {
             let upvalue_idx = self.num_captures + i as u16;
             self.binding_to_slot.insert(*param, upvalue_idx);
+            self.upvalue_bindings.insert(*param);
         }
 
         // Lower body
@@ -125,6 +134,7 @@ impl Lowerer {
         self.binding_to_slot = saved_bindings;
         self.in_lambda = saved_in_lambda;
         self.num_captures = saved_num_captures;
+        self.upvalue_bindings = saved_upvalue_bindings;
 
         Ok(func)
     }
@@ -140,15 +150,40 @@ impl Lowerer {
 
             HirKind::Var(binding_id) => {
                 if let Some(&slot) = self.binding_to_slot.get(binding_id) {
+                    // Check if this binding needs cell unwrapping
+                    let needs_cell = self
+                        .bindings
+                        .get(binding_id)
+                        .map(|info| info.needs_cell())
+                        .unwrap_or(false);
+
+                    // Check if this is an upvalue (capture or parameter) or a local
+                    let is_upvalue = self.upvalue_bindings.contains(binding_id);
+
                     let dst = self.fresh_reg();
-                    if self.in_lambda {
-                        // In a lambda, parameters and captures are accessed via LoadCapture
+                    if self.in_lambda && is_upvalue {
+                        // In a lambda, captures and parameters are accessed via LoadCapture
+                        // Note: LoadCapture (which emits LoadUpvalue) auto-unwraps LocalCell,
+                        // so we don't need to emit LoadCell for captured variables
                         self.emit(LirInstr::LoadCapture { dst, index: slot });
+                        Ok(dst)
                     } else {
-                        // In the main function, use LoadLocal
+                        // Local variables (including those defined inside lambda) use LoadLocal
                         self.emit(LirInstr::LoadLocal { dst, slot });
+
+                        if needs_cell {
+                            // Unwrap the cell to get the actual value
+                            // Only needed for locals, not captures (LoadCapture auto-unwraps)
+                            let value_reg = self.fresh_reg();
+                            self.emit(LirInstr::LoadCell {
+                                dst: value_reg,
+                                cell: dst,
+                            });
+                            Ok(value_reg)
+                        } else {
+                            Ok(dst)
+                        }
                     }
-                    Ok(dst)
                 } else if let Some(info) = self.bindings.get(binding_id) {
                     match info.kind {
                         BindingKind::Global => {
@@ -169,29 +204,92 @@ impl Lowerer {
                 for (binding_id, init) in bindings {
                     let init_reg = self.lower_expr(init)?;
                     let slot = self.allocate_slot(*binding_id);
-                    self.emit(LirInstr::StoreLocal {
-                        slot,
-                        src: init_reg,
-                    });
+
+                    // Check if this binding needs to be wrapped in a cell
+                    let needs_cell = self
+                        .bindings
+                        .get(binding_id)
+                        .map(|info| info.needs_cell())
+                        .unwrap_or(false);
+
+                    if needs_cell {
+                        // Wrap the value in a cell
+                        let cell_reg = self.fresh_reg();
+                        self.emit(LirInstr::MakeCell {
+                            dst: cell_reg,
+                            value: init_reg,
+                        });
+                        self.emit(LirInstr::StoreLocal {
+                            slot,
+                            src: cell_reg,
+                        });
+                    } else {
+                        self.emit(LirInstr::StoreLocal {
+                            slot,
+                            src: init_reg,
+                        });
+                    }
                 }
                 self.lower_expr(body)
             }
 
             HirKind::Letrec { bindings, body } => {
-                // First allocate all slots with nil
+                // First allocate all slots with nil (or cells containing nil)
                 for (binding_id, _) in bindings {
                     let nil_reg = self.emit_const(LirConst::Nil)?;
                     let slot = self.allocate_slot(*binding_id);
-                    self.emit(LirInstr::StoreLocal { slot, src: nil_reg });
+
+                    // Check if this binding needs to be wrapped in a cell
+                    let needs_cell = self
+                        .bindings
+                        .get(binding_id)
+                        .map(|info| info.needs_cell())
+                        .unwrap_or(false);
+
+                    if needs_cell {
+                        // Create a cell containing nil initially
+                        let cell_reg = self.fresh_reg();
+                        self.emit(LirInstr::MakeCell {
+                            dst: cell_reg,
+                            value: nil_reg,
+                        });
+                        self.emit(LirInstr::StoreLocal {
+                            slot,
+                            src: cell_reg,
+                        });
+                    } else {
+                        self.emit(LirInstr::StoreLocal { slot, src: nil_reg });
+                    }
                 }
                 // Then initialize
                 for (binding_id, init) in bindings {
                     let init_reg = self.lower_expr(init)?;
                     let slot = self.binding_to_slot[binding_id];
-                    self.emit(LirInstr::StoreLocal {
-                        slot,
-                        src: init_reg,
-                    });
+
+                    // Check if this binding needs cell update
+                    let needs_cell = self
+                        .bindings
+                        .get(binding_id)
+                        .map(|info| info.needs_cell())
+                        .unwrap_or(false);
+
+                    if needs_cell {
+                        // Load the cell and update it
+                        let cell_reg = self.fresh_reg();
+                        self.emit(LirInstr::LoadLocal {
+                            dst: cell_reg,
+                            slot,
+                        });
+                        self.emit(LirInstr::StoreCell {
+                            cell: cell_reg,
+                            value: init_reg,
+                        });
+                    } else {
+                        self.emit(LirInstr::StoreLocal {
+                            slot,
+                            src: init_reg,
+                        });
+                    }
                 }
                 self.lower_expr(body)
             }
@@ -205,28 +303,56 @@ impl Lowerer {
                 // Collect capture registers
                 let mut capture_regs = Vec::new();
                 for cap in captures {
-                    if let Some(&slot) = self.binding_to_slot.get(&cap.binding) {
-                        let reg = self.fresh_reg();
-                        self.emit(LirInstr::LoadLocal { dst: reg, slot });
-                        capture_regs.push(reg);
-                    } else if let Some(info) = self.bindings.get(&cap.binding) {
-                        // If the capture is a global, load it as a global
-                        match info.kind {
-                            BindingKind::Global => {
-                                let sym = info.name;
-                                let reg = self.fresh_reg();
-                                self.emit(LirInstr::LoadGlobal { dst: reg, sym });
-                                capture_regs.push(reg);
-                            }
-                            _ => {
+                    use crate::hir::CaptureKind;
+
+                    let reg = self.fresh_reg();
+                    match cap.kind {
+                        CaptureKind::Local { index: _ } => {
+                            // Load from parent's local/parameter slot
+                            // Use binding_to_slot to find where this binding is in the current context
+                            if let Some(&slot) = self.binding_to_slot.get(&cap.binding) {
+                                // Check if this is an upvalue or a local in the current context
+                                let is_upvalue = self.upvalue_bindings.contains(&cap.binding);
+                                if self.in_lambda && is_upvalue {
+                                    // In a lambda, captures and params are accessed via LoadCapture
+                                    self.emit(LirInstr::LoadCapture {
+                                        dst: reg,
+                                        index: slot,
+                                    });
+                                } else {
+                                    // Local variables (including those defined inside lambda) use LoadLocal
+                                    self.emit(LirInstr::LoadLocal { dst: reg, slot });
+                                }
+                            } else {
+                                // Binding not found in current context - this shouldn't happen
                                 return Err(format!(
-                                    "Cannot capture non-local binding: {:?}",
+                                    "Capture binding {:?} not found in current context",
                                     cap.binding
                                 ));
                             }
+                            capture_regs.push(reg);
                         }
-                    } else {
-                        return Err(format!("Captured variable not found: {:?}", cap.binding));
+                        CaptureKind::Capture { index } => {
+                            // Load from parent's capture (transitive capture)
+                            // The index refers to the parent's capture array
+                            if self.in_lambda {
+                                // We're in a nested lambda - load from parent's captures
+                                self.emit(LirInstr::LoadCapture { dst: reg, index });
+                            } else {
+                                // We're in the main function - this shouldn't happen
+                                // (main function doesn't have captures to forward)
+                                self.emit(LirInstr::LoadLocal {
+                                    dst: reg,
+                                    slot: index,
+                                });
+                            }
+                            capture_regs.push(reg);
+                        }
+                        CaptureKind::Global { sym } => {
+                            // Load global directly
+                            self.emit(LirInstr::LoadGlobal { dst: reg, sym });
+                            capture_regs.push(reg);
+                        }
                     }
                 }
 
@@ -290,6 +416,42 @@ impl Lowerer {
             }
 
             HirKind::Begin(exprs) => {
+                // Pre-allocate slots for all LocalDefine bindings
+                // This enables mutual recursion where lambda A captures variable B
+                // before B's LocalDefine has been lowered
+                for expr in exprs {
+                    if let HirKind::LocalDefine { binding, .. } = &expr.kind {
+                        // Allocate slot now so captures can find it
+                        if !self.binding_to_slot.contains_key(binding) {
+                            let slot = self.allocate_slot(*binding);
+
+                            // Check if this binding needs a cell
+                            let needs_cell = self
+                                .bindings
+                                .get(binding)
+                                .map(|info| info.needs_cell())
+                                .unwrap_or(false);
+
+                            if needs_cell {
+                                // Create a cell containing nil
+                                // This cell will be captured by nested lambdas
+                                // and updated when the LocalDefine is lowered
+                                let nil_reg = self.emit_const(LirConst::Nil)?;
+                                let cell_reg = self.fresh_reg();
+                                self.emit(LirInstr::MakeCell {
+                                    dst: cell_reg,
+                                    value: nil_reg,
+                                });
+                                self.emit(LirInstr::StoreLocal {
+                                    slot,
+                                    src: cell_reg,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Now lower all expressions (slots are available for capture lookup)
                 let mut last_reg = self.emit_const(LirConst::Nil)?;
                 for expr in exprs {
                     last_reg = self.lower_expr(expr)?;
@@ -338,11 +500,43 @@ impl Lowerer {
 
             HirKind::Set { target, value } => {
                 let value_reg = self.lower_expr(value)?;
+
+                // Check if this binding needs cell update
+                let needs_cell = self
+                    .bindings
+                    .get(target)
+                    .map(|info| info.needs_cell())
+                    .unwrap_or(false);
+
+                // Check if this is an upvalue (capture or parameter) or a local
+                let is_upvalue = self.upvalue_bindings.contains(target);
+
                 if let Some(&slot) = self.binding_to_slot.get(target) {
-                    self.emit(LirInstr::StoreLocal {
-                        slot,
-                        src: value_reg,
-                    });
+                    if self.in_lambda && is_upvalue {
+                        // For captured variables, use StoreCapture which handles cells automatically
+                        // StoreUpvalue checks if the upvalue is a cell and updates it
+                        self.emit(LirInstr::StoreCapture {
+                            index: slot,
+                            src: value_reg,
+                        });
+                    } else if needs_cell {
+                        // For local variables that need cells, load the cell and update it
+                        let cell_reg = self.fresh_reg();
+                        self.emit(LirInstr::LoadLocal {
+                            dst: cell_reg,
+                            slot,
+                        });
+                        self.emit(LirInstr::StoreCell {
+                            cell: cell_reg,
+                            value: value_reg,
+                        });
+                    } else {
+                        // For simple local variables, store directly
+                        self.emit(LirInstr::StoreLocal {
+                            slot,
+                            src: value_reg,
+                        });
+                    }
                 } else if let Some(info) = self.bindings.get(target) {
                     let sym = info.name;
                     match info.kind {
@@ -371,32 +565,80 @@ impl Lowerer {
                 Ok(value_reg)
             }
 
+            HirKind::LocalDefine { binding, value } => {
+                // Allocate the slot BEFORE lowering the value so that recursive
+                // references can find the binding (like letrec)
+                // The slot might already be allocated by the Begin pre-pass
+                let slot = if let Some(&existing_slot) = self.binding_to_slot.get(binding) {
+                    existing_slot
+                } else {
+                    self.allocate_slot(*binding)
+                };
+
+                // Check if this binding needs to be wrapped in a cell
+                let needs_cell = self
+                    .bindings
+                    .get(binding)
+                    .map(|info| info.needs_cell())
+                    .unwrap_or(false);
+
+                // Now lower the value (which can reference the binding)
+                let value_reg = self.lower_expr(value)?;
+
+                if needs_cell {
+                    // The cell was already created in the Begin pre-pass
+                    // Load it and update it with the value
+                    let cell_reg = self.fresh_reg();
+                    self.emit(LirInstr::LoadLocal {
+                        dst: cell_reg,
+                        slot,
+                    });
+                    self.emit(LirInstr::StoreCell {
+                        cell: cell_reg,
+                        value: value_reg,
+                    });
+                } else {
+                    self.emit(LirInstr::StoreLocal {
+                        slot,
+                        src: value_reg,
+                    });
+                }
+                Ok(value_reg)
+            }
+
             HirKind::While { cond, body } => {
-                let loop_label = self.fresh_label();
-                let body_label = self.fresh_label();
-                let exit_label = self.fresh_label();
+                let loop_label_id = self.next_label;
+                self.next_label += 1;
+                let exit_label_id = self.next_label;
+                self.next_label += 1;
 
-                self.terminate(Terminator::Jump(loop_label));
-                self.finish_block();
-
-                // Loop header
-                self.start_block(loop_label);
-                let cond_reg = self.lower_expr(cond)?;
-                self.terminate(Terminator::Branch {
-                    cond: cond_reg,
-                    then_label: body_label,
-                    else_label: exit_label,
+                // Emit loop label marker
+                self.emit(LirInstr::LabelMarker {
+                    label_id: loop_label_id,
                 });
-                self.finish_block();
 
-                // Loop body
-                self.start_block(body_label);
+                // Evaluate condition
+                let cond_reg = self.lower_expr(cond)?;
+
+                // Jump to exit if condition is false
+                self.emit(LirInstr::JumpIfFalseInline {
+                    cond: cond_reg,
+                    label_id: exit_label_id,
+                });
+
+                // Evaluate body
                 self.lower_expr(body)?;
-                self.terminate(Terminator::Jump(loop_label));
-                self.finish_block();
 
-                // Exit
-                self.start_block(exit_label);
+                // Jump back to loop start
+                self.emit(LirInstr::JumpInline {
+                    label_id: loop_label_id,
+                });
+
+                // Exit label
+                self.emit(LirInstr::LabelMarker {
+                    label_id: exit_label_id,
+                });
+
                 self.emit_const(LirConst::Nil)
             }
 
@@ -409,15 +651,17 @@ impl Lowerer {
                     src: iter_reg,
                 });
 
-                let loop_label = self.fresh_label();
-                let body_label = self.fresh_label();
-                let exit_label = self.fresh_label();
+                let loop_label_id = self.next_label;
+                self.next_label += 1;
+                let exit_label_id = self.next_label;
+                self.next_label += 1;
 
-                self.terminate(Terminator::Jump(loop_label));
-                self.finish_block();
+                // Emit loop label marker
+                self.emit(LirInstr::LabelMarker {
+                    label_id: loop_label_id,
+                });
 
-                // Loop header - check if iter is pair
-                self.start_block(loop_label);
+                // Load current iterator and check if it's a pair
                 let current_iter = self.fresh_reg();
                 self.emit(LirInstr::LoadLocal {
                     dst: current_iter,
@@ -428,15 +672,14 @@ impl Lowerer {
                     dst: is_pair,
                     src: current_iter,
                 });
-                self.terminate(Terminator::Branch {
-                    cond: is_pair,
-                    then_label: body_label,
-                    else_label: exit_label,
-                });
-                self.finish_block();
 
-                // Body
-                self.start_block(body_label);
+                // Jump to exit if not a pair
+                self.emit(LirInstr::JumpIfFalseInline {
+                    cond: is_pair,
+                    label_id: exit_label_id,
+                });
+
+                // Extract car and store as var
                 let car_reg = self.fresh_reg();
                 let iter_load = self.fresh_reg();
                 self.emit(LirInstr::LoadLocal {
@@ -452,6 +695,7 @@ impl Lowerer {
                     src: car_reg,
                 }); // Store car as var
 
+                // Evaluate body
                 self.lower_expr(body)?;
 
                 // Advance iterator
@@ -470,11 +714,16 @@ impl Lowerer {
                     src: cdr_reg,
                 });
 
-                self.terminate(Terminator::Jump(loop_label));
-                self.finish_block();
+                // Jump back to loop start
+                self.emit(LirInstr::JumpInline {
+                    label_id: loop_label_id,
+                });
 
-                // Exit
-                self.start_block(exit_label);
+                // Exit label
+                self.emit(LirInstr::LabelMarker {
+                    label_id: exit_label_id,
+                });
+
                 self.emit_const(LirConst::Nil)
             }
 
@@ -483,27 +732,36 @@ impl Lowerer {
                     return self.emit_const(LirConst::Bool(true));
                 }
 
-                let exit_label = self.fresh_label();
-                let mut last_reg = self.emit_const(LirConst::Bool(true))?;
+                let exit_label_id = self.next_label;
+                self.next_label += 1;
+
+                let result_reg = self.fresh_reg();
 
                 for (i, expr) in exprs.iter().enumerate() {
-                    last_reg = self.lower_expr(expr)?;
+                    let expr_reg = self.lower_expr(expr)?;
+
+                    // Move result to result_reg
+                    self.emit(LirInstr::Move {
+                        dst: result_reg,
+                        src: expr_reg,
+                    });
+
+                    // If not last expression, check and potentially short-circuit
                     if i < exprs.len() - 1 {
-                        let next_label = self.fresh_label();
-                        self.terminate(Terminator::Branch {
-                            cond: last_reg,
-                            then_label: next_label,
-                            else_label: exit_label,
+                        // If false, jump to exit (short-circuit)
+                        self.emit(LirInstr::JumpIfFalseInline {
+                            cond: expr_reg,
+                            label_id: exit_label_id,
                         });
-                        self.finish_block();
-                        self.start_block(next_label);
                     }
                 }
 
-                self.terminate(Terminator::Jump(exit_label));
-                self.finish_block();
-                self.start_block(exit_label);
-                Ok(last_reg)
+                // Exit label
+                self.emit(LirInstr::LabelMarker {
+                    label_id: exit_label_id,
+                });
+
+                Ok(result_reg)
             }
 
             HirKind::Or(exprs) => {
@@ -511,27 +769,45 @@ impl Lowerer {
                     return self.emit_const(LirConst::Bool(false));
                 }
 
-                let exit_label = self.fresh_label();
-                let mut last_reg = self.emit_const(LirConst::Bool(false))?;
+                let exit_label_id = self.next_label;
+                self.next_label += 1;
+
+                let result_reg = self.fresh_reg();
 
                 for (i, expr) in exprs.iter().enumerate() {
-                    last_reg = self.lower_expr(expr)?;
+                    let expr_reg = self.lower_expr(expr)?;
+
+                    // Move result to result_reg
+                    self.emit(LirInstr::Move {
+                        dst: result_reg,
+                        src: expr_reg,
+                    });
+
+                    // If not last expression, check and potentially short-circuit
                     if i < exprs.len() - 1 {
-                        let next_label = self.fresh_label();
-                        self.terminate(Terminator::Branch {
-                            cond: last_reg,
-                            then_label: exit_label,
-                            else_label: next_label,
+                        // If true, jump to exit (short-circuit)
+                        // We use JumpIfFalseInline to skip to next, then JumpInline to exit
+                        let next_label_id = self.next_label;
+                        self.next_label += 1;
+
+                        self.emit(LirInstr::JumpIfFalseInline {
+                            cond: expr_reg,
+                            label_id: next_label_id,
                         });
-                        self.finish_block();
-                        self.start_block(next_label);
+                        // If we get here, expr was true, jump to exit
+                        self.emit(LirInstr::JumpInline {
+                            label_id: exit_label_id,
+                        });
+                        self.emit(LirInstr::LabelMarker {
+                            label_id: next_label_id,
+                        });
                     }
                 }
 
-                self.terminate(Terminator::Jump(exit_label));
-                self.finish_block();
-                self.start_block(exit_label);
-                Ok(last_reg)
+                self.emit(LirInstr::LabelMarker {
+                    label_id: exit_label_id,
+                });
+                Ok(result_reg)
             }
 
             HirKind::Yield(value) => {
@@ -568,31 +844,38 @@ impl Lowerer {
                     };
                 }
 
-                let exit_label = self.fresh_label();
+                let exit_label_id = self.next_label;
+                self.next_label += 1;
+
                 let result_reg = self.fresh_reg();
 
                 for (test, body) in clauses {
                     let test_reg = self.lower_expr(test)?;
-                    let body_label = self.fresh_label();
-                    let next_label = self.fresh_label();
+                    let next_label_id = self.next_label;
+                    self.next_label += 1;
 
-                    self.terminate(Terminator::Branch {
+                    // Jump to next clause if test is false
+                    self.emit(LirInstr::JumpIfFalseInline {
                         cond: test_reg,
-                        then_label: body_label,
-                        else_label: next_label,
+                        label_id: next_label_id,
                     });
-                    self.finish_block();
 
-                    self.start_block(body_label);
+                    // Evaluate body
                     let body_reg = self.lower_expr(body)?;
                     self.emit(LirInstr::Move {
                         dst: result_reg,
                         src: body_reg,
                     });
-                    self.terminate(Terminator::Jump(exit_label));
-                    self.finish_block();
 
-                    self.start_block(next_label);
+                    // Jump to exit
+                    self.emit(LirInstr::JumpInline {
+                        label_id: exit_label_id,
+                    });
+
+                    // Next clause label
+                    self.emit(LirInstr::LabelMarker {
+                        label_id: next_label_id,
+                    });
                 }
 
                 // Else branch
@@ -609,10 +892,12 @@ impl Lowerer {
                         src: nil_reg,
                     });
                 }
-                self.terminate(Terminator::Jump(exit_label));
-                self.finish_block();
 
-                self.start_block(exit_label);
+                // Exit label
+                self.emit(LirInstr::LabelMarker {
+                    label_id: exit_label_id,
+                });
+
                 Ok(result_reg)
             }
 
@@ -636,12 +921,6 @@ impl Lowerer {
         let r = Reg::new(self.next_reg);
         self.next_reg += 1;
         r
-    }
-
-    fn fresh_label(&mut self) -> Label {
-        let l = Label::new(self.next_label);
-        self.next_label += 1;
-        l
     }
 
     fn allocate_slot(&mut self, binding: BindingId) -> u16 {
@@ -668,10 +947,6 @@ impl Lowerer {
     fn finish_block(&mut self) {
         let block = std::mem::replace(&mut self.current_block, BasicBlock::new(Label(0)));
         self.current_func.blocks.push(block);
-    }
-
-    fn start_block(&mut self, label: Label) {
-        self.current_block = BasicBlock::new(label);
     }
 }
 

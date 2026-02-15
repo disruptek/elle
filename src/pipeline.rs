@@ -437,4 +437,220 @@ mod tests {
             }
         }
     }
+
+    // === Control Flow: cond ===
+
+    #[test]
+    fn test_eval_cond_first_true() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(cond (#t 42))", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+    }
+
+    #[test]
+    fn test_eval_cond_second_true() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(cond (#f 1) (#t 42))", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+    }
+
+    #[test]
+    fn test_eval_cond_else() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(cond (#f 1) (#f 2) (else 42))", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+    }
+
+    #[test]
+    fn test_eval_cond_with_expressions() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(cond ((< 5 10) (+ 20 22)))", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+    }
+
+    // === Control Flow: and ===
+
+    #[test]
+    fn test_eval_and_all_true() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(and #t #t #t)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Bool(true));
+    }
+
+    #[test]
+    fn test_eval_and_one_false() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(and #t #f #t)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Bool(false));
+    }
+
+    #[test]
+    fn test_eval_and_returns_last() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(and 1 2 3)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(3));
+    }
+
+    #[test]
+    fn test_eval_and_short_circuit() {
+        let (mut symbols, mut vm) = setup();
+        // If and doesn't short-circuit, this would fail trying to call nil
+        let result = eval_new("(and #f (nil))", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Bool(false));
+    }
+
+    #[test]
+    fn test_eval_and_empty() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(and)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Bool(true));
+    }
+
+    // === Control Flow: or ===
+
+    #[test]
+    fn test_eval_or_all_false() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(or #f #f #f)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Bool(false));
+    }
+
+    #[test]
+    fn test_eval_or_one_true() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(or #f #t #f)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Bool(true));
+    }
+
+    #[test]
+    fn test_eval_or_returns_first_truthy() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(or #f 42 99)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+    }
+
+    #[test]
+    fn test_eval_or_short_circuit() {
+        let (mut symbols, mut vm) = setup();
+        // If or doesn't short-circuit, this would fail trying to call nil
+        let result = eval_new("(or #t (nil))", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Bool(true));
+    }
+
+    #[test]
+    fn test_eval_or_empty() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(or)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Bool(false));
+    }
+
+    // === Control Flow: while ===
+
+    #[test]
+    fn test_eval_while_never_executes() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(while #f 42)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Nil);
+    }
+
+    #[test]
+    fn test_eval_while_with_mutation() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            "(begin (define x 0) (while (< x 5) (set! x (+ x 1))) x)",
+            &mut symbols,
+            &mut vm,
+        );
+        assert_eq!(result.unwrap(), crate::value::Value::Int(5));
+    }
+
+    // === Closures and Captures ===
+
+    #[test]
+    fn test_eval_closure_captures_local() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(let ((x 10)) ((fn () x)))", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(10));
+    }
+
+    #[test]
+    fn test_eval_closure_captures_multiple() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            "(let ((x 10) (y 20)) ((fn () (+ x y))))",
+            &mut symbols,
+            &mut vm,
+        );
+        assert_eq!(result.unwrap(), crate::value::Value::Int(30));
+    }
+
+    #[test]
+    fn test_eval_nested_closure() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            "(let ((x 10)) ((fn () ((fn () x)))))",
+            &mut symbols,
+            &mut vm,
+        );
+        assert_eq!(result.unwrap(), crate::value::Value::Int(10));
+    }
+
+    #[test]
+    fn test_eval_closure_with_param_and_capture() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(let ((x 10)) ((fn (y) (+ x y)) 5))", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(15));
+    }
+
+    // === Higher-Order Functions ===
+
+    #[test]
+    fn test_eval_function_as_argument() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            "((fn (f x) (f x)) (fn (n) (+ n 1)) 10)",
+            &mut symbols,
+            &mut vm,
+        );
+        assert_eq!(result.unwrap(), crate::value::Value::Int(11));
+    }
+
+    #[test]
+    fn test_eval_function_returning_function() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(((fn (x) (fn (y) (+ x y))) 10) 5)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(15));
+    }
+
+    // === Define and Set! ===
+
+    #[test]
+    fn test_eval_define_then_use() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(begin (define x 42) x)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+    }
+
+    #[test]
+    fn test_eval_define_then_set() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(begin (define x 10) (set! x 42) x)", &mut symbols, &mut vm);
+        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+    }
+
+    #[test]
+    fn test_eval_set_in_closure() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            "(begin 
+               (define counter 0)
+               (define inc (fn () (set! counter (+ counter 1))))
+               (inc)
+               (inc)
+               counter)",
+            &mut symbols,
+            &mut vm,
+        );
+        assert_eq!(result.unwrap(), crate::value::Value::Int(2));
+    }
 }

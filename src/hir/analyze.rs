@@ -94,16 +94,22 @@ pub struct Analyzer<'a> {
     scopes: Vec<Scope>,
     /// Captures for the current function being analyzed
     current_captures: Vec<CaptureInfo>,
+    /// Captures from the parent function (for nested closures)
+    parent_captures: Vec<CaptureInfo>,
 }
 
 impl<'a> Analyzer<'a> {
     pub fn new(symbols: &'a mut SymbolTable) -> Self {
-        Analyzer {
+        let mut analyzer = Analyzer {
             ctx: AnalysisContext::new(),
             symbols,
             scopes: Vec::new(),
             current_captures: Vec::new(),
-        }
+            parent_captures: Vec::new(),
+        };
+        // Initialize with a global scope so top-level bindings can be registered
+        analyzer.push_scope(false);
+        analyzer
     }
 
     /// Analyze a syntax tree into HIR
@@ -357,6 +363,22 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
+    /// Check if an expression is a define form and return the name being defined
+    fn is_define_form(syntax: &Syntax) -> Option<&str> {
+        if let SyntaxKind::List(items) = &syntax.kind {
+            if let Some(first) = items.first() {
+                if let Some(name) = first.as_symbol() {
+                    if name == "define" {
+                        if let Some(second) = items.get(1) {
+                            return second.as_symbol();
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     fn analyze_lambda(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
         if items.len() < 3 {
             return Err(format!("{}: lambda requires parameters and body", span));
@@ -366,8 +388,12 @@ impl<'a> Analyzer<'a> {
             .as_list()
             .ok_or_else(|| format!("{}: lambda parameters must be a list", span))?;
 
-        // Save current captures and start fresh for this lambda
+        // Save current captures and parent captures, start fresh for this lambda
         let saved_captures = std::mem::take(&mut self.current_captures);
+        let saved_parent_captures = std::mem::take(&mut self.parent_captures);
+
+        // For nested lambdas, the parent captures are the captures from the enclosing lambda
+        self.parent_captures = saved_captures.clone();
 
         self.push_scope(true);
 
@@ -387,6 +413,42 @@ impl<'a> Analyzer<'a> {
 
         self.pop_scope();
         let captures = std::mem::replace(&mut self.current_captures, saved_captures);
+        self.parent_captures = saved_parent_captures;
+
+        // Propagate captures from this lambda to the parent lambda
+        // If we're in a nested lambda, add our captures to the parent's captures
+        // But only if:
+        // 1. They're not parameters of the current lambda
+        // 2. They're not already accessible in the parent scope (as params or locals)
+        // 3. They're not already in the parent's captures
+        for cap in &captures {
+            // Check if this capture is a parameter of the current lambda
+            let is_param = params.contains(&cap.binding);
+            if is_param {
+                continue;
+            }
+
+            // Check if already in parent's captures
+            if self
+                .current_captures
+                .iter()
+                .any(|c| c.binding == cap.binding)
+            {
+                continue;
+            }
+
+            // Check if the binding is accessible in the parent scope (without capturing)
+            // This handles the case where the inner lambda captures a parameter of the outer lambda
+            let is_in_parent_scope = self.is_binding_in_current_scope(cap.binding);
+            if is_in_parent_scope {
+                // The binding is accessible in the parent scope, no need to propagate
+                continue;
+            }
+
+            // This capture is from an outer scope, propagate it to the parent lambda
+            let propagated_cap = cap.clone();
+            self.current_captures.push(propagated_cap);
+        }
 
         // Lambda itself is pure, but captures the body's effect
         Ok(Hir::new(
@@ -406,16 +468,44 @@ impl<'a> Analyzer<'a> {
             return Ok(Hir::pure(HirKind::Nil, span));
         }
 
-        let mut exprs = Vec::new();
-        let mut effect = Effect::Pure;
+        // Check if we're inside a function scope
+        let in_function = self.scopes.iter().any(|s| s.is_function);
 
-        for item in items {
-            let hir = self.analyze_expr(item)?;
-            effect = effect.combine(hir.effect);
-            exprs.push(hir);
+        if in_function {
+            // Two-pass analysis for letrec-style semantics:
+            // Pass 1: Create bindings for all defines (without analyzing values)
+            for item in items {
+                if let Some(name) = Self::is_define_form(item) {
+                    // Create local binding slot
+                    let local_index = self.current_local_count();
+                    self.bind(name, BindingKind::Local { index: local_index });
+                }
+            }
+
+            // Pass 2: Analyze all expressions (all bindings now visible)
+            let mut exprs = Vec::new();
+            let mut effect = Effect::Pure;
+
+            for item in items {
+                let hir = self.analyze_expr(item)?;
+                effect = effect.combine(hir.effect);
+                exprs.push(hir);
+            }
+
+            Ok(Hir::new(HirKind::Begin(exprs), span, effect))
+        } else {
+            // At top level, sequential semantics are fine
+            let mut exprs = Vec::new();
+            let mut effect = Effect::Pure;
+
+            for item in items {
+                let hir = self.analyze_expr(item)?;
+                effect = effect.combine(hir.effect);
+                exprs.push(hir);
+            }
+
+            Ok(Hir::new(HirKind::Begin(exprs), span, effect))
         }
-
-        Ok(Hir::new(HirKind::Begin(exprs), span, effect))
     }
 
     fn analyze_block(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
@@ -444,19 +534,51 @@ impl<'a> Analyzer<'a> {
             .as_symbol()
             .ok_or_else(|| format!("{}: define name must be a symbol", span))?;
         let sym = self.symbols.intern(name);
-        let value = self.analyze_expr(&items[2])?;
 
-        // Register the binding in the current scope so that subsequent set! can find it
-        self.bind(name, BindingKind::Global);
+        // Check if we're inside a function scope
+        // If so, define creates a local binding, not a global one
+        let in_function = self.scopes.iter().any(|s| s.is_function);
 
-        Ok(Hir::new(
-            HirKind::Define {
-                name: sym,
-                value: Box::new(value),
-            },
-            span,
-            Effect::Pure,
-        ))
+        if in_function {
+            // Inside a function, define creates a local binding
+            // Check if binding was pre-created by analyze_begin (for mutual recursion)
+            let binding_id = if let Some(existing) = self.lookup_in_current_scope(name) {
+                existing
+            } else {
+                // Not pre-created, create now (for single defines outside begin)
+                let local_index = self.current_local_count();
+                self.bind(name, BindingKind::Local { index: local_index })
+            };
+
+            // Now analyze the value (which can reference the binding)
+            let value = self.analyze_expr(&items[2])?;
+
+            // Emit a LocalDefine that stores to a local slot
+            Ok(Hir::new(
+                HirKind::LocalDefine {
+                    binding: binding_id,
+                    value: Box::new(value),
+                },
+                span,
+                Effect::Pure,
+            ))
+        } else {
+            // At top level, define creates a global binding
+            // Create binding first so recursive references work
+            self.bind(name, BindingKind::Global);
+
+            // Now analyze the value
+            let value = self.analyze_expr(&items[2])?;
+
+            Ok(Hir::new(
+                HirKind::Define {
+                    name: sym,
+                    value: Box::new(value),
+                },
+                span,
+                Effect::Pure,
+            ))
+        }
     }
 
     fn analyze_set(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
@@ -1049,6 +1171,14 @@ impl<'a> Analyzer<'a> {
 
         if let Some((_found_depth, id, needs_capture)) = found_in_scope {
             if needs_capture {
+                // Check if this is a global - globals are not captured, accessed directly
+                if let Some(info) = self.ctx.get_binding(id) {
+                    if matches!(info.kind, BindingKind::Global) {
+                        // Globals are accessed directly, not captured
+                        return Some(id);
+                    }
+                }
+
                 // Mark as captured
                 if let Some(info) = self.ctx.get_binding_mut(id) {
                     info.mark_captured();
@@ -1058,9 +1188,13 @@ impl<'a> Analyzer<'a> {
                 let capture_kind = if let Some(info) = self.ctx.get_binding(id) {
                     match info.kind {
                         BindingKind::Parameter { index } | BindingKind::Local { index } => {
+                            // Direct capture from parent's locals (parameters or local variables)
                             CaptureKind::Local { index }
                         }
-                        BindingKind::Global => CaptureKind::Global { sym: info.name },
+                        BindingKind::Global => {
+                            // This should not happen due to the check above
+                            CaptureKind::Global { sym: info.name }
+                        }
                     }
                 } else {
                     return Some(id);
@@ -1084,6 +1218,49 @@ impl<'a> Analyzer<'a> {
             return Some(id);
         }
 
+        // If not found in scopes, check if it's in parent captures (for nested lambdas)
+        if !self.parent_captures.is_empty() {
+            for (capture_index, parent_cap) in self.parent_captures.iter().enumerate() {
+                if let Some(info) = self.ctx.get_binding(parent_cap.binding) {
+                    if info.name.0 == self.symbols.intern(name).0 {
+                        // Found in parent captures - create a transitive capture
+                        let binding_id = parent_cap.binding;
+
+                        // Mark as captured
+                        if let Some(info) = self.ctx.get_binding_mut(binding_id) {
+                            info.mark_captured();
+                        }
+
+                        // Create a Capture kind that references the parent's capture index
+                        let capture_kind = CaptureKind::Capture {
+                            index: capture_index as u16,
+                        };
+
+                        // Add to current captures if not already present
+                        if !self
+                            .current_captures
+                            .iter()
+                            .any(|c| c.binding == binding_id)
+                        {
+                            let is_mutated = self
+                                .ctx
+                                .get_binding(binding_id)
+                                .map(|i| i.is_mutated)
+                                .unwrap_or(false);
+
+                            self.current_captures.push(CaptureInfo {
+                                binding: binding_id,
+                                kind: capture_kind,
+                                is_mutated,
+                            });
+                        }
+
+                        return Some(binding_id);
+                    }
+                }
+            }
+        }
+
         None
     }
 
@@ -1093,6 +1270,28 @@ impl<'a> Analyzer<'a> {
 
     fn current_local_count(&self) -> u16 {
         self.scopes.last().map(|s| s.next_local).unwrap_or(0)
+    }
+
+    /// Check if a binding is accessible in the current scope stack without crossing a function boundary
+    fn is_binding_in_current_scope(&self, binding_id: BindingId) -> bool {
+        // Walk scopes from innermost to outermost, stopping at function boundaries
+        for scope in self.scopes.iter().rev() {
+            if scope.bindings.values().any(|&id| id == binding_id) {
+                return true;
+            }
+            if scope.is_function {
+                // Stop at function boundary - anything beyond requires capturing
+                break;
+            }
+        }
+        false
+    }
+
+    /// Look up a binding in only the current (innermost) scope, not walking up the scope chain
+    fn lookup_in_current_scope(&self, name: &str) -> Option<BindingId> {
+        self.scopes
+            .last()
+            .and_then(|scope| scope.bindings.get(name).copied())
     }
 }
 

@@ -108,8 +108,18 @@ impl BindingInfo {
     }
 
     /// Check if this binding needs to be boxed in a cell
-    /// (mutated AND captured)
+    /// A binding needs a cell if:
+    /// - It's mutated AND captured (standard case for mutable captures)
+    /// - OR it's captured AND it's a Local (for letrec-style recursive bindings)
     pub fn needs_cell(&self) -> bool {
-        self.is_mutated && self.is_captured
+        if self.is_captured {
+            match self.kind {
+                BindingKind::Local { .. } => true, // Locals captured = need cell for letrec semantics
+                BindingKind::Parameter { .. } => self.is_mutated, // Params only if mutated
+                BindingKind::Global => false,      // Globals don't use cells
+            }
+        } else {
+            false
+        }
     }
 }

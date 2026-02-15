@@ -63,7 +63,14 @@ pub fn read_syntax(input: &str) -> Result<Syntax, String> {
     }
 
     let mut parser = SyntaxReader::new(tokens, locations);
-    parser.read()
+    let result = parser.read()?;
+
+    // Check for trailing tokens after the expression
+    if let Some(err) = parser.check_exhausted() {
+        return Err(err);
+    }
+
+    Ok(result)
 }
 
 /// Parse source code into multiple Syntax trees

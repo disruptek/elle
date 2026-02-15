@@ -108,6 +108,12 @@ pub enum HirKind {
         value: Box<Hir>,
     },
 
+    /// LocalDefine - create a local binding inside a function
+    LocalDefine {
+        binding: BindingId,
+        value: Box<Hir>,
+    },
+
     // === Loops ===
     /// While loop
     While {
