@@ -198,8 +198,8 @@ mod tests {
     #[test]
     fn test_display_float() {
         let span = Span::new(0, 3, 1, 1);
-        let syntax = Syntax::new(SyntaxKind::Float(3.14), span);
-        assert_eq!(syntax.to_string(), "3.14");
+        let syntax = Syntax::new(SyntaxKind::Float(2.71), span);
+        assert_eq!(syntax.to_string(), "2.71");
     }
 
     #[test]

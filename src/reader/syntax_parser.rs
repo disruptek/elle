@@ -379,8 +379,8 @@ mod tests {
 
     #[test]
     fn test_parse_float() {
-        let result = lex_and_parse("3.14").unwrap();
-        assert!(matches!(result.kind, SyntaxKind::Float(f) if (f - 3.14).abs() < 0.0001));
+        let result = lex_and_parse("2.71").unwrap();
+        assert!(matches!(result.kind, SyntaxKind::Float(f) if (f - 2.71).abs() < 0.0001));
     }
 
     #[test]
