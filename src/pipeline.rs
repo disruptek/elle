@@ -226,4 +226,114 @@ mod tests {
             Err(e) => panic!("Expected Ok(3), got Err: {}", e),
         }
     }
+
+    #[test]
+    fn test_eval_subtraction() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(- 10 3)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(7)),
+            Err(e) => panic!("Expected Ok(7), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_nested_arithmetic() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(+ (* 2 3) (- 10 5))", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(11)),
+            Err(e) => panic!("Expected Ok(11), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_if_true() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(if #t 42 0)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(42)),
+            Err(e) => panic!("Expected Ok(42), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_if_false() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(if #f 42 0)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(0)),
+            Err(e) => panic!("Expected Ok(0), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_let_simple() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(let ((x 10)) x)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(10)),
+            Err(e) => panic!("Expected Ok(10), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_let_with_arithmetic() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(let ((x 10) (y 5)) (+ x y))", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(15)),
+            Err(e) => panic!("Expected Ok(15), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_lambda_identity() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("((fn (x) x) 42)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(42)),
+            Err(e) => panic!("Expected Ok(42), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_lambda_add_one() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("((fn (x) (+ x 1)) 10)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(11)),
+            Err(e) => panic!("Expected Ok(11), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_compile_lambda_with_capture() {
+        let (mut symbols, _) = setup();
+        let result = compile_new("(let ((x 10)) (fn () x))", &mut symbols);
+        match result {
+            Ok(_) => {}
+            Err(e) => panic!("Failed to compile lambda with capture: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_begin() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(begin 1 2 3)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Int(3)),
+            Err(e) => panic!("Expected Ok(3), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_eval_comparison_lt() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new("(< 1 2)", &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::Bool(true)),
+            Err(e) => panic!("Expected Ok(true), got Err: {}", e),
+        }
+    }
 }

@@ -16,12 +16,12 @@ pub struct Lowerer {
     next_label: u32,
     /// Mapping from BindingId to local slot
     binding_to_slot: HashMap<BindingId, u16>,
-    /// Nested functions to compile
-    nested_functions: Vec<(u32, Hir)>,
-    /// Next function ID for nested closures
-    next_func_id: u32,
     /// Binding metadata from analysis
     bindings: HashMap<BindingId, BindingInfo>,
+    /// Whether we're currently lowering a lambda (closure)
+    in_lambda: bool,
+    /// Number of captured variables (for lambda context)
+    num_captures: u16,
 }
 
 impl Lowerer {
@@ -32,9 +32,9 @@ impl Lowerer {
             next_reg: 0,
             next_label: 1, // 0 is entry
             binding_to_slot: HashMap::new(),
-            nested_functions: Vec::new(),
-            next_func_id: 0,
             bindings: HashMap::new(),
+            in_lambda: false,
+            num_captures: 0,
         }
     }
 
@@ -69,7 +69,7 @@ impl Lowerer {
     pub fn lower_lambda(
         &mut self,
         params: &[BindingId],
-        _captures: &[crate::hir::CaptureInfo],
+        captures: &[crate::hir::CaptureInfo],
         body: &Hir,
         num_locals: u16,
     ) -> Result<LirFunction, String> {
@@ -82,14 +82,30 @@ impl Lowerer {
         let saved_reg = self.next_reg;
         let saved_label = self.next_label;
         let saved_bindings = std::mem::take(&mut self.binding_to_slot);
+        let saved_in_lambda = self.in_lambda;
+        let saved_num_captures = self.num_captures;
 
         self.next_reg = 0;
         self.next_label = 1;
         self.current_func.num_locals = num_locals;
+        self.in_lambda = true;
+        self.num_captures = captures.len() as u16;
 
-        // Bind parameters to slots
+        // In a closure, the environment is laid out as:
+        // [captured_vars..., parameters..., locally_defined_cells...]
+        // So:
+        // - Captured variables are at indices [0, num_captures)
+        // - Parameters are at indices [num_captures, num_captures + num_params)
+
+        // Bind captured variables to upvalue indices
+        for (i, cap) in captures.iter().enumerate() {
+            self.binding_to_slot.insert(cap.binding, i as u16);
+        }
+
+        // Bind parameters to upvalue indices
         for (i, param) in params.iter().enumerate() {
-            self.binding_to_slot.insert(*param, i as u16);
+            let upvalue_idx = self.num_captures + i as u16;
+            self.binding_to_slot.insert(*param, upvalue_idx);
         }
 
         // Lower body
@@ -107,6 +123,8 @@ impl Lowerer {
         self.next_reg = saved_reg;
         self.next_label = saved_label;
         self.binding_to_slot = saved_bindings;
+        self.in_lambda = saved_in_lambda;
+        self.num_captures = saved_num_captures;
 
         Ok(func)
     }
@@ -123,7 +141,13 @@ impl Lowerer {
             HirKind::Var(binding_id) => {
                 if let Some(&slot) = self.binding_to_slot.get(binding_id) {
                     let dst = self.fresh_reg();
-                    self.emit(LirInstr::LoadLocal { dst, slot });
+                    if self.in_lambda {
+                        // In a lambda, parameters and captures are accessed via LoadCapture
+                        self.emit(LirInstr::LoadCapture { dst, index: slot });
+                    } else {
+                        // In the main function, use LoadLocal
+                        self.emit(LirInstr::LoadLocal { dst, slot });
+                    }
                     Ok(dst)
                 } else if let Some(info) = self.bindings.get(binding_id) {
                     match info.kind {
@@ -173,15 +197,11 @@ impl Lowerer {
             }
 
             HirKind::Lambda {
-                params: _,
+                params,
                 captures,
                 body,
-                num_locals: _,
+                num_locals,
             } => {
-                // Lower the lambda body to a separate function
-                let func_id = self.next_func_id;
-                self.next_func_id += 1;
-
                 // Collect capture registers
                 let mut capture_regs = Vec::new();
                 for cap in captures {
@@ -189,17 +209,35 @@ impl Lowerer {
                         let reg = self.fresh_reg();
                         self.emit(LirInstr::LoadLocal { dst: reg, slot });
                         capture_regs.push(reg);
+                    } else if let Some(info) = self.bindings.get(&cap.binding) {
+                        // If the capture is a global, load it as a global
+                        match info.kind {
+                            BindingKind::Global => {
+                                let sym = info.name;
+                                let reg = self.fresh_reg();
+                                self.emit(LirInstr::LoadGlobal { dst: reg, sym });
+                                capture_regs.push(reg);
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "Cannot capture non-local binding: {:?}",
+                                    cap.binding
+                                ));
+                            }
+                        }
+                    } else {
+                        return Err(format!("Captured variable not found: {:?}", cap.binding));
                     }
                 }
 
-                // Store body for later compilation
-                self.nested_functions.push((func_id, (**body).clone()));
+                // Lower the lambda body to a separate LirFunction
+                let nested_lir = self.lower_lambda(params, captures, body, *num_locals)?;
 
-                // Create closure
+                // Create closure with the nested function
                 let dst = self.fresh_reg();
                 self.emit(LirInstr::MakeClosure {
                     dst,
-                    func_id,
+                    func: Box::new(nested_lir),
                     captures: capture_regs,
                 });
                 Ok(dst)
@@ -210,45 +248,45 @@ impl Lowerer {
                 then_branch,
                 else_branch,
             } => {
+                // Lower condition
                 let cond_reg = self.lower_expr(cond)?;
 
-                let then_label = self.fresh_label();
-                let else_label = self.fresh_label();
-                let join_label = self.fresh_label();
+                // Allocate label IDs for inline jumps
+                let else_label_id = self.next_label;
+                self.next_label += 1;
+                let end_label_id = self.next_label;
+                self.next_label += 1;
 
-                self.terminate(Terminator::Branch {
+                // Emit conditional jump to else (will jump if condition is false)
+                self.emit(LirInstr::JumpIfFalseInline {
                     cond: cond_reg,
-                    then_label,
-                    else_label,
+                    label_id: else_label_id,
                 });
-                self.finish_block();
 
-                // Then branch
-                self.start_block(then_label);
+                // Lower then branch
                 let then_reg = self.lower_expr(then_branch)?;
-                let then_result = self.fresh_reg();
-                self.emit(LirInstr::Move {
-                    dst: then_result,
-                    src: then_reg,
-                });
-                self.terminate(Terminator::Jump(join_label));
-                self.finish_block();
 
-                // Else branch
-                self.start_block(else_label);
-                let else_reg = self.lower_expr(else_branch)?;
-                let else_result = self.fresh_reg();
-                self.emit(LirInstr::Move {
-                    dst: else_result,
-                    src: else_reg,
+                // Emit unconditional jump to end
+                self.emit(LirInstr::JumpInline {
+                    label_id: end_label_id,
                 });
-                self.terminate(Terminator::Jump(join_label));
-                self.finish_block();
 
-                // Join point - in real SSA we'd use phi nodes
-                // For now, we assume the result is in a consistent register
-                self.start_block(join_label);
-                Ok(then_result) // Simplified - bytecode emission handles this
+                // Emit else label marker
+                self.emit(LirInstr::LabelMarker {
+                    label_id: else_label_id,
+                });
+
+                // Lower else branch
+                let _else_reg = self.lower_expr(else_branch)?;
+
+                // Emit end label marker
+                self.emit(LirInstr::LabelMarker {
+                    label_id: end_label_id,
+                });
+
+                // Both branches should produce the same result register
+                // For now, use then_reg as the result (emitter will handle this)
+                Ok(then_reg)
             }
 
             HirKind::Begin(exprs) => {
@@ -672,8 +710,13 @@ mod tests {
             make_span(),
         );
         let func = lowerer.lower(&hir).unwrap();
-        // Should have multiple blocks for the branches
-        assert!(func.blocks.len() >= 3);
+        // If is now emitted inline in a single block
+        assert_eq!(func.blocks.len(), 1);
+        // Should have inline jump instructions
+        assert!(func.blocks[0]
+            .instructions
+            .iter()
+            .any(|i| matches!(i, LirInstr::JumpIfFalseInline { .. })));
     }
 
     #[test]

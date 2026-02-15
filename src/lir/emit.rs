@@ -5,8 +5,10 @@
 
 use super::types::*;
 use crate::compiler::bytecode::{Bytecode, Instruction};
-use crate::value::Value;
+use crate::compiler::effects::Effect;
+use crate::value::{Arity, Closure, Value};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Emits bytecode from LIR
 pub struct Emitter {
@@ -65,19 +67,58 @@ impl Emitter {
         std::mem::take(&mut self.bytecode)
     }
 
+    /// Emit bytecode from a nested LIR function (for closures)
+    fn emit_nested_function(&mut self, func: &LirFunction) -> Bytecode {
+        // Save current state
+        let saved_bytecode = std::mem::replace(&mut self.bytecode, Bytecode::new());
+        let saved_label_offsets = std::mem::replace(&mut self.label_offsets, HashMap::new());
+        let saved_pending_jumps = std::mem::replace(&mut self.pending_jumps, Vec::new());
+        let saved_stack = std::mem::replace(&mut self.stack, Vec::new());
+        let saved_reg_to_stack = std::mem::replace(&mut self.reg_to_stack, HashMap::new());
+
+        // Emit the nested function
+        let result = self.emit(func);
+
+        // Restore state
+        self.bytecode = saved_bytecode;
+        self.label_offsets = saved_label_offsets;
+        self.pending_jumps = saved_pending_jumps;
+        self.stack = saved_stack;
+        self.reg_to_stack = saved_reg_to_stack;
+
+        result
+    }
+
     fn emit_block(&mut self, block: &BasicBlock, func: &LirFunction) {
         // Reset stack state at block entry
         self.stack.clear();
         self.reg_to_stack.clear();
 
+        // First pass: record label positions within the block
+        let mut label_positions: HashMap<u32, usize> = HashMap::new();
+        let mut current_pos = self.bytecode.current_pos();
         for instr in &block.instructions {
-            self.emit_instr(instr, func);
+            if let LirInstr::LabelMarker { label_id } = instr {
+                label_positions.insert(*label_id, current_pos);
+            }
+            // Estimate bytecode size (rough approximation)
+            current_pos += 4; // Conservative estimate
+        }
+
+        // Second pass: emit instructions
+        for instr in &block.instructions {
+            self.emit_instr(instr, func, &label_positions);
         }
 
         self.emit_terminator(&block.terminator);
     }
 
-    fn emit_instr(&mut self, instr: &LirInstr, func: &LirFunction) {
+    fn emit_instr(
+        &mut self,
+        instr: &LirInstr,
+        func: &LirFunction,
+        _label_positions: &HashMap<u32, usize>,
+    ) {
         match instr {
             LirInstr::Const { dst, value } => {
                 self.emit_const(value, func);
@@ -101,6 +142,7 @@ impl Emitter {
 
             LirInstr::LoadCapture { dst, index } => {
                 self.bytecode.emit(Instruction::LoadUpvalue);
+                self.bytecode.emit_byte(0); // depth (currently unused)
                 self.bytecode.emit_byte(*index as u8);
                 self.push_reg(*dst);
             }
@@ -126,17 +168,37 @@ impl Emitter {
 
             LirInstr::MakeClosure {
                 dst,
-                func_id,
+                func,
                 captures,
             } => {
                 // Push captures onto stack
                 for cap in captures {
                     self.ensure_on_top(*cap);
                 }
-                // MakeClosure expects: const_idx for function, num_upvalues
+
+                // Recursively emit the nested function
+                let nested_bytecode = self.emit_nested_function(func);
+
+                // Create closure template
+                let closure = Closure {
+                    bytecode: Rc::new(nested_bytecode.instructions),
+                    arity: Arity::Exact(func.arity as usize),
+                    env: Rc::new(vec![]), // Empty - captures added at runtime
+                    num_locals: func.num_locals as usize,
+                    num_captures: captures.len(),
+                    constants: Rc::new(nested_bytecode.constants),
+                    source_ast: None,
+                    effect: Effect::Pure, // TODO: get from HIR
+                };
+
+                // Add closure template to constants
+                let const_idx = self.bytecode.add_constant(Value::Closure(Rc::new(closure)));
+
+                // Emit MakeClosure instruction
                 self.bytecode.emit(Instruction::MakeClosure);
-                self.bytecode.emit_u16(*func_id as u16);
+                self.bytecode.emit_u16(const_idx);
                 self.bytecode.emit_byte(captures.len() as u8);
+
                 // Pop captures, push closure
                 for _ in captures {
                     self.pop();
@@ -335,6 +397,28 @@ impl Emitter {
                 self.ensure_on_top(*value);
                 // Use existing exception mechanism
                 // For now, just leave value on stack
+            }
+
+            LirInstr::JumpIfFalseInline { cond, label_id } => {
+                self.ensure_on_top(*cond);
+                self.bytecode.emit(Instruction::JumpIfFalse);
+                let pos = self.bytecode.current_pos();
+                self.bytecode.emit_i16(0); // placeholder - will be patched
+                self.pending_jumps.push((pos, Label(*label_id)));
+                self.pop();
+            }
+
+            LirInstr::JumpInline { label_id } => {
+                self.bytecode.emit(Instruction::Jump);
+                let pos = self.bytecode.current_pos();
+                self.bytecode.emit_i16(0); // placeholder - will be patched
+                self.pending_jumps.push((pos, Label(*label_id)));
+            }
+
+            LirInstr::LabelMarker { label_id } => {
+                // Record the current bytecode position for this label
+                self.label_offsets
+                    .insert(Label(*label_id), self.bytecode.current_pos());
             }
         }
     }

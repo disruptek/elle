@@ -96,7 +96,7 @@ pub enum LirInstr {
     /// Create a closure
     MakeClosure {
         dst: Reg,
-        func_id: u32,
+        func: Box<LirFunction>,
         captures: Vec<Reg>,
     },
 
@@ -151,6 +151,12 @@ pub enum LirInstr {
     // === Control Flow Helpers ===
     /// Copy a register (for phi-like operations)
     Move { dst: Reg, src: Reg },
+    /// Inline conditional jump (for if expressions)
+    JumpIfFalseInline { cond: Reg, label_id: u32 },
+    /// Inline unconditional jump (for if expressions)
+    JumpInline { label_id: u32 },
+    /// Label marker for inline jumps (not emitted, just marks position)
+    LabelMarker { label_id: u32 },
 
     // === Coroutines ===
     /// Yield a value
