@@ -1,8 +1,6 @@
 //! Cell/Box primitives for mutable storage
 use crate::error::{LError, LResult};
 use crate::value::Value;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 /// Create a mutable cell containing a value
 ///
@@ -14,9 +12,7 @@ pub fn prim_box(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(1, args.len()));
     }
 
-    Ok(Value::Cell(Rc::new(RefCell::new(Box::new(
-        args[0].clone(),
-    )))))
+    Ok(Value::cell(args[0]))
 }
 
 /// Extract the value from a cell
@@ -29,12 +25,11 @@ pub fn prim_unbox(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(1, args.len()));
     }
 
-    match &args[0] {
-        Value::Cell(cell) | Value::LocalCell(cell) => {
-            let borrowed = cell.borrow();
-            Ok((**borrowed).clone())
-        }
-        other => Err(LError::type_mismatch("cell", other.type_name())),
+    if let Some(cell) = args[0].as_cell() {
+        let borrowed = cell.borrow();
+        Ok(*borrowed)
+    } else {
+        Err(LError::type_mismatch("cell", args[0].type_name()))
     }
 }
 
@@ -48,13 +43,12 @@ pub fn prim_box_set(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(2, args.len()));
     }
 
-    match &args[0] {
-        Value::Cell(cell) | Value::LocalCell(cell) => {
-            let mut borrowed = cell.borrow_mut();
-            **borrowed = args[1].clone();
-            Ok(args[1].clone())
-        }
-        other => Err(LError::type_mismatch("cell", other.type_name())),
+    if let Some(cell) = args[0].as_cell() {
+        let mut borrowed = cell.borrow_mut();
+        *borrowed = args[1];
+        Ok(args[1])
+    } else {
+        Err(LError::type_mismatch("cell", args[0].type_name()))
     }
 }
 
@@ -68,8 +62,5 @@ pub fn prim_box_p(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(1, args.len()));
     }
 
-    Ok(Value::Bool(matches!(
-        &args[0],
-        Value::Cell(_) | Value::LocalCell(_)
-    )))
+    Ok(Value::bool(args[0].is_cell()))
 }

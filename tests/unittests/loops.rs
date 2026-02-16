@@ -88,7 +88,7 @@ fn unit_while_loop_returns_nil() {
     env.eval("(define x 0)").unwrap();
     let result = env.eval("(while (< x 1) (set! x 1))").unwrap();
 
-    assert_eq!(result, Value::Nil);
+    assert_eq!(result, Value::NIL);
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn unit_for_loop_returns_nil() {
     env.eval("(define lst (list 1 2 3))").unwrap();
     let result = env.eval("(each item lst (+ item 1))").unwrap();
 
-    assert_eq!(result, Value::Nil);
+    assert_eq!(result, Value::NIL);
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn unit_simple_while_increment() {
         .unwrap();
     let result = env.eval("counter").unwrap();
 
-    assert_eq!(result, Value::Int(3));
+    assert_eq!(result, Value::int(3));
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn unit_while_loop_comparison_operators() {
     env.eval("(while (>= n 1) (set! n (- n 1)))").unwrap();
     let result = env.eval("n").unwrap();
 
-    assert_eq!(result, Value::Int(0));
+    assert_eq!(result, Value::int(0));
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn unit_while_loop_multiplication() {
 
     let x = env.eval("x").unwrap();
     // 2 * 2^5 = 64
-    assert_eq!(x, Value::Int(64));
+    assert_eq!(x, Value::int(64));
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn unit_loop_variable_mutation() {
     env.eval("(while (> a b) (set! a (- a 1)))").unwrap();
 
     let a = env.eval("a").unwrap();
-    assert_eq!(a, Value::Int(5)); // a should equal b after loop
+    assert_eq!(a, Value::int(5)); // a should equal b after loop
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn unit_while_false_condition() {
     env.eval("(while (= 1 0) (set! flag 1))").unwrap();
     let flag = env.eval("flag").unwrap();
 
-    assert_eq!(flag, Value::Int(0)); // flag should remain 0
+    assert_eq!(flag, Value::int(0)); // flag should remain 0
 }
 
 #[test]

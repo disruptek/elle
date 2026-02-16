@@ -222,7 +222,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(+ 1 2)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(3)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(3)),
             Err(e) => panic!("Expected Ok(3), got Err: {}", e),
         }
     }
@@ -232,7 +232,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(- 10 3)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(7)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(7)),
             Err(e) => panic!("Expected Ok(7), got Err: {}", e),
         }
     }
@@ -242,7 +242,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(+ (* 2 3) (- 10 5))", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(11)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(11)),
             Err(e) => panic!("Expected Ok(11), got Err: {}", e),
         }
     }
@@ -252,7 +252,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(if #t 42 0)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(42)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(42)),
             Err(e) => panic!("Expected Ok(42), got Err: {}", e),
         }
     }
@@ -262,7 +262,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(if #f 42 0)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(0)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(0)),
             Err(e) => panic!("Expected Ok(0), got Err: {}", e),
         }
     }
@@ -272,7 +272,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(let ((x 10)) x)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(10)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(10)),
             Err(e) => panic!("Expected Ok(10), got Err: {}", e),
         }
     }
@@ -282,7 +282,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(let ((x 10) (y 5)) (+ x y))", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(15)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(15)),
             Err(e) => panic!("Expected Ok(15), got Err: {}", e),
         }
     }
@@ -292,7 +292,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("((fn (x) x) 42)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(42)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(42)),
             Err(e) => panic!("Expected Ok(42), got Err: {}", e),
         }
     }
@@ -302,7 +302,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("((fn (x) (+ x 1)) 10)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(11)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(11)),
             Err(e) => panic!("Expected Ok(11), got Err: {}", e),
         }
     }
@@ -322,7 +322,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(begin 1 2 3)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Int(3)),
+            Ok(v) => assert_eq!(v, crate::value::Value::int(3)),
             Err(e) => panic!("Expected Ok(3), got Err: {}", e),
         }
     }
@@ -332,7 +332,7 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(< 1 2)", &mut symbols, &mut vm);
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::Bool(true)),
+            Ok(v) => assert_eq!(v, crate::value::Value::bool(true)),
             Err(e) => panic!("Expected Ok(true), got Err: {}", e),
         }
     }
@@ -444,28 +444,28 @@ mod tests {
     fn test_eval_cond_first_true() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(cond (#t 42))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+        assert_eq!(result.unwrap(), crate::value::Value::int(42));
     }
 
     #[test]
     fn test_eval_cond_second_true() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(cond (#f 1) (#t 42))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+        assert_eq!(result.unwrap(), crate::value::Value::int(42));
     }
 
     #[test]
     fn test_eval_cond_else() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(cond (#f 1) (#f 2) (else 42))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+        assert_eq!(result.unwrap(), crate::value::Value::int(42));
     }
 
     #[test]
     fn test_eval_cond_with_expressions() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(cond ((< 5 10) (+ 20 22)))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+        assert_eq!(result.unwrap(), crate::value::Value::int(42));
     }
 
     // === Control Flow: and ===
@@ -474,21 +474,21 @@ mod tests {
     fn test_eval_and_all_true() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(and #t #t #t)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Bool(true));
+        assert_eq!(result.unwrap(), crate::value::Value::bool(true));
     }
 
     #[test]
     fn test_eval_and_one_false() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(and #t #f #t)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Bool(false));
+        assert_eq!(result.unwrap(), crate::value::Value::bool(false));
     }
 
     #[test]
     fn test_eval_and_returns_last() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(and 1 2 3)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(3));
+        assert_eq!(result.unwrap(), crate::value::Value::int(3));
     }
 
     #[test]
@@ -496,14 +496,14 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         // If and doesn't short-circuit, this would fail trying to call nil
         let result = eval_new("(and #f (nil))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Bool(false));
+        assert_eq!(result.unwrap(), crate::value::Value::bool(false));
     }
 
     #[test]
     fn test_eval_and_empty() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(and)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Bool(true));
+        assert_eq!(result.unwrap(), crate::value::Value::bool(true));
     }
 
     // === Control Flow: or ===
@@ -512,21 +512,21 @@ mod tests {
     fn test_eval_or_all_false() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(or #f #f #f)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Bool(false));
+        assert_eq!(result.unwrap(), crate::value::Value::bool(false));
     }
 
     #[test]
     fn test_eval_or_one_true() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(or #f #t #f)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Bool(true));
+        assert_eq!(result.unwrap(), crate::value::Value::bool(true));
     }
 
     #[test]
     fn test_eval_or_returns_first_truthy() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(or #f 42 99)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+        assert_eq!(result.unwrap(), crate::value::Value::int(42));
     }
 
     #[test]
@@ -534,14 +534,14 @@ mod tests {
         let (mut symbols, mut vm) = setup();
         // If or doesn't short-circuit, this would fail trying to call nil
         let result = eval_new("(or #t (nil))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Bool(true));
+        assert_eq!(result.unwrap(), crate::value::Value::bool(true));
     }
 
     #[test]
     fn test_eval_or_empty() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(or)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Bool(false));
+        assert_eq!(result.unwrap(), crate::value::Value::bool(false));
     }
 
     // === Control Flow: while ===
@@ -550,7 +550,7 @@ mod tests {
     fn test_eval_while_never_executes() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(while #f 42)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Nil);
+        assert_eq!(result.unwrap(), crate::value::Value::NIL);
     }
 
     #[test]
@@ -561,7 +561,7 @@ mod tests {
             &mut symbols,
             &mut vm,
         );
-        assert_eq!(result.unwrap(), crate::value::Value::Int(5));
+        assert_eq!(result.unwrap(), crate::value::Value::int(5));
     }
 
     // === Closures and Captures ===
@@ -570,7 +570,7 @@ mod tests {
     fn test_eval_closure_captures_local() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(let ((x 10)) ((fn () x)))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(10));
+        assert_eq!(result.unwrap(), crate::value::Value::int(10));
     }
 
     #[test]
@@ -581,7 +581,7 @@ mod tests {
             &mut symbols,
             &mut vm,
         );
-        assert_eq!(result.unwrap(), crate::value::Value::Int(30));
+        assert_eq!(result.unwrap(), crate::value::Value::int(30));
     }
 
     #[test]
@@ -592,14 +592,14 @@ mod tests {
             &mut symbols,
             &mut vm,
         );
-        assert_eq!(result.unwrap(), crate::value::Value::Int(10));
+        assert_eq!(result.unwrap(), crate::value::Value::int(10));
     }
 
     #[test]
     fn test_eval_closure_with_param_and_capture() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(let ((x 10)) ((fn (y) (+ x y)) 5))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(15));
+        assert_eq!(result.unwrap(), crate::value::Value::int(15));
     }
 
     // === Higher-Order Functions ===
@@ -612,14 +612,14 @@ mod tests {
             &mut symbols,
             &mut vm,
         );
-        assert_eq!(result.unwrap(), crate::value::Value::Int(11));
+        assert_eq!(result.unwrap(), crate::value::Value::int(11));
     }
 
     #[test]
     fn test_eval_function_returning_function() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(((fn (x) (fn (y) (+ x y))) 10) 5)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(15));
+        assert_eq!(result.unwrap(), crate::value::Value::int(15));
     }
 
     // === Define and Set! ===
@@ -628,14 +628,14 @@ mod tests {
     fn test_eval_define_then_use() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(begin (define x 42) x)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+        assert_eq!(result.unwrap(), crate::value::Value::int(42));
     }
 
     #[test]
     fn test_eval_define_then_set() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new("(begin (define x 10) (set! x 42) x)", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::Int(42));
+        assert_eq!(result.unwrap(), crate::value::Value::int(42));
     }
 
     #[test]
@@ -651,7 +651,7 @@ mod tests {
             &mut symbols,
             &mut vm,
         );
-        assert_eq!(result.unwrap(), crate::value::Value::Int(2));
+        assert_eq!(result.unwrap(), crate::value::Value::int(2));
     }
 
     #[test]

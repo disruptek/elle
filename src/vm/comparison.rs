@@ -4,19 +4,32 @@ use crate::value::Value;
 pub fn handle_eq(vm: &mut VM) -> Result<(), String> {
     let b = vm.stack.pop().ok_or("Stack underflow")?;
     let a = vm.stack.pop().ok_or("Stack underflow")?;
-    vm.stack.push(Value::Bool(a == b));
+    vm.stack
+        .push(if a == b { Value::TRUE } else { Value::FALSE });
     Ok(())
 }
 
 pub fn handle_lt(vm: &mut VM) -> Result<(), String> {
     let b = vm.stack.pop().ok_or("Stack underflow")?;
     let a = vm.stack.pop().ok_or("Stack underflow")?;
-    let result = match (a, b) {
-        (Value::Int(x), Value::Int(y)) => Value::Bool(x < y),
-        (Value::Float(x), Value::Float(y)) => Value::Bool(x < y),
-        (Value::Int(x), Value::Float(y)) => Value::Bool((x as f64) < y),
-        (Value::Float(x), Value::Int(y)) => Value::Bool(x < (y as f64)),
-        _ => return Err("Type error in comparison".to_string()),
+    let result = match (a.as_int(), b.as_int()) {
+        (Some(x), Some(y)) => {
+            if x < y {
+                Value::TRUE
+            } else {
+                Value::FALSE
+            }
+        }
+        _ => match (a.as_float(), b.as_float()) {
+            (Some(x), Some(y)) => {
+                if x < y {
+                    Value::TRUE
+                } else {
+                    Value::FALSE
+                }
+            }
+            _ => return Err("Type error in comparison".to_string()),
+        },
     };
     vm.stack.push(result);
     Ok(())
@@ -25,12 +38,24 @@ pub fn handle_lt(vm: &mut VM) -> Result<(), String> {
 pub fn handle_gt(vm: &mut VM) -> Result<(), String> {
     let b = vm.stack.pop().ok_or("Stack underflow")?;
     let a = vm.stack.pop().ok_or("Stack underflow")?;
-    let result = match (a, b) {
-        (Value::Int(x), Value::Int(y)) => Value::Bool(x > y),
-        (Value::Float(x), Value::Float(y)) => Value::Bool(x > y),
-        (Value::Int(x), Value::Float(y)) => Value::Bool((x as f64) > y),
-        (Value::Float(x), Value::Int(y)) => Value::Bool(x > (y as f64)),
-        _ => return Err("Type error in comparison".to_string()),
+    let result = match (a.as_int(), b.as_int()) {
+        (Some(x), Some(y)) => {
+            if x > y {
+                Value::TRUE
+            } else {
+                Value::FALSE
+            }
+        }
+        _ => match (a.as_float(), b.as_float()) {
+            (Some(x), Some(y)) => {
+                if x > y {
+                    Value::TRUE
+                } else {
+                    Value::FALSE
+                }
+            }
+            _ => return Err("Type error in comparison".to_string()),
+        },
     };
     vm.stack.push(result);
     Ok(())
@@ -39,12 +64,24 @@ pub fn handle_gt(vm: &mut VM) -> Result<(), String> {
 pub fn handle_le(vm: &mut VM) -> Result<(), String> {
     let b = vm.stack.pop().ok_or("Stack underflow")?;
     let a = vm.stack.pop().ok_or("Stack underflow")?;
-    let result = match (a, b) {
-        (Value::Int(x), Value::Int(y)) => Value::Bool(x <= y),
-        (Value::Float(x), Value::Float(y)) => Value::Bool(x <= y),
-        (Value::Int(x), Value::Float(y)) => Value::Bool((x as f64) <= y),
-        (Value::Float(x), Value::Int(y)) => Value::Bool(x <= (y as f64)),
-        _ => return Err("Type error in comparison".to_string()),
+    let result = match (a.as_int(), b.as_int()) {
+        (Some(x), Some(y)) => {
+            if x <= y {
+                Value::TRUE
+            } else {
+                Value::FALSE
+            }
+        }
+        _ => match (a.as_float(), b.as_float()) {
+            (Some(x), Some(y)) => {
+                if x <= y {
+                    Value::TRUE
+                } else {
+                    Value::FALSE
+                }
+            }
+            _ => return Err("Type error in comparison".to_string()),
+        },
     };
     vm.stack.push(result);
     Ok(())
@@ -53,12 +90,24 @@ pub fn handle_le(vm: &mut VM) -> Result<(), String> {
 pub fn handle_ge(vm: &mut VM) -> Result<(), String> {
     let b = vm.stack.pop().ok_or("Stack underflow")?;
     let a = vm.stack.pop().ok_or("Stack underflow")?;
-    let result = match (a, b) {
-        (Value::Int(x), Value::Int(y)) => Value::Bool(x >= y),
-        (Value::Float(x), Value::Float(y)) => Value::Bool(x >= y),
-        (Value::Int(x), Value::Float(y)) => Value::Bool((x as f64) >= y),
-        (Value::Float(x), Value::Int(y)) => Value::Bool(x >= (y as f64)),
-        _ => return Err("Type error in comparison".to_string()),
+    let result = match (a.as_int(), b.as_int()) {
+        (Some(x), Some(y)) => {
+            if x >= y {
+                Value::TRUE
+            } else {
+                Value::FALSE
+            }
+        }
+        _ => match (a.as_float(), b.as_float()) {
+            (Some(x), Some(y)) => {
+                if x >= y {
+                    Value::TRUE
+                } else {
+                    Value::FALSE
+                }
+            }
+            _ => return Err("Type error in comparison".to_string()),
+        },
     };
     vm.stack.push(result);
     Ok(())

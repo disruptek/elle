@@ -847,7 +847,7 @@ impl<'a> Analyzer<'a> {
             }
             SyntaxKind::List(items) => {
                 if items.is_empty() {
-                    return Ok(HirPattern::Nil);
+                    return Ok(HirPattern::List(vec![]));
                 }
                 // Check for cons pattern (head . tail)
                 if items.len() == 3 && items[1].as_symbol() == Some(".") {

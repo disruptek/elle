@@ -25,7 +25,7 @@ fn test_catch_undefined_variable_by_id() {
     // handler-case catches undefined-variable exception (ID 5)
     let result = eval("(handler-case undefined-var (5 e 'caught))").unwrap();
     // Just verify it's a symbol (the exact ID depends on symbol table state)
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn test_catch_undefined_variable_by_name() {
     // handler-case catches undefined-variable by symbolic name
     let result = eval("(handler-case undefined-var (undefined-variable e 'caught))").unwrap();
     // Result is 'caught symbol
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 #[test]
@@ -56,14 +56,14 @@ fn test_undefined_variable_exception_contains_symbol() {
     "#,
     )
     .unwrap();
-    assert_eq!(result, Value::Int(5)); // exception-id returns 5
+    assert_eq!(result, Value::int(5)); // exception-id returns 5
 }
 
 #[test]
 fn test_undefined_variable_in_nested_expression() {
     // Undefined variable in a nested expression is catchable
     let result = eval("(handler-case (+ 1 undefined-var) (5 e 'caught))").unwrap();
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 // ============================================================================
@@ -82,7 +82,7 @@ fn test_catch_arity_error_by_id() {
     "#,
     )
     .unwrap();
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn test_catch_arity_error_by_name() {
     "#,
     )
     .unwrap();
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 #[test]
@@ -110,7 +110,7 @@ fn test_arity_error_too_few_args() {
     "#,
     )
     .unwrap();
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn test_arity_error_too_many_args() {
     "#,
     )
     .unwrap();
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn test_multiple_handlers_second_match() {
     )
     .unwrap();
     // Should match undefined-variable (5) with first handler
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 // ============================================================================
@@ -153,7 +153,7 @@ fn test_catch_error_base_catches_undefined() {
     // exception ID 2 (error) is parent of ID 5 (undefined-variable)
     // Catching 'error' should catch undefined-variable
     let result = eval("(handler-case undefined-var (error e 'caught))").unwrap();
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 #[test]
@@ -167,14 +167,14 @@ fn test_catch_error_base_catches_arity() {
     "#,
     )
     .unwrap();
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 #[test]
 fn test_catch_condition_base_catches_all() {
     // exception ID 1 (condition) is the root
     let result = eval("(handler-case undefined-var (condition e 'caught))").unwrap();
-    assert!(matches!(result, Value::Symbol(_)));
+    assert!((result).is_symbol());
 }
 
 // ============================================================================
@@ -194,9 +194,9 @@ fn test_multiple_handlers_first_match() {
     )
     .unwrap();
     // Should match undefined-variable (5), not arity (6)
-    if let Value::Symbol(sym) = result {
+    if let Some(sym) = result.as_symbol() {
         // The symbol should be 'undefined, not 'arity
-        assert!(sym.0 > 0); // Just verify it's a valid symbol
+        assert!(sym > 0); // Just verify it's a valid symbol
     } else {
         panic!("Expected symbol");
     }
@@ -217,7 +217,7 @@ fn test_assertion_pattern_catches_errors() {
     "#,
     )
     .unwrap();
-    assert_eq!(result, Value::Int(3));
+    assert_eq!(result, Value::int(3));
 }
 
 #[test]

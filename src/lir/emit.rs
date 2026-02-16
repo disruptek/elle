@@ -148,7 +148,7 @@ impl Emitter {
             }
 
             LirInstr::ValueConst { dst, value } => {
-                let const_idx = self.bytecode.add_constant(value.clone());
+                let const_idx = self.bytecode.add_constant(*value);
                 self.bytecode.emit(Instruction::LoadConst);
                 self.bytecode.emit_u16(const_idx);
                 self.push_reg(*dst);
@@ -195,7 +195,7 @@ impl Emitter {
 
             LirInstr::LoadGlobal { dst, sym } => {
                 // Add symbol to constants
-                let const_idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                let const_idx = self.bytecode.add_constant(Value::symbol(sym.0));
                 // LoadGlobal reads the symbol index directly from bytecode
                 self.bytecode.emit(Instruction::LoadGlobal);
                 self.bytecode.emit_u16(const_idx);
@@ -204,7 +204,7 @@ impl Emitter {
 
             LirInstr::StoreGlobal { sym, src } => {
                 self.ensure_on_top(*src);
-                let const_idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                let const_idx = self.bytecode.add_constant(Value::symbol(sym.0));
                 // StoreGlobal reads the symbol index directly from bytecode
                 // Stack should have the value on top
                 self.bytecode.emit(Instruction::StoreGlobal);
@@ -235,11 +235,11 @@ impl Emitter {
                     constants: Rc::new(nested_bytecode.constants),
                     source_ast: None,
                     effect: Effect::Pure, // TODO: get from HIR
-                    cell_params_mask: func.cell_params_mask,
+                    cell_params_mask: 0,
                 };
 
                 // Add closure template to constants
-                let const_idx = self.bytecode.add_constant(Value::Closure(Rc::new(closure)));
+                let const_idx = self.bytecode.add_constant(Value::closure(closure));
 
                 // Emit MakeClosure instruction
                 self.bytecode.emit(Instruction::MakeClosure);
@@ -405,7 +405,7 @@ impl Emitter {
                         // Emit: push 0, swap, sub
                         // Actually, we need to emit 0 - src
                         // Stack has src on top, we need 0 on top then sub
-                        let zero_idx = self.bytecode.add_constant(Value::Int(0));
+                        let zero_idx = self.bytecode.add_constant(Value::int(0));
                         self.bytecode.emit(Instruction::LoadConst);
                         self.bytecode.emit_u16(zero_idx);
                         self.bytecode.emit(Instruction::Sub);
@@ -531,7 +531,7 @@ impl Emitter {
 
             LirInstr::BindException { var_name } => {
                 self.bytecode.emit(Instruction::BindException);
-                let const_idx = self.bytecode.add_constant(Value::Symbol(*var_name));
+                let const_idx = self.bytecode.add_constant(Value::symbol(var_name.0));
                 self.bytecode.emit_u16(const_idx);
             }
 
@@ -643,29 +643,27 @@ impl Emitter {
                 self.bytecode.emit(Instruction::False);
             }
             LirConst::Int(n) => {
-                let idx = self.bytecode.add_constant(Value::Int(*n));
+                let idx = self.bytecode.add_constant(Value::int(*n));
                 self.bytecode.emit(Instruction::LoadConst);
                 self.bytecode.emit_u16(idx);
             }
             LirConst::Float(f) => {
-                let idx = self.bytecode.add_constant(Value::Float(*f));
+                let idx = self.bytecode.add_constant(Value::float(*f));
                 self.bytecode.emit(Instruction::LoadConst);
                 self.bytecode.emit_u16(idx);
             }
             LirConst::String(s) => {
-                let idx = self
-                    .bytecode
-                    .add_constant(Value::String(std::rc::Rc::from(s.as_str())));
+                let idx = self.bytecode.add_constant(Value::string(s.clone()));
                 self.bytecode.emit(Instruction::LoadConst);
                 self.bytecode.emit_u16(idx);
             }
             LirConst::Symbol(sym) => {
-                let idx = self.bytecode.add_constant(Value::Symbol(*sym));
+                let idx = self.bytecode.add_constant(Value::symbol(sym.0));
                 self.bytecode.emit(Instruction::LoadConst);
                 self.bytecode.emit_u16(idx);
             }
             LirConst::Keyword(sym) => {
-                let idx = self.bytecode.add_constant(Value::Keyword(*sym));
+                let idx = self.bytecode.add_constant(Value::keyword(sym.0));
                 self.bytecode.emit(Instruction::LoadConst);
                 self.bytecode.emit_u16(idx);
             }

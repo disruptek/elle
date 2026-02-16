@@ -22,16 +22,14 @@ pub fn prim_make_c_callback(_vm: &mut VM, args: &[Value]) -> Result<Value, Strin
     let closure = &args[0];
 
     // Parse argument types
-    let arg_types = match &args[1] {
-        Value::Nil => vec![],
-        Value::Cons(_) => {
-            let type_list = args[1].list_to_vec()?;
-            type_list
-                .iter()
-                .map(parse_ctype)
-                .collect::<Result<Vec<_>, _>>()?
-        }
-        _ => return Err("arg-types must be a list".to_string()),
+    let arg_types = if args[1].is_nil() {
+        vec![]
+    } else {
+        let type_list = args[1].list_to_vec()?;
+        type_list
+            .iter()
+            .map(parse_ctype)
+            .collect::<Result<Vec<_>, _>>()?
     };
 
     // Parse return type
@@ -41,13 +39,13 @@ pub fn prim_make_c_callback(_vm: &mut VM, args: &[Value]) -> Result<Value, Strin
     let (cb_id, _info) = create_callback(arg_types, return_type);
 
     // Register the closure with the callback registry
-    let closure_rc = Rc::new(closure.clone());
+    let closure_rc = Rc::new(*closure);
     if !register_callback(cb_id, closure_rc) {
         return Err(format!("Failed to register callback with ID {}", cb_id));
     }
 
     // Return callback ID as integer
-    Ok(Value::Int(cb_id as i64))
+    Ok(Value::int(cb_id as i64))
 }
 
 /// (free-callback callback-id) -> nil
@@ -58,14 +56,11 @@ pub fn prim_free_callback(_vm: &mut VM, args: &[Value]) -> Result<Value, String>
         return Err("free-callback requires exactly 1 argument".to_string());
     }
 
-    let cb_id = match &args[0] {
-        Value::Int(id) => *id as u32,
-        _ => return Err("callback-id must be an integer".to_string()),
-    };
+    let cb_id = args[0].as_int().ok_or("callback-id must be an integer")? as u32;
 
     // Unregister the callback from the registry
     if unregister_callback(cb_id) {
-        Ok(Value::Nil)
+        Ok(Value::NIL)
     } else {
         Err(format!("Callback with ID {} not found", cb_id))
     }
@@ -79,16 +74,14 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> crate::error::LResult<Val
     let closure = &args[0];
 
     // Parse argument types
-    let arg_types = match &args[1] {
-        Value::Nil => vec![],
-        Value::Cons(_) => {
-            let type_list = args[1].list_to_vec()?;
-            type_list
-                .iter()
-                .map(parse_ctype)
-                .collect::<Result<Vec<_>, _>>()?
-        }
-        _ => return Err("arg-types must be a list".into()),
+    let arg_types = if args[1].is_nil() {
+        vec![]
+    } else {
+        let type_list = args[1].list_to_vec()?;
+        type_list
+            .iter()
+            .map(parse_ctype)
+            .collect::<Result<Vec<_>, _>>()?
     };
 
     // Parse return type
@@ -98,13 +91,13 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> crate::error::LResult<Val
     let (cb_id, _info) = create_callback(arg_types, return_type);
 
     // Register the closure with the callback registry
-    let closure_rc = Rc::new(closure.clone());
+    let closure_rc = Rc::new(*closure);
     if !register_callback(cb_id, closure_rc) {
         return Err(format!("Failed to register callback with ID {}", cb_id).into());
     }
 
     // Return callback ID as integer
-    Ok(Value::Int(cb_id as i64))
+    Ok(Value::int(cb_id as i64))
 }
 
 /// (free-callback callback-id) -> nil
@@ -115,14 +108,11 @@ pub fn prim_free_callback_wrapper(args: &[Value]) -> crate::error::LResult<Value
         return Err("free-callback requires exactly 1 argument".into());
     }
 
-    let cb_id = match &args[0] {
-        Value::Int(id) => *id as u32,
-        _ => return Err("callback-id must be an integer".into()),
-    };
+    let cb_id = args[0].as_int().ok_or("callback-id must be an integer")? as u32;
 
     // Unregister the callback from the registry
     if unregister_callback(cb_id) {
-        Ok(Value::Nil)
+        Ok(Value::NIL)
     } else {
         Err(format!("Callback with ID {} not found", cb_id).into())
     }

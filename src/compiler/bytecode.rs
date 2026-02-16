@@ -239,6 +239,11 @@ impl Bytecode {
         self.instructions[pos] = (offset >> 8) as u8;
         self.instructions[pos + 1] = (offset & 0xff) as u8;
     }
+
+    pub fn patch_u16(&mut self, pos: usize, value: u16) {
+        self.instructions[pos] = (value >> 8) as u8;
+        self.instructions[pos + 1] = (value & 0xff) as u8;
+    }
 }
 
 impl Default for Bytecode {
@@ -263,8 +268,8 @@ mod tests {
     #[test]
     fn test_constant_deduplication() {
         let mut bc = Bytecode::new();
-        let idx1 = bc.add_constant(Value::Int(42));
-        let idx2 = bc.add_constant(Value::Int(42));
+        let idx1 = bc.add_constant(Value::int(42));
+        let idx2 = bc.add_constant(Value::int(42));
         assert_eq!(idx1, idx2);
         assert_eq!(bc.constants.len(), 1);
     }

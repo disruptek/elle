@@ -2,6 +2,7 @@
 
 use super::types::*;
 use crate::hir::{BindingId, BindingInfo, BindingKind, Hir, HirKind, HirPattern, PatternLiteral};
+use crate::value::Value;
 use std::collections::HashMap;
 
 /// Lowers HIR to LIR
@@ -928,7 +929,7 @@ impl Lowerer {
 
             HirKind::Quote(value) => {
                 // Quote produces the pre-computed Value as a constant
-                self.emit_value_const(value.clone())
+                self.emit_value_const(*value)
             }
 
             HirKind::Throw(value) => {
@@ -1198,17 +1199,22 @@ impl Lowerer {
                 Ok(())
             }
             HirPattern::Nil => {
-                // Check if value is nil
+                // Check if value is nil (NOT empty_list)
+                // nil and '() are distinct values with distinct semantics
                 let is_nil_reg = self.fresh_reg();
                 self.emit(LirInstr::IsNil {
                     dst: is_nil_reg,
                     src: value_reg,
                 });
+
+                // If NOT nil, fail
                 self.emit(LirInstr::JumpIfFalseInline {
                     cond: is_nil_reg,
                     label_id: fail_label_id,
                 });
+
                 Ok(())
+
             }
             HirPattern::Literal(lit) => {
                 // Check if value equals literal
@@ -1341,14 +1347,25 @@ impl Lowerer {
                     current_reg = tail_reg;
                 }
 
-                // Check that tail is nil (list ends)
-                let is_nil_reg = self.fresh_reg();
-                self.emit(LirInstr::IsNil {
-                    dst: is_nil_reg,
-                    src: current_reg,
+                // Check that tail is empty_list (list ends)
+                // Proper lists end with empty_list ()
+
+                // Load current_reg for the empty_list check
+                let empty_list_reg = self.fresh_reg();
+                self.emit(LirInstr::ValueConst {
+                    dst: empty_list_reg,
+                    value: Value::EMPTY_LIST,
                 });
+                let is_empty_reg = self.fresh_reg();
+                self.emit(LirInstr::Compare {
+                    dst: is_empty_reg,
+                    op: CmpOp::Eq,
+                    lhs: current_reg,
+                    rhs: empty_list_reg,
+                });
+                // If NOT empty_list, fail
                 self.emit(LirInstr::JumpIfFalseInline {
-                    cond: is_nil_reg,
+                    cond: is_empty_reg,
                     label_id: fail_label_id,
                 });
 

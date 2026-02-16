@@ -1,6 +1,6 @@
 //! Exception introspection primitives (Phase 8)
 //! Provides functions for handlers to query exception details
-use crate::error::LResult;
+use crate::error::{LError, LResult};
 use crate::value::Value;
 
 /// Get the exception ID from a Condition
@@ -9,9 +9,10 @@ pub fn prim_exception_id(args: &[Value]) -> LResult<Value> {
         return Err("exception-id expects 1 argument".to_string().into());
     }
 
-    match &args[0] {
-        Value::Condition(cond) => Ok(Value::Int(cond.exception_id as i64)),
-        _ => Err("exception-id expects a Condition".to_string().into()),
+    if let Some(cond) = args[0].as_condition() {
+        Ok(Value::int(cond.exception_id as i64))
+    } else {
+        Err("exception-id expects a Condition".to_string().into())
     }
 }
 
@@ -23,15 +24,22 @@ pub fn prim_condition_field(args: &[Value]) -> LResult<Value> {
             .into());
     }
 
-    let field_id = args[1].as_int()? as u32;
-    match &args[0] {
-        Value::Condition(cond) => match cond.fields.get(&field_id) {
-            Some(val) => Ok(val.clone()),
-            None => Ok(Value::Nil),
-        },
-        _ => Err("condition-field expects a Condition as first argument"
+    let field_id = (args[1]
+        .as_int()
+        .ok_or_else(|| LError::from("field-id must be an integer"))?) as u32;
+    if let Some(cond) = args[0].as_condition() {
+        match cond.fields.get(&field_id) {
+            Some(val) => {
+                // Convert old Value to new Value
+                let new_value = crate::compiler::cps::primitives::old_value_to_new(val);
+                Ok(new_value)
+            }
+            None => Ok(Value::NIL),
+        }
+    } else {
+        Err("condition-field expects a Condition as first argument"
             .to_string()
-            .into()),
+            .into())
     }
 }
 
@@ -43,20 +51,22 @@ pub fn prim_condition_matches_type(args: &[Value]) -> LResult<Value> {
             .into());
     }
 
-    let exception_type_id = args[1].as_int()? as u32;
-    match &args[0] {
-        Value::Condition(cond) => {
-            use crate::vm::is_exception_subclass;
-            Ok(Value::Bool(is_exception_subclass(
-                cond.exception_id,
-                exception_type_id,
-            )))
-        }
-        _ => Err(
+    let exception_type_id = (args[1]
+        .as_int()
+        .ok_or_else(|| LError::from("exception-type-id must be an integer"))?)
+        as u32;
+    if let Some(cond) = args[0].as_condition() {
+        use crate::vm::is_exception_subclass;
+        Ok(Value::bool(is_exception_subclass(
+            cond.exception_id,
+            exception_type_id,
+        )))
+    } else {
+        Err(
             "condition-matches-type expects a Condition as first argument"
                 .to_string()
                 .into(),
-        ),
+        )
     }
 }
 
@@ -66,12 +76,12 @@ pub fn prim_condition_backtrace(args: &[Value]) -> LResult<Value> {
         return Err("condition-backtrace expects 1 argument".to_string().into());
     }
 
-    use std::rc::Rc;
-    match &args[0] {
-        Value::Condition(cond) => match &cond.backtrace {
-            Some(bt) => Ok(Value::String(Rc::from(bt.clone()))),
-            None => Ok(Value::Nil),
-        },
-        _ => Err("condition-backtrace expects a Condition".to_string().into()),
+    if let Some(cond) = args[0].as_condition() {
+        match &cond.backtrace {
+            Some(bt) => Ok(Value::string(bt.as_str())),
+            None => Ok(Value::NIL),
+        }
+    } else {
+        Err("condition-backtrace expects a Condition".to_string().into())
     }
 }

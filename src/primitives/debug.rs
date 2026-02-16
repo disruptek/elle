@@ -9,7 +9,7 @@ pub fn prim_debug_print(args: &[Value]) -> LResult<Value> {
     }
 
     eprintln!("[DEBUG] {:?}", args[0]);
-    Ok(args[0].clone())
+    Ok(args[0])
 }
 
 /// Traces execution with a label
@@ -19,18 +19,28 @@ pub fn prim_trace(args: &[Value]) -> LResult<Value> {
         return Err(format!("trace: expected 2 arguments, got {}", args.len()).into());
     }
 
-    match &args[0] {
-        Value::String(label) => {
-            eprintln!("[TRACE] {}: {:?}", label, args[1]);
-            Ok(args[1].clone())
+    if let Some(_label) = args[0].as_heap_ptr() {
+        // Try to extract string from heap
+        use crate::value::heap::{deref, HeapObject};
+        match unsafe { deref(args[0]) } {
+            HeapObject::String(s) => {
+                eprintln!("[TRACE] {}: {:?}", s, args[1]);
+                Ok(args[1])
+            }
+            _ => {
+                if let Some(sym_id) = args[0].as_symbol() {
+                    eprintln!("[TRACE] {:?}: {:?}", sym_id, args[1]);
+                    Ok(args[1])
+                } else {
+                    Err("trace: first argument must be a string or symbol".into())
+                }
+            }
         }
-        Value::Symbol(label_id) => {
-            eprintln!("[TRACE] {:?}: {:?}", label_id, args[1]);
-            Ok(args[1].clone())
-        }
-        _ => Err("trace: first argument must be a string or symbol"
-            .to_string()
-            .into()),
+    } else if let Some(sym_id) = args[0].as_symbol() {
+        eprintln!("[TRACE] {:?}: {:?}", sym_id, args[1]);
+        Ok(args[1])
+    } else {
+        Err("trace: first argument must be a string or symbol".into())
     }
 }
 
@@ -43,11 +53,10 @@ pub fn prim_profile(args: &[Value]) -> LResult<Value> {
 
     // In production, would time execution of closure
     // For now, just return a placeholder timing
-    match &args[0] {
-        Value::Closure(_) | Value::NativeFn(_) => {
-            Ok(Value::String("profiling-not-yet-implemented".into()))
-        }
-        _ => Err("profile: argument must be a function".to_string().into()),
+    if args[0].as_closure().is_some() || args[0].as_native_fn().is_some() {
+        Ok(Value::string("profiling-not-yet-implemented"))
+    } else {
+        Err("profile: argument must be a function".into())
     }
 }
 
@@ -57,8 +66,8 @@ pub fn prim_profile(args: &[Value]) -> LResult<Value> {
 pub fn prim_memory_usage(_args: &[Value]) -> LResult<Value> {
     let (rss_bytes, virtual_bytes) = get_memory_usage();
     Ok(list(vec![
-        Value::Int(rss_bytes as i64),
-        Value::Int(virtual_bytes as i64),
+        Value::int(rss_bytes as i64),
+        Value::int(virtual_bytes as i64),
     ]))
 }
 

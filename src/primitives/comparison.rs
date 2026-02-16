@@ -7,7 +7,11 @@ pub fn prim_eq(args: &[Value]) -> LResult<Value> {
     if args.len() != 2 {
         return Err(LError::arity_mismatch(2, args.len()));
     }
-    Ok(Value::Bool(args[0] == args[1]))
+    Ok(if args[0] == args[1] {
+        Value::TRUE
+    } else {
+        Value::FALSE
+    })
 }
 
 /// Less than comparison
@@ -16,13 +20,14 @@ pub fn prim_lt(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(2, args.len()));
     }
 
-    match (&args[0], &args[1]) {
-        (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a < b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a < b)),
-        (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) < *b)),
-        (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a < (*b as f64))),
-        _ => Err(LError::type_mismatch("number", "mixed types")),
-    }
+    let result = match (args[0].as_int(), args[1].as_int()) {
+        (Some(a), Some(b)) => a < b,
+        _ => match (args[0].as_float(), args[1].as_float()) {
+            (Some(a), Some(b)) => a < b,
+            _ => return Err(LError::type_mismatch("number", args[0].type_name())),
+        },
+    };
+    Ok(if result { Value::TRUE } else { Value::FALSE })
 }
 
 /// Greater than comparison
@@ -31,13 +36,14 @@ pub fn prim_gt(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(2, args.len()));
     }
 
-    match (&args[0], &args[1]) {
-        (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a > b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a > b)),
-        (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) > *b)),
-        (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a > (*b as f64))),
-        _ => Err(LError::type_mismatch("number", "mixed types")),
-    }
+    let result = match (args[0].as_int(), args[1].as_int()) {
+        (Some(a), Some(b)) => a > b,
+        _ => match (args[0].as_float(), args[1].as_float()) {
+            (Some(a), Some(b)) => a > b,
+            _ => return Err(LError::type_mismatch("number", args[0].type_name())),
+        },
+    };
+    Ok(if result { Value::TRUE } else { Value::FALSE })
 }
 
 /// Less than or equal comparison
@@ -46,13 +52,14 @@ pub fn prim_le(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(2, args.len()));
     }
 
-    match (&args[0], &args[1]) {
-        (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a <= b)),
-        (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) <= *b)),
-        (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a <= (*b as f64))),
-        _ => Err(LError::type_mismatch("number", "mixed types")),
-    }
+    let result = match (args[0].as_int(), args[1].as_int()) {
+        (Some(a), Some(b)) => a <= b,
+        _ => match (args[0].as_float(), args[1].as_float()) {
+            (Some(a), Some(b)) => a <= b,
+            _ => return Err(LError::type_mismatch("number", args[0].type_name())),
+        },
+    };
+    Ok(if result { Value::TRUE } else { Value::FALSE })
 }
 
 /// Greater than or equal comparison
@@ -61,11 +68,12 @@ pub fn prim_ge(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(2, args.len()));
     }
 
-    match (&args[0], &args[1]) {
-        (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a >= b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a >= b)),
-        (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) >= *b)),
-        (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a >= (*b as f64))),
-        _ => Err(LError::type_mismatch("number", "mixed types")),
-    }
+    let result = match (args[0].as_int(), args[1].as_int()) {
+        (Some(a), Some(b)) => a >= b,
+        _ => match (args[0].as_float(), args[1].as_float()) {
+            (Some(a), Some(b)) => a >= b,
+            _ => return Err(LError::type_mismatch("number", args[0].type_name())),
+        },
+    };
+    Ok(if result { Value::TRUE } else { Value::FALSE })
 }

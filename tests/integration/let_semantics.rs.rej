@@ -1,0 +1,11 @@
+--- tests/integration/let_semantics.rs
++++ tests/integration/let_semantics.rs
+@@ -36,7 +36,7 @@ fn eval(code: &str) -> Result<Value, String> {
+         values.into_iter().next().unwrap()
+     } else if values.is_empty() {
+         return Err("No input".to_string());
+     } else {
+         // Wrap multiple expressions in a begin
+-        let mut begin_args = vec![Value::symbol(symbols.intern("begin"))];
++        let mut begin_args = vec![Value::symbol(symbols.intern("begin") as u32)];
+         begin_args.extend(values);

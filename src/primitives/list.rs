@@ -45,7 +45,7 @@ pub fn prim_cons(args: &[Value]) -> LResult<Value> {
     if args.len() != 2 {
         return Err(LError::arity_mismatch(2, args.len()));
     }
-    Ok(crate::value::cons(args[0].clone(), args[1].clone()))
+    Ok(crate::value::cons(args[0], args[1]))
 }
 
 /// Get the first element of a cons cell
@@ -53,8 +53,10 @@ pub fn prim_first(args: &[Value]) -> LResult<Value> {
     if args.len() != 1 {
         return Err(LError::arity_mismatch(1, args.len()));
     }
-    let cons = args[0].as_cons()?;
-    Ok(cons.first.clone())
+    let cons = args[0]
+        .as_cons()
+        .ok_or_else(|| LError::type_mismatch("cons cell", args[0].type_name()))?;
+    Ok(cons.first)
 }
 
 /// Get the rest of a cons cell
@@ -62,8 +64,10 @@ pub fn prim_rest(args: &[Value]) -> LResult<Value> {
     if args.len() != 1 {
         return Err(LError::arity_mismatch(1, args.len()));
     }
-    let cons = args[0].as_cons()?;
-    Ok(cons.rest.clone())
+    let cons = args[0]
+        .as_cons()
+        .ok_or_else(|| LError::type_mismatch("cons cell", args[0].type_name()))?;
+    Ok(cons.rest)
 }
 
 /// Create a list from arguments
@@ -77,57 +81,53 @@ pub fn prim_length(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(1, args.len()));
     }
 
-    match &args[0] {
-        // For lists: convert to vec and get length
-        Value::Nil => Ok(Value::Int(0)),
-        Value::Cons(_) => {
-            let vec = args[0].list_to_vec()?;
-            Ok(Value::Int(vec.len() as i64))
+    if args[0].is_nil() || args[0].is_empty_list() {
+        Ok(Value::int(0))
+    } else if args[0].is_cons() {
+        let vec = args[0].list_to_vec()?;
+        Ok(Value::int(vec.len() as i64))
+    } else if let Some(s) = args[0].as_string() {
+        Ok(Value::int(s.chars().count() as i64))
+    } else if args[0].is_vector() {
+        let vec = args[0]
+            .as_vector()
+            .ok_or_else(|| LError::generic("Failed to get vector"))?;
+        Ok(Value::int(vec.borrow().len() as i64))
+    } else if args[0].is_table() {
+        let table = args[0]
+            .as_table()
+            .ok_or_else(|| LError::generic("Failed to get table"))?;
+        Ok(Value::int(table.borrow().len() as i64))
+    } else if args[0].is_struct() {
+        let s = args[0]
+            .as_struct()
+            .ok_or_else(|| LError::generic("Failed to get struct"))?;
+        Ok(Value::int(s.len() as i64))
+    } else if let Some(sid) = args[0].as_symbol() {
+        // Get the symbol name from the symbol table context
+        if let Some(name) = get_keyword_name(crate::value_old::SymbolId(sid)) {
+            Ok(Value::int(name.chars().count() as i64))
+        } else {
+            Err(LError::generic(format!(
+                "Unable to resolve symbol name for id {:?}",
+                sid
+            )))
         }
-
-        // For strings: get character count
-        Value::String(s) => Ok(Value::Int(s.chars().count() as i64)),
-
-        // For vectors: get length (Rc<Vec<Value>>)
-        Value::Vector(v) => Ok(Value::Int(v.len() as i64)),
-
-        // For tables (hash maps): get entry count (Rc<RefCell<BTreeMap>>)
-        Value::Table(t) => Ok(Value::Int(t.borrow().len() as i64)),
-
-        // For structs: get field count (Rc<BTreeMap>)
-        Value::Struct(s) => Ok(Value::Int(s.len() as i64)),
-
-        // For symbols: get the length of the symbol name
-        Value::Symbol(sid) => {
-            // Get the symbol name from the symbol table context
-            if let Some(name) = get_keyword_name(*sid) {
-                Ok(Value::Int(name.chars().count() as i64))
-            } else {
-                Err(LError::runtime_error(format!(
-                    "Unable to resolve symbol name for id {:?}",
-                    sid
-                )))
-            }
+    } else if let Some(kid) = args[0].as_keyword() {
+        // Get the keyword name from the symbol table context
+        if let Some(name) = get_keyword_name(crate::value_old::SymbolId(kid)) {
+            Ok(Value::int(name.chars().count() as i64))
+        } else {
+            Err(LError::generic(format!(
+                "Unable to resolve keyword name for id {:?}",
+                kid
+            )))
         }
-
-        // For keywords: get the length of the keyword name
-        Value::Keyword(kid) => {
-            // Get the keyword name from the symbol table context
-            if let Some(name) = get_keyword_name(*kid) {
-                Ok(Value::Int(name.chars().count() as i64))
-            } else {
-                Err(LError::runtime_error(format!(
-                    "Unable to resolve keyword name for id {:?}",
-                    kid
-                )))
-            }
-        }
-
-        // Other types are not sequences
-        _ => Err(LError::type_mismatch(
-            "collection (list, string, vector, table, struct, symbol, or keyword)",
+    } else {
+        Err(LError::type_mismatch(
+            "collection type (list, string, vector, table, struct, symbol, or keyword)",
             args[0].type_name(),
-        )),
+        ))
     }
 }
 
@@ -137,29 +137,35 @@ pub fn prim_empty(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(1, args.len()));
     }
 
-    match &args[0] {
-        // For lists: just check if it's nil
-        Value::Nil => Ok(Value::Bool(true)),
-        Value::Cons(_) => Ok(Value::Bool(false)),
-
-        // For strings: check if empty
-        Value::String(s) => Ok(Value::Bool(s.is_empty())),
-
-        // For vectors: check length (Rc<Vec<Value>>)
-        Value::Vector(v) => Ok(Value::Bool(v.is_empty())),
-
-        // For tables (hash maps): check if empty (Rc<RefCell<BTreeMap>>)
-        Value::Table(t) => Ok(Value::Bool(t.borrow().is_empty())),
-
-        // For structs: check field count (Rc<BTreeMap>)
-        Value::Struct(s) => Ok(Value::Bool(s.is_empty())),
-
-        // Other types are not sequences
-        _ => Err(LError::type_mismatch(
-            "collection (list, string, vector, table, or struct)",
+    let result = if args[0].is_nil() || args[0].is_empty_list() {
+        true
+    } else if args[0].is_cons() {
+        false
+    } else if let Some(s) = args[0].as_string() {
+        s.is_empty()
+    } else if args[0].is_vector() {
+        let vec = args[0]
+            .as_vector()
+            .ok_or_else(|| LError::generic("Failed to get vector"))?;
+        vec.borrow().is_empty()
+    } else if args[0].is_table() {
+        let table = args[0]
+            .as_table()
+            .ok_or_else(|| LError::generic("Failed to get table"))?;
+        table.borrow().is_empty()
+    } else if args[0].is_struct() {
+        let s = args[0]
+            .as_struct()
+            .ok_or_else(|| LError::generic("Failed to get struct"))?;
+        s.is_empty()
+    } else {
+        return Err(LError::type_mismatch(
+            "collection type (list, string, vector, table, or struct)",
             args[0].type_name(),
-        )),
-    }
+        ));
+    };
+
+    Ok(if result { Value::TRUE } else { Value::FALSE })
 }
 
 /// Append multiple lists
@@ -188,7 +194,10 @@ pub fn prim_nth(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(2, args.len()));
     }
 
-    let index = args[0].as_int()? as usize;
+    let index = match args[0].as_int() {
+        Some(n) => n as usize,
+        None => return Err(LError::type_mismatch("integer", args[0].type_name())),
+    };
     let vec = args[1].list_to_vec()?;
 
     vec.get(index)
@@ -205,7 +214,7 @@ pub fn prim_last(args: &[Value]) -> LResult<Value> {
     let vec = args[0].list_to_vec()?;
     vec.last()
         .cloned()
-        .ok_or_else(|| LError::runtime_error("Cannot get last of empty list"))
+        .ok_or_else(|| LError::generic("Cannot get last of empty list"))
 }
 
 /// Take the first n elements of a list
@@ -214,7 +223,10 @@ pub fn prim_take(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(2, args.len()));
     }
 
-    let count = args[0].as_int()? as usize;
+    let count = match args[0].as_int() {
+        Some(n) => n as usize,
+        None => return Err(LError::type_mismatch("integer", args[0].type_name())),
+    };
     let vec = args[1].list_to_vec()?;
 
     let taken: Vec<Value> = vec.into_iter().take(count).collect();
@@ -227,7 +239,10 @@ pub fn prim_drop(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(2, args.len()));
     }
 
-    let count = args[0].as_int()? as usize;
+    let count = match args[0].as_int() {
+        Some(n) => n as usize,
+        None => return Err(LError::type_mismatch("integer", args[0].type_name())),
+    };
     let vec = args[1].list_to_vec()?;
 
     let dropped: Vec<Value> = vec.into_iter().skip(count).collect();

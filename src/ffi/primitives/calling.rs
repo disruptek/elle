@@ -3,7 +3,7 @@
 use super::types::parse_ctype;
 use crate::ffi::call::FunctionCall;
 use crate::ffi::types::FunctionSignature;
-use crate::value::{LibHandle, Value};
+use crate::value::Value;
 use crate::vm::VM;
 
 /// (call-c-function lib-id func-name return-type (arg-type ...) (arg-val ...)) -> result
@@ -22,38 +22,34 @@ pub fn prim_call_c_function(vm: &VM, args: &[Value]) -> Result<Value, String> {
     }
 
     // Parse library ID
-    let lib_id = match &args[0] {
-        Value::LibHandle(LibHandle(id)) => *id,
-        _ => return Err("First argument must be a library handle".into()),
-    };
+    let lib_id = args[0]
+        .as_int()
+        .ok_or("First argument must be a library handle")? as u32;
 
     // Parse function name
-    let func_name = match &args[1] {
-        Value::String(s) => s.as_ref(),
-        _ => return Err("Second argument must be a function name string".into()),
-    };
+    let func_name = args[1]
+        .as_string()
+        .ok_or("Second argument must be a function name string")?;
 
     // Parse return type
     let return_type = parse_ctype(&args[2])?;
 
     // Parse argument types
-    let arg_types = match &args[3] {
-        Value::Nil => vec![],
-        Value::Cons(_) => {
-            let type_list = args[3].list_to_vec()?;
-            type_list
-                .iter()
-                .map(parse_ctype)
-                .collect::<Result<Vec<_>, _>>()?
-        }
-        _ => return Err("Fourth argument must be a list of argument types".into()),
+    let arg_types = if args[3].is_nil() {
+        vec![]
+    } else {
+        let type_list = args[3].list_to_vec()?;
+        type_list
+            .iter()
+            .map(parse_ctype)
+            .collect::<Result<Vec<_>, _>>()?
     };
 
     // Parse argument values
-    let arg_values = match &args[4] {
-        Value::Nil => vec![],
-        Value::Cons(_) => args[4].list_to_vec()?,
-        _ => return Err("Fifth argument must be a list of argument values".into()),
+    let arg_values = if args[4].is_nil() {
+        vec![]
+    } else {
+        args[4].list_to_vec()?
     };
 
     // Check argument count matches
@@ -90,38 +86,34 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> crate::error::LResult<Val
     }
 
     // Parse library ID
-    let lib_id = match &args[0] {
-        Value::LibHandle(LibHandle(id)) => *id,
-        _ => return Err("First argument must be a library handle".into()),
-    };
+    let lib_id = args[0]
+        .as_int()
+        .ok_or("First argument must be a library handle")? as u32;
 
     // Parse function name
-    let func_name = match &args[1] {
-        Value::String(s) => s.as_ref(),
-        _ => return Err("Second argument must be a function name string".into()),
-    };
+    let func_name = args[1]
+        .as_string()
+        .ok_or("Second argument must be a function name string")?;
 
     // Parse return type
     let return_type = parse_ctype(&args[2])?;
 
     // Parse argument types
-    let arg_types = match &args[3] {
-        Value::Nil => vec![],
-        Value::Cons(_) => {
-            let type_list = args[3].list_to_vec()?;
-            type_list
-                .iter()
-                .map(parse_ctype)
-                .collect::<Result<Vec<_>, _>>()?
-        }
-        _ => return Err("Fourth argument must be a list of argument types".into()),
+    let arg_types = if args[3].is_nil() {
+        vec![]
+    } else {
+        let type_list = args[3].list_to_vec()?;
+        type_list
+            .iter()
+            .map(parse_ctype)
+            .collect::<Result<Vec<_>, _>>()?
     };
 
     // Parse argument values
-    let arg_values = match &args[4] {
-        Value::Nil => vec![],
-        Value::Cons(_) => args[4].list_to_vec()?,
-        _ => return Err("Fifth argument must be a list of argument values".into()),
+    let arg_values = if args[4].is_nil() {
+        vec![]
+    } else {
+        args[4].list_to_vec()?
     };
 
     // Check argument count matches

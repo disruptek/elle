@@ -10,21 +10,21 @@ pub fn prim_map(args: &[Value]) -> LResult<Value> {
             .into());
     }
 
-    match &args[0] {
-        Value::NativeFn(f) => {
-            let vec = args[1].list_to_vec()?;
-            let results: Result<Vec<Value>, LError> =
-                vec.iter().map(|v| f(std::slice::from_ref(v))).collect();
-            Ok(list(results?))
-        }
-        Value::Closure(_) => Err(
+    if let Some(f) = args[0].as_native_fn() {
+        let vec = args[1].list_to_vec()?;
+        let results: Result<Vec<Value>, LError> =
+            vec.iter().map(|v| f(std::slice::from_ref(v))).collect();
+        Ok(list(results?))
+    } else if args[0].is_closure() {
+        Err(
             "map with closures not yet supported (use native functions or ffi_map)"
                 .to_string()
                 .into(),
-        ),
-        _ => Err("map requires a function as first argument"
+        )
+    } else {
+        Err("map requires a function as first argument"
             .to_string()
-            .into()),
+            .into())
     }
 }
 
@@ -36,26 +36,26 @@ pub fn prim_filter(args: &[Value]) -> LResult<Value> {
             .into());
     }
 
-    match &args[0] {
-        Value::NativeFn(f) => {
-            let vec = args[1].list_to_vec()?;
-            let mut results = Vec::new();
-            for v in vec {
-                let result = f(std::slice::from_ref(&v))?;
-                if result != Value::Nil && result != Value::Bool(false) {
-                    results.push(v);
-                }
+    if let Some(f) = args[0].as_native_fn() {
+        let vec = args[1].list_to_vec()?;
+        let mut results = Vec::new();
+        for v in vec {
+            let result = f(std::slice::from_ref(&v))?;
+            if !result.is_nil() && result != Value::FALSE {
+                results.push(v);
             }
-            Ok(list(results))
         }
-        Value::Closure(_) => Err(
+        Ok(list(results))
+    } else if args[0].is_closure() {
+        Err(
             "filter with closures not yet supported (use native functions or ffi_filter)"
                 .to_string()
                 .into(),
-        ),
-        _ => Err("filter requires a predicate function as first argument"
+        )
+    } else {
+        Err("filter requires a predicate function as first argument"
             .to_string()
-            .into()),
+            .into())
     }
 }
 
@@ -67,22 +67,22 @@ pub fn prim_fold(args: &[Value]) -> LResult<Value> {
             .into());
     }
 
-    match &args[0] {
-        Value::NativeFn(f) => {
-            let mut accumulator = args[1].clone();
-            let vec = args[2].list_to_vec()?;
-            for v in vec {
-                accumulator = f(&[accumulator, v])?;
-            }
-            Ok(accumulator)
+    if let Some(f) = args[0].as_native_fn() {
+        let mut accumulator = args[1];
+        let vec = args[2].list_to_vec()?;
+        for v in vec {
+            accumulator = f(&[accumulator, v])?;
         }
-        Value::Closure(_) => Err(
+        Ok(accumulator)
+    } else if args[0].is_closure() {
+        Err(
             "fold with closures not yet supported (use native functions or ffi_fold)"
                 .to_string()
                 .into(),
-        ),
-        _ => Err("fold requires a function as first argument"
+        )
+    } else {
+        Err("fold requires a function as first argument"
             .to_string()
-            .into()),
+            .into())
     }
 }

@@ -7,6 +7,7 @@
 use crate::error::{LError, LResult};
 use crate::symbol::SymbolTable;
 use crate::value::Value;
+use crate::value_old::SymbolId;
 use std::cell::RefCell;
 
 thread_local! {
@@ -65,13 +66,12 @@ pub fn prim_is_macro(args: &[Value]) -> LResult<Value> {
         return Err(format!("macro?: expected 1 argument, got {}", args.len()).into());
     }
 
-    match &args[0] {
-        Value::Symbol(sym_id) => {
-            with_symbol_table(|symbols| Ok(Value::Bool(symbols.is_macro(*sym_id))))
-                .map_err(|e| e.into())
-        }
+    if let Some(sym_id) = args[0].as_symbol() {
+        with_symbol_table(|symbols| Ok(Value::bool(symbols.is_macro(SymbolId(sym_id)))))
+            .map_err(|e| e.into())
+    } else {
         // Non-symbols are never macros
-        _ => Ok(Value::Bool(false)),
+        Ok(Value::bool(false))
     }
 }
 
@@ -107,25 +107,25 @@ pub fn prim_expand_macro(args: &[Value]) -> LResult<Value> {
     }
 
     // First element should be a symbol (the macro name)
-    let macro_sym = match &list[0] {
-        Value::Symbol(id) => *id,
-        _ => {
-            return Err("expand-macro: first element must be a symbol (macro name)"
-                .to_string()
-                .into())
-        }
+    let macro_sym = if let Some(id) = list[0].as_symbol() {
+        id
+    } else {
+        return Err("expand-macro: first element must be a symbol (macro name)"
+            .to_string()
+            .into());
     };
 
     with_symbol_table(|symbols| {
+        let sym_id = crate::value_old::SymbolId(macro_sym);
         // Check if it's actually a macro
-        if !symbols.is_macro(macro_sym) {
-            let name = symbols.name(macro_sym).unwrap_or("<unknown>");
+        if !symbols.is_macro(sym_id) {
+            let name = symbols.name(sym_id).unwrap_or("<unknown>");
             return Err(format!("expand-macro: '{}' is not a macro", name));
         }
 
         // Get the macro definition
         let macro_def = symbols
-            .get_macro(macro_sym)
+            .get_macro(sym_id)
             .ok_or_else(|| "expand-macro: macro definition not found".to_string())?;
 
         // Get the arguments (everything after the macro name)
@@ -133,7 +133,7 @@ pub fn prim_expand_macro(args: &[Value]) -> LResult<Value> {
 
         // Expand the macro using the existing expand_macro function
         use crate::compiler::macros::expand_macro;
-        expand_macro(macro_sym, &macro_def, &macro_args, symbols)
+        expand_macro(sym_id, &macro_def, &macro_args, symbols)
     })
     .map_err(|e| e.into())
 }

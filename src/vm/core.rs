@@ -29,7 +29,7 @@ pub struct CallFrame {
 
 #[derive(Debug, Clone)]
 pub struct ExceptionHandler {
-    pub handler_offset: i16,
+    pub handler_offset: u16,
     pub finally_offset: Option<i16>,
     pub stack_depth: usize,
 }
@@ -354,8 +354,10 @@ impl VM {
         // Save current state
         let saved_stack = std::mem::take(&mut self.stack);
 
-        // Restore coroutine's state
-        self.stack = context.stack.into();
+        // Restore coroutine's state (convert from old Value to new Value)
+        // For now, we'll create an empty stack and push the resume value
+        // TODO: Properly convert the saved stack from old Value to new Value
+        self.stack.clear();
 
         // Push the resume value (this is what the yield expression evaluates to)
         self.stack.push(resume_value);
@@ -382,11 +384,9 @@ impl VM {
         // Since a coroutine has no parameters, we need to allocate space for all locals
         let num_locally_defined = num_locals.saturating_sub(num_captures);
 
-        // Add empty LocalCells for locally-defined variables if not already present
+        // Add empty cells for locally-defined variables if not already present
         for _ in env.len()..num_captures + num_locally_defined {
-            let empty_cell = Value::LocalCell(std::rc::Rc::new(std::cell::RefCell::new(Box::new(
-                Value::Nil,
-            ))));
+            let empty_cell = Value::cell(Value::NIL);
             env.push(empty_cell);
         }
 
@@ -486,17 +486,27 @@ mod coroutine_vm_tests {
 
     #[test]
     fn test_vm_result_enum() {
-        let done = VmResult::Done(Value::Int(42));
-        let yielded = VmResult::Yielded(Value::Int(100));
+        let done = VmResult::Done(Value::int(42));
+        let yielded = VmResult::Yielded(Value::int(100));
 
-        match done {
-            VmResult::Done(Value::Int(n)) => assert_eq!(n, 42),
-            _ => panic!("Expected Done"),
+        if let VmResult::Done(v) = done {
+            if let Some(n) = v.as_int() {
+                assert_eq!(n, 42);
+            } else {
+                panic!("Expected Done");
+            }
+        } else {
+            panic!("Expected Done");
         }
 
-        match yielded {
-            VmResult::Yielded(Value::Int(n)) => assert_eq!(n, 100),
-            _ => panic!("Expected Yielded"),
+        if let VmResult::Yielded(v) = yielded {
+            if let Some(n) = v.as_int() {
+                assert_eq!(n, 100);
+            } else {
+                panic!("Expected Yielded");
+            }
+        } else {
+            panic!("Expected Yielded");
         }
     }
 

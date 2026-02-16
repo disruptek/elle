@@ -6,7 +6,7 @@ pub fn prim_not(args: &[Value]) -> LResult<Value> {
     if args.len() != 1 {
         return Err(LError::arity_mismatch(1, args.len()));
     }
-    Ok(Value::Bool(!args[0].is_truthy()))
+    Ok(Value::bool(!args[0].is_truthy()))
 }
 
 /// Logical AND operation
@@ -15,16 +15,16 @@ pub fn prim_not(args: &[Value]) -> LResult<Value> {
 /// (and x y z) => z if all truthy, else first falsy
 pub fn prim_and(args: &[Value]) -> LResult<Value> {
     if args.is_empty() {
-        return Ok(Value::Bool(true));
+        return Ok(Value::bool(true));
     }
 
     for arg in &args[..args.len() - 1] {
         if !arg.is_truthy() {
-            return Ok(arg.clone());
+            return Ok(*arg);
         }
     }
 
-    Ok(args[args.len() - 1].clone())
+    Ok(args[args.len() - 1])
 }
 
 /// Logical OR operation
@@ -33,16 +33,16 @@ pub fn prim_and(args: &[Value]) -> LResult<Value> {
 /// (or x y z) => x if truthy, else next truthy or z
 pub fn prim_or(args: &[Value]) -> LResult<Value> {
     if args.is_empty() {
-        return Ok(Value::Bool(false));
+        return Ok(Value::bool(false));
     }
 
     for arg in &args[..args.len() - 1] {
         if arg.is_truthy() {
-            return Ok(arg.clone());
+            return Ok(*arg);
         }
     }
 
-    Ok(args[args.len() - 1].clone())
+    Ok(args[args.len() - 1])
 }
 
 /// Logical XOR operation
@@ -51,9 +51,9 @@ pub fn prim_or(args: &[Value]) -> LResult<Value> {
 /// (xor x y z) => true if odd number of truthy values, else false
 pub fn prim_xor(args: &[Value]) -> LResult<Value> {
     if args.is_empty() {
-        return Ok(Value::Bool(false));
+        return Ok(Value::bool(false));
     }
 
     let truthy_count = args.iter().filter(|v| v.is_truthy()).count();
-    Ok(Value::Bool(truthy_count % 2 == 1))
+    Ok(Value::bool(truthy_count % 2 == 1))
 }
