@@ -93,9 +93,11 @@ impl Lowerer {
 
         self.next_reg = 0;
         self.next_label = 1;
-        // Locals start after captures and parameters in the environment
-        // This ensures allocate_slot() gives slots that don't conflict with captures/params
-        self.current_func.num_locals = captures.len() as u16 + params.len() as u16;
+        // num_locals should be params + locals (NOT including captures)
+        // This matches the HIR definition and is what the VM expects
+        // The environment layout is: [captures..., parameters..., locally_defined_cells...]
+        // But num_locals only counts the parameters and locally-defined variables
+        self.current_func.num_locals = params.len() as u16;
         self.in_lambda = true;
         self.num_captures = captures.len() as u16;
 
@@ -477,6 +479,11 @@ impl Lowerer {
                         if !self.binding_to_slot.contains_key(binding) {
                             let slot = self.allocate_slot(*binding);
 
+                            // Inside lambdas, local variables are part of the closure environment
+                            if self.in_lambda {
+                                self.upvalue_bindings.insert(*binding);
+                            }
+
                             // Check if this binding needs a cell
                             let needs_cell = self
                                 .bindings
@@ -484,7 +491,10 @@ impl Lowerer {
                                 .map(|info| info.needs_cell())
                                 .unwrap_or(false);
 
-                            if needs_cell {
+                            // Only create cells for top-level locals (outside lambdas)
+                            // Inside lambdas, the VM creates cells for locally-defined variables
+                            // when building the closure environment
+                            if needs_cell && !self.in_lambda {
                                 // Create a cell containing nil
                                 // This cell will be captured by nested lambdas
                                 // and updated when the LocalDefine is lowered
@@ -1385,7 +1395,15 @@ impl Lowerer {
     }
 
     fn allocate_slot(&mut self, binding: BindingId) -> u16 {
-        let slot = self.current_func.num_locals;
+        // Inside a lambda, slots need to account for the captures offset
+        // Environment layout: [captures..., params..., locally_defined...]
+        // num_locals tracks params + locally_defined (NOT captures)
+        // But binding_to_slot needs the actual index in the environment
+        let slot = if self.in_lambda {
+            self.num_captures + self.current_func.num_locals
+        } else {
+            self.current_func.num_locals
+        };
         self.current_func.num_locals += 1;
         self.binding_to_slot.insert(binding, slot);
         slot

@@ -289,9 +289,7 @@ impl VM {
                                 crate::value_old::Arity::AtLeast(n) => n,
                                 crate::value_old::Arity::Range(min, _) => min,
                             };
-                            let num_locally_defined = closure
-                                .num_locals
-                                .saturating_sub(num_params + closure.num_captures);
+                            let num_locally_defined = closure.num_locals.saturating_sub(num_params);
 
                             // Add empty LocalCells for locally-defined variables
                             // These will be initialized when define statements execute
@@ -397,9 +395,7 @@ impl VM {
                                 crate::value_old::Arity::AtLeast(n) => n,
                                 crate::value_old::Arity::Range(min, _) => min,
                             };
-                            let num_locally_defined = source
-                                .num_locals
-                                .saturating_sub(num_params + source.num_captures);
+                            let num_locally_defined = source.num_locals.saturating_sub(num_params);
 
                             // Add empty LocalCells for locally-defined variables
                             for _ in 0..num_locally_defined {
@@ -514,9 +510,7 @@ impl VM {
                             crate::value_old::Arity::AtLeast(n) => n,
                             crate::value_old::Arity::Range(min, _) => min,
                         };
-                        let num_locally_defined = closure
-                            .num_locals
-                            .saturating_sub(num_params + closure.num_captures);
+                        let num_locally_defined = closure.num_locals.saturating_sub(num_params);
 
                         // Add empty LocalCells for locally-defined variables
                         for _ in 0..num_locally_defined {
@@ -615,9 +609,7 @@ impl VM {
                                 crate::value_old::Arity::AtLeast(n) => n,
                                 crate::value_old::Arity::Range(min, _) => min,
                             };
-                            let num_locally_defined = source
-                                .num_locals
-                                .saturating_sub(num_params + source.num_captures);
+                            let num_locally_defined = source.num_locals.saturating_sub(num_params);
 
                             // Add empty LocalCells for locally-defined variables
                             for _ in 0..num_locally_defined {

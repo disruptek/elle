@@ -265,8 +265,8 @@ impl<'a> Analyzer<'a> {
     }
 
     fn analyze_let(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
-        if items.len() < 3 {
-            return Err(format!("{}: let requires bindings and body", span));
+        if items.len() < 2 {
+            return Err(format!("{}: let requires bindings list", span));
         }
 
         let bindings_syntax = items[1]
@@ -301,8 +301,12 @@ impl<'a> Analyzer<'a> {
             bindings.push((id, value));
         }
 
-        // Analyze body expressions
-        let body = self.analyze_body(&items[2..], span.clone())?;
+        // Analyze body expressions (empty body returns nil)
+        let body = if items.len() > 2 {
+            self.analyze_body(&items[2..], span.clone())?
+        } else {
+            Hir::pure(HirKind::Nil, span.clone())
+        };
         effect = effect.combine(body.effect);
 
         self.pop_scope();

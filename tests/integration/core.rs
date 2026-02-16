@@ -1,4 +1,5 @@
 // DEFENSE: Integration tests ensure the full pipeline works end-to-end
+use elle::ffi::primitives::context::set_symbol_table;
 use elle::pipeline::{compile_all_new, compile_new};
 use elle::primitives::register_primitives;
 use elle::{list, SymbolTable, Value, VM};
@@ -7,6 +8,9 @@ fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
     register_primitives(&mut vm, &mut symbols);
+
+    // Set symbol table context for primitives that need it (like type-of)
+    set_symbol_table(&mut symbols as *mut SymbolTable);
 
     // Try to compile as a single expression first
     match compile_new(input, &mut symbols) {
@@ -1360,4 +1364,20 @@ fn test_thread_last_nested() {
     let code = "(->> 10 (- 3) (+ 5))";
     // (+ 5 (- 3 10)) = (+ 5 -7) = -2
     assert_eq!(eval(code).unwrap(), Value::int(-2));
+}
+
+#[test]
+fn test_closure_with_local_define_and_param_arithmetic() {
+    // Issue: inner closure accessing both captured local and its own parameter
+    // The inner closure captures `local` and has parameter `y`
+    // Environment layout should be: [local, y] at indices [0, 1]
+    let code = r#"
+        (let ((outer (fn (x) 
+                       (begin 
+                         (define local (* x 2)) 
+                         (fn (y) (+ local y))))))
+          ((outer 1) 1))
+    "#;
+    // local = 1 * 2 = 2, y = 1, result = 2 + 1 = 3
+    assert_eq!(eval(code).unwrap(), Value::int(3));
 }
