@@ -584,7 +584,7 @@ proptest! {
         for _ in 0..increments {
             expr.push_str(" (counter)");
         }
-        expr.push_str(")");
+        expr.push(')');
 
         let result = eval(&expr);
         prop_assert!(result.is_ok(), "failed: {:?}", result);
@@ -990,15 +990,15 @@ proptest! {
     #[test]
     fn apply_n_times(n in 1usize..5, start in 0i64..20) {
         // Apply increment n times
-        let mut expr = format!("(let ((inc (fn (x) (+ x 1)))) ");
+        let mut expr = "(let ((inc (fn (x) (+ x 1)))) ".to_string();
         for _ in 0..n {
             expr.push_str("(inc ");
         }
         expr.push_str(&start.to_string());
         for _ in 0..n {
-            expr.push_str(")");
+            expr.push(')');
         }
-        expr.push_str(")");
+        expr.push(')');
 
         let result = eval(&expr);
 
@@ -1700,7 +1700,7 @@ proptest! {
     }
 
     #[test]
-    fn letrec_with_higher_order(a in 1i64..10, b in 1i64..10, c in 1i64..10) {
+    fn letrec_with_higher_order(a in 1i64..10, b in 1i64..10, _c in 1i64..10) {
         // letrec where functions take other functions as arguments
         let expr = format!(
             "(letrec ((apply-twice (fn (f x) (f (f x))))

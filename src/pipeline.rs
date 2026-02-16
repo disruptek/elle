@@ -89,7 +89,6 @@ mod tests {
     use super::*;
     use crate::primitives::register_primitives;
     use crate::vm::VM;
-    use std::rc::Rc;
 
     fn setup() -> (SymbolTable, VM) {
         let mut symbols = SymbolTable::new();
@@ -356,7 +355,7 @@ mod tests {
             let entry = entry.expect("Failed to read directory entry");
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "lisp") {
+            if path.extension().is_some_and(|e| e == "lisp") {
                 let filename = path.file_name().unwrap().to_string_lossy().to_string();
                 let content = fs::read_to_string(&path).expect("Failed to read example file");
 

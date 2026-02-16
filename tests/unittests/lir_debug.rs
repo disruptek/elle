@@ -65,7 +65,6 @@ fn test_print_lir_failing_case() {
 
     // Print nested functions info
     println!("\n=== NESTED FUNCTIONS ===");
-    let mut nested_count = 0;
     fn count_nested(func: &elle::lir::LirFunction) -> usize {
         let mut count = 0;
         for block in &func.blocks {
@@ -77,6 +76,6 @@ fn test_print_lir_failing_case() {
         }
         count
     }
-    nested_count = count_nested(&lir);
+    let nested_count = count_nested(&lir);
     println!("Total nested functions: {}", nested_count);
 }
