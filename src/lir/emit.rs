@@ -166,11 +166,20 @@ impl Emitter {
                 self.bytecode.emit(Instruction::StoreLocal);
                 self.bytecode.emit_byte(0); // depth 0
                 self.bytecode.emit_byte(*slot as u8);
-                self.pop();
+                // StoreLocal pops the value, stores it, and pushes it back
+                // So the stack simulation stays the same (value is still on top)
             }
 
             LirInstr::LoadCapture { dst, index } => {
                 self.bytecode.emit(Instruction::LoadUpvalue);
+                self.bytecode.emit_byte(0); // depth (currently unused)
+                self.bytecode.emit_byte(*index as u8);
+                self.push_reg(*dst);
+            }
+
+            LirInstr::LoadCaptureRaw { dst, index } => {
+                // Load without unwrapping cells - used for forwarding captures
+                self.bytecode.emit(Instruction::LoadUpvalueRaw);
                 self.bytecode.emit_byte(0); // depth (currently unused)
                 self.bytecode.emit_byte(*index as u8);
                 self.push_reg(*dst);
@@ -226,6 +235,7 @@ impl Emitter {
                     constants: Rc::new(nested_bytecode.constants),
                     source_ast: None,
                     effect: Effect::Pure, // TODO: get from HIR
+                    cell_params_mask: func.cell_params_mask,
                 };
 
                 // Add closure template to constants

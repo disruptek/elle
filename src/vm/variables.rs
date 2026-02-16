@@ -92,7 +92,9 @@ pub fn handle_store_local(vm: &mut VM, bytecode: &[u8], ip: &mut usize) -> Resul
             vm.stack.push(Value::Nil);
         }
     }
-    vm.stack[abs_idx] = value;
+    vm.stack[abs_idx] = value.clone();
+    // Push the value back so it can be used as the result of set!
+    vm.stack.push(value);
     Ok(())
 }
 

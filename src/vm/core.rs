@@ -432,6 +432,7 @@ mod coroutine_vm_tests {
             constants: Rc::new(vec![]),
             source_ast: None,
             effect: Effect::Pure,
+            cell_params_mask: 0,
         });
         let co = Rc::new(RefCell::new(Coroutine::new(closure)));
 
@@ -460,6 +461,7 @@ mod coroutine_vm_tests {
                 constants: Rc::new(vec![]),
                 source_ast: None,
                 effect: Effect::Pure,
+                cell_params_mask: 0,
             });
             Rc::new(RefCell::new(Coroutine::new(closure)))
         };

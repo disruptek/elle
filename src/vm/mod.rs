@@ -272,11 +272,23 @@ impl VM {
                                 // Create a new environment that includes:
                                 // [captured_vars..., parameters..., locally_defined_cells...]
                                 // The closure's env contains captured variables
-                                // We append the arguments as parameters
+                                // We append the arguments as parameters (wrapping in cells if needed)
                                 // We append empty cells for locally-defined variables (Phase 4)
                                 let mut new_env = Vec::new();
                                 new_env.extend((*closure.env).iter().cloned());
-                                new_env.extend(args.clone());
+
+                                // Add parameters, wrapping in cells if needed based on cell_params_mask
+                                for (i, arg) in args.iter().enumerate() {
+                                    if i < 64 && (closure.cell_params_mask & (1 << i)) != 0 {
+                                        // This parameter needs a cell
+                                        let cell = Value::LocalCell(std::rc::Rc::new(
+                                            std::cell::RefCell::new(Box::new(arg.clone())),
+                                        ));
+                                        new_env.push(cell);
+                                    } else {
+                                        new_env.push(arg.clone());
+                                    }
+                                }
 
                                 // Calculate number of locally-defined variables
                                 let num_params = match closure.arity {

@@ -639,6 +639,7 @@ mod tests {
             constants: Rc::new(vec![Value::Nil]),
             source_ast: None,
             effect: Effect::Pure,
+            cell_params_mask: 0,
         }))
     }
 

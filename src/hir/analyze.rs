@@ -440,8 +440,17 @@ impl<'a> Analyzer<'a> {
         let num_locals = self.current_local_count();
 
         self.pop_scope();
-        let captures = std::mem::replace(&mut self.current_captures, saved_captures);
+        let mut captures = std::mem::replace(&mut self.current_captures, saved_captures);
         self.parent_captures = saved_parent_captures;
+
+        // Update is_mutated flag in captures based on current binding info
+        // This is needed because the capture info might have been created before
+        // the set! was analyzed, so is_mutated might be stale
+        for cap in &mut captures {
+            if let Some(info) = self.ctx.get_binding(cap.binding) {
+                cap.is_mutated = info.is_mutated;
+            }
+        }
 
         // Propagate captures from this lambda to the parent lambda
         // If we're in a nested lambda, add our captures to the parent's captures

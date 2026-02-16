@@ -120,6 +120,9 @@ pub struct Closure {
     pub source_ast: Option<Rc<JitLambda>>,
     /// Effect of the closure body
     pub effect: Effect,
+    /// Bitmask indicating which parameters need to be wrapped in cells
+    /// Bit i is set if parameter i needs a cell (for mutable parameters)
+    pub cell_params_mask: u64,
 }
 
 impl Closure {
@@ -707,6 +710,7 @@ mod coroutine_tests {
             constants: Rc::new(vec![Value::Nil]),
             source_ast: None,
             effect: Effect::Pure,
+            cell_params_mask: 0,
         });
 
         let co = Coroutine::new(closure);
@@ -739,6 +743,7 @@ mod coroutine_tests {
             constants: Rc::new(vec![Value::Nil]),
             source_ast: None,
             effect: Effect::Pure,
+            cell_params_mask: 0,
         });
 
         let mut co = Coroutine::new(closure.clone());

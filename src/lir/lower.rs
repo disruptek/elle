@@ -110,8 +110,9 @@ impl Lowerer {
             self.upvalue_bindings.insert(cap.binding);
         }
 
-        // Bind parameters to upvalue indices
-        // For parameters that need cells, we'll allocate local slots instead
+        // Build cell_params_mask and bind parameters to upvalue indices
+        // Parameters that need cells will be wrapped by the VM when the closure is called
+        let mut cell_params_mask: u64 = 0;
         for (i, param) in params.iter().enumerate() {
             let upvalue_idx = self.num_captures + i as u16;
 
@@ -121,50 +122,16 @@ impl Lowerer {
                 .map(|info| info.needs_cell())
                 .unwrap_or(false);
 
-            if needs_cell {
-                // For parameters that need cells, allocate a local slot
-                // and we'll initialize it below
-                let _local_slot = self.allocate_slot(*param);
-                // Don't add to upvalue_bindings - this is now a local
-            } else {
-                // For parameters that don't need cells, use upvalue indices
-                self.binding_to_slot.insert(*param, upvalue_idx);
-                self.upvalue_bindings.insert(*param);
+            if needs_cell && i < 64 {
+                // Set the bit for this parameter
+                cell_params_mask |= 1 << i;
             }
+
+            // All parameters are upvalues - the VM will wrap them in cells if needed
+            self.binding_to_slot.insert(*param, upvalue_idx);
+            self.upvalue_bindings.insert(*param);
         }
-
-        // Box parameters that are captured and mutated
-        for (i, param) in params.iter().enumerate() {
-            let needs_cell = self
-                .bindings
-                .get(param)
-                .map(|info| info.needs_cell())
-                .unwrap_or(false);
-
-            if needs_cell {
-                // Load the parameter value from the upvalue slot
-                let upvalue_idx = self.num_captures + i as u16;
-                let param_reg = self.fresh_reg();
-                self.emit(LirInstr::LoadCapture {
-                    dst: param_reg,
-                    index: upvalue_idx,
-                });
-
-                // Wrap it in a cell
-                let cell_reg = self.fresh_reg();
-                self.emit(LirInstr::MakeCell {
-                    dst: cell_reg,
-                    value: param_reg,
-                });
-
-                // Store the cell to the local slot
-                let local_slot = self.binding_to_slot[param];
-                self.emit(LirInstr::StoreLocal {
-                    slot: local_slot,
-                    src: cell_reg,
-                });
-            }
-        }
+        self.current_func.cell_params_mask = cell_params_mask;
 
         // Lower body
         let result_reg = self.lower_expr(body)?;
@@ -355,6 +322,10 @@ impl Lowerer {
                     use crate::hir::CaptureKind;
 
                     let reg = self.fresh_reg();
+
+                    // Check if this capture is mutable (needs to be captured as a cell)
+                    let is_mutable_capture = cap.is_mutated;
+
                     match cap.kind {
                         CaptureKind::Local { index: _ } => {
                             // Load from parent's local/parameter slot
@@ -364,10 +335,18 @@ impl Lowerer {
                                 let is_upvalue = self.upvalue_bindings.contains(&cap.binding);
                                 if self.in_lambda && is_upvalue {
                                     // In a lambda, captures and params are accessed via LoadCapture
-                                    self.emit(LirInstr::LoadCapture {
-                                        dst: reg,
-                                        index: slot,
-                                    });
+                                    // Use LoadCaptureRaw for mutable captures to preserve the cell
+                                    if is_mutable_capture {
+                                        self.emit(LirInstr::LoadCaptureRaw {
+                                            dst: reg,
+                                            index: slot,
+                                        });
+                                    } else {
+                                        self.emit(LirInstr::LoadCapture {
+                                            dst: reg,
+                                            index: slot,
+                                        });
+                                    }
                                 } else {
                                     // Local variables (including those defined inside lambda) use LoadLocal
                                     self.emit(LirInstr::LoadLocal { dst: reg, slot });
@@ -386,7 +365,12 @@ impl Lowerer {
                             // The index refers to the parent's capture array
                             if self.in_lambda {
                                 // We're in a nested lambda - load from parent's captures
-                                self.emit(LirInstr::LoadCapture { dst: reg, index });
+                                // Use LoadCaptureRaw for mutable captures to preserve the cell
+                                if is_mutable_capture {
+                                    self.emit(LirInstr::LoadCaptureRaw { dst: reg, index });
+                                } else {
+                                    self.emit(LirInstr::LoadCapture { dst: reg, index });
+                                }
                             } else {
                                 // We're in the main function - this shouldn't happen
                                 // (main function doesn't have captures to forward)
@@ -513,16 +497,28 @@ impl Lowerer {
                 }
 
                 // Now lower all expressions (slots are available for capture lookup)
-                let mut last_reg = self.emit_const(LirConst::Nil)?;
-                for expr in exprs {
+                // Pop intermediate results to keep the stack clean
+                if exprs.is_empty() {
+                    return self.emit_const(LirConst::Nil);
+                }
+                let mut last_reg = self.lower_expr(&exprs[0])?;
+                for expr in exprs.iter().skip(1) {
+                    // Pop the previous result before evaluating the next expression
+                    self.emit(LirInstr::Pop { src: last_reg });
                     last_reg = self.lower_expr(expr)?;
                 }
                 Ok(last_reg)
             }
 
             HirKind::Block(exprs) => {
-                let mut last_reg = self.emit_const(LirConst::Nil)?;
-                for expr in exprs {
+                // Pop intermediate results to keep the stack clean
+                if exprs.is_empty() {
+                    return self.emit_const(LirConst::Nil);
+                }
+                let mut last_reg = self.lower_expr(&exprs[0])?;
+                for expr in exprs.iter().skip(1) {
+                    // Pop the previous result before evaluating the next expression
+                    self.emit(LirInstr::Pop { src: last_reg });
                     last_reg = self.lower_expr(expr)?;
                 }
                 Ok(last_reg)

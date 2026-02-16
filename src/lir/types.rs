@@ -39,6 +39,9 @@ pub struct LirFunction {
     pub num_regs: u32,
     /// Number of local slots needed
     pub num_locals: u16,
+    /// Bitmask indicating which parameters need to be wrapped in cells
+    /// Bit i is set if parameter i needs a cell (for mutable parameters)
+    pub cell_params_mask: u64,
 }
 
 impl LirFunction {
@@ -51,6 +54,7 @@ impl LirFunction {
             constants: Vec::new(),
             num_regs: 0,
             num_locals: 0,
+            cell_params_mask: 0,
         }
     }
 }
@@ -90,8 +94,10 @@ pub enum LirInstr {
     LoadLocal { dst: Reg, slot: u16 },
     /// Store to local slot
     StoreLocal { slot: u16, src: Reg },
-    /// Load from capture
+    /// Load from capture (auto-unwraps LocalCell)
     LoadCapture { dst: Reg, index: u16 },
+    /// Load from capture without unwrapping (for forwarding cells to nested closures)
+    LoadCaptureRaw { dst: Reg, index: u16 },
     /// Store to capture (handles cells automatically)
     StoreCapture { index: u16, src: Reg },
     /// Load global by symbol
