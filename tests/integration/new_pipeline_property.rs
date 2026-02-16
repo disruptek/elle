@@ -1070,7 +1070,7 @@ proptest! {
         let elements: Vec<String> = (0..len).map(|i| i.to_string()).collect();
         let list_str = elements.join(" ");
         let expr = format!(
-            "(letrec ((my-length (fn (lst) (if (nil? lst) 0 (+ 1 (my-length (rest lst)))))))
+            "(letrec ((my-length (fn (lst) (if (empty? lst) 0 (+ 1 (my-length (rest lst)))))))
                (my-length (list {})))",
             list_str
         );
@@ -1467,11 +1467,11 @@ proptest! {
                    (define doubled (* x 2))
                    (+ acc doubled))))
                
-               ;; This should work but fails due to name collision
-               (define fold-acc (fn (f acc lst)
-                 (if (nil? lst)
-                   acc
-                   (fold-acc f (f acc (first lst)) (rest lst)))))
+                ;; This should work but fails due to name collision
+                (define fold-acc (fn (f acc lst)
+                  (if (empty? lst)
+                    acc
+                    (fold-acc f (f acc (first lst)) (rest lst)))))
                
                (fold-acc process 0 (list {} {} {})))",
             a, b, c
@@ -1491,11 +1491,11 @@ proptest! {
                  (begin
                    (define doubled (* x 2))
                    (+ acc doubled))))
-               
-               (define fold-init (fn (f init lst)
-                 (if (nil? lst)
-                   init
-                   (fold-init f (f init (first lst)) (rest lst)))))
+                
+                (define fold-init (fn (f init lst)
+                  (if (empty? lst)
+                    init
+                    (fold-init f (f init (first lst)) (rest lst)))))
                
                (fold-init process 0 (list {} {} {})))",
             a, b, c

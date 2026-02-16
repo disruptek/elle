@@ -807,6 +807,8 @@ impl Value {
         use crate::value::heap::deref;
         if self.is_nil() {
             "nil"
+        } else if self.is_empty_list() {
+            "list" // empty list is still a list
         } else if self.is_bool() {
             "boolean"
         } else if self.is_int() {

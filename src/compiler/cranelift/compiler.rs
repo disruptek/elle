@@ -966,16 +966,17 @@ impl ExprCompiler {
                 }
             }
             "nil?" => {
-                // nil? is same as empty?
+                // nil? checks only for nil (0), not empty list
                 match arg {
                     IrValue::I64(val) => {
                         let zero = ctx.builder.ins().iconst(types::I64, 0);
-                        let cmp_result =
+
+                        let is_nil =
                             ctx.builder
                                 .ins()
                                 .icmp(cranelift::prelude::IntCC::Equal, val, zero);
                         // Extend i8 boolean to i64
-                        let result = ctx.builder.ins().uextend(types::I64, cmp_result);
+                        let result = ctx.builder.ins().uextend(types::I64, is_nil);
                         Ok(IrValue::I64(result))
                     }
                     _ => Err("nil? on non-I64 not supported".to_string()),

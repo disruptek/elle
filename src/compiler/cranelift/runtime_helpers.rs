@@ -40,7 +40,7 @@ pub extern "C" fn jit_is_nil(value_ptr: i64) -> i64 {
         return 1; // Encoded nil
     }
     let value = unsafe { &*(value_ptr as *const Value) };
-    if value.is_nil() || value.is_empty_list() {
+    if value.is_nil() {
         1
     } else {
         0
