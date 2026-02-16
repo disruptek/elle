@@ -4,7 +4,7 @@
 // hold when code is compiled and executed through the new pipeline.
 
 use elle::pipeline::eval_new;
-use elle::primitives::register_primitives;
+use elle::primitives::{init_stdlib, register_primitives};
 use elle::{SymbolTable, Value, VM};
 use proptest::prelude::*;
 
@@ -13,6 +13,7 @@ fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
     register_primitives(&mut vm, &mut symbols);
+    init_stdlib(&mut vm, &mut symbols);
     eval_new(input, &mut symbols, &mut vm)
 }
 
