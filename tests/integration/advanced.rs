@@ -1,8 +1,8 @@
 // DEFENSE: Integration tests ensure the full pipeline works end-to-end
-use elle::compiler::value_to_expr;
 use elle::ffi_primitives;
-use elle::primitives::{clear_macro_symbol_table, set_macro_symbol_table};
-use elle::{compile, read_str, register_primitives, SymbolTable, Value, VM};
+use elle::pipeline::{compile_all_new, compile_new};
+use elle::primitives::{clear_macro_symbol_table, register_primitives, set_macro_symbol_table};
+use elle::{SymbolTable, Value, VM};
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
@@ -16,10 +16,33 @@ fn eval(input: &str) -> Result<Value, String> {
     set_macro_symbol_table(&mut symbols as *mut SymbolTable);
     ffi_primitives::set_symbol_table(&mut symbols as *mut SymbolTable);
 
-    let value = read_str(input, &mut symbols)?;
-    let expr = value_to_expr(&value, &mut symbols)?;
-    let bytecode = compile(&expr);
-    let result = vm.execute(&bytecode);
+    // Try single expression first
+    let result = match compile_new(input, &mut symbols) {
+        Ok(compiled) => vm.execute(&compiled.bytecode),
+        Err(_) => {
+            // Try wrapping in begin
+            let wrapped = format!("(begin {})", input);
+            match compile_new(&wrapped, &mut symbols) {
+                Ok(compiled) => vm.execute(&compiled.bytecode),
+                Err(_) => {
+                    // Try multiple expressions
+                    match compile_all_new(input, &mut symbols) {
+                        Ok(results) => {
+                            let mut last_result = Ok(Value::NIL);
+                            for r in results {
+                                last_result = vm.execute(&r.bytecode);
+                                if last_result.is_err() {
+                                    break;
+                                }
+                            }
+                            last_result
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+            }
+        }
+    };
 
     // Clear context
     ffi_primitives::clear_vm_context();
@@ -451,21 +474,21 @@ fn test_memory_usage_consistency() {
 fn test_match_syntax_parsing() {
     // Test that match syntax is properly parsed (not treated as function call)
     // Match expression should evaluate without errors
-    assert!(eval("(match 5 ((5) \"five\"))").is_ok());
+    assert!(eval("(match 5 (5 \"five\"))").is_ok());
 }
 
 #[test]
 fn test_match_wildcard_catches_any() {
     // Wildcard pattern matches any value
-    assert!(eval("(match 42 ((_ ) \"matched\"))").is_ok());
-    assert!(eval("(match \"test\" ((_ ) #t))").is_ok());
+    assert!(eval("(match 42 (_ \"matched\"))").is_ok());
+    assert!(eval("(match \"test\" (_ #t))").is_ok());
 }
 
 #[test]
 fn test_match_returns_result_expression() {
     // Match should return the value of the matched branch
     // Using literals to avoid variable binding complexity
-    match eval("(match 5 ((5) 42) ((10) 0))") {
+    match eval("(match 5 (5 42) (10 0))") {
         Ok(v) => {
             if let Some(n) = v.as_int() {
                 assert!(n > 0, "Should return a positive number");
@@ -480,30 +503,30 @@ fn test_match_returns_result_expression() {
 #[test]
 fn test_match_clause_ordering() {
     // First matching clause should be used
-    assert!(eval("(match 5 ((5) #t) ((5) #f))").is_ok());
+    assert!(eval("(match 5 (5 #t) (5 #f))").is_ok());
 }
 
 #[test]
 fn test_match_default_wildcard() {
     // Wildcard pattern should match when no literals match
-    assert!(eval("(match 99 ((1) \"one\") ((2) \"two\") ((_ ) \"other\"))").is_ok());
+    assert!(eval("(match 99 (1 \"one\") (2 \"two\") (_ \"other\"))").is_ok());
 }
 
 #[test]
 fn test_match_nil_pattern_parsing() {
     // Nil pattern should parse and work
-    assert!(eval("(match nil ((nil) \"empty\"))").is_ok());
+    assert!(eval("(match nil (nil \"empty\"))").is_ok());
 }
 
 #[test]
 fn test_match_wildcard_pattern() {
     // Match with wildcard (_) - catches any value
     assert_eq!(
-        eval("(match 42 ((_ ) \"any\"))").unwrap(),
+        eval("(match 42 (_ \"any\"))").unwrap(),
         Value::string("any")
     );
     assert_eq!(
-        eval("(match \"hello\" ((_ ) \"matched\"))").unwrap(),
+        eval("(match \"hello\" (_ \"matched\"))").unwrap(),
         Value::string("matched")
     );
 }
@@ -512,12 +535,12 @@ fn test_match_wildcard_pattern() {
 fn test_match_nil_pattern() {
     // Match nil
     assert_eq!(
-        eval("(match nil ((nil) \"empty\"))").unwrap(),
+        eval("(match nil (nil \"empty\"))").unwrap(),
         Value::string("empty")
     );
     // nil pattern should NOT match empty list
     assert_eq!(
-        eval("(match (list) ((nil) \"empty\") (_ \"not-nil\")))").unwrap(),
+        eval("(match (list) (nil \"empty\") (_ \"not-nil\"))").unwrap(),
         Value::string("not-nil")
     );
 }
@@ -526,7 +549,7 @@ fn test_match_nil_pattern() {
 fn test_match_default_case() {
     // Default pattern at end - catches anything not matched
     assert_eq!(
-        eval("(match 99 ((1) \"one\") ((2) \"two\") ((_ ) \"other\"))").unwrap(),
+        eval("(match 99 (1 \"one\") (2 \"two\") (_ \"other\"))").unwrap(),
         Value::string("other")
     );
 }
@@ -535,11 +558,11 @@ fn test_match_default_case() {
 fn test_match_multiple_clauses_ordering() {
     // Test clause ordering - first matching clause wins
     assert_eq!(
-        eval("(match 2 ((1) \"one\") ((2) \"two\") ((3) \"three\"))").unwrap(),
+        eval("(match 2 (1 \"one\") (2 \"two\") (3 \"three\"))").unwrap(),
         Value::string("two")
     );
     assert_eq!(
-        eval("(match 1 ((1) \"one\") ((2) \"two\") ((3) \"three\"))").unwrap(),
+        eval("(match 1 (1 \"one\") (2 \"two\") (3 \"three\"))").unwrap(),
         Value::string("one")
     );
 }
@@ -547,15 +570,15 @@ fn test_match_multiple_clauses_ordering() {
 #[test]
 fn test_match_with_static_expressions() {
     // Matched expressions should be evaluated (without pattern variable binding)
-    assert_eq!(eval("(match 10 ((10) (* 2 3)))").unwrap(), Value::int(6));
-    assert_eq!(eval("(match 5 ((5) (+ 1 1)))").unwrap(), Value::int(2));
+    assert_eq!(eval("(match 10 (10 (* 2 3)))").unwrap(), Value::int(6));
+    assert_eq!(eval("(match 5 (5 (+ 1 1)))").unwrap(), Value::int(2));
 }
 
 #[test]
 fn test_match_string_literals() {
     // Match string literals
     assert_eq!(
-        eval("(match \"hello\" ((\"hello\") \"matched\") ((_ ) \"no\"))").unwrap(),
+        eval("(match \"hello\" (\"hello\" \"matched\") (_ \"no\"))").unwrap(),
         Value::string("matched")
     );
 }

@@ -156,7 +156,7 @@ pub fn prim_odd(args: &[Value]) -> LResult<Value> {
     }
 }
 
-pub fn prim_div_vm(args: &[Value], vm: &mut VM) -> LResult<Value> {
+pub fn prim_div_vm(args: &[Value], _vm: &mut VM) -> LResult<Value> {
     if args.is_empty() {
         return Err(LError::arity_at_least(1, args.len()));
     }
@@ -188,7 +188,7 @@ pub fn prim_div_vm(args: &[Value], vm: &mut VM) -> LResult<Value> {
             let mut cond = crate::value::Condition::new(4);
             cond.set_field(0, result); // dividend
             cond.set_field(1, *arg); // divisor
-            vm.current_exception = Some(std::rc::Rc::new(cond));
+            _vm.current_exception = Some(std::rc::Rc::new(cond));
             return Ok(Value::NIL);
         }
 

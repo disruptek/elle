@@ -88,6 +88,7 @@ fn is_value_sendable(value: &Value) -> bool {
 
     // Check immediate values
     if value.is_nil()
+        || value.is_empty_list()
         || value.is_bool()
         || value.is_int()
         || value.is_float()
