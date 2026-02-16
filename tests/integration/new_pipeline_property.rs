@@ -596,7 +596,7 @@ proptest! {
         let expr = format!(
             "(let ((c1 (let ((n {})) (fn () (begin (set! n (+ n 1)) n))))
                    (c2 (let ((m {})) (fn () (begin (set! m (+ m 1)) m)))))
-               (begin (c1) (c1) (c2) (list (c1) (c2))))",
+                (begin (c1) (c1) (c2) (list (c1) (c2))))",
             a, b
         );
         let result = eval(&expr);
@@ -605,6 +605,145 @@ proptest! {
         // c1 called 3 times: a+1, a+2, a+3
         // c2 called 2 times: b+1, b+2
         // Result should be list of (a+3, b+2)
+    }
+
+    #[test]
+    fn closure_captures_and_mutates(start in 0i64..50, increments in 1usize..5) {
+        // Basic closure that captures and mutates a variable
+        let mut calls = String::new();
+        for _ in 0..increments {
+            calls.push_str("(inc) ");
+        }
+        let expr = format!(
+            "(let ((n {}))
+               (let ((inc (fn () (begin (set! n (+ n 1)) n))))
+                 (begin {})))",
+            start, calls
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(start + increments as i64));
+    }
+
+    #[test]
+    fn counter_factory_single(start in 0i64..100) {
+        // Single counter from factory
+        let expr = format!(
+            "(let ((make-counter (fn (n) (fn () (begin (set! n (+ n 1)) n)))))
+               (let ((c (make-counter {})))
+                 (begin (c) (c) (c))))",
+            start
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(start + 3));
+    }
+
+    #[test]
+    fn counter_factory_independence(a in 0i64..50, b in 100i64..150) {
+        // Two counters from same factory must be independent
+        // This is the critical test that catches shared-state bugs
+        // c1 called twice: a+1, a+2
+        // c2 called once: b+1
+        // Final call: c1 at a+3, c2 at b+2
+        let expr = format!(
+            "(let ((make-counter (fn (n) (fn () (begin (set! n (+ n 1)) n)))))
+               (let ((c1 (make-counter {})) (c2 (make-counter {})))
+                 (begin 
+                   (c1) (c1)
+                   (c2)
+                   (+ (c1) (c2)))))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int((a + 3) + (b + 2)));
+    }
+
+    #[test]
+    fn closure_mutates_outer_scope(outer in 0i64..100, delta in 1i64..10) {
+        let expr = format!(
+            "(let ((x {}))
+               (let ((add (fn () (set! x (+ x {})))))
+                 (begin (add) (add) x)))",
+            outer, delta
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(outer + 2 * delta));
+    }
+
+    #[test]
+    fn multiple_closures_share_state(init in 0i64..50) {
+        // Multiple closures over same variable should share state
+        let expr = format!(
+            "(let ((n {}))
+               (let ((inc (fn () (begin (set! n (+ n 1)) n)))
+                     (dec (fn () (begin (set! n (- n 1)) n)))
+                     (get (fn () n)))
+                 (begin (inc) (inc) (dec) (get))))",
+            init
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(init + 1)); // +2 -1 = +1
+    }
+
+    #[test]
+    fn nested_closure_mutation(a in 0i64..30, b in 0i64..30) {
+        // Nested closures, inner mutates outer's captured var
+        let expr = format!(
+            "(let ((x {}))
+               (let ((outer (fn (y)
+                              (begin (set! x (+ x y)) x))))
+                 (begin (outer {}) (outer {}))))",
+            a, b, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(a + b + b));
+    }
+
+    #[test]
+    fn closure_over_parameter(param in 0i64..50, delta in 1i64..10) {
+        // Closure captures function parameter and mutates it
+        let expr = format!(
+            "(let ((make-mutator (fn (n)
+                                   (fn () (begin (set! n (+ n {})) n)))))
+               (let ((m (make-mutator {})))
+                 (begin (m) (m) (m))))",
+            delta, param
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(param + 3 * delta));
+    }
+
+    #[test]
+    fn accumulator_pattern(init in 0i64..20, values in prop::collection::vec(1i64..10, 1..5)) {
+        // Accumulator pattern: closure that adds to running total
+        let mut calls = String::new();
+        for v in &values {
+            calls.push_str(&format!("(add {}) ", v));
+        }
+        let expr = format!(
+            "(let ((total {}))
+               (let ((add (fn (x) (begin (set! total (+ total x)) total))))
+                 (begin {})))",
+            init, calls
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        let expected: i64 = init + values.iter().sum::<i64>();
+        prop_assert_eq!(result.unwrap(), Value::Int(expected));
     }
 }
 
@@ -787,5 +926,383 @@ proptest! {
 
         prop_assert!(result.is_ok(), "failed: {:?}", result);
         prop_assert_eq!(result.unwrap(), Value::Int(-a));
+    }
+}
+
+// ============================================================================
+// Higher-Order Function Properties
+// ============================================================================
+// NOTE: map, filter, reduce are not yet registered as primitives in the
+// current implementation. These tests are commented out pending implementation.
+// See: src/primitives/higher_order.rs for the function definitions.
+
+// ============================================================================
+// Function Factory Properties (returning closures)
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+
+    #[test]
+    fn make_adder_works(n in -50i64..50, x in -50i64..50) {
+        let expr = format!(
+            "(let ((make-adder (fn (n) (fn (x) (+ x n)))))
+               ((make-adder {}) {}))",
+            n, x
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(x + n));
+    }
+
+    #[test]
+    fn make_multiplier_works(n in -20i64..20, x in -20i64..20) {
+        let expr = format!(
+            "(let ((make-mult (fn (n) (fn (x) (* x n)))))
+               ((make-mult {}) {}))",
+            n, x
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(x * n));
+    }
+
+    #[test]
+    fn compose_functions(a in -20i64..20) {
+        // (compose f g)(x) = f(g(x))
+        let expr = format!(
+            "(let ((compose (fn (f g) (fn (x) (f (g x)))))
+                   (add1 (fn (x) (+ x 1)))
+                   (double (fn (x) (* x 2)))
+                   (composed (compose add1 double)))
+                (composed {}))",
+            a
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int((a * 2) + 1));
+    }
+
+    #[test]
+    fn apply_n_times(n in 1usize..5, start in 0i64..20) {
+        // Apply increment n times
+        let mut expr = format!("(let ((inc (fn (x) (+ x 1)))) ");
+        for _ in 0..n {
+            expr.push_str("(inc ");
+        }
+        expr.push_str(&start.to_string());
+        for _ in 0..n {
+            expr.push_str(")");
+        }
+        expr.push_str(")");
+
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(start + n as i64));
+    }
+}
+
+// ============================================================================
+// Currying and Partial Application Properties
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+
+    #[test]
+    fn manual_curry_add(a in -50i64..50, b in -50i64..50) {
+        // curry: (a, b) -> a -> b -> result
+        let expr = format!(
+            "(let ((curry-add (fn (a) (fn (b) (+ a b)))))
+               ((curry-add {}) {}))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(a + b));
+    }
+}
+
+// ============================================================================
+// Recursion Properties
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+
+    #[test]
+    fn recursive_factorial(n in 0u8..8) {
+        let expr = format!(
+            "(letrec ((fact (fn (n) (if (<= n 1) 1 (* n (fact (- n 1)))))))
+               (fact {}))",
+            n
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        let expected: i64 = (1..=n as i64).product();
+        let expected = if expected == 0 { 1 } else { expected };
+        prop_assert_eq!(result.unwrap(), Value::Int(expected));
+    }
+
+    #[test]
+    fn recursive_sum(n in 0u8..20) {
+        let expr = format!(
+            "(letrec ((sum-to (fn (n) (if (<= n 0) 0 (+ n (sum-to (- n 1)))))))
+               (sum-to {}))",
+            n
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        let expected: i64 = (0..=n as i64).sum();
+        prop_assert_eq!(result.unwrap(), Value::Int(expected));
+    }
+
+    #[test]
+    fn recursive_length(len in 0usize..10) {
+        let elements: Vec<String> = (0..len).map(|i| i.to_string()).collect();
+        let list_str = elements.join(" ");
+        let expr = format!(
+            "(letrec ((my-length (fn (lst) (if (nil? lst) 0 (+ 1 (my-length (rest lst)))))))
+               (my-length (list {})))",
+            list_str
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(len as i64));
+    }
+
+    #[test]
+    fn tail_recursive_sum(n in 0u8..50) {
+        let expr = format!(
+            "(letrec ((sum-iter (fn (n acc) (if (<= n 0) acc (sum-iter (- n 1) (+ acc n))))))
+               (sum-iter {} 0))",
+            n
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        let expected: i64 = (0..=n as i64).sum();
+        prop_assert_eq!(result.unwrap(), Value::Int(expected));
+    }
+
+    #[test]
+    fn mutual_recursion_even_odd(n in 0u8..20) {
+        let expr = format!(
+            "(letrec ((is-even (fn (n) (if (= n 0) #t (is-odd (- n 1)))))
+                      (is-odd (fn (n) (if (= n 0) #f (is-even (- n 1))))))
+               (is-even {}))",
+            n
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Bool(n % 2 == 0));
+    }
+}
+
+// ============================================================================
+// Function as Data Properties
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(20))]
+
+    #[test]
+    fn store_function_in_list(a in -50i64..50, b in -50i64..50) {
+        let expr = format!(
+            "(let ((fns (list (fn (x) (+ x 1)) (fn (x) (* x 2)))))
+               (+ ((first fns) {}) ((first (rest fns)) {})))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int((a + 1) + (b * 2)));
+    }
+
+    #[test]
+    fn function_returning_function_returning_value(a in -30i64..30, b in -30i64..30) {
+        // Test a function that returns a function that returns a value
+        let expr = format!(
+            "(let ((f (fn (x) (fn (y) (+ x y)))))
+               ((f {}) {}))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(a + b));
+    }
+}
+
+// ============================================================================
+// Higher-Order Function Properties (map, filter, fold)
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+
+    #[test]
+    fn map_adds_one(a in -50i64..50, b in -50i64..50, c in -50i64..50) {
+        let expr = format!(
+            "(let ((result (map (fn (x) (+ x 1)) (list {} {} {}))))
+               (+ (first result) (+ (first (rest result)) (first (rest (rest result))))))",
+            a, b, c
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int((a+1) + (b+1) + (c+1)));
+    }
+
+    #[test]
+    fn map_doubles(a in -30i64..30, b in -30i64..30) {
+        let expr = format!(
+            "(let ((result (map (fn (x) (* x 2)) (list {} {}))))
+               (list (first result) (first (rest result))))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        if let Ok(vec) = result.unwrap().list_to_vec() {
+            prop_assert_eq!(vec.len(), 2);
+            prop_assert_eq!(&vec[0], &Value::Int(a * 2));
+            prop_assert_eq!(&vec[1], &Value::Int(b * 2));
+        }
+    }
+
+    #[test]
+    fn map_preserves_length(len in 1usize..6) {
+        let elements: Vec<String> = (0..len).map(|i| i.to_string()).collect();
+        let list_str = elements.join(" ");
+        let expr = format!("(length (map (fn (x) x) (list {})))", list_str);
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(len as i64));
+    }
+
+    #[test]
+    fn filter_positive(a in -50i64..50, b in -50i64..50, c in -50i64..50) {
+        let expr = format!(
+            "(length (filter (fn (x) (> x 0)) (list {} {} {})))",
+            a, b, c
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        let expected = [a, b, c].iter().filter(|&&x| x > 0).count() as i64;
+        prop_assert_eq!(result.unwrap(), Value::Int(expected));
+    }
+
+    #[test]
+    fn filter_all_true_preserves(a in 1i64..50, b in 1i64..50) {
+        let expr = format!(
+            "(length (filter (fn (x) #t) (list {} {})))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(2));
+    }
+
+    #[test]
+    fn filter_all_false_empty(a in -50i64..50, b in -50i64..50) {
+        let expr = format!(
+            "(length (filter (fn (x) #f) (list {} {})))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(0));
+    }
+
+    #[test]
+    fn fold_sum(a in -30i64..30, b in -30i64..30, c in -30i64..30) {
+        let expr = format!("(fold + 0 (list {} {} {}))", a, b, c);
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(a + b + c));
+    }
+
+    #[test]
+    fn fold_product(a in 1i64..10, b in 1i64..10, c in 1i64..10) {
+        let expr = format!("(fold * 1 (list {} {} {}))", a, b, c);
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(a * b * c));
+    }
+
+    #[test]
+    fn fold_with_initial(init in -50i64..50, a in -30i64..30, b in -30i64..30) {
+        let expr = format!("(fold + {} (list {} {}))", init, a, b);
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(init + a + b));
+    }
+
+    #[test]
+    fn fold_empty_returns_initial(init in -100i64..100) {
+        let expr = format!("(fold + {} (list))", init);
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(init));
+    }
+
+    #[test]
+    fn map_then_fold(a in -20i64..20, b in -20i64..20, c in -20i64..20) {
+        // map to double, then fold to sum
+        let expr = format!(
+            "(fold + 0 (map (fn (x) (* x 2)) (list {} {} {})))",
+            a, b, c
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int(2 * (a + b + c)));
+    }
+
+    #[test]
+    fn filter_then_fold(a in -20i64..20, b in -20i64..20, c in -20i64..20) {
+        // filter positive, then sum
+        let expr = format!(
+            "(fold + 0 (filter (fn (x) (> x 0)) (list {} {} {})))",
+            a, b, c
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        let expected: i64 = [a, b, c].iter().filter(|&&x| x > 0).sum();
+        prop_assert_eq!(result.unwrap(), Value::Int(expected));
+    }
+
+    #[test]
+    fn map_with_closure_capture(n in -20i64..20, a in -20i64..20, b in -20i64..20) {
+        // Closure captures n from outer scope
+        let expr = format!(
+            "(let ((n {}))
+               (let ((result (map (fn (x) (+ x n)) (list {} {}))))
+                 (+ (first result) (first (rest result)))))",
+            n, a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "failed: {:?}", result);
+        prop_assert_eq!(result.unwrap(), Value::Int((a + n) + (b + n)));
     }
 }
