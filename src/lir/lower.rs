@@ -1,7 +1,7 @@
 //! HIR to LIR lowering
 
 use super::types::*;
-use crate::hir::{BindingId, BindingInfo, BindingKind, Hir, HirKind};
+use crate::hir::{BindingId, BindingInfo, BindingKind, Hir, HirKind, HirPattern, PatternLiteral};
 use std::collections::HashMap;
 
 /// Lowers HIR to LIR
@@ -704,9 +704,14 @@ impl Lowerer {
             }
 
             HirKind::For { var, iter, body } => {
-                // Lower as: let iter_val = iter; while (pair? iter_val) { var = car(iter_val); body; iter_val = cdr(iter_val) }
+                // Allocate separate slots for iterator and loop variable
+                let iter_slot = self.current_func.num_locals;
+                self.current_func.num_locals += 1;
+
+                let var_slot = self.allocate_slot(*var);
+
+                // Store initial iterator
                 let iter_reg = self.lower_expr(iter)?;
-                let iter_slot = self.allocate_slot(*var);
                 self.emit(LirInstr::StoreLocal {
                     slot: iter_slot,
                     src: iter_reg,
@@ -717,12 +722,12 @@ impl Lowerer {
                 let exit_label_id = self.next_label;
                 self.next_label += 1;
 
-                // Emit loop label marker
+                // Loop start
                 self.emit(LirInstr::LabelMarker {
                     label_id: loop_label_id,
                 });
 
-                // Load current iterator and check if it's a pair
+                // Load iterator and check if it's a pair
                 let current_iter = self.fresh_reg();
                 self.emit(LirInstr::LoadLocal {
                     dst: current_iter,
@@ -734,48 +739,48 @@ impl Lowerer {
                     src: current_iter,
                 });
 
-                // Jump to exit if not a pair
+                // Exit if not a pair
                 self.emit(LirInstr::JumpIfFalseInline {
                     cond: is_pair,
                     label_id: exit_label_id,
                 });
 
-                // Extract car and store as var
-                let car_reg = self.fresh_reg();
-                let iter_load = self.fresh_reg();
+                // Extract car and store to VAR slot (not iter slot!)
+                let iter_for_car = self.fresh_reg();
                 self.emit(LirInstr::LoadLocal {
-                    dst: iter_load,
+                    dst: iter_for_car,
                     slot: iter_slot,
                 });
+                let car_reg = self.fresh_reg();
                 self.emit(LirInstr::Car {
                     dst: car_reg,
-                    pair: iter_load,
+                    pair: iter_for_car,
                 });
                 self.emit(LirInstr::StoreLocal {
-                    slot: iter_slot,
+                    slot: var_slot, // Store to loop variable, not iterator!
                     src: car_reg,
-                }); // Store car as var
+                });
 
                 // Evaluate body
                 self.lower_expr(body)?;
 
-                // Advance iterator
-                let iter_load2 = self.fresh_reg();
+                // Advance iterator: iter_slot = cdr(iter_slot)
+                let iter_for_cdr = self.fresh_reg();
                 self.emit(LirInstr::LoadLocal {
-                    dst: iter_load2,
+                    dst: iter_for_cdr,
                     slot: iter_slot,
                 });
                 let cdr_reg = self.fresh_reg();
                 self.emit(LirInstr::Cdr {
                     dst: cdr_reg,
-                    pair: iter_load2,
+                    pair: iter_for_cdr,
                 });
                 self.emit(LirInstr::StoreLocal {
-                    slot: iter_slot,
+                    slot: iter_slot, // Update iterator, not var
                     src: cdr_reg,
                 });
 
-                // Jump back to loop start
+                // Loop back
                 self.emit(LirInstr::JumpInline {
                     label_id: loop_label_id,
                 });
@@ -986,10 +991,68 @@ impl Lowerer {
                 Ok(result_reg)
             }
 
-            // Stubs for complex forms - full implementation later
-            HirKind::Match { value, .. } => {
-                // Simplified: just evaluate value, ignore patterns
-                self.lower_expr(value)
+            HirKind::Match { value, arms } => {
+                // Evaluate the value to match
+                let value_reg = self.lower_expr(value)?;
+
+                // Allocate result register
+                let result_reg = self.fresh_reg();
+
+                // Allocate end label
+                let end_label_id = self.next_label;
+                self.next_label += 1;
+
+                // Process each arm
+                for (pattern, guard, body) in arms {
+                    // Allocate label for next arm (if pattern doesn't match)
+                    let next_arm_label_id = self.next_label;
+                    self.next_label += 1;
+
+                    // Generate pattern matching code
+                    // This will emit JumpIfFalseInline to next_arm_label_id if pattern doesn't match
+                    self.lower_pattern_match(pattern, value_reg, next_arm_label_id)?;
+
+                    // If we reach here, pattern matched
+                    // Check guard if present
+                    if let Some(guard_expr) = guard {
+                        let guard_reg = self.lower_expr(guard_expr)?;
+                        self.emit(LirInstr::JumpIfFalseInline {
+                            cond: guard_reg,
+                            label_id: next_arm_label_id,
+                        });
+                    }
+
+                    // Lower body
+                    let body_reg = self.lower_expr(body)?;
+                    self.emit(LirInstr::Move {
+                        dst: result_reg,
+                        src: body_reg,
+                    });
+
+                    // Jump to end
+                    self.emit(LirInstr::JumpInline {
+                        label_id: end_label_id,
+                    });
+
+                    // Next arm label
+                    self.emit(LirInstr::LabelMarker {
+                        label_id: next_arm_label_id,
+                    });
+                }
+
+                // If no arm matched, return nil (or could be an error)
+                let nil_reg = self.emit_const(LirConst::Nil)?;
+                self.emit(LirInstr::Move {
+                    dst: result_reg,
+                    src: nil_reg,
+                });
+
+                // End label
+                self.emit(LirInstr::LabelMarker {
+                    label_id: end_label_id,
+                });
+
+                Ok(result_reg)
             }
             HirKind::HandlerCase { body, handlers } => {
                 let result_reg = self.fresh_reg();
@@ -1085,6 +1148,156 @@ impl Lowerer {
     }
 
     // === Helper Methods ===
+
+    /// Lower pattern matching code
+    /// Emits code that checks if value_reg matches the pattern
+    /// If it doesn't match, jumps to fail_label_id
+    /// If it matches, binds any variables and falls through
+    fn lower_pattern_match(
+        &mut self,
+        pattern: &HirPattern,
+        value_reg: Reg,
+        fail_label_id: u32,
+    ) -> Result<(), String> {
+        match pattern {
+            HirPattern::Wildcard => {
+                // Wildcard always matches, do nothing
+                Ok(())
+            }
+            HirPattern::Nil => {
+                // Check if value is nil
+                let is_nil_reg = self.fresh_reg();
+                self.emit(LirInstr::IsNil {
+                    dst: is_nil_reg,
+                    src: value_reg,
+                });
+                self.emit(LirInstr::JumpIfFalseInline {
+                    cond: is_nil_reg,
+                    label_id: fail_label_id,
+                });
+                Ok(())
+            }
+            HirPattern::Literal(lit) => {
+                // Check if value equals literal
+                let lit_reg = match lit {
+                    PatternLiteral::Bool(b) => self.emit_const(LirConst::Bool(*b))?,
+                    PatternLiteral::Int(n) => self.emit_const(LirConst::Int(*n))?,
+                    PatternLiteral::Float(f) => self.emit_const(LirConst::Float(*f))?,
+                    PatternLiteral::String(s) => self.emit_const(LirConst::String(s.clone()))?,
+                    PatternLiteral::Keyword(sym) => self.emit_const(LirConst::Keyword(*sym))?,
+                };
+
+                let eq_reg = self.fresh_reg();
+                self.emit(LirInstr::Compare {
+                    dst: eq_reg,
+                    op: CmpOp::Eq,
+                    lhs: value_reg,
+                    rhs: lit_reg,
+                });
+                self.emit(LirInstr::JumpIfFalseInline {
+                    cond: eq_reg,
+                    label_id: fail_label_id,
+                });
+                Ok(())
+            }
+            HirPattern::Var(binding_id) => {
+                // Bind the value to the variable
+                let slot = self.allocate_slot(*binding_id);
+                self.emit(LirInstr::StoreLocal {
+                    slot,
+                    src: value_reg,
+                });
+                Ok(())
+            }
+            HirPattern::Cons { head, tail } => {
+                // Check if value is a pair
+                let is_pair_reg = self.fresh_reg();
+                self.emit(LirInstr::IsPair {
+                    dst: is_pair_reg,
+                    src: value_reg,
+                });
+                self.emit(LirInstr::JumpIfFalseInline {
+                    cond: is_pair_reg,
+                    label_id: fail_label_id,
+                });
+
+                // Extract head and tail
+                let head_reg = self.fresh_reg();
+                self.emit(LirInstr::Car {
+                    dst: head_reg,
+                    pair: value_reg,
+                });
+
+                let tail_reg = self.fresh_reg();
+                self.emit(LirInstr::Cdr {
+                    dst: tail_reg,
+                    pair: value_reg,
+                });
+
+                // Recursively match head and tail
+                // Both must match, so they both jump to fail_label_id on failure
+                self.lower_pattern_match(head, head_reg, fail_label_id)?;
+                self.lower_pattern_match(tail, tail_reg, fail_label_id)?;
+
+                Ok(())
+            }
+            HirPattern::List(patterns) => {
+                // Check if value is a list of the right length
+                // Iterate through patterns and match each element
+
+                let mut current_reg = value_reg;
+
+                for pat in patterns.iter() {
+                    // Check if current is a pair
+                    let is_pair_reg = self.fresh_reg();
+                    self.emit(LirInstr::IsPair {
+                        dst: is_pair_reg,
+                        src: current_reg,
+                    });
+                    self.emit(LirInstr::JumpIfFalseInline {
+                        cond: is_pair_reg,
+                        label_id: fail_label_id,
+                    });
+
+                    // Extract head
+                    let head_reg = self.fresh_reg();
+                    self.emit(LirInstr::Car {
+                        dst: head_reg,
+                        pair: current_reg,
+                    });
+
+                    // Match head against pattern
+                    self.lower_pattern_match(pat, head_reg, fail_label_id)?;
+
+                    // Extract tail for next iteration
+                    let tail_reg = self.fresh_reg();
+                    self.emit(LirInstr::Cdr {
+                        dst: tail_reg,
+                        pair: current_reg,
+                    });
+
+                    current_reg = tail_reg;
+                }
+
+                // Check that tail is nil (list ends)
+                let is_nil_reg = self.fresh_reg();
+                self.emit(LirInstr::IsNil {
+                    dst: is_nil_reg,
+                    src: current_reg,
+                });
+                self.emit(LirInstr::JumpIfFalseInline {
+                    cond: is_nil_reg,
+                    label_id: fail_label_id,
+                });
+
+                Ok(())
+            }
+            HirPattern::Vector(_patterns) => {
+                // TODO: Implement vector pattern matching
+                Err("Vector pattern matching not yet implemented".to_string())
+            }
+        }
+    }
 
     fn fresh_reg(&mut self) -> Reg {
         let r = Reg::new(self.next_reg);

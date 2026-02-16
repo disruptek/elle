@@ -17,4 +17,4 @@ mod pattern;
 pub use analyze::{AnalysisContext, AnalysisResult, Analyzer};
 pub use binding::{BindingId, BindingInfo, BindingKind, CaptureInfo, CaptureKind};
 pub use expr::{Hir, HirKind};
-pub use pattern::{HirPattern, PatternBindings};
+pub use pattern::{HirPattern, PatternBindings, PatternLiteral};
