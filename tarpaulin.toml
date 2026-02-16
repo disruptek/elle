@@ -3,6 +3,3 @@
 
 # Output format
 out = ["Xml"]
-
-# Exclude test and example files from coverage
-exclude_files = ["tests/*", "examples/*"]
