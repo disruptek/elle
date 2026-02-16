@@ -136,6 +136,24 @@ Things that look wrong but aren't:
   pipelines, property tests for invariants.
 - Examples in `examples/` serve as both documentation and executable tests.
 
+## Maintaining documentation
+
+AGENTS.md and README.md files exist throughout the codebase. Keep them current:
+
+- **When you change a module's interface**, update its AGENTS.md. Changed
+  exports, new invariants, altered data flow - these matter to the next agent.
+
+- **When you add a new module**, create AGENTS.md (for agents) and README.md
+  (for humans). Copy structure from a sibling module.
+
+- **When you violate a documented invariant**, either fix your code or update
+  the invariant. Stale invariants are worse than none.
+
+- **When you discover undocumented behavior**, document it. If it's intentional,
+  add to "Intentional oddities." If it's a bug, file an issue.
+
+Documentation debt compounds. A few minutes now saves hours of confusion later.
+
 ## What not to do
 
 - Do not add backward compatibility machinery. Breaking changes are fine;
