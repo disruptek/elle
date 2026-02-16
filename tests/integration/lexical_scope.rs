@@ -2,48 +2,34 @@
 // Tests comprehensive capture behavior across nested scopes, let bindings,
 // mutable captures, and coroutine interactions.
 
-use elle::compiler::converters::value_to_expr;
-use elle::reader::OwnedToken;
-use elle::{compile, list, register_primitives, Lexer, Reader, SymbolTable, Value, VM};
+use elle::ffi::primitives::context::set_symbol_table;
+use elle::pipeline::{compile_all_new, compile_new};
+use elle::primitives::register_primitives;
+use elle::{SymbolTable, Value, VM};
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
     register_primitives(&mut vm, &mut symbols);
+    set_symbol_table(&mut symbols as *mut SymbolTable);
 
-    // Tokenize the input
-    let mut lexer = Lexer::new(input);
-    let mut tokens = Vec::new();
-    while let Some(token) = lexer.next_token()? {
-        tokens.push(OwnedToken::from(token));
+    match compile_new(input, &mut symbols) {
+        Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
+        Err(_) => {
+            let wrapped = format!("(begin {})", input);
+            match compile_new(&wrapped, &mut symbols) {
+                Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
+                Err(_) => {
+                    let results = compile_all_new(input, &mut symbols)?;
+                    let mut last_result = Value::NIL;
+                    for result in results {
+                        last_result = vm.execute(&result.bytecode).map_err(|e| e.to_string())?;
+                    }
+                    Ok(last_result)
+                }
+            }
+        }
     }
-
-    if tokens.is_empty() {
-        return Err("No input".to_string());
-    }
-
-    // Read all expressions
-    let mut reader = Reader::new(tokens);
-    let mut values = Vec::new();
-    while let Some(result) = reader.try_read(&mut symbols) {
-        values.push(result?);
-    }
-
-    // If we have multiple expressions, wrap them in a begin
-    let value = if values.len() == 1 {
-        values.into_iter().next().unwrap()
-    } else if values.is_empty() {
-        return Err("No input".to_string());
-    } else {
-        // Wrap multiple expressions in a begin
-        let mut begin_args = vec![Value::symbol(symbols.intern("begin").0)];
-        begin_args.extend(values);
-        list(begin_args)
-    };
-
-    let expr = value_to_expr(&value, &mut symbols)?;
-    let bytecode = compile(&expr);
-    vm.execute(&bytecode)
 }
 
 // ============================================================================
