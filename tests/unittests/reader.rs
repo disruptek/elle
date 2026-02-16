@@ -96,7 +96,10 @@ fn test_read_empty_list() {
     let mut symbols = SymbolTable::new();
 
     let result = read_str("()", &mut symbols).unwrap();
-    assert_eq!(result, Value::NIL);
+    // Empty list is NOT nil - they are distinct values
+    assert_eq!(result, Value::EMPTY_LIST);
+    assert!(result.is_empty_list());
+    assert!(!result.is_nil());
 }
 
 #[test]

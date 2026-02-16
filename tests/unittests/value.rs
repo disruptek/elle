@@ -29,6 +29,15 @@ fn test_value_equality() {
     assert_ne!(Value::int(0), Value::NIL);
 }
 
+// ============================================================================
+// TRUTHINESS SEMANTICS - DO NOT CHANGE WITHOUT UNDERSTANDING THE DESIGN
+// ============================================================================
+// nil is FALSY (represents absence, logical false)
+// () (empty list) is TRUTHY (it's a list, just empty - distinct from nil)
+// #f is FALSY (explicit boolean false)
+// 0 is TRUTHY (numbers are always truthy)
+// ============================================================================
+
 #[test]
 fn test_truthiness() {
     // Truthy values
@@ -36,11 +45,12 @@ fn test_truthiness() {
     assert!(Value::int(1).is_truthy());
     assert!(Value::float(0.0).is_truthy());
     assert!(Value::bool(true).is_truthy());
-    assert!(cons(Value::int(1), Value::NIL).is_truthy());
-    assert!(Value::NIL.is_truthy()); // Empty list is truthy (matching Janet/modern Lisps)
+    assert!(cons(Value::int(1), Value::EMPTY_LIST).is_truthy());
+    assert!(Value::EMPTY_LIST.is_truthy()); // Empty list is truthy
 
     // Falsy values
     assert!(!Value::bool(false).is_truthy());
+    assert!(!Value::NIL.is_truthy()); // nil is falsy
 }
 
 #[test]
@@ -88,8 +98,10 @@ fn test_list_construction() {
 
 #[test]
 fn test_empty_list() {
-    let empty = Value::NIL;
+    let empty = Value::EMPTY_LIST;
     assert!(empty.is_list());
+    assert!(empty.is_empty_list()); // Verify it's empty list
+    assert!(!empty.is_nil()); // Verify it's NOT nil
     assert_eq!(empty.list_to_vec().unwrap().len(), 0);
 }
 
@@ -162,7 +174,7 @@ fn test_arity_matching() {
 #[test]
 fn test_cons_sharing() {
     // Cons cells should allow efficient sharing
-    let tail = cons(Value::int(2), Value::NIL);
+    let tail = cons(Value::int(2), Value::EMPTY_LIST);
     let list1 = cons(Value::int(1), tail);
     let list2 = cons(Value::int(0), tail);
 
@@ -182,4 +194,32 @@ fn test_large_list() {
     assert_eq!(vec.len(), 1000);
     assert_eq!(vec[0], Value::int(0));
     assert_eq!(vec[999], Value::int(999));
+}
+
+#[test]
+fn test_is_nil_semantics() {
+    // (is-nil nil) → true
+    assert!(Value::NIL.is_nil());
+
+    // (is-nil '()) → FALSE (empty list is NOT nil)
+    assert!(!Value::empty_list().is_nil());
+
+    // (is-nil 0) → false
+    assert!(!Value::int(0).is_nil());
+
+    // (is-nil #f) → false
+    assert!(!Value::bool(false).is_nil());
+}
+
+#[test]
+fn test_is_empty_list_semantics() {
+    // Empty list should be detected
+    assert!(Value::empty_list().is_empty_list());
+
+    // Nil should NOT be an empty list
+    assert!(!Value::NIL.is_empty_list());
+
+    // Non-empty list should not be empty
+    let non_empty = list(vec![Value::int(1)]);
+    assert!(!non_empty.is_empty_list());
 }

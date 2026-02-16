@@ -598,14 +598,17 @@ impl Compiler {
         // Loop start
         let loop_label = self.bytecode.current_pos() as i32;
 
-        // Check if list is nil
+        // Check if list is empty (proper list terminator)
+        // Stack: [list]
         self.bytecode.emit(Instruction::Dup);
-        self.bytecode.emit(Instruction::IsNil);
+        // Stack: [list, list]
+        self.bytecode.emit(Instruction::IsEmptyList);
+        // Stack: [list, is_empty_list]
         self.bytecode.emit(Instruction::JumpIfTrue);
         let exit_jump = self.bytecode.current_pos() as i32;
         self.bytecode.emit_u16(0);
 
-        // Extract car
+        // Extract car (will error if nil encountered - enforces proper list invariant)
         self.bytecode.emit(Instruction::Dup);
         self.bytecode.emit(Instruction::Car);
 
@@ -619,7 +622,7 @@ impl Compiler {
         self.compile_expr(body, false);
         self.bytecode.emit(Instruction::Pop);
 
-        // Update list to rest
+        // Update list to rest (will error if nil encountered)
         self.bytecode.emit(Instruction::Cdr);
 
         // Loop back

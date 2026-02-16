@@ -257,6 +257,7 @@ pub enum Terminator {
 #[derive(Debug, Clone)]
 pub enum LirConst {
     Nil,
+    EmptyList,
     Bool(bool),
     Int(i64),
     Float(f64),

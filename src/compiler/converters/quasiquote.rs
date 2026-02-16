@@ -29,6 +29,7 @@ fn build_quasiquote_expr(
     use super::value_to_expr::value_to_expr_with_scope;
 
     if value.is_nil()
+        || value.is_empty_list()
         || value.is_bool()
         || value.is_int()
         || value.is_float()
@@ -42,7 +43,7 @@ fn build_quasiquote_expr(
     } else if value.is_cons() {
         let list = value.list_to_vec()?;
         if list.is_empty() {
-            return Ok(Expr::Literal(Value::NIL));
+            return Ok(Expr::Literal(Value::EMPTY_LIST));
         }
 
         // Check for special forms

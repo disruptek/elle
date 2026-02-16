@@ -191,7 +191,7 @@ impl<'a> Analyzer<'a> {
             // List - could be special form or function call
             SyntaxKind::List(items) => {
                 if items.is_empty() {
-                    return Ok(Hir::pure(HirKind::Nil, span));
+                    return Ok(Hir::pure(HirKind::EmptyList, span));
                 }
 
                 // Check for special forms

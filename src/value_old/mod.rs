@@ -500,7 +500,7 @@ impl Value {
 
     #[inline(always)]
     pub fn is_truthy(&self) -> bool {
-        !matches!(self, Value::Bool(false))
+        !matches!(self, Value::Bool(false) | Value::Nil)
     }
 
     pub fn as_int(&self) -> LResult<i64> {
@@ -738,12 +738,22 @@ mod tests {
         assert_eq!(vec.len(), 3);
     }
 
+    // ============================================================================
+    // TRUTHINESS SEMANTICS - DO NOT CHANGE
+    // ============================================================================
+    // In Elle, only nil and #f are falsy. Everything else is truthy.
+    // This matches the new NaN-boxed Value type semantics.
+    // ============================================================================
     #[test]
     fn test_truthy() {
+        // Truthy values
         assert!(Value::Int(0).is_truthy());
         assert!(Value::Bool(true).is_truthy());
-        assert!(Value::Nil.is_truthy()); // Empty list is truthy (matching Janet/modern Lisps)
+        // Note: Value::Nil is FALSY in the new semantics
+
+        // Falsy values
         assert!(!Value::Bool(false).is_truthy());
+        assert!(!Value::Nil.is_truthy()); // ← nil is falsy
     }
 }
 

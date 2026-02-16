@@ -109,7 +109,17 @@ condition (1)
 | `closure.rs` | ~100 | MakeClosure |
 | `arithmetic.rs` | ~150 | Add, Sub, Mul, Div |
 | `comparison.rs` | ~100 | Eq, Lt, Gt, Le, Ge |
-| `types.rs` | ~50 | IsNil, IsPair, Not |
+| `types.rs` | ~50 | IsNil, IsEmptyList, IsPair, Not |
 | `data.rs` | ~100 | Cons, Car, Cdr, MakeVector |
 | `scope/` | ~200 | Runtime scope stack (legacy) |
+
+## Truthiness
+
+The VM evaluates truthiness via `Value::is_truthy()`:
+- `Value::NIL` → falsy
+- `Value::FALSE` → falsy  
+- Everything else (including `Value::EMPTY_LIST`, `Value::int(0)`) → truthy
+
+The `Instruction::Nil` pushes `Value::NIL` (falsy).
+The `Instruction::EmptyList` pushes `Value::EMPTY_LIST` (truthy).
 ```

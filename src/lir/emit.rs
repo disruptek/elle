@@ -636,6 +636,9 @@ impl Emitter {
             LirConst::Nil => {
                 self.bytecode.emit(Instruction::Nil);
             }
+            LirConst::EmptyList => {
+                self.bytecode.emit(Instruction::EmptyList);
+            }
             LirConst::Bool(true) => {
                 self.bytecode.emit(Instruction::True);
             }

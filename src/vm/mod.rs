@@ -698,6 +698,10 @@ impl VM {
                     types::handle_is_nil(self)?;
                 }
 
+                Instruction::IsEmptyList => {
+                    types::handle_is_empty_list(self)?;
+                }
+
                 Instruction::IsPair => {
                     types::handle_is_pair(self)?;
                 }
@@ -717,6 +721,10 @@ impl VM {
                 // Literals
                 Instruction::Nil => {
                     literals::handle_nil(self);
+                }
+
+                Instruction::EmptyList => {
+                    literals::handle_empty_list(self);
                 }
 
                 Instruction::True => {

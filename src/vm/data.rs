@@ -11,10 +11,14 @@ pub fn handle_cons(vm: &mut VM) -> Result<(), String> {
 pub fn handle_car(vm: &mut VM) -> Result<(), String> {
     let val = vm.stack.pop().ok_or("Stack underflow")?;
 
-    // Handle nil and empty list - car of nil/empty list is nil
-    if val.is_nil() || val.is_empty_list() {
-        vm.stack.push(Value::NIL);
-        return Ok(());
+    // car of nil is an error - enforces proper list invariant
+    if val.is_nil() {
+        return Err("car: cannot take car of nil (improper list terminator)".to_string());
+    }
+
+    // car of empty list is an error
+    if val.is_empty_list() {
+        return Err("car: cannot take car of empty list".to_string());
     }
 
     // Handle cons cells
@@ -22,17 +26,21 @@ pub fn handle_car(vm: &mut VM) -> Result<(), String> {
         vm.stack.push(cons.first);
         Ok(())
     } else {
-        Err("car: expected cons cell, nil, or empty list".to_string())
+        Err("car: expected cons cell".to_string())
     }
 }
 
 pub fn handle_cdr(vm: &mut VM) -> Result<(), String> {
     let val = vm.stack.pop().ok_or("Stack underflow")?;
 
-    // Handle nil and empty list - cdr of nil/empty list is nil
-    if val.is_nil() || val.is_empty_list() {
-        vm.stack.push(Value::NIL);
-        return Ok(());
+    // cdr of nil is an error - enforces proper list invariant
+    if val.is_nil() {
+        return Err("cdr: cannot take cdr of nil (improper list terminator)".to_string());
+    }
+
+    // cdr of empty list is an error
+    if val.is_empty_list() {
+        return Err("cdr: cannot take cdr of empty list".to_string());
     }
 
     // Handle cons cells
@@ -40,7 +48,7 @@ pub fn handle_cdr(vm: &mut VM) -> Result<(), String> {
         vm.stack.push(cons.rest);
         Ok(())
     } else {
-        Err("cdr: expected cons cell, nil, or empty list".to_string())
+        Err("cdr: expected cons cell".to_string())
     }
 }
 

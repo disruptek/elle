@@ -35,7 +35,9 @@ Value-based pipeline. Prefer the new pipeline; it's in `pipeline.rs`.
 
 ### The Value type
 
-`Value` is the runtime representation. It's an enum. Notable variants:
+`Value` is the runtime representation. It uses NaN-boxing for efficient
+representation. Create values via methods like `Value::int()`, `Value::cons()`,
+`Value::closure()` rather than enum variants. Notable types:
 - `Closure` - bytecode + captured environment + arity + effect
 - `JitClosure` - native code pointer + environment
 - `Cell` / `LocalCell` - mutable cells for captured variables
@@ -123,8 +125,11 @@ Things that look wrong but aren't:
   `LocalCell` (compiler-created for mutable captures, auto-unwrapped).
 - `VmAwareFn` exists because some primitives (like `coroutine-resume`) need
   to execute bytecode, so they need VM access.
-- The `Cons` type is separate from `Value::Cons` - the former is the data,
-  the latter wraps it in `Rc`.
+- The `Cons` type in `value/heap.rs` is the heap-allocated cons cell data.
+  `Value::cons(car, cdr)` creates a NaN-boxed pointer to a heap Cons.
+- `nil` and empty list `()` are distinct values with different truthiness:
+  - `Value::NIL` is falsy (represents absence)
+  - `Value::EMPTY_LIST` is truthy (it's a list, just empty)
 
 ## Conventions
 

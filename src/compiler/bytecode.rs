@@ -98,6 +98,7 @@ pub enum Instruction {
 
     /// Type checks
     IsNil,
+    IsEmptyList,
     IsPair,
     IsNumber,
     IsSymbol,
@@ -164,6 +165,9 @@ pub enum Instruction {
 
     /// Yield from coroutine (suspends execution)
     Yield,
+
+    /// Empty list constant
+    EmptyList,
 }
 
 /// Inline cache entry for function lookups

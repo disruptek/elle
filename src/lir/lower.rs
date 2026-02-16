@@ -159,6 +159,7 @@ impl Lowerer {
     fn lower_expr(&mut self, hir: &Hir) -> Result<Reg, String> {
         match &hir.kind {
             HirKind::Nil => self.emit_const(LirConst::Nil),
+            HirKind::EmptyList => self.emit_const(LirConst::EmptyList),
             HirKind::Bool(b) => self.emit_const(LirConst::Bool(*b)),
             HirKind::Int(n) => self.emit_const(LirConst::Int(*n)),
             HirKind::Float(f) => self.emit_const(LirConst::Float(*f)),

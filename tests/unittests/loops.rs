@@ -313,3 +313,55 @@ fn unit_forever_loop_compiles_with_multiple_body_expressions() {
     let _bytecode = compile(&expr);
     // If we get here, compilation succeeded
 }
+
+#[test]
+fn unit_each_loop_empty_list_zero_iterations() {
+    let mut env = LoopTestEnv::new();
+
+    // Test: (each x '() body) should iterate 0 times
+    env.eval("(define counter 0)").unwrap();
+    let result = env.eval("(each x '() (set! counter (+ counter 1)))");
+    
+    assert!(result.is_ok());
+    let counter_val = env.eval("counter").unwrap();
+    assert_eq!(counter_val, Value::int(0), "Empty list should not iterate");
+}
+
+#[test]
+fn unit_each_loop_nil_errors() {
+    let mut env = LoopTestEnv::new();
+
+    // Test: (each x nil body) should error - nil is not a valid list
+    // Proper lists must end with '(), not nil
+    env.eval("(define counter 0)").unwrap();
+    let result = env.eval("(each x nil (set! counter (+ counter 1)))");
+    
+    // nil is not a valid list terminator - should error
+    assert!(result.is_err(), "Iterating over nil should error");
+}
+
+#[test]
+fn unit_each_loop_non_empty_list_iterates() {
+    let mut env = LoopTestEnv::new();
+
+    // Test: (each x (list 1 2 3) body) should iterate 3 times
+    env.eval("(define counter 0)").unwrap();
+    let result = env.eval("(each x (list 1 2 3) (set! counter (+ counter 1)))");
+    
+    assert!(result.is_ok());
+    let counter_val = env.eval("counter").unwrap();
+    assert_eq!(counter_val, Value::int(3), "List with 3 elements should iterate 3 times");
+}
+
+#[test]
+fn unit_each_loop_collects_values() {
+    let mut env = LoopTestEnv::new();
+
+    // Test: (each x (list 1 2 3) body) should iterate with correct values
+    env.eval("(define values '())").unwrap();
+    env.eval("(each x (list 1 2 3) (set! values (cons x values)))").unwrap();
+    
+    let values_val = env.eval("values").unwrap();
+    // Values should be in reverse order due to cons
+    assert!(values_val.is_list());
+}

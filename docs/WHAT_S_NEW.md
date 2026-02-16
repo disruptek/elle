@@ -12,26 +12,31 @@ Elle now treats the empty list `()` as truthy, matching Janet and all modern Lis
 ; Empty list is truthy
 (if () "truthy" "falsy")  ⟹ "truthy"
 
-; Only #f is falsy
+; Only #f is falsy among booleans
 (if #f "truthy" "falsy")  ⟹ "falsy"
 
-; nil (which is the empty list) is truthy
-(if nil "truthy" "falsy") ⟹ "truthy"
+; nil is FALSY (represents absence/undefined)
+(if nil "truthy" "falsy") ⟹ "falsy"
 
-; Use nil? to check for empty list
-(if (nil? x) "empty" "not empty")
+; Use nil? to check for nil specifically
+(if (nil? x) "is nil" "not nil")
+
+; Use empty? to check for empty collections
+(if (empty? x) "is empty" "not empty")
 ```
 
 **Truthiness Table:**
-| Value | Truthy? |
-|-------|---------|
-| `#f` | ✗ No |
-| `()` / `nil` | ✓ Yes |
-| `0` | ✓ Yes |
-| `""` | ✓ Yes |
-| Any other value | ✓ Yes |
+| Value | Truthy? | Notes |
+|-------|---------|-------|
+| `#f` | ✗ No | Boolean false |
+| `nil` | ✗ No | Absence of value |
+| `()` | ✓ Yes | Empty list (distinct from nil) |
+| `0` | ✓ Yes | Zero is truthy |
+| `""` | ✓ Yes | Empty string is truthy |
+| `[]` | ✓ Yes | Empty vector is truthy |
+| All other values | ✓ Yes | Default |
 
-This simplifies Elle's semantics: **only `#f` is falsy**. This aligns with Janet's design and modern Lisp conventions.
+This follows modern Lisp conventions: **only `#f` and `nil` are falsy**. The empty list `()` is truthy because it IS a list (just an empty one), while `nil` represents the absence of a value. This aligns with Janet's design and modern Lisp conventions.
 
 ## Recent Additions
 
