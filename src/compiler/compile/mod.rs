@@ -1246,7 +1246,7 @@ impl Compiler {
         let mut pending_jumps: Vec<Vec<usize>> = Vec::new();
 
         // Compile all patterns
-        for (pattern, body_expr) in patterns {
+        for (pattern, body_expr) in patterns.iter() {
             // If we have pending jumps from the previous pattern, patch them now
             // They should jump to this position (start of this pattern check)
             if !pending_jumps.is_empty() {
