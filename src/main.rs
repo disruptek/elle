@@ -119,6 +119,17 @@ fn run_source(
 
     // Execute each compiled form
     for result in results {
+        // Debug: print bytecode if ELLE_DEBUG is set
+        if std::env::var("ELLE_DEBUG").is_ok() {
+            eprintln!(
+                "{}",
+                elle::compiler::format_bytecode_with_constants(
+                    &result.bytecode.instructions,
+                    &result.bytecode.constants
+                )
+            );
+        }
+
         match vm.execute(&result.bytecode) {
             Ok(_) => {
                 // Script mode is silent except for explicit output (display, etc.)

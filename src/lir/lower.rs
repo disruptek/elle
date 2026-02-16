@@ -995,6 +995,16 @@ impl Lowerer {
                 // Evaluate the value to match
                 let value_reg = self.lower_expr(value)?;
 
+                // Store the match value to a local slot so we can reload it for each arm.
+                // This is necessary because the stack-based emitter loses track of registers
+                // across control flow (jumps between match arms).
+                let match_value_slot = self.current_func.num_locals;
+                self.current_func.num_locals += 1;
+                self.emit(LirInstr::StoreLocal {
+                    slot: match_value_slot,
+                    src: value_reg,
+                });
+
                 // Allocate result register
                 let result_reg = self.fresh_reg();
 
@@ -1008,9 +1018,17 @@ impl Lowerer {
                     let next_arm_label_id = self.next_label;
                     self.next_label += 1;
 
+                    // Reload the match value from the local slot for each arm.
+                    // This ensures the value is available even after control flow jumps.
+                    let arm_value_reg = self.fresh_reg();
+                    self.emit(LirInstr::LoadLocal {
+                        dst: arm_value_reg,
+                        slot: match_value_slot,
+                    });
+
                     // Generate pattern matching code
                     // This will emit JumpIfFalseInline to next_arm_label_id if pattern doesn't match
-                    self.lower_pattern_match(pattern, value_reg, next_arm_label_id)?;
+                    self.lower_pattern_match(pattern, arm_value_reg, next_arm_label_id)?;
 
                     // If we reach here, pattern matched
                     // Check guard if present
@@ -1248,32 +1266,61 @@ impl Lowerer {
                 let mut current_reg = value_reg;
 
                 for pat in patterns.iter() {
-                    // Check if current is a pair
+                    // Duplicate current so we can check if it's a pair without losing it
+                    let current_dup = self.fresh_reg();
+                    self.emit(LirInstr::Dup {
+                        dst: current_dup,
+                        src: current_reg,
+                    });
+
+                    // Check if current is a pair (using the duplicate)
                     let is_pair_reg = self.fresh_reg();
                     self.emit(LirInstr::IsPair {
                         dst: is_pair_reg,
-                        src: current_reg,
+                        src: current_dup,
                     });
                     self.emit(LirInstr::JumpIfFalseInline {
                         cond: is_pair_reg,
                         label_id: fail_label_id,
                     });
 
+                    // Store current to a temporary slot so we can load it twice
+                    let temp_slot = self.current_func.num_locals;
+                    self.current_func.num_locals += 1;
+                    self.emit(LirInstr::StoreLocal {
+                        slot: temp_slot,
+                        src: current_reg,
+                    });
+
+                    // Load for car extraction
+                    let current_for_car = self.fresh_reg();
+                    self.emit(LirInstr::LoadLocal {
+                        dst: current_for_car,
+                        slot: temp_slot,
+                    });
+
                     // Extract head
                     let head_reg = self.fresh_reg();
                     self.emit(LirInstr::Car {
                         dst: head_reg,
-                        pair: current_reg,
+                        pair: current_for_car,
                     });
 
                     // Match head against pattern
                     self.lower_pattern_match(pat, head_reg, fail_label_id)?;
 
+                    // Load for cdr extraction
+                    let current_for_cdr = self.fresh_reg();
+                    self.emit(LirInstr::LoadLocal {
+                        dst: current_for_cdr,
+                        slot: temp_slot,
+                    });
+
                     // Extract tail for next iteration
                     let tail_reg = self.fresh_reg();
                     self.emit(LirInstr::Cdr {
                         dst: tail_reg,
-                        pair: current_reg,
+                        pair: current_for_cdr,
                     });
 
                     current_reg = tail_reg;
