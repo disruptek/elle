@@ -206,7 +206,6 @@ impl<'a> Analyzer<'a> {
                             return Ok(Hir::pure(HirKind::Quote(value), span));
                         }
                         "yield" => return self.analyze_yield(items, span),
-                        "try" => return self.analyze_try(items, span),
                         "throw" => return self.analyze_throw(items, span),
                         "match" => return self.analyze_match(items, span),
                         "cond" => return self.analyze_cond(items, span),
@@ -731,65 +730,6 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
-    fn analyze_try(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
-        // (try body (catch var handler)? (finally cleanup)?)
-        if items.len() < 2 {
-            return Err(format!("{}: try requires a body", span));
-        }
-
-        let body = self.analyze_expr(&items[1])?;
-        let mut effect = body.effect;
-        let mut catch = None;
-        let mut finally = None;
-
-        for item in &items[2..] {
-            let parts = item
-                .as_list()
-                .ok_or_else(|| format!("{}: try clause must be a list", span))?;
-            if parts.is_empty() {
-                continue;
-            }
-
-            match parts[0].as_symbol() {
-                Some("catch") => {
-                    if parts.len() != 3 {
-                        return Err(format!("{}: catch requires variable and handler", span));
-                    }
-                    let var_name = parts[1]
-                        .as_symbol()
-                        .ok_or_else(|| format!("{}: catch variable must be a symbol", span))?;
-
-                    self.push_scope(false);
-                    let var_id = self.bind(var_name, BindingKind::Local { index: 0 });
-                    let handler = self.analyze_expr(&parts[2])?;
-                    self.pop_scope();
-
-                    effect = effect.combine(handler.effect);
-                    catch = Some((var_id, Box::new(handler)));
-                }
-                Some("finally") => {
-                    if parts.len() != 2 {
-                        return Err(format!("{}: finally requires a body", span));
-                    }
-                    let cleanup = self.analyze_expr(&parts[1])?;
-                    effect = effect.combine(cleanup.effect);
-                    finally = Some(Box::new(cleanup));
-                }
-                _ => return Err(format!("{}: unknown try clause", span)),
-            }
-        }
-
-        Ok(Hir::new(
-            HirKind::Try {
-                body: Box::new(body),
-                catch,
-                finally,
-            },
-            span,
-            effect,
-        ))
-    }
-
     fn analyze_throw(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
         if items.len() != 2 {
             return Err(format!("{}: throw requires 1 argument", span));
@@ -959,18 +899,23 @@ impl<'a> Analyzer<'a> {
                 ));
             }
 
-            // For now, use a simple numeric condition type
+            // Map condition names to IDs per src/vm/core.rs
             let cond_type = match &parts[0].kind {
                 SyntaxKind::Int(n) => *n as u32,
                 SyntaxKind::Symbol(s) => {
-                    // Map known condition names to IDs
                     match s.as_str() {
-                        "error" => 0,
-                        "warning" => 1,
-                        _ => 0,
+                        "condition" => 1,
+                        "error" => 2,
+                        "type-error" => 3,
+                        "division-by-zero" => 4,
+                        "undefined-variable" => 5,
+                        "arity-error" => 6,
+                        "warning" => 7,
+                        "style-warning" => 8,
+                        _ => 2, // default to error
                     }
                 }
-                _ => 0,
+                _ => 2, // default to error
             };
 
             let var_name = parts[1]

@@ -926,7 +926,6 @@ impl Lowerer {
             }
 
             // Stubs for complex forms - full implementation later
-            HirKind::Try { body, .. } => self.lower_expr(body),
             HirKind::Match { value, .. } => {
                 // Simplified: just evaluate value, ignore patterns
                 self.lower_expr(value)

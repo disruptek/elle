@@ -135,12 +135,6 @@ pub enum HirKind {
     },
 
     // === Exception Handling ===
-    Try {
-        body: Box<Hir>,
-        catch: Option<(BindingId, Box<Hir>)>,
-        finally: Option<Box<Hir>>,
-    },
-
     Throw(Box<Hir>),
 
     HandlerCase {
