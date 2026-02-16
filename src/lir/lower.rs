@@ -92,9 +92,9 @@ impl Lowerer {
 
         self.next_reg = 0;
         self.next_label = 1;
-        // Start with 0 locals - they will be allocated as we encounter LocalDefine
-        // The num_locals from HIR is just a hint for the total count
-        self.current_func.num_locals = 0;
+        // Locals start after captures and parameters in the environment
+        // This ensures allocate_slot() gives slots that don't conflict with captures/params
+        self.current_func.num_locals = captures.len() as u16 + params.len() as u16;
         self.in_lambda = true;
         self.num_captures = captures.len() as u16;
 
@@ -178,13 +178,13 @@ impl Lowerer {
 
                     let dst = self.fresh_reg();
                     if self.in_lambda && is_upvalue {
-                        // In a lambda, captures and parameters are accessed via LoadCapture
+                        // In a lambda, captures, parameters, and locally-defined variables are accessed via LoadCapture
                         // Note: LoadCapture (which emits LoadUpvalue) auto-unwraps LocalCell,
                         // so we don't need to emit LoadCell for captured variables
                         self.emit(LirInstr::LoadCapture { dst, index: slot });
                         Ok(dst)
                     } else {
-                        // Local variables (including those defined inside lambda) use LoadLocal
+                        // Outside lambdas, local variables use LoadLocal
                         self.emit(LirInstr::LoadLocal { dst, slot });
 
                         if needs_cell {
@@ -632,6 +632,11 @@ impl Lowerer {
                     self.allocate_slot(*binding)
                 };
 
+                // Inside lambdas, local variables are part of the closure environment
+                if self.in_lambda {
+                    self.upvalue_bindings.insert(*binding);
+                }
+
                 // Check if this binding needs to be wrapped in a cell
                 let needs_cell = self
                     .bindings
@@ -642,23 +647,32 @@ impl Lowerer {
                 // Now lower the value (which can reference the binding)
                 let value_reg = self.lower_expr(value)?;
 
-                if needs_cell {
-                    // The cell was already created in the Begin pre-pass
-                    // Load it and update it with the value
-                    let cell_reg = self.fresh_reg();
-                    self.emit(LirInstr::LoadLocal {
-                        dst: cell_reg,
-                        slot,
-                    });
-                    self.emit(LirInstr::StoreCell {
-                        cell: cell_reg,
-                        value: value_reg,
-                    });
-                } else {
-                    self.emit(LirInstr::StoreLocal {
-                        slot,
+                if self.in_lambda {
+                    // Inside a lambda, use closure environment via StoreCapture
+                    // StoreCapture handles cells automatically
+                    self.emit(LirInstr::StoreCapture {
+                        index: slot,
                         src: value_reg,
                     });
+                } else {
+                    // Outside lambdas (at top level), use stack-based locals
+                    if needs_cell {
+                        // The cell was already created in the Begin pre-pass
+                        let cell_reg = self.fresh_reg();
+                        self.emit(LirInstr::LoadLocal {
+                            dst: cell_reg,
+                            slot,
+                        });
+                        self.emit(LirInstr::StoreCell {
+                            cell: cell_reg,
+                            value: value_reg,
+                        });
+                    } else {
+                        self.emit(LirInstr::StoreLocal {
+                            slot,
+                            src: value_reg,
+                        });
+                    }
                 }
                 Ok(value_reg)
             }

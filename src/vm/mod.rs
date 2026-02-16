@@ -312,6 +312,15 @@ impl VM {
 
                                 let new_env_rc = std::rc::Rc::new(new_env);
 
+                                // Push call frame for stack tracing and local variable access
+                                // The frame_base is the current stack top - locals will be allocated above this
+                                let frame_base = self.stack.len();
+                                self.push_call_frame_with_base(
+                                    "<closure>".to_string(),
+                                    ip,
+                                    frame_base,
+                                );
+
                                 // If we're in a coroutine context, use coroutine-aware execution
                                 // that can handle yields from called functions
                                 if self.in_coroutine() {
@@ -321,6 +330,7 @@ impl VM {
                                         Some(&new_env_rc),
                                     )?;
 
+                                    self.pop_call_frame();
                                     self.call_depth -= 1;
 
                                     // If the called function yielded, propagate it up
@@ -340,6 +350,7 @@ impl VM {
                                         Some(&new_env_rc),
                                     )?;
 
+                                    self.pop_call_frame();
                                     self.call_depth -= 1;
                                     self.stack.push(result);
                                 }
@@ -409,6 +420,14 @@ impl VM {
 
                                 let new_env_rc = std::rc::Rc::new(new_env);
 
+                                // Push call frame for stack tracing and local variable access
+                                let frame_base = self.stack.len();
+                                self.push_call_frame_with_base(
+                                    "<jit-closure>".to_string(),
+                                    ip,
+                                    frame_base,
+                                );
+
                                 // If we're in a coroutine context, use coroutine-aware execution
                                 if self.in_coroutine() {
                                     let result = self.execute_bytecode_coroutine(
@@ -417,6 +436,7 @@ impl VM {
                                         Some(&new_env_rc),
                                     )?;
 
+                                    self.pop_call_frame();
                                     self.call_depth -= 1;
 
                                     // If the called function yielded, propagate it up
@@ -436,6 +456,7 @@ impl VM {
                                         Some(&new_env_rc),
                                     )?;
 
+                                    self.pop_call_frame();
                                     self.call_depth -= 1;
                                     self.stack.push(result);
                                 }
