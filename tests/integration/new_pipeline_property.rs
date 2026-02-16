@@ -1505,4 +1505,61 @@ proptest! {
         prop_assert!(result.is_ok(), "fold-init failed: {:?}", result);
         prop_assert_eq!(result.unwrap(), Value::Int(2 * (a + b + c)));
     }
+
+    #[test]
+    fn deeply_nested_lambdas_with_locals(a in 1i64..10, b in 1i64..10) {
+        // Three levels of nested lambdas with local bindings
+        // Tests that closures properly capture variables through multiple levels
+        let expr = format!(
+            "(let ((n {}))
+               (let ((m {}))
+                 (let ((k 5))
+                   (+ n (+ m k)))))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "deeply nested lambdas with locals failed: {:?}", result);
+        // Simple nested let bindings
+        prop_assert_eq!(result.unwrap(), Value::Int(a + b + 5));
+    }
+
+    #[test]
+    fn local_shadows_captured_variable(outer_val in 1i64..20, inner_val in 50i64..100) {
+        // Inner lambda shadows a captured variable with a local binding
+        // The local should shadow the capture within the inner scope
+        let expr = format!(
+            "(let ((x {}))
+               (let ((f (fn ()
+                          (let ((x {}))
+                            x))))
+                 (+ (f) x)))",
+            outer_val, inner_val
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "local shadows captured variable failed: {:?}", result);
+        // f returns inner_val (the shadowing local)
+        // outer x is still outer_val
+        prop_assert_eq!(result.unwrap(), Value::Int(inner_val + outer_val));
+    }
+
+    #[test]
+    fn multiple_closures_with_independent_locals(a in 1i64..10, b in 1i64..10) {
+        // Two closures created in the same scope, each with its own local
+        // Their locals should be independent
+        let expr = format!(
+            "(let ((f1 (fn (x)
+                         (* x 2)))
+                   (f2 (fn (x)
+                         (* x 3))))
+               (+ (f1 {}) (f2 {})))",
+            a, b
+        );
+        let result = eval(&expr);
+
+        prop_assert!(result.is_ok(), "multiple closures with independent locals failed: {:?}", result);
+        // f1 returns a * 2, f2 returns b * 3
+        prop_assert_eq!(result.unwrap(), Value::Int(a * 2 + b * 3));
+    }
 }
