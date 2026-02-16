@@ -24,6 +24,18 @@ fn format_value(value: &Value) -> String {
             // Fallback if symbol table is not available
             format!("Symbol({})", id.0)
         }
+        Value::Keyword(id) => {
+            // Try to get the keyword name from the thread-local symbol table
+            unsafe {
+                if let Some(symbols_ptr) = crate::ffi::primitives::context::get_symbol_table() {
+                    if let Some(name) = (*symbols_ptr).name(*id) {
+                        return format!(":{}", name);
+                    }
+                }
+            }
+            // Fallback if symbol table is not available
+            format!(":keyword-{}", id.0)
+        }
         Value::Cons(cons) => {
             // Format lists with proper symbol resolution
             let mut result = String::from("(");

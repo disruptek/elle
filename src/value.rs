@@ -537,8 +537,30 @@ impl fmt::Debug for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Int(n) => write!(f, "{}", n),
             Value::Float(fl) => write!(f, "{}", fl),
-            Value::Symbol(id) => write!(f, "Symbol({})", id.0),
-            Value::Keyword(id) => write!(f, ":{}", id.0),
+            Value::Symbol(id) => {
+                // Try to get the symbol name from the thread-local symbol table
+                unsafe {
+                    if let Some(symbols_ptr) = crate::ffi::primitives::context::get_symbol_table() {
+                        if let Some(name) = (*symbols_ptr).name(*id) {
+                            return write!(f, "{}", name);
+                        }
+                    }
+                }
+                // Fallback if symbol table is not available
+                write!(f, "Symbol({})", id.0)
+            }
+            Value::Keyword(id) => {
+                // Try to get the keyword name from the thread-local symbol table
+                unsafe {
+                    if let Some(symbols_ptr) = crate::ffi::primitives::context::get_symbol_table() {
+                        if let Some(name) = (*symbols_ptr).name(*id) {
+                            return write!(f, ":{}", name);
+                        }
+                    }
+                }
+                // Fallback if symbol table is not available
+                write!(f, ":keyword-{}", id.0)
+            }
             Value::String(s) => write!(f, "\"{}\"", s),
             Value::Cons(cons) => {
                 write!(f, "(")?;

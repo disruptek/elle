@@ -256,4 +256,5 @@ pub enum LirConst {
     Float(f64),
     String(String),
     Symbol(SymbolId),
+    Keyword(SymbolId),
 }

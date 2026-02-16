@@ -654,6 +654,11 @@ impl Emitter {
                 self.bytecode.emit(Instruction::LoadConst);
                 self.bytecode.emit_u16(idx);
             }
+            LirConst::Keyword(sym) => {
+                let idx = self.bytecode.add_constant(Value::Keyword(*sym));
+                self.bytecode.emit(Instruction::LoadConst);
+                self.bytecode.emit_u16(idx);
+            }
         }
     }
 

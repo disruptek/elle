@@ -111,10 +111,59 @@ impl Lowerer {
         }
 
         // Bind parameters to upvalue indices
+        // For parameters that need cells, we'll allocate local slots instead
         for (i, param) in params.iter().enumerate() {
             let upvalue_idx = self.num_captures + i as u16;
-            self.binding_to_slot.insert(*param, upvalue_idx);
-            self.upvalue_bindings.insert(*param);
+
+            let needs_cell = self
+                .bindings
+                .get(param)
+                .map(|info| info.needs_cell())
+                .unwrap_or(false);
+
+            if needs_cell {
+                // For parameters that need cells, allocate a local slot
+                // and we'll initialize it below
+                let _local_slot = self.allocate_slot(*param);
+                // Don't add to upvalue_bindings - this is now a local
+            } else {
+                // For parameters that don't need cells, use upvalue indices
+                self.binding_to_slot.insert(*param, upvalue_idx);
+                self.upvalue_bindings.insert(*param);
+            }
+        }
+
+        // Box parameters that are captured and mutated
+        for (i, param) in params.iter().enumerate() {
+            let needs_cell = self
+                .bindings
+                .get(param)
+                .map(|info| info.needs_cell())
+                .unwrap_or(false);
+
+            if needs_cell {
+                // Load the parameter value from the upvalue slot
+                let upvalue_idx = self.num_captures + i as u16;
+                let param_reg = self.fresh_reg();
+                self.emit(LirInstr::LoadCapture {
+                    dst: param_reg,
+                    index: upvalue_idx,
+                });
+
+                // Wrap it in a cell
+                let cell_reg = self.fresh_reg();
+                self.emit(LirInstr::MakeCell {
+                    dst: cell_reg,
+                    value: param_reg,
+                });
+
+                // Store the cell to the local slot
+                let local_slot = self.binding_to_slot[param];
+                self.emit(LirInstr::StoreLocal {
+                    slot: local_slot,
+                    src: cell_reg,
+                });
+            }
         }
 
         // Lower body
@@ -146,7 +195,7 @@ impl Lowerer {
             HirKind::Int(n) => self.emit_const(LirConst::Int(*n)),
             HirKind::Float(f) => self.emit_const(LirConst::Float(*f)),
             HirKind::String(s) => self.emit_const(LirConst::String(s.clone())),
-            HirKind::Keyword(sym) => self.emit_const(LirConst::Symbol(*sym)),
+            HirKind::Keyword(sym) => self.emit_const(LirConst::Keyword(*sym)),
 
             HirKind::Var(binding_id) => {
                 if let Some(&slot) = self.binding_to_slot.get(binding_id) {
@@ -377,6 +426,9 @@ impl Lowerer {
                 // Lower condition
                 let cond_reg = self.lower_expr(cond)?;
 
+                // Allocate a result register for the if expression
+                let result_reg = self.fresh_reg();
+
                 // Allocate label IDs for inline jumps
                 let else_label_id = self.next_label;
                 self.next_label += 1;
@@ -391,6 +443,11 @@ impl Lowerer {
 
                 // Lower then branch
                 let then_reg = self.lower_expr(then_branch)?;
+                // Move then result to result register
+                self.emit(LirInstr::Move {
+                    dst: result_reg,
+                    src: then_reg,
+                });
 
                 // Emit unconditional jump to end
                 self.emit(LirInstr::JumpInline {
@@ -403,16 +460,20 @@ impl Lowerer {
                 });
 
                 // Lower else branch
-                let _else_reg = self.lower_expr(else_branch)?;
+                let else_reg = self.lower_expr(else_branch)?;
+                // Move else result to result register
+                self.emit(LirInstr::Move {
+                    dst: result_reg,
+                    src: else_reg,
+                });
 
                 // Emit end label marker
                 self.emit(LirInstr::LabelMarker {
                     label_id: end_label_id,
                 });
 
-                // Both branches should produce the same result register
-                // For now, use then_reg as the result (emitter will handle this)
-                Ok(then_reg)
+                // Return the result register
+                Ok(result_reg)
             }
 
             HirKind::Begin(exprs) => {

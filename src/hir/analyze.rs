@@ -149,7 +149,7 @@ impl<'a> Analyzer<'a> {
                 }
             }
 
-            // Vector literal
+            // Vector literal - call vector primitive
             SyntaxKind::Vector(items) => {
                 let mut args = Vec::new();
                 let mut effect = Effect::Pure;
@@ -158,8 +158,20 @@ impl<'a> Analyzer<'a> {
                     effect = effect.combine(hir.effect);
                     args.push(hir);
                 }
-                // For now, treat vector literals as Begin of elements
-                Ok(Hir::new(HirKind::Begin(args), span, effect))
+                // Look up the 'vector' primitive and call it with the elements
+                let sym = self.symbols.intern("vector");
+                let id = self.ctx.fresh_binding();
+                self.ctx.register_binding(BindingInfo::global(id, sym));
+                let func = Hir::new(HirKind::Var(id), span.clone(), Effect::Pure);
+                Ok(Hir::new(
+                    HirKind::Call {
+                        func: Box::new(func),
+                        args,
+                        is_tail: false,
+                    },
+                    span,
+                    effect,
+                ))
             }
 
             // Quote - convert to Value at analysis time
@@ -412,7 +424,19 @@ impl<'a> Analyzer<'a> {
         }
 
         // Analyze body
-        let body = self.analyze_body(&items[2..], span.clone())?;
+        // Skip docstring if present (string literal as first body expression)
+        let body_items = &items[2..];
+        let body_start = if body_items.len() > 1 {
+            // Check if first item is a string literal (docstring)
+            if matches!(&body_items[0].kind, crate::syntax::SyntaxKind::String(_)) {
+                &body_items[1..] // Skip docstring
+            } else {
+                body_items
+            }
+        } else {
+            body_items
+        };
+        let body = self.analyze_body(body_start, span.clone())?;
         let num_locals = self.current_local_count();
 
         self.pop_scope();
