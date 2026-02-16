@@ -89,6 +89,7 @@ mod tests {
     use super::*;
     use crate::primitives::register_primitives;
     use crate::vm::VM;
+    use std::rc::Rc;
 
     fn setup() -> (SymbolTable, VM) {
         let mut symbols = SymbolTable::new();
@@ -652,5 +653,48 @@ mod tests {
             &mut vm,
         );
         assert_eq!(result.unwrap(), crate::value::Value::Int(2));
+    }
+
+    #[test]
+    fn test_fold_multiple_elements() {
+        let (mut symbols, mut vm) = setup();
+
+        // Test with (list 1) - should work
+        let code1 = r#"(begin
+            (define process (fn (acc x) (begin (define doubled (* x 2)) (+ acc doubled))))
+            (define my-fold (fn (f init lst)
+                (if (nil? lst)
+                    init
+                    (my-fold f (f init (first lst)) (rest lst)))))
+            (my-fold process 0 (list 1)))"#;
+
+        let result1 = eval_new(code1, &mut symbols, &mut vm);
+        println!("list 1: {:?}", result1);
+
+        // Test with (list 1 2) - might fail
+        let (mut symbols2, mut vm2) = setup();
+        let code2 = r#"(begin
+            (define process (fn (acc x) (begin (define doubled (* x 2)) (+ acc doubled))))
+            (define my-fold (fn (f init lst)
+                (if (nil? lst)
+                    init
+                    (my-fold f (f init (first lst)) (rest lst)))))
+            (my-fold process 0 (list 1 2)))"#;
+
+        let result2 = eval_new(code2, &mut symbols2, &mut vm2);
+        println!("list 1 2: {:?}", result2);
+
+        // Test with (list 1 2 3) - original failing case
+        let (mut symbols3, mut vm3) = setup();
+        let code3 = r#"(begin
+            (define process (fn (acc x) (begin (define doubled (* x 2)) (+ acc doubled))))
+            (define my-fold (fn (f init lst)
+                (if (nil? lst)
+                    init
+                    (my-fold f (f init (first lst)) (rest lst)))))
+            (my-fold process 0 (list 1 2 3)))"#;
+
+        let result3 = eval_new(code3, &mut symbols3, &mut vm3);
+        println!("list 1 2 3: {:?}", result3);
     }
 }

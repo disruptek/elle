@@ -538,3 +538,51 @@ fn test_and_short_circuit() {
 fn test_or_short_circuit() {
     assert!(compiles("(or #f #t #f)"));
 }
+
+#[test]
+fn test_trace_vm_execution() {
+    // Enable some form of debug if available
+    std::env::set_var("ELLE_DEBUG", "1");
+
+    let code = r#"(begin
+        (define process (fn (acc x) (begin (define doubled (* x 2)) (+ acc doubled))))
+        (define my-fold (fn (f init lst)
+            (if (nil? lst)
+                init
+                (my-fold f (f init (first lst)) (rest lst)))))
+        (my-fold process 0 (list 1)))"#; // Only one element for simpler trace
+
+    let result = eval(code);
+    println!("Result: {:?}", result);
+
+    // Also try with the non-begin version to compare
+    let mut vm = VM::new();
+    let mut symbols = SymbolTable::new();
+    register_primitives(&mut vm, &mut symbols);
+
+    // Define process
+    let code2a =
+        r#"(define process (fn (acc x) (begin (define doubled (* x 2)) (+ acc doubled))))"#;
+    let results = elle::compile_all_new(code2a, &mut symbols).expect("compile failed");
+    for r in &results {
+        vm.execute(&r.bytecode).expect("exec failed");
+    }
+
+    // Define my-fold
+    let code2b = r#"(define my-fold (fn (f init lst)
+            (if (nil? lst)
+                init
+                (my-fold f (f init (first lst)) (rest lst)))))"#;
+    let results = elle::compile_all_new(code2b, &mut symbols).expect("compile failed");
+    for r in &results {
+        vm.execute(&r.bytecode).expect("exec failed");
+    }
+
+    // Call it
+    let code2c = r#"(my-fold process 0 (list 1))"#;
+    let results = elle::compile_all_new(code2c, &mut symbols).expect("compile failed");
+    for r in &results {
+        let res = vm.execute(&r.bytecode);
+        println!("Multi-form result: {:?}", res);
+    }
+}
