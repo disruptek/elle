@@ -323,8 +323,13 @@ impl Lowerer {
 
                     let reg = self.fresh_reg();
 
-                    // Check if this capture is mutable (needs to be captured as a cell)
-                    let is_mutable_capture = cap.is_mutated;
+                    // Check if this binding needs a cell (captured locals, mutated params)
+                    // We need to preserve the cell when capturing so mutations are shared
+                    let binding_needs_cell = self
+                        .bindings
+                        .get(&cap.binding)
+                        .map(|info| info.needs_cell())
+                        .unwrap_or(false);
 
                     match cap.kind {
                         CaptureKind::Local { index: _ } => {
@@ -335,8 +340,8 @@ impl Lowerer {
                                 let is_upvalue = self.upvalue_bindings.contains(&cap.binding);
                                 if self.in_lambda && is_upvalue {
                                     // In a lambda, captures and params are accessed via LoadCapture
-                                    // Use LoadCaptureRaw for mutable captures to preserve the cell
-                                    if is_mutable_capture {
+                                    // Use LoadCaptureRaw for bindings that need cells to preserve the cell
+                                    if binding_needs_cell {
                                         self.emit(LirInstr::LoadCaptureRaw {
                                             dst: reg,
                                             index: slot,
@@ -365,8 +370,8 @@ impl Lowerer {
                             // The index refers to the parent's capture array
                             if self.in_lambda {
                                 // We're in a nested lambda - load from parent's captures
-                                // Use LoadCaptureRaw for mutable captures to preserve the cell
-                                if is_mutable_capture {
+                                // Use LoadCaptureRaw for bindings that need cells to preserve the cell
+                                if binding_needs_cell {
                                     self.emit(LirInstr::LoadCaptureRaw { dst: reg, index });
                                 } else {
                                     self.emit(LirInstr::LoadCapture { dst: reg, index });

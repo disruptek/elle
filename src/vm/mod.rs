@@ -332,6 +332,8 @@ impl VM {
 
                                     self.pop_call_frame();
                                     self.call_depth -= 1;
+                                    // Clean up any garbage left on the stack by the called closure
+                                    self.stack.truncate(frame_base);
 
                                     // If the called function yielded, propagate it up
                                     match result {
@@ -352,6 +354,9 @@ impl VM {
 
                                     self.pop_call_frame();
                                     self.call_depth -= 1;
+                                    // Clean up any garbage left on the stack by the called closure
+                                    // The closure may have left temporary values; we only want the result
+                                    self.stack.truncate(frame_base);
                                     self.stack.push(result);
                                 }
                             }

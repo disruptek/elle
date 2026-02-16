@@ -1508,30 +1508,39 @@ proptest! {
 
     #[test]
     fn deeply_nested_lambdas_with_locals(a in 1i64..10, b in 1i64..10) {
-        // Three levels of nested lambdas with local bindings
-        // Tests that closures properly capture variables through multiple levels
+        // Three levels of nested lambdas, each with its own local define
         let expr = format!(
-            "(let ((n {}))
-               (let ((m {}))
-                 (let ((k 5))
-                   (+ n (+ m k)))))",
+            "(let ((outer (fn (x)
+                            (begin
+                              (define outer-local (* x 2))
+                              (fn (y)
+                                (begin
+                                  (define middle-local (+ y outer-local))
+                                  (fn (z)
+                                    (begin
+                                      (define inner-local (* z middle-local))
+                                      inner-local))))))))
+               (((outer {}) {}) 3))",
             a, b
         );
         let result = eval(&expr);
 
         prop_assert!(result.is_ok(), "deeply nested lambdas with locals failed: {:?}", result);
-        // Simple nested let bindings
-        prop_assert_eq!(result.unwrap(), Value::Int(a + b + 5));
+        // outer-local = a * 2
+        // middle-local = b + (a * 2)
+        // inner-local = 3 * (b + a * 2)
+        prop_assert_eq!(result.unwrap(), Value::Int(3 * (b + a * 2)));
     }
 
     #[test]
     fn local_shadows_captured_variable(outer_val in 1i64..20, inner_val in 50i64..100) {
-        // Inner lambda shadows a captured variable with a local binding
+        // Inner lambda defines a local with same name as captured variable
         // The local should shadow the capture within the inner scope
         let expr = format!(
             "(let ((x {}))
                (let ((f (fn ()
-                          (let ((x {}))
+                          (begin
+                            (define x {})
                             x))))
                  (+ (f) x)))",
             outer_val, inner_val
@@ -1546,14 +1555,22 @@ proptest! {
 
     #[test]
     fn multiple_closures_with_independent_locals(a in 1i64..10, b in 1i64..10) {
-        // Two closures created in the same scope, each with its own local
+        // Two closures created in the same scope, each with its own local define
         // Their locals should be independent
         let expr = format!(
-            "(let ((f1 (fn (x)
-                         (* x 2)))
-                   (f2 (fn (x)
-                         (* x 3))))
-               (+ (f1 {}) (f2 {})))",
+            "(let ((make-f1 (fn ()
+                              (fn (x)
+                                (begin
+                                  (define local (* x 2))
+                                  local))))
+                   (make-f2 (fn ()
+                              (fn (x)
+                                (begin
+                                  (define local (* x 3))
+                                  local)))))
+               (let ((f1 (make-f1))
+                     (f2 (make-f2)))
+                 (+ (f1 {}) (f2 {}))))",
             a, b
         );
         let result = eval(&expr);
