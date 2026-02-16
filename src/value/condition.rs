@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_generic_exception_with_data() {
         let data = Value::int(42);
-        let exc = Condition::generic_with_data("error with data", data.clone());
+        let exc = Condition::generic_with_data("error with data", data);
         assert_eq!(exc.exception_id, Condition::GENERIC_EXCEPTION_ID);
         assert!(exc.is_generic());
         assert_eq!(exc.message(), Some("error with data"));
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn test_data_extraction() {
         let data = Value::int(99);
-        let exc = Condition::generic_with_data("msg", data.clone());
+        let exc = Condition::generic_with_data("msg", data);
         assert_eq!(exc.data(), Some(&data));
 
         let exc_no_data = Condition::generic("msg");

@@ -160,7 +160,7 @@ pub fn coroutine_value(coroutine: &Value) -> Result<Value, String> {
 mod tests {
     use super::*;
     use crate::compiler::effects::Effect;
-    use crate::value::heap::{alloc, deref, HeapObject};
+    use crate::value::heap::{deref, HeapObject};
     use crate::value::{Arity, Closure};
     use std::rc::Rc;
 

@@ -1,6 +1,5 @@
 // DEFENSE: Value type is the foundation - must be rock solid
 use elle::value::{cons, list, Arity, Value};
-use std::rc::Rc;
 
 #[test]
 fn test_value_equality() {

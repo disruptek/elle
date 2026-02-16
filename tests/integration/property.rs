@@ -205,7 +205,7 @@ proptest! {
 
         // Store list in global
         let id = symbols.intern("test-list");
-        vm.set_global(id.0, l.clone());
+        vm.set_global(id.0, l);
 
         // Get first
         let first_expr = read_str("(first test-list)", &mut symbols).unwrap();
@@ -351,7 +351,7 @@ proptest! {
     #[test]
     fn test_value_clone_preserves_equality_int(n in -1000i64..1000) {
         let v = Value::int(n);
-        let cloned = v.clone();
+        let cloned = v;
         prop_assert_eq!(v, cloned);
     }
 
@@ -359,7 +359,7 @@ proptest! {
     fn test_value_clone_preserves_equality_list(values in prop::collection::vec(-100i64..100, 0..10)) {
         let list_values: Vec<Value> = values.iter().map(|&v| Value::int(v)).collect();
         let l = list(list_values);
-        let cloned = l.clone();
+        let cloned = l;
         prop_assert_eq!(l, cloned);
     }
 }

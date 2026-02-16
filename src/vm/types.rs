@@ -3,7 +3,8 @@ use crate::value::Value;
 
 pub fn handle_is_nil(vm: &mut VM) -> Result<(), String> {
     let val = vm.stack.pop().ok_or("Stack underflow")?;
-    vm.stack.push(Value::bool(val.is_nil()));
+    vm.stack
+        .push(Value::bool(val.is_nil() || val.is_empty_list()));
     Ok(())
 }
 

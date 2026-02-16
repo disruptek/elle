@@ -174,7 +174,7 @@ mod tests {
         let sym_id = 42;
         let value = Value::int(123);
 
-        stack.define_local(sym_id, value.clone());
+        stack.define_local(sym_id, value);
         assert_eq!(stack.get(sym_id), Some(value));
     }
 
@@ -187,13 +187,13 @@ mod tests {
         let y_val = Value::int(20);
 
         // Define x in global
-        stack.define_local(x_id, x_val.clone());
+        stack.define_local(x_id, x_val);
 
         // Push a function scope
         stack.push(ScopeType::Function);
 
         // Define y locally
-        stack.define_local(y_id, y_val.clone());
+        stack.define_local(y_id, y_val);
 
         // Should find both
         assert_eq!(stack.get(x_id), Some(x_val));
@@ -218,8 +218,8 @@ mod tests {
         stack.push(ScopeType::Function);
 
         // Set should find x in parent and update it
-        assert!(stack.set(x_id, x_val2.clone()));
-        assert_eq!(stack.get(x_id), Some(x_val2.clone()));
+        assert!(stack.set(x_id, x_val2));
+        assert_eq!(stack.get(x_id), Some(x_val2));
 
         // Go back to global - should see the update
         stack.pop();
@@ -240,7 +240,7 @@ mod tests {
         stack.push(ScopeType::Block);
 
         // Set at depth 1 (parent scope/global)
-        assert!(stack.set_at_depth(1, sym_id, val2.clone()));
+        assert!(stack.set_at_depth(1, sym_id, val2));
 
         // Verify it changed in global
         stack.pop();
@@ -275,25 +275,25 @@ mod tests {
         let c_val = Value::int(30);
 
         // Global scope: define a
-        stack.define_local(a_id, a_val.clone());
+        stack.define_local(a_id, a_val);
 
         // Function scope: define b
         stack.push(ScopeType::Function);
-        stack.define_local(b_id, b_val.clone());
+        stack.define_local(b_id, b_val);
 
         // Block scope: define c
         stack.push(ScopeType::Block);
-        stack.define_local(c_id, c_val.clone());
+        stack.define_local(c_id, c_val);
 
         // Can see all three
-        assert_eq!(stack.get(a_id), Some(a_val.clone()));
-        assert_eq!(stack.get(b_id), Some(b_val.clone()));
-        assert_eq!(stack.get(c_id), Some(c_val.clone()));
+        assert_eq!(stack.get(a_id), Some(a_val));
+        assert_eq!(stack.get(b_id), Some(b_val));
+        assert_eq!(stack.get(c_id), Some(c_val));
 
         // Pop block
         assert!(stack.pop());
-        assert_eq!(stack.get(a_id), Some(a_val.clone()));
-        assert_eq!(stack.get(b_id), Some(b_val.clone()));
+        assert_eq!(stack.get(a_id), Some(a_val));
+        assert_eq!(stack.get(b_id), Some(b_val));
         assert_eq!(stack.get(c_id), None); // c no longer visible
 
         // Pop function

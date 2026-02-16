@@ -8,7 +8,7 @@ use elle::binding::VarRef;
 use elle::compiler::ast::Expr;
 use elle::compiler::converters::value_to_expr;
 use elle::compiler::scope::ScopeType;
-use elle::{read_str, SymbolTable, Value};
+use elle::{read_str, SymbolTable};
 
 /// Test basic scope structure creation
 #[test]

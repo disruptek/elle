@@ -910,7 +910,14 @@ mod tests {
 
     #[test]
     fn test_float_roundtrip() {
-        for &f in &[0.0f64, 1.0, -1.0, 3.14159, f64::INFINITY, f64::NEG_INFINITY] {
+        for &f in &[
+            0.0f64,
+            1.0,
+            -1.0,
+            std::f64::consts::PI,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        ] {
             let v = Value::float(f);
             assert!(v.is_float());
             assert!(!v.is_int());
@@ -1033,7 +1040,7 @@ mod tests {
         assert_eq!(Value::NIL.type_name(), "nil");
         assert_eq!(Value::TRUE.type_name(), "boolean");
         assert_eq!(Value::int(42).type_name(), "integer");
-        assert_eq!(Value::float(3.14).type_name(), "float");
+        assert_eq!(Value::float(std::f64::consts::PI).type_name(), "float");
         assert_eq!(Value::symbol(1).type_name(), "symbol");
         assert_eq!(Value::keyword(1).type_name(), "keyword");
         assert_eq!(Value::string("test").type_name(), "string");
@@ -1071,7 +1078,10 @@ mod tests {
         // Regular values are truthy
         assert!(Value::int(1).is_truthy(), "1 is truthy");
         assert!(Value::int(-1).is_truthy(), "-1 is truthy");
-        assert!(Value::float(3.14).is_truthy(), "3.14 is truthy");
+        assert!(
+            Value::float(std::f64::consts::PI).is_truthy(),
+            "PI is truthy"
+        );
         assert!(
             Value::string("hello").is_truthy(),
             "non-empty string is truthy"

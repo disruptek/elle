@@ -1214,7 +1214,6 @@ impl Lowerer {
                 });
 
                 Ok(())
-
             }
             HirPattern::Literal(lit) => {
                 // Check if value equals literal

@@ -70,7 +70,6 @@ pub fn prim_is_keyword(args: &[Value]) -> LResult<Value> {
 }
 
 /// Check if value is a keyword
-
 /// Get the type name of a value as a keyword
 pub fn prim_type_of(args: &[Value]) -> LResult<Value> {
     if args.len() != 1 {

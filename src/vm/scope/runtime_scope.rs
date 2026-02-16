@@ -63,7 +63,7 @@ mod tests {
         let sym_id = 42;
         let value = Value::int(123);
 
-        scope.define(sym_id, value.clone());
+        scope.define(sym_id, value);
         assert_eq!(scope.get(sym_id), Some(&value));
         assert!(scope.contains(sym_id));
     }

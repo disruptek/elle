@@ -2,7 +2,6 @@
 // Tests the full pipeline from parsing through execution with closures and lambdas
 use elle::compiler::converters::value_to_expr;
 use elle::{compile, init_stdlib, read_str, register_primitives, SymbolTable, Value, VM};
-use std::rc::Rc;
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();

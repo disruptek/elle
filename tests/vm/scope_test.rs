@@ -45,7 +45,7 @@ fn test_define_and_lookup_in_current_scope() {
     let sym_id = 42u32;
     let value = Value::int(123);
 
-    scope_stack.define_local(sym_id, value.clone());
+    scope_stack.define_local(sym_id, value);
     assert_eq!(scope_stack.get(sym_id), Some(value));
 }
 
@@ -175,13 +175,13 @@ fn test_runtime_scope_basic_operations() {
     let value = Value::int(123);
 
     // Define and retrieve
-    scope.define(sym_id, value.clone());
+    scope.define(sym_id, value);
     assert_eq!(scope.get(sym_id), Some(&value));
     assert!(scope.contains(sym_id));
 
     // Update
     let new_value = Value::int(456);
-    scope.set(sym_id, new_value.clone());
+    scope.set(sym_id, new_value);
     assert_eq!(scope.get(sym_id), Some(&new_value));
 }
 

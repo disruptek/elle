@@ -10,16 +10,38 @@ pub fn handle_cons(vm: &mut VM) -> Result<(), String> {
 
 pub fn handle_car(vm: &mut VM) -> Result<(), String> {
     let val = vm.stack.pop().ok_or("Stack underflow")?;
-    let cons = val.as_cons().ok_or("Expected cons cell")?;
-    vm.stack.push(cons.first);
-    Ok(())
+
+    // Handle nil and empty list - car of nil/empty list is nil
+    if val.is_nil() || val.is_empty_list() {
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    }
+
+    // Handle cons cells
+    if let Some(cons) = val.as_cons() {
+        vm.stack.push(cons.first);
+        Ok(())
+    } else {
+        Err("car: expected cons cell, nil, or empty list".to_string())
+    }
 }
 
 pub fn handle_cdr(vm: &mut VM) -> Result<(), String> {
     let val = vm.stack.pop().ok_or("Stack underflow")?;
-    let cons = val.as_cons().ok_or("Expected cons cell")?;
-    vm.stack.push(cons.rest);
-    Ok(())
+
+    // Handle nil and empty list - cdr of nil/empty list is nil
+    if val.is_nil() || val.is_empty_list() {
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    }
+
+    // Handle cons cells
+    if let Some(cons) = val.as_cons() {
+        vm.stack.push(cons.rest);
+        Ok(())
+    } else {
+        Err("cdr: expected cons cell, nil, or empty list".to_string())
+    }
 }
 
 pub fn handle_make_vector(vm: &mut VM, bytecode: &[u8], ip: &mut usize) -> Result<(), String> {

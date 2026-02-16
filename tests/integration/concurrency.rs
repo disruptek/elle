@@ -1,7 +1,6 @@
 use elle::compiler::converters::value_to_expr;
 use elle::reader::OwnedToken;
 use elle::{compile, list, register_primitives, Lexer, Reader, SymbolTable, Value, VM};
-use std::f64;
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();

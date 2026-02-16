@@ -3,7 +3,6 @@ use elle::compiler::converters::value_to_expr;
 use elle::ffi::primitives::context::set_symbol_table;
 use elle::reader::OwnedToken;
 use elle::{compile, list, read_str, register_primitives, Lexer, Reader, SymbolTable, Value, VM};
-use std::rc::Rc;
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();

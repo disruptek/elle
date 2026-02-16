@@ -2,7 +2,6 @@
 // Tests capture_resolution, converters, and analysis modules
 use elle::compiler::converters::value_to_expr;
 use elle::{compile, init_stdlib, read_str, register_primitives, SymbolTable, Value, VM};
-use std::rc::Rc;
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
