@@ -1,50 +1,37 @@
 // DEFENSE: Integration tests ensure the full pipeline works end-to-end
-use elle::compiler::converters::value_to_expr;
-use elle::ffi::primitives::context::set_symbol_table;
-use elle::reader::OwnedToken;
-use elle::{compile, list, read_str, register_primitives, Lexer, Reader, SymbolTable, Value, VM};
+use elle::pipeline::{compile_all_new, compile_new};
+use elle::primitives::register_primitives;
+use elle::{list, SymbolTable, Value, VM};
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
     register_primitives(&mut vm, &mut symbols);
 
-    // Set the symbol table in thread-local context for primitives that need it
-    set_symbol_table(&mut symbols as *mut SymbolTable);
-
-    // Tokenize the input
-    let mut lexer = Lexer::new(input);
-    let mut tokens = Vec::new();
-    while let Some(token) = lexer.next_token()? {
-        tokens.push(OwnedToken::from(token));
+    // Try to compile as a single expression first
+    match compile_new(input, &mut symbols) {
+        Ok(result) => {
+            return vm.execute(&result.bytecode).map_err(|e| e.to_string());
+        }
+        Err(_) => {
+            // If that fails, try wrapping in a begin
+            let wrapped = format!("(begin {})", input);
+            match compile_new(&wrapped, &mut symbols) {
+                Ok(result) => {
+                    return vm.execute(&result.bytecode).map_err(|e| e.to_string());
+                }
+                Err(_) => {
+                    // If that also fails, try compiling all expressions
+                    let results = compile_all_new(input, &mut symbols)?;
+                    let mut last_result = Value::NIL;
+                    for result in results {
+                        last_result = vm.execute(&result.bytecode).map_err(|e| e.to_string())?;
+                    }
+                    return Ok(last_result);
+                }
+            }
+        }
     }
-
-    if tokens.is_empty() {
-        return Err("No input".to_string());
-    }
-
-    // Read all expressions
-    let mut reader = Reader::new(tokens);
-    let mut values = Vec::new();
-    while let Some(result) = reader.try_read(&mut symbols) {
-        values.push(result?);
-    }
-
-    // If we have multiple expressions, wrap them in a begin
-    let value = if values.len() == 1 {
-        values.into_iter().next().unwrap()
-    } else if values.is_empty() {
-        return Err("No input".to_string());
-    } else {
-        // Wrap multiple expressions in a begin
-        let mut begin_args = vec![Value::symbol(symbols.intern("begin").0)];
-        begin_args.extend(values);
-        list(begin_args)
-    };
-
-    let expr = value_to_expr(&value, &mut symbols)?;
-    let bytecode = compile(&expr);
-    vm.execute(&bytecode)
 }
 
 // Basic arithmetic
@@ -172,46 +159,22 @@ fn test_predicates() {
 // Global definitions
 #[test]
 fn test_define_and_use() {
-    let mut vm = VM::new();
-    let mut symbols = SymbolTable::new();
-    register_primitives(&mut vm, &mut symbols);
-
-    // Define x
-    let def = read_str("(define x 42)", &mut symbols).unwrap();
-    let expr = value_to_expr(&def, &mut symbols).unwrap();
-    let bytecode = compile(&expr);
-    vm.execute(&bytecode).unwrap();
-
-    // Use x
-    let use_x = read_str("(+ x 10)", &mut symbols).unwrap();
-    let expr = value_to_expr(&use_x, &mut symbols).unwrap();
-    let bytecode = compile(&expr);
-    let result = vm.execute(&bytecode).unwrap();
-
-    assert_eq!(result, Value::int(52));
+    let code = r#"
+        (define x 42)
+        (+ x 10)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(52));
 }
 
 #[test]
 fn test_multiple_defines() {
-    let mut vm = VM::new();
-    let mut symbols = SymbolTable::new();
-    register_primitives(&mut vm, &mut symbols);
-
-    // Define multiple variables
-    for (name, value) in &[("a", "10"), ("b", "20"), ("c", "30")] {
-        let def = read_str(&format!("(define {} {})", name, value), &mut symbols).unwrap();
-        let expr = value_to_expr(&def, &mut symbols).unwrap();
-        let bytecode = compile(&expr);
-        vm.execute(&bytecode).unwrap();
-    }
-
-    // Use them
-    let result = read_str("(+ a b c)", &mut symbols).unwrap();
-    let expr = value_to_expr(&result, &mut symbols).unwrap();
-    let bytecode = compile(&expr);
-    let result = vm.execute(&bytecode).unwrap();
-
-    assert_eq!(result, Value::int(60));
+    let code = r#"
+        (define a 10)
+        (define b 20)
+        (define c 30)
+        (+ a b c)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(60));
 }
 
 // Begin
@@ -223,18 +186,10 @@ fn test_begin() {
 
 #[test]
 fn test_begin_with_side_effects() {
-    let mut vm = VM::new();
-    let mut symbols = SymbolTable::new();
-    register_primitives(&mut vm, &mut symbols);
-
-    // Begin with defines
-    let code = "(begin (define x 10) (define y 20) (+ x y))";
-    let value = read_str(code, &mut symbols).unwrap();
-    let expr = value_to_expr(&value, &mut symbols).unwrap();
-    let bytecode = compile(&expr);
-    let result = vm.execute(&bytecode).unwrap();
-
-    assert_eq!(result, Value::int(30));
+    let code = r#"
+        (begin (define x 10) (define y 20) (+ x y))
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(30));
 }
 
 // Complex expressions
@@ -278,10 +233,6 @@ fn test_arity_error() {
 // Stress tests
 #[test]
 fn test_large_list() {
-    let mut vm = VM::new();
-    let mut symbols = SymbolTable::new();
-    register_primitives(&mut vm, &mut symbols);
-
     // Create list with 100 elements
     let numbers = (0..100)
         .map(|i| i.to_string())
@@ -289,11 +240,7 @@ fn test_large_list() {
         .join(" ");
     let code = format!("(list {})", numbers);
 
-    let value = read_str(&code, &mut symbols).unwrap();
-    let expr = value_to_expr(&value, &mut symbols).unwrap();
-    let bytecode = compile(&expr);
-    let result = vm.execute(&bytecode).unwrap();
-
+    let result = eval(&code).unwrap();
     assert!(result.is_list());
     assert_eq!(result.list_to_vec().unwrap().len(), 100);
 }
@@ -338,7 +285,8 @@ fn test_int_float_mixing() {
 fn test_not() {
     assert_eq!(eval("(not #t)").unwrap(), Value::bool(false));
     assert_eq!(eval("(not #f)").unwrap(), Value::bool(true));
-    assert_eq!(eval("(not nil)").unwrap(), Value::bool(false)); // nil (empty list) is truthy
+    assert_eq!(eval("(not nil)").unwrap(), Value::bool(true)); // nil is falsy (represents absence)
+    assert_eq!(eval("(not ())").unwrap(), Value::bool(false)); // empty list is truthy
     assert_eq!(eval("(not 0)").unwrap(), Value::bool(false)); // 0 is truthy
 }
 
@@ -426,7 +374,10 @@ fn test_string_length() {
 
 #[test]
 fn test_string_append() {
-    if let Some(s) = eval("(string-append \"hello\" \" \" \"world\")").unwrap().as_string() {
+    if let Some(s) = eval("(string-append \"hello\" \" \" \"world\")")
+        .unwrap()
+        .as_string()
+    {
         assert_eq!(s, "hello world")
     } else {
         panic!("Expected string");
@@ -664,11 +615,11 @@ fn test_char_at() {
 #[test]
 fn test_vector_creation() {
     if let Some(vec_ref) = eval("(vector 1 2 3)").unwrap().as_vector() {
-            let v = vec_ref.borrow();
-            assert_eq!(v.len(), 3);
-            assert_eq!(v[0], Value::int(1));
-            assert_eq!(v[1], Value::int(2));
-            assert_eq!(v[2], Value::int(3));
+        let v = vec_ref.borrow();
+        assert_eq!(v.len(), 3);
+        assert_eq!(v[0], Value::int(1));
+        assert_eq!(v[1], Value::int(2));
+        assert_eq!(v[2], Value::int(3));
     } else {
         panic!("Expected vector");
     }
@@ -709,7 +660,10 @@ fn test_vector_ref() {
 
 #[test]
 fn test_vector_set() {
-    if let Some(vec_ref) = eval("(vector-set! (vector 1 2 3) 1 99)").unwrap().as_vector() {
+    if let Some(vec_ref) = eval("(vector-set! (vector 1 2 3) 1 99)")
+        .unwrap()
+        .as_vector()
+    {
         let v = vec_ref.borrow();
         assert_eq!(v[0], Value::int(1));
         assert_eq!(v[1], Value::int(99));
@@ -719,7 +673,10 @@ fn test_vector_set() {
     }
 
     // Set at beginning
-    if let Some(vec_ref) = eval("(vector-set! (vector 1 2 3) 0 100)").unwrap().as_vector() {
+    if let Some(vec_ref) = eval("(vector-set! (vector 1 2 3) 0 100)")
+        .unwrap()
+        .as_vector()
+    {
         let v = vec_ref.borrow();
         assert_eq!(v[0], Value::int(100))
     } else {
@@ -727,7 +684,10 @@ fn test_vector_set() {
     }
 
     // Set at end
-    if let Some(vec_ref) = eval("(vector-set! (vector 1 2 3) 2 200)").unwrap().as_vector() {
+    if let Some(vec_ref) = eval("(vector-set! (vector 1 2 3) 2 200)")
+        .unwrap()
+        .as_vector()
+    {
         let v = vec_ref.borrow();
         assert_eq!(v[2], Value::int(200))
     } else {

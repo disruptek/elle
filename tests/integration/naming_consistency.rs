@@ -95,13 +95,13 @@ fn test_keys_on_struct() {
 #[test]
 fn test_keys_on_empty_table() {
     let result = eval("(keys (table))").unwrap();
-    assert_eq!(result, Value::NIL);
+    assert_eq!(result, Value::EMPTY_LIST);
 }
 
 #[test]
 fn test_keys_on_empty_struct() {
     let result = eval("(keys (struct))").unwrap();
-    assert_eq!(result, Value::NIL);
+    assert_eq!(result, Value::EMPTY_LIST);
 }
 
 #[test]
@@ -126,13 +126,13 @@ fn test_values_on_struct() {
 #[test]
 fn test_values_on_empty_table() {
     let result = eval("(values (table))").unwrap();
-    assert_eq!(result, Value::NIL);
+    assert_eq!(result, Value::EMPTY_LIST);
 }
 
 #[test]
 fn test_values_on_empty_struct() {
     let result = eval("(values (struct))").unwrap();
-    assert_eq!(result, Value::NIL);
+    assert_eq!(result, Value::EMPTY_LIST);
 }
 
 #[test]
@@ -268,10 +268,7 @@ fn test_string_to_float_invalid() {
 
 #[test]
 fn test_any_to_string_int() {
-    assert_eq!(
-        eval("(any->string 42)").unwrap(),
-        Value::string("42")
-    );
+    assert_eq!(eval("(any->string 42)").unwrap(), Value::string("42"));
 }
 
 #[test]
@@ -286,26 +283,17 @@ fn test_any_to_string_float() {
 
 #[test]
 fn test_any_to_string_bool_true() {
-    assert_eq!(
-        eval("(any->string #t)").unwrap(),
-        Value::string("true")
-    );
+    assert_eq!(eval("(any->string #t)").unwrap(), Value::string("true"));
 }
 
 #[test]
 fn test_any_to_string_bool_false() {
-    assert_eq!(
-        eval("(any->string #f)").unwrap(),
-        Value::string("false")
-    );
+    assert_eq!(eval("(any->string #f)").unwrap(), Value::string("false"));
 }
 
 #[test]
 fn test_any_to_string_nil() {
-    assert_eq!(
-        eval("(any->string nil)").unwrap(),
-        Value::string("nil")
-    );
+    assert_eq!(eval("(any->string nil)").unwrap(), Value::string("nil"));
 }
 
 #[test]

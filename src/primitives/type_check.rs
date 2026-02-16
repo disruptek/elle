@@ -19,13 +19,13 @@ pub fn prim_is_pair(args: &[Value]) -> LResult<Value> {
     Ok(Value::bool(args[0].as_cons().is_some()))
 }
 
-/// Check if value is a list (nil or cons cell)
+/// Check if value is a list (empty list or cons cell)
 pub fn prim_is_list(args: &[Value]) -> LResult<Value> {
     if args.len() != 1 {
         return Err(LError::arity_mismatch(1, args.len()));
     }
     Ok(Value::bool(
-        args[0].is_nil() || args[0].is_empty_list() || args[0].as_cons().is_some(),
+        args[0].is_empty_list() || args[0].as_cons().is_some(),
     ))
 }
 

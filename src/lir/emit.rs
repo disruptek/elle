@@ -235,7 +235,7 @@ impl Emitter {
                     constants: Rc::new(nested_bytecode.constants),
                     source_ast: None,
                     effect: Effect::Pure, // TODO: get from HIR
-                    cell_params_mask: 0,
+                    cell_params_mask: func.cell_params_mask,
                 };
 
                 // Add closure template to constants

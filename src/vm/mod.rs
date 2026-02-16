@@ -272,7 +272,16 @@ impl VM {
                             // We append empty cells for locally-defined variables (Phase 4)
                             let mut new_env = Vec::new();
                             new_env.extend((*closure.env).iter().cloned());
-                            new_env.extend(args.clone());
+
+                            // Add parameters, wrapping in cells if cell_params_mask indicates
+                            for (i, arg) in args.iter().enumerate() {
+                                if i < 64 && (closure.cell_params_mask & (1 << i)) != 0 {
+                                    // This parameter is mutated - wrap it in a cell
+                                    new_env.push(Value::cell(*arg));
+                                } else {
+                                    new_env.push(*arg);
+                                }
+                            }
 
                             // Calculate number of locally-defined variables
                             let num_params = match closure.arity {
@@ -371,7 +380,16 @@ impl VM {
                             // [captured_vars..., parameters..., locally_defined_cells...]
                             let mut new_env = Vec::new();
                             new_env.extend((*source.env).iter().cloned());
-                            new_env.extend(args.clone());
+
+                            // Add parameters, wrapping in cells if cell_params_mask indicates
+                            for (i, arg) in args.iter().enumerate() {
+                                if i < 64 && (source.cell_params_mask & (1 << i)) != 0 {
+                                    // This parameter is mutated - wrap it in a cell
+                                    new_env.push(Value::cell(*arg));
+                                } else {
+                                    new_env.push(*arg);
+                                }
+                            }
 
                             // Calculate number of locally-defined variables
                             let num_params = match source.arity {
@@ -479,7 +497,16 @@ impl VM {
                         self.tail_call_env_cache.clear();
                         self.tail_call_env_cache
                             .extend((*closure.env).iter().cloned());
-                        self.tail_call_env_cache.extend(args);
+
+                        // Add parameters, wrapping in cells if cell_params_mask indicates
+                        for (i, arg) in args.iter().enumerate() {
+                            if i < 64 && (closure.cell_params_mask & (1 << i)) != 0 {
+                                // This parameter is mutated - wrap it in a cell
+                                self.tail_call_env_cache.push(Value::cell(*arg));
+                            } else {
+                                self.tail_call_env_cache.push(*arg);
+                            }
+                        }
 
                         // Calculate number of locally-defined variables
                         let num_params = match closure.arity {
@@ -571,7 +598,16 @@ impl VM {
                             self.tail_call_env_cache.clear();
                             self.tail_call_env_cache
                                 .extend((*source.env).iter().cloned());
-                            self.tail_call_env_cache.extend(args);
+
+                            // Add parameters, wrapping in cells if cell_params_mask indicates
+                            for (i, arg) in args.iter().enumerate() {
+                                if i < 64 && (source.cell_params_mask & (1 << i)) != 0 {
+                                    // This parameter is mutated - wrap it in a cell
+                                    self.tail_call_env_cache.push(Value::cell(*arg));
+                                } else {
+                                    self.tail_call_env_cache.push(*arg);
+                                }
+                            }
 
                             // Calculate number of locally-defined variables
                             let num_params = match source.arity {

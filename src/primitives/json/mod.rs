@@ -200,6 +200,7 @@ mod tests {
             panic!("Expected table");
         }
     }
+    #[test]
     fn test_parse_whitespace() {
         let mut parser = JsonParser::new("  \n\t  42  \n\t  ");
         assert_eq!(parser.parse().unwrap(), Value::int(42));

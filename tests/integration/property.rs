@@ -283,7 +283,7 @@ proptest! {
 
         let parsed = result.unwrap();
         if values.is_empty() {
-            prop_assert_eq!(parsed, Value::NIL);
+            prop_assert_eq!(parsed, Value::EMPTY_LIST);
         } else {
             prop_assert!(parsed.is_list());
             let vec = parsed.list_to_vec().unwrap();

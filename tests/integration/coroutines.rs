@@ -54,6 +54,7 @@ fn eval(input: &str) -> Result<Value, String> {
 }
 
 /// Helper to collect integers from a cons list
+#[allow(dead_code)]
 fn collect_list_ints(value: &Value) -> Vec<i64> {
     let mut result = Vec::new();
     let mut current = value;

@@ -137,7 +137,15 @@ pub fn prim_empty(args: &[Value]) -> LResult<Value> {
         return Err(LError::arity_mismatch(1, args.len()));
     }
 
-    let result = if args[0].is_nil() || args[0].is_empty_list() {
+    // nil is not a container - error if passed
+    if args[0].is_nil() {
+        return Err(LError::type_mismatch(
+            "collection type (list, string, vector, table, or struct)",
+            "nil",
+        ));
+    }
+
+    let result = if args[0].is_empty_list() {
         true
     } else if args[0].is_cons() {
         false

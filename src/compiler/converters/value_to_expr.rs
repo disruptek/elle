@@ -37,6 +37,7 @@ pub fn value_to_expr_with_scope(
         || value.is_string()
         || value.is_keyword()
         || value.is_vector()
+        || value.is_empty_list()
     {
         return Ok(Expr::Literal(*value));
     }
@@ -634,8 +635,10 @@ fn lookup_var_for_set(var: u32, scope_stack: &[ScopeEntry]) -> VarRef {
 
 /// Convert a value back to source code using the symbol table
 fn value_to_source(value: &Value, symbols: &SymbolTable) -> String {
-    if value.is_nil() || value.is_empty_list() {
+    if value.is_nil() {
         "nil".to_string()
+    } else if value.is_empty_list() {
+        "()".to_string()
     } else if let Some(b) = value.as_bool() {
         b.to_string()
     } else if let Some(n) = value.as_int() {

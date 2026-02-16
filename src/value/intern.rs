@@ -294,9 +294,9 @@ mod tests {
         }
 
         // Verify re-interning returns same pointers
-        for i in 0..1000 {
+        for (i, &expected_ptr) in ptrs.iter().enumerate() {
             let ptr = intern_string(&format!("string_number_{}", i));
-            assert_eq!(ptr, ptrs[i], "Re-interning should return same pointer");
+            assert_eq!(ptr, expected_ptr, "Re-interning should return same pointer");
         }
     }
 
@@ -333,7 +333,7 @@ mod tests {
     #[test]
     fn test_intern_similar_strings() {
         // Strings that are similar but not identical
-        let ptrs = vec![
+        let ptrs = [
             intern_string("test"),
             intern_string("test "),  // trailing space
             intern_string(" test"),  // leading space

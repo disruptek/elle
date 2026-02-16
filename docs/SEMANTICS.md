@@ -68,10 +68,10 @@ Lists are built from cons cells and terminate with `EMPTY_LIST`:
 |------------|--------|-------|
 | `(nil? nil)` | `#t` | Only nil is nil |
 | `(nil? ())` | `#f` | Empty list is NOT nil |
-| `(empty? nil)` | `#t` | Nil is empty |
+| `(empty? nil)` | error | Nil is not a container |
 | `(empty? ())` | `#t` | Empty list is empty |
 | `(list? ())` | `#t` | Empty list is a list |
-| `(list? nil)` | `#t` | Nil is the improper list terminator |
+| `(list? nil)` | `#f` | Nil is not a list, it represents absence |
 | `(pair? ())` | `#f` | Empty list is not a pair |
 | `(pair? nil)` | `#f` | Nil is not a pair |
 
