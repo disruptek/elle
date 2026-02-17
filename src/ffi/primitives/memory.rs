@@ -1,10 +1,9 @@
 //! Memory management and safety checking primitives.
 
 use super::types::parse_ctype;
-use crate::error::{LError, LResult};
 use crate::ffi::memory::{get_memory_stats, register_allocation, MemoryOwner};
 use crate::ffi::safety::{get_last_error, NullPointerChecker, TypeChecker};
-use crate::value::Value;
+use crate::value::{Condition, Value};
 use crate::vm::VM;
 
 /// (register-allocation ptr type-name size owner) -> alloc-id
@@ -126,11 +125,11 @@ pub fn prim_with_ffi_safety_checks(_vm: &mut VM, args: &[Value]) -> Result<Value
     Ok(args[0])
 }
 
-pub fn prim_register_allocation_wrapper(_args: &[Value]) -> LResult<Value> {
+pub fn prim_register_allocation_wrapper(_args: &[Value]) -> Result<Value, Condition> {
     Ok(Value::int(1))
 }
 
-pub fn prim_memory_stats_wrapper(_args: &[Value]) -> LResult<Value> {
+pub fn prim_memory_stats_wrapper(_args: &[Value]) -> Result<Value, Condition> {
     let (total_bytes, alloc_count) = get_memory_stats();
     Ok(Value::cons(
         Value::int(total_bytes as i64),
@@ -138,13 +137,15 @@ pub fn prim_memory_stats_wrapper(_args: &[Value]) -> LResult<Value> {
     ))
 }
 
-pub fn prim_type_check_wrapper(args: &[Value]) -> LResult<Value> {
+pub fn prim_type_check_wrapper(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 2 {
-        return Err(LError::from("type-check requires 2 arguments"));
+        return Err(Condition::arity_error(
+            "type-check: expected 2 arguments".to_string(),
+        ));
     }
 
     let value = &args[0];
-    let expected = parse_ctype(&args[1])?;
+    let expected = parse_ctype(&args[1]).map_err(Condition::error)?;
 
     match TypeChecker::check_type(value, &expected) {
         Ok(()) => Ok(Value::int(1)),
@@ -152,26 +153,28 @@ pub fn prim_type_check_wrapper(args: &[Value]) -> LResult<Value> {
     }
 }
 
-pub fn prim_null_pointer_wrapper(args: &[Value]) -> LResult<Value> {
+pub fn prim_null_pointer_wrapper(args: &[Value]) -> Result<Value, Condition> {
     if args.is_empty() {
-        return Err(LError::from("null-pointer? requires at least 1 argument"));
+        return Err(Condition::arity_error(
+            "null-pointer?: expected at least 1 argument".to_string(),
+        ));
     }
 
     let is_null = NullPointerChecker::is_null(&args[0]);
     Ok(Value::int(if is_null { 1 } else { 0 }))
 }
 
-pub fn prim_ffi_last_error_wrapper(_args: &[Value]) -> LResult<Value> {
+pub fn prim_ffi_last_error_wrapper(_args: &[Value]) -> Result<Value, Condition> {
     match get_last_error() {
         Some(err) => Ok(Value::string(format!("{}", err))),
         None => Ok(Value::EMPTY_LIST),
     }
 }
 
-pub fn prim_with_ffi_safety_checks_wrapper(args: &[Value]) -> LResult<Value> {
+pub fn prim_with_ffi_safety_checks_wrapper(args: &[Value]) -> Result<Value, Condition> {
     if args.is_empty() {
-        return Err(LError::from(
-            "with-ffi-safety-checks requires at least 1 argument",
+        return Err(Condition::arity_error(
+            "with-ffi-safety-checks: expected at least 1 argument".to_string(),
         ));
     }
     Ok(args[0])

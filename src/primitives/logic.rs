@@ -1,10 +1,12 @@
-use crate::error::{LError, LResult};
-use crate::value::Value;
+use crate::value::{Condition, Value};
 
 /// Logical NOT operation
-pub fn prim_not(args: &[Value]) -> LResult<Value> {
+pub fn prim_not(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(LError::arity_mismatch(1, args.len()));
+        return Err(Condition::arity_error(format!(
+            "not: expected 1 argument, got {}",
+            args.len()
+        )));
     }
     Ok(Value::bool(!args[0].is_truthy()))
 }
@@ -13,7 +15,7 @@ pub fn prim_not(args: &[Value]) -> LResult<Value> {
 /// (and) => true
 /// (and x) => x
 /// (and x y z) => z if all truthy, else first falsy
-pub fn prim_and(args: &[Value]) -> LResult<Value> {
+pub fn prim_and(args: &[Value]) -> Result<Value, Condition> {
     if args.is_empty() {
         return Ok(Value::bool(true));
     }
@@ -31,7 +33,7 @@ pub fn prim_and(args: &[Value]) -> LResult<Value> {
 /// (or) => false
 /// (or x) => x
 /// (or x y z) => x if truthy, else next truthy or z
-pub fn prim_or(args: &[Value]) -> LResult<Value> {
+pub fn prim_or(args: &[Value]) -> Result<Value, Condition> {
     if args.is_empty() {
         return Ok(Value::bool(false));
     }
@@ -49,7 +51,7 @@ pub fn prim_or(args: &[Value]) -> LResult<Value> {
 /// (xor) => false
 /// (xor x) => x (as bool)
 /// (xor x y z) => true if odd number of truthy values, else false
-pub fn prim_xor(args: &[Value]) -> LResult<Value> {
+pub fn prim_xor(args: &[Value]) -> Result<Value, Condition> {
     if args.is_empty() {
         return Ok(Value::bool(false));
     }

@@ -1,5 +1,5 @@
 //! JIT compilation primitives
-use crate::error::{LError, LResult};
+use crate::value::Condition;
 
 use crate::compiler::cranelift::context::JITContext;
 use crate::compiler::cranelift::jit_compile::{compile_closure, is_jit_compilable, CompileResult};
@@ -67,9 +67,12 @@ pub fn clear_jit_context() {
 /// is not possible (e.g., unsupported constructs in the body).
 ///
 /// Errors only on actual compilation failures, not on "not compilable" cases.
-pub fn prim_jit_compile(args: &[Value]) -> LResult<Value> {
+pub fn prim_jit_compile(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!("jit-compile: expected 1 argument, got {}", args.len()).into());
+        return Err(Condition::arity_error(format!(
+            "jit-compile: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     let closure = match args[0].as_closure() {
@@ -80,7 +83,7 @@ pub fn prim_jit_compile(args: &[Value]) -> LResult<Value> {
                 // Already JIT compiled, return as-is
                 return Ok(args[0]);
             }
-            return Err(LError::from(format!(
+            return Err(Condition::type_error(format!(
                 "jit-compile: expected closure, got {}",
                 args[0].type_name()
             )));
@@ -148,9 +151,9 @@ pub fn prim_jit_compile(args: &[Value]) -> LResult<Value> {
 /// (jit-compiled? value) -> bool
 ///
 /// Returns true if the value is a JIT-compiled closure.
-pub fn prim_jit_compiled_p(args: &[Value]) -> LResult<Value> {
+pub fn prim_jit_compiled_p(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(LError::from(format!(
+        return Err(Condition::arity_error(format!(
             "jit-compiled?: expected 1 argument, got {}",
             args.len()
         )));
@@ -162,9 +165,9 @@ pub fn prim_jit_compiled_p(args: &[Value]) -> LResult<Value> {
 /// (jit-compilable? closure) -> bool
 ///
 /// Returns true if the closure can be JIT compiled.
-pub fn prim_jit_compilable_p(args: &[Value]) -> LResult<Value> {
+pub fn prim_jit_compilable_p(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(LError::from(format!(
+        return Err(Condition::arity_error(format!(
             "jit-compilable?: expected 1 argument, got {}",
             args.len()
         )));
@@ -188,9 +191,9 @@ pub fn prim_jit_compilable_p(args: &[Value]) -> LResult<Value> {
 /// Returns a struct with the following fields:
 /// - compiled-functions: Number of functions compiled to native code
 /// - jit-enabled: Whether JIT compilation is available
-pub fn prim_jit_stats(args: &[Value]) -> LResult<Value> {
+pub fn prim_jit_stats(args: &[Value]) -> Result<Value, Condition> {
     if !args.is_empty() {
-        return Err(LError::from(format!(
+        return Err(Condition::arity_error(format!(
             "jit-stats: expected 0 arguments, got {}",
             args.len()
         )));

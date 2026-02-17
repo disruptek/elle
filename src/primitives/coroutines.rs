@@ -15,7 +15,7 @@ use crate::compiler::cps::{
 };
 use crate::compiler::effects::EffectContext;
 use crate::error::LResult;
-use crate::value::{Coroutine, CoroutineState, Value};
+use crate::value::{Condition, Coroutine, CoroutineState, Value};
 use crate::value_old::Value as OldValue;
 use crate::vm::{VmResult, VM};
 use std::cell::RefMut;
@@ -24,13 +24,12 @@ use std::rc::Rc;
 /// F1: Create a coroutine from a function
 ///
 /// (make-coroutine fn) -> coroutine
-pub fn prim_make_coroutine(args: &[Value]) -> LResult<Value> {
+pub fn prim_make_coroutine(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!(
-            "make-coroutine requires exactly 1 argument, got {}",
+        return Err(Condition::arity_error(format!(
+            "make-coroutine: expected 1 argument, got {}",
             args.len()
-        )
-        .into());
+        )));
     }
 
     if let Some(c) = args[0].as_closure() {
@@ -41,27 +40,27 @@ pub fn prim_make_coroutine(args: &[Value]) -> LResult<Value> {
             let coroutine = Coroutine::new(source.clone());
             Ok(Value::coroutine(coroutine))
         } else {
-            Err("JitClosure has no source for coroutine".to_string().into())
+            Err(Condition::error(
+                "make-coroutine: JitClosure has no source for coroutine",
+            ))
         }
     } else {
-        Err(format!(
-            "make-coroutine requires a function, got {}",
+        Err(Condition::type_error(format!(
+            "make-coroutine: expected function, got {}",
             args[0].type_name()
-        )
-        .into())
+        )))
     }
 }
 
 /// F3: Get the status of a coroutine
 ///
 /// (coroutine-status co) -> string
-pub fn prim_coroutine_status(args: &[Value]) -> LResult<Value> {
+pub fn prim_coroutine_status(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!(
-            "coroutine-status requires exactly 1 argument, got {}",
+        return Err(Condition::arity_error(format!(
+            "coroutine-status: expected 1 argument, got {}",
             args.len()
-        )
-        .into());
+        )));
     }
 
     if let Some(co) = args[0].as_coroutine() {
@@ -75,24 +74,22 @@ pub fn prim_coroutine_status(args: &[Value]) -> LResult<Value> {
         };
         Ok(Value::string(status))
     } else {
-        Err(format!(
-            "coroutine-status requires a coroutine, got {}",
+        Err(Condition::type_error(format!(
+            "coroutine-status: expected coroutine, got {}",
             args[0].type_name()
-        )
-        .into())
+        )))
     }
 }
 
 /// Check if a coroutine is done
 ///
 /// (coroutine-done? co) -> bool
-pub fn prim_coroutine_done(args: &[Value]) -> LResult<Value> {
+pub fn prim_coroutine_done(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!(
-            "coroutine-done? requires exactly 1 argument, got {}",
+        return Err(Condition::arity_error(format!(
+            "coroutine-done?: expected 1 argument, got {}",
             args.len()
-        )
-        .into());
+        )));
     }
 
     if let Some(co) = args[0].as_coroutine() {
@@ -102,24 +99,22 @@ pub fn prim_coroutine_done(args: &[Value]) -> LResult<Value> {
             CoroutineState::Done | CoroutineState::Error(_)
         )))
     } else {
-        Err(format!(
-            "coroutine-done? requires a coroutine, got {}",
+        Err(Condition::type_error(format!(
+            "coroutine-done?: expected coroutine, got {}",
             args[0].type_name()
-        )
-        .into())
+        )))
     }
 }
 
 /// Get the last yielded value from a coroutine
 ///
 /// (coroutine-value co) -> value
-pub fn prim_coroutine_value(args: &[Value]) -> LResult<Value> {
+pub fn prim_coroutine_value(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!(
-            "coroutine-value requires exactly 1 argument, got {}",
+        return Err(Condition::arity_error(format!(
+            "coroutine-value: expected 1 argument, got {}",
             args.len()
-        )
-        .into());
+        )));
     }
 
     if let Some(co) = args[0].as_coroutine() {
@@ -128,20 +123,22 @@ pub fn prim_coroutine_value(args: &[Value]) -> LResult<Value> {
             &borrowed.yielded_value.clone().unwrap_or(OldValue::Nil),
         ))
     } else {
-        Err(format!(
-            "coroutine-value requires a coroutine, got {}",
+        Err(Condition::type_error(format!(
+            "coroutine-value: expected coroutine, got {}",
             args[0].type_name()
-        )
-        .into())
+        )))
     }
 }
 
 /// Check if a value is a coroutine
 ///
 /// (coroutine? val) -> bool
-pub fn prim_is_coroutine(args: &[Value]) -> LResult<Value> {
+pub fn prim_is_coroutine(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!("coroutine? requires exactly 1 argument, got {}", args.len()).into());
+        return Err(Condition::arity_error(format!(
+            "coroutine?: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     Ok(Value::bool(args[0].is_coroutine()))
@@ -555,13 +552,12 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> LResult<Value> {
 /// (coroutine->iterator co) -> iterator
 ///
 /// Creates an iterator that yields values from the coroutine.
-pub fn prim_coroutine_to_iterator(args: &[Value]) -> LResult<Value> {
+pub fn prim_coroutine_to_iterator(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!(
-            "coroutine->iterator requires exactly 1 argument, got {}",
+        return Err(Condition::arity_error(format!(
+            "coroutine->iterator: expected 1 argument, got {}",
             args.len()
-        )
-        .into());
+        )));
     }
 
     if args[0].is_coroutine() {
@@ -569,11 +565,10 @@ pub fn prim_coroutine_to_iterator(args: &[Value]) -> LResult<Value> {
         // The for loop implementation will need to recognize coroutines
         Ok(args[0])
     } else {
-        Err(format!(
-            "coroutine->iterator requires a coroutine, got {}",
+        Err(Condition::type_error(format!(
+            "coroutine->iterator: expected coroutine, got {}",
             args[0].type_name()
-        )
-        .into())
+        )))
     }
 }
 

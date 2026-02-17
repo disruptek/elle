@@ -240,33 +240,8 @@ impl VM {
                     if let Some(f) = func.as_native_fn() {
                         let result = match f(args.as_slice()) {
                             Ok(val) => val,
-                            Err(e) => {
-                                // Convert error to exception
-                                let msg = e.description();
-                                let mut cond = match &e.kind {
-                                    crate::error::ErrorKind::DivisionByZero => {
-                                        crate::value::Condition::division_by_zero(msg)
-                                    }
-                                    crate::error::ErrorKind::TypeMismatch { .. } => {
-                                        crate::value::Condition::type_error(msg)
-                                    }
-                                    crate::error::ErrorKind::UndefinedVariable { .. } => {
-                                        crate::value::Condition::undefined_variable(msg)
-                                    }
-                                    crate::error::ErrorKind::ArityMismatch { .. }
-                                    | crate::error::ErrorKind::ArityAtLeast { .. }
-                                    | crate::error::ErrorKind::ArityRange { .. } => {
-                                        crate::value::Condition::arity_error(msg)
-                                    }
-                                    _ => crate::value::Condition::error(msg),
-                                };
-                                // Try to set dividend and divisor if we have the arguments (for division by zero)
-                                if cond.exception_id == 4 && args.len() >= 2 {
-                                    cond.set_field(0, args[0]); // dividend
-                                    cond.set_field(1, args[1]); // divisor
-                                }
+                            Err(cond) => {
                                 self.current_exception = Some(std::rc::Rc::new(cond));
-                                // Push Nil to keep stack consistent
                                 Value::NIL
                             }
                         };
@@ -482,7 +457,13 @@ impl VM {
                     args.reverse();
 
                     if let Some(f) = func.as_native_fn() {
-                        return f(&args).map(VmResult::Done).map_err(|e| e.description());
+                        match f(&args) {
+                            Ok(val) => return Ok(VmResult::Done(val)),
+                            Err(cond) => {
+                                self.current_exception = Some(std::rc::Rc::new(cond));
+                                return Ok(VmResult::Done(Value::NIL));
+                            }
+                        }
                     } else if let Some(f) = func.as_vm_aware_fn() {
                         return f(&args, self)
                             .map(VmResult::Done)

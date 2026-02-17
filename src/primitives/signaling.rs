@@ -2,22 +2,24 @@
 //!
 //! Provides signal, warn, and error functions for the condition system.
 
-use crate::error::LResult;
 use crate::value::condition::exception_name;
 use crate::value::{Condition, Value};
 
 /// Signal a condition (silent - just propagates)
-pub fn prim_signal(args: &[Value]) -> LResult<Value> {
+pub fn prim_signal(args: &[Value]) -> Result<Value, Condition> {
     if args.is_empty() {
-        return Err("signal requires at least 1 argument (condition ID)"
-            .to_string()
-            .into());
+        return Err(Condition::arity_error(
+            "signal: expected at least 1 argument (condition ID), got 0".to_string(),
+        ));
     }
 
     // First arg should be the exception ID
     if let Some(id) = args[0].as_int() {
         if id < 0 || id > u32::MAX as i64 {
-            return Err(format!("Invalid exception ID: {}", id).into());
+            return Err(Condition::error(format!(
+                "signal: invalid exception ID: {}",
+                id
+            )));
         }
 
         let exception_id = id as u32;
@@ -49,20 +51,20 @@ pub fn prim_signal(args: &[Value]) -> LResult<Value> {
         }
         Ok(alloc(HeapObject::Condition(old_cond)))
     } else {
-        Err("signal: first argument must be an integer (exception ID)"
-            .to_string()
-            .into())
+        Err(Condition::type_error(
+            "signal: first argument must be an integer (exception ID)".to_string(),
+        ))
     }
 }
 
 /// Warn about a condition (prints if unhandled)
-pub fn prim_warn(args: &[Value]) -> LResult<Value> {
+pub fn prim_warn(args: &[Value]) -> Result<Value, Condition> {
     // Same as signal for now - actual warning behavior would be in the handler
     prim_signal(args)
 }
 
 /// Signal an error condition (goes to debugger if unhandled)
-pub fn prim_error(args: &[Value]) -> LResult<Value> {
+pub fn prim_error(args: &[Value]) -> Result<Value, Condition> {
     // Same as signal for now - actual error behavior would be in the handler
     prim_signal(args)
 }

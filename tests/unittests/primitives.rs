@@ -21,7 +21,7 @@ fn get_primitive(vm: &VM, symbols: &mut SymbolTable, name: &str) -> Value {
 #[allow(clippy::result_large_err)]
 fn call_primitive(prim: &Value, args: &[Value]) -> Result<Value, LError> {
     if let Some(f) = prim.as_native_fn() {
-        f(args)
+        f(args).map_err(|c| LError::from(c.to_string()))
     } else if let Some(f) = prim.as_vm_aware_fn() {
         // VM-aware functions need a VM instance
         let mut vm = VM::new();
@@ -451,7 +451,8 @@ fn test_throw() {
     // throw with string message should produce error
     let result = call_primitive(&throw_fn, &[Value::string("Test error")]);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().to_string(), "Error: Test error");
+    // Condition::error formats as "error: {message}", then LError wraps as "Error: ..."
+    assert_eq!(result.unwrap_err().to_string(), "Error: error: Test error");
 }
 
 #[test]

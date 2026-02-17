@@ -4,9 +4,8 @@
 //! Macros themselves expand at compile-time; these primitives allow querying
 //! and manually expanding macros at runtime.
 
-use crate::error::{LError, LResult};
 use crate::symbol::SymbolTable;
-use crate::value::Value;
+use crate::value::{Condition, Value};
 use crate::value_old::SymbolId;
 use std::cell::RefCell;
 
@@ -61,14 +60,17 @@ where
 /// (macro? +)         ; => #f
 /// (macro? 42)        ; => #f
 /// ```
-pub fn prim_is_macro(args: &[Value]) -> LResult<Value> {
+pub fn prim_is_macro(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!("macro?: expected 1 argument, got {}", args.len()).into());
+        return Err(Condition::arity_error(format!(
+            "macro?: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     if let Some(sym_id) = args[0].as_symbol() {
         with_symbol_table(|symbols| Ok(Value::bool(symbols.is_macro(SymbolId(sym_id)))))
-            .map_err(|e| e.into())
+            .map_err(Condition::error)
     } else {
         // Non-symbols are never macros
         Ok(Value::bool(false))
@@ -90,29 +92,32 @@ pub fn prim_is_macro(args: &[Value]) -> LResult<Value> {
 /// (defmacro when (cond body) (list 'if cond body nil))
 /// (expand-macro '(when #t (display "hi")))  ; => (if #t (display "hi") nil)
 /// ```
-pub fn prim_expand_macro(args: &[Value]) -> LResult<Value> {
+pub fn prim_expand_macro(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(format!("expand-macro: expected 1 argument, got {}", args.len()).into());
+        return Err(Condition::arity_error(format!(
+            "expand-macro: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     let form = &args[0];
 
     // The form should be a list starting with a macro name
     let list = form.list_to_vec().map_err(|_| {
-        LError::from("expand-macro: argument must be a list (macro call form)".to_string())
+        Condition::type_error("expand-macro: argument must be a list (macro call form)".to_string())
     })?;
 
     if list.is_empty() {
-        return Err("expand-macro: empty list".to_string().into());
+        return Err(Condition::error("expand-macro: empty list".to_string()));
     }
 
     // First element should be a symbol (the macro name)
     let macro_sym = if let Some(id) = list[0].as_symbol() {
         id
     } else {
-        return Err("expand-macro: first element must be a symbol (macro name)"
-            .to_string()
-            .into());
+        return Err(Condition::type_error(
+            "expand-macro: first element must be a symbol (macro name)".to_string(),
+        ));
     };
 
     with_symbol_table(|symbols| {
@@ -135,5 +140,5 @@ pub fn prim_expand_macro(args: &[Value]) -> LResult<Value> {
         use crate::compiler::macros::expand_macro;
         expand_macro(sym_id, &macro_def, &macro_args, symbols)
     })
-    .map_err(|e| e.into())
+    .map_err(Condition::error)
 }

@@ -402,7 +402,7 @@ fn register_fn(
     vm: &mut VM,
     symbols: &mut SymbolTable,
     name: &str,
-    func: fn(&[Value]) -> LResult<Value>,
+    func: fn(&[Value]) -> Result<Value, crate::value::Condition>,
 ) {
     let sym_id = symbols.intern(name);
     vm.set_global(sym_id.0, Value::native_fn(func));

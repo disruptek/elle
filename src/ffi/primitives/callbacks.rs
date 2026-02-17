@@ -2,7 +2,7 @@
 
 use super::types::parse_ctype;
 use crate::ffi::callback::{create_callback, register_callback, unregister_callback};
-use crate::value::Value;
+use crate::value::{Condition, Value};
 use crate::vm::VM;
 use std::rc::Rc;
 
@@ -66,9 +66,11 @@ pub fn prim_free_callback(_vm: &mut VM, args: &[Value]) -> Result<Value, String>
     }
 }
 
-pub fn prim_make_c_callback_wrapper(args: &[Value]) -> crate::error::LResult<Value> {
+pub fn prim_make_c_callback_wrapper(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 3 {
-        return Err("make-c-callback requires exactly 3 arguments".into());
+        return Err(Condition::arity_error(
+            "make-c-callback: expected 3 arguments".to_string(),
+        ));
     }
 
     let closure = &args[0];
@@ -77,15 +79,18 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> crate::error::LResult<Val
     let arg_types = if args[1].is_nil() {
         vec![]
     } else {
-        let type_list = args[1].list_to_vec()?;
+        let type_list = args[1]
+            .list_to_vec()
+            .map_err(|e| Condition::type_error(format!("make-c-callback: {}", e)))?;
         type_list
             .iter()
             .map(parse_ctype)
-            .collect::<Result<Vec<_>, _>>()?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Condition::error)?
     };
 
     // Parse return type
-    let return_type = parse_ctype(&args[2])?;
+    let return_type = parse_ctype(&args[2]).map_err(Condition::error)?;
 
     // Create callback
     let (cb_id, _info) = create_callback(arg_types, return_type);
@@ -93,7 +98,10 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> crate::error::LResult<Val
     // Register the closure with the callback registry
     let closure_rc = Rc::new(*closure);
     if !register_callback(cb_id, closure_rc) {
-        return Err(format!("Failed to register callback with ID {}", cb_id).into());
+        return Err(Condition::error(format!(
+            "make-c-callback: failed to register callback with ID {}",
+            cb_id
+        )));
     }
 
     // Return callback ID as integer
@@ -103,17 +111,24 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> crate::error::LResult<Val
 /// (free-callback callback-id) -> nil
 ///
 /// Frees a callback by ID, unregistering it and cleaning up.
-pub fn prim_free_callback_wrapper(args: &[Value]) -> crate::error::LResult<Value> {
+pub fn prim_free_callback_wrapper(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err("free-callback requires exactly 1 argument".into());
+        return Err(Condition::arity_error(
+            "free-callback: expected 1 argument".to_string(),
+        ));
     }
 
-    let cb_id = args[0].as_int().ok_or("callback-id must be an integer")? as u32;
+    let cb_id = args[0].as_int().ok_or_else(|| {
+        Condition::type_error("free-callback: callback-id must be an integer".to_string())
+    })? as u32;
 
     // Unregister the callback from the registry
     if unregister_callback(cb_id) {
         Ok(Value::NIL)
     } else {
-        Err(format!("Callback with ID {} not found", cb_id).into())
+        Err(Condition::error(format!(
+            "free-callback: callback with ID {} not found",
+            cb_id
+        )))
     }
 }

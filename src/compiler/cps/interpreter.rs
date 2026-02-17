@@ -798,7 +798,7 @@ impl<'a> CpsInterpreter<'a> {
             self.vm
                 .execute_bytecode(&closure.bytecode, &closure.constants, Some(&env_rc))
         } else if let Some(f) = func.as_native_fn() {
-            f(args).map_err(|e| e.into())
+            f(args).map_err(|e| e.to_string())
         } else if let Some(f) = func.as_vm_aware_fn() {
             f(args, self.vm).map_err(|e| e.into())
         } else {

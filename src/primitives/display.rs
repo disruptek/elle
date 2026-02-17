@@ -1,8 +1,7 @@
-use crate::error::LResult;
-use crate::value::Value;
+use crate::value::{Condition, Value};
 
 /// Display values to standard output
-pub fn prim_display(args: &[Value]) -> LResult<Value> {
+pub fn prim_display(args: &[Value]) -> Result<Value, Condition> {
     for arg in args {
         print!("{}", format_value(arg));
     }
@@ -10,7 +9,7 @@ pub fn prim_display(args: &[Value]) -> LResult<Value> {
 }
 
 /// Print values followed by a newline (Common Lisp-style print)
-pub fn prim_print(args: &[Value]) -> LResult<Value> {
+pub fn prim_print(args: &[Value]) -> Result<Value, Condition> {
     for arg in args {
         print!("{}", format_value(arg));
     }
@@ -49,7 +48,7 @@ fn format_value(value: &Value) -> String {
 }
 
 /// Print a newline
-pub fn prim_newline(_args: &[Value]) -> LResult<Value> {
+pub fn prim_newline(_args: &[Value]) -> Result<Value, Condition> {
     println!();
     Ok(Value::NIL)
 }

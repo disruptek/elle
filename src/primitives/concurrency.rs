@@ -1,7 +1,7 @@
 use crate::error::{LError, LResult};
 use crate::primitives::registration::register_primitives;
 use crate::symbol::SymbolTable;
-use crate::value::Value;
+use crate::value::{Condition, Value};
 use crate::vm::VM;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -274,31 +274,34 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
 /// The closure's bytecode is compiled and executed in that VM.
 ///
 /// For JIT-compiled closures, falls back to the source closure for thread-safe execution.
-pub fn prim_spawn(args: &[Value]) -> LResult<Value> {
+pub fn prim_spawn(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(LError::from(format!(
+        return Err(Condition::arity_error(format!(
             "spawn: expected 1 argument, got {}",
             args.len()
         )));
     }
 
     if let Some(closure) = args[0].as_closure() {
-        spawn_closure_impl(closure)
+        spawn_closure_impl(closure).map_err(|e| Condition::error(e.to_string()))
     } else if let Some(jit_closure) = args[0].as_jit_closure() {
         // Fall back to the source closure for thread-safe execution
         match &jit_closure.source {
-            Some(source) => spawn_closure_impl(source),
-            None => Err(LError::from(
+            Some(source) => spawn_closure_impl(source).map_err(|e| Condition::error(e.to_string())),
+            None => Err(Condition::error(
                 "spawn: JitClosure has no source closure for thread execution. \
-                 JIT-compiled closures must retain their source to be spawned.",
+                 JIT-compiled closures must retain their source to be spawned."
+                    .to_string(),
             )),
         }
     } else if args[0].as_native_fn().is_some() {
-        Err(LError::from(
-            "spawn: native functions cannot be spawned. Use closures instead.",
+        Err(Condition::error(
+            "spawn: native functions cannot be spawned. Use closures instead.".to_string(),
         ))
     } else {
-        Err(LError::from("spawn: argument must be a closure"))
+        Err(Condition::type_error(
+            "spawn: argument must be a closure".to_string(),
+        ))
     }
 }
 
@@ -307,11 +310,14 @@ pub fn prim_spawn(args: &[Value]) -> LResult<Value> {
 ///
 /// Blocks until the spawned thread completes and returns the actual Value result.
 /// If the thread produced an error, that error is re-raised.
-pub fn prim_join(args: &[Value]) -> LResult<Value> {
+pub fn prim_join(args: &[Value]) -> Result<Value, Condition> {
     use crate::value::SendValue;
 
     if args.len() != 1 {
-        return Err(format!("join: expected 1 argument, got {}", args.len()).into());
+        return Err(Condition::arity_error(format!(
+            "join: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     if let Some(handle) = args[0].as_thread_handle() {
@@ -327,28 +333,32 @@ pub fn prim_join(args: &[Value]) -> LResult<Value> {
                     return result
                         .as_ref()
                         .map(|send_val: &SendValue| send_val.clone().into_value())
-                        .map_err(|e: &String| LError::from(e.clone()));
+                        .map_err(|e: &String| Condition::error(e.clone()));
                 }
             }
 
             attempts += 1;
             if attempts >= MAX_ATTEMPTS {
-                return Err("join: thread did not complete in time".to_string().into());
+                return Err(Condition::error(
+                    "join: thread did not complete in time".to_string(),
+                ));
             }
 
             // Sleep briefly to avoid busy-waiting
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
     } else {
-        Err("join: argument must be a thread handle".to_string().into())
+        Err(Condition::type_error(
+            "join: argument must be a thread handle".to_string(),
+        ))
     }
 }
 
 /// Sleeps for the specified number of seconds
 /// (sleep seconds)
-pub fn prim_sleep(args: &[Value]) -> LResult<Value> {
+pub fn prim_sleep(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(LError::from(format!(
+        return Err(Condition::arity_error(format!(
             "sleep: expected 1 argument, got {}",
             args.len()
         )));
@@ -356,24 +366,30 @@ pub fn prim_sleep(args: &[Value]) -> LResult<Value> {
 
     if let Some(n) = args[0].as_int() {
         if n < 0 {
-            return Err(LError::from("sleep: duration must be non-negative"));
+            return Err(Condition::error(
+                "sleep: duration must be non-negative".to_string(),
+            ));
         }
         std::thread::sleep(std::time::Duration::from_secs(n as u64));
         Ok(Value::NIL)
     } else if let Some(f) = args[0].as_float() {
         if f < 0.0 {
-            return Err(LError::from("sleep: duration must be non-negative"));
+            return Err(Condition::error(
+                "sleep: duration must be non-negative".to_string(),
+            ));
         }
         std::thread::sleep(std::time::Duration::from_secs_f64(f));
         Ok(Value::NIL)
     } else {
-        Err(LError::from("sleep: argument must be a number"))
+        Err(Condition::type_error(
+            "sleep: argument must be a number".to_string(),
+        ))
     }
 }
 
 /// Returns the ID of the current thread
 /// (current-thread-id)
-pub fn prim_current_thread_id(_args: &[Value]) -> LResult<Value> {
+pub fn prim_current_thread_id(_args: &[Value]) -> Result<Value, Condition> {
     let thread_id = std::thread::current().id();
     Ok(Value::string(format!("{:?}", thread_id)))
 }

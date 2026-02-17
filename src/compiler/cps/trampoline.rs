@@ -701,7 +701,7 @@ fn call_value_with_vm(func: &Value, args: &[Value], vm: &mut VM) -> Result<Value
         // Execute
         vm.execute_bytecode(&closure.bytecode, &closure.constants, Some(&env_rc))
     } else if let Some(f) = func.as_native_fn() {
-        f(args).map_err(|e| e.into())
+        f(args).map_err(|e| e.to_string())
     } else if let Some(f) = func.as_vm_aware_fn() {
         f(args, vm).map_err(|e| e.into())
     } else {
@@ -751,7 +751,7 @@ fn call_value_with_vm_result(
     } else if let Some(f) = func.as_native_fn() {
         match f(args) {
             Ok(v) => Ok(crate::vm::VmResult::Done(v)),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e.to_string()),
         }
     } else if let Some(f) = func.as_vm_aware_fn() {
         match f(args, vm) {

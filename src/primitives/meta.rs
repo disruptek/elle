@@ -1,12 +1,11 @@
 //! Meta-programming primitives (gensym, macro expansion, etc.)
-use crate::error::LResult;
-use crate::value::Value;
+use crate::value::{Condition, Value};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static GENSYM_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// Generate a unique symbol
-pub fn prim_gensym(args: &[Value]) -> LResult<Value> {
+pub fn prim_gensym(args: &[Value]) -> Result<Value, Condition> {
     let prefix = if args.is_empty() {
         "G".to_string()
     } else if let Some(s) = args[0].as_string() {
@@ -23,11 +22,14 @@ pub fn prim_gensym(args: &[Value]) -> LResult<Value> {
 }
 
 /// Expand a macro (placeholder)
-pub fn prim_expand_macro(args: &[Value]) -> LResult<Value> {
+pub fn prim_expand_macro(args: &[Value]) -> Result<Value, Condition> {
     // (expand-macro macro-expr)
     // Expands a macro call and returns the expanded form
     if args.len() != 1 {
-        return Err(format!("expand-macro: expected 1 argument, got {}", args.len()).into());
+        return Err(Condition::arity_error(format!(
+            "expand-macro: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     // In production, this would:
@@ -40,11 +42,14 @@ pub fn prim_expand_macro(args: &[Value]) -> LResult<Value> {
 }
 
 /// Check if a value is a macro
-pub fn prim_is_macro(args: &[Value]) -> LResult<Value> {
+pub fn prim_is_macro(args: &[Value]) -> Result<Value, Condition> {
     // (macro? value)
     // Returns true if value is a macro
     if args.len() != 1 {
-        return Err(format!("macro?: expected 1 argument, got {}", args.len()).into());
+        return Err(Condition::arity_error(format!(
+            "macro?: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     // In production, would check symbol table for macro definitions

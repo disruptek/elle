@@ -1,15 +1,17 @@
 //! Cell/Box primitives for mutable storage
-use crate::error::{LError, LResult};
-use crate::value::Value;
+use crate::value::{Condition, Value};
 
 /// Create a mutable cell containing a value
 ///
 /// (box value) -> cell
 ///
 /// Creates a mutable cell that can be modified with box-set!
-pub fn prim_box(args: &[Value]) -> LResult<Value> {
+pub fn prim_box(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(LError::arity_mismatch(1, args.len()));
+        return Err(Condition::arity_error(format!(
+            "box: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     Ok(Value::cell(args[0]))
@@ -20,16 +22,22 @@ pub fn prim_box(args: &[Value]) -> LResult<Value> {
 /// (unbox cell) -> value
 ///
 /// Returns the current value stored in the cell
-pub fn prim_unbox(args: &[Value]) -> LResult<Value> {
+pub fn prim_unbox(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(LError::arity_mismatch(1, args.len()));
+        return Err(Condition::arity_error(format!(
+            "unbox: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     if let Some(cell) = args[0].as_cell() {
         let borrowed = cell.borrow();
         Ok(*borrowed)
     } else {
-        Err(LError::type_mismatch("cell", args[0].type_name()))
+        Err(Condition::type_error(format!(
+            "unbox: expected cell, got {}",
+            args[0].type_name()
+        )))
     }
 }
 
@@ -38,9 +46,12 @@ pub fn prim_unbox(args: &[Value]) -> LResult<Value> {
 /// (box-set! cell value) -> value
 ///
 /// Sets the cell to contain the new value and returns the new value
-pub fn prim_box_set(args: &[Value]) -> LResult<Value> {
+pub fn prim_box_set(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 2 {
-        return Err(LError::arity_mismatch(2, args.len()));
+        return Err(Condition::arity_error(format!(
+            "box-set!: expected 2 arguments, got {}",
+            args.len()
+        )));
     }
 
     if let Some(cell) = args[0].as_cell() {
@@ -48,7 +59,10 @@ pub fn prim_box_set(args: &[Value]) -> LResult<Value> {
         *borrowed = args[1];
         Ok(args[1])
     } else {
-        Err(LError::type_mismatch("cell", args[0].type_name()))
+        Err(Condition::type_error(format!(
+            "box-set!: expected cell, got {}",
+            args[0].type_name()
+        )))
     }
 }
 
@@ -57,9 +71,12 @@ pub fn prim_box_set(args: &[Value]) -> LResult<Value> {
 /// (box? value) -> bool
 ///
 /// Returns #t if the value is a box, #f otherwise
-pub fn prim_box_p(args: &[Value]) -> LResult<Value> {
+pub fn prim_box_p(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 1 {
-        return Err(LError::arity_mismatch(1, args.len()));
+        return Err(Condition::arity_error(format!(
+            "box?: expected 1 argument, got {}",
+            args.len()
+        )));
     }
 
     Ok(Value::bool(args[0].is_cell()))

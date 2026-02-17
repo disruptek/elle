@@ -71,7 +71,8 @@ impl Arity {
 }
 
 /// Native function type
-pub type NativeFn = fn(&[crate::value::Value]) -> LResult<crate::value::Value>;
+pub type NativeFn =
+    fn(&[crate::value::Value]) -> Result<crate::value::Value, crate::value::Condition>;
 
 /// VM-aware native function type (needs access to VM for execution)
 /// This is used for primitives like coroutine-resume that need to execute bytecode

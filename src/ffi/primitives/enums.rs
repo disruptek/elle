@@ -1,10 +1,9 @@
 //! Header parsing and enum definition primitives.
 
-use crate::error::{LError, LResult};
 use crate::ffi::bindings::generate_elle_bindings;
 use crate::ffi::header::HeaderParser;
 use crate::ffi::types::{CType, EnumId, EnumLayout};
-use crate::value::Value;
+use crate::value::{Condition, Value};
 use crate::vm::VM;
 
 /// (load-header-with-lib header-path lib-path) -> library-handle
@@ -85,28 +84,32 @@ pub fn prim_define_enum(_vm: &mut VM, args: &[Value]) -> Result<Value, String> {
     Ok(Value::int(enum_id.0 as i64))
 }
 
-pub fn prim_load_header_with_lib_wrapper(args: &[Value]) -> LResult<Value> {
+pub fn prim_load_header_with_lib_wrapper(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 2 {
-        return Err(LError::from(
-            "load-header-with-lib requires exactly 2 arguments",
+        return Err(Condition::arity_error(
+            "load-header-with-lib: expected 2 arguments".to_string(),
         ));
     }
 
     let header_path = if let Some(s) = args[0].as_string() {
         s
     } else {
-        return Err(LError::from("header-path must be a string"));
+        return Err(Condition::type_error(
+            "load-header-with-lib: header-path must be a string".to_string(),
+        ));
     };
 
     let lib_path = if let Some(s) = args[1].as_string() {
         s
     } else {
-        return Err(LError::from("lib-path must be a string"));
+        return Err(Condition::type_error(
+            "load-header-with-lib: lib-path must be a string".to_string(),
+        ));
     };
 
     // Parse header
     let mut parser = HeaderParser::new();
-    let parsed = parser.parse(header_path)?;
+    let parsed = parser.parse(header_path).map_err(Condition::error)?;
 
     // Generate bindings
     let _lisp_code = generate_elle_bindings(&parsed, lib_path);
@@ -115,15 +118,19 @@ pub fn prim_load_header_with_lib_wrapper(args: &[Value]) -> LResult<Value> {
     Ok(Value::string(lib_path))
 }
 
-pub fn prim_define_enum_wrapper(args: &[Value]) -> LResult<Value> {
+pub fn prim_define_enum_wrapper(args: &[Value]) -> Result<Value, Condition> {
     if args.len() != 2 {
-        return Err(LError::from("define-enum requires exactly 2 arguments"));
+        return Err(Condition::arity_error(
+            "define-enum: expected 2 arguments".to_string(),
+        ));
     }
 
     let enum_name = if let Some(s) = args[0].as_string() {
         s
     } else {
-        return Err(LError::from("enum name must be a string"));
+        return Err(Condition::type_error(
+            "define-enum: enum name must be a string".to_string(),
+        ));
     };
 
     // Parse variants from list
@@ -131,17 +138,22 @@ pub fn prim_define_enum_wrapper(args: &[Value]) -> LResult<Value> {
     let variants = Vec::new();
 
     if !variants_list.is_nil() && !variants_list.is_empty_list() {
-        let variant_vec = variants_list.list_to_vec()?;
+        let variant_vec = variants_list
+            .list_to_vec()
+            .map_err(|e| Condition::type_error(format!("define-enum: {}", e)))?;
         #[allow(clippy::never_loop)]
         for variant_val in variant_vec {
             if let Some(_cons) = variant_val.as_heap_ptr() {
                 // This is a cons cell - need to extract it properly
                 // For now, we'll need to handle this differently
-                return Err(LError::from(
-                    "variant parsing not yet implemented for new Value API",
+                return Err(Condition::error(
+                    "define-enum: variant parsing not yet implemented for new Value API"
+                        .to_string(),
                 ));
             } else {
-                return Err(LError::from("each variant must be a cons cell"));
+                return Err(Condition::type_error(
+                    "define-enum: each variant must be a cons cell".to_string(),
+                ));
             }
         }
     }
