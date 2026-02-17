@@ -3,6 +3,7 @@
 //! Provides signal, warn, and error functions for the condition system.
 
 use crate::error::LResult;
+use crate::value::condition::exception_name;
 use crate::value::{Condition, Value};
 
 /// Signal a condition (silent - just propagates)
@@ -19,7 +20,9 @@ pub fn prim_signal(args: &[Value]) -> LResult<Value> {
             return Err(format!("Invalid exception ID: {}", id).into());
         }
 
-        let mut condition = Condition::new(id as u32);
+        let exception_id = id as u32;
+        let msg = format!("signaled {}", exception_name(exception_id));
+        let mut condition = Condition::new(exception_id, msg);
 
         // Remaining args are field values
         // For now, we'll store them as positional fields
@@ -30,6 +33,10 @@ pub fn prim_signal(args: &[Value]) -> LResult<Value> {
         use crate::value::heap::{alloc, HeapObject};
         // Convert new Condition to old Condition
         let mut old_cond = crate::value_old::Condition::new(condition.exception_id);
+        old_cond.set_field(
+            crate::value_old::Condition::FIELD_MESSAGE,
+            crate::value_old::Value::String(condition.message.clone().into()),
+        );
         for (field_id, value) in condition.fields {
             let old_value = crate::primitives::coroutines::new_value_to_old(value);
             old_cond.set_field(field_id, old_value);

@@ -25,8 +25,8 @@ pub fn handle_load_global(
             vm.stack.push(*val);
         } else {
             // Signal undefined-variable exception (ID 5)
-            let mut cond = Condition::new(5);
-            cond.set_field(0, Value::symbol(sym_id)); // Store the symbol
+            let msg = format!("undefined variable: symbol #{}", sym_id);
+            let mut cond = Condition::undefined_variable(msg).with_field(0, Value::symbol(sym_id)); // Store the symbol
             if let Some(loc) = vm.current_source_loc.clone() {
                 cond.location = Some(loc);
             }

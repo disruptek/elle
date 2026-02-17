@@ -60,10 +60,9 @@ pub fn handle_div_int(vm: &mut VM) -> Result<(), String> {
     let a = a_val.as_int().ok_or("Expected integer")?;
     if b == 0 {
         // Create a division-by-zero Condition
-        // Exception ID 4 is "division-by-zero" from ExceptionRegistry
-        let mut cond = crate::value::Condition::new(4);
-        cond.set_field(0, Value::int(a)); // dividend
-        cond.set_field(1, Value::int(b)); // divisor
+        let cond = crate::value::Condition::division_by_zero("division by zero")
+            .with_field(0, Value::int(a)) // dividend
+            .with_field(1, Value::int(b)); // divisor
         vm.current_exception = Some(std::rc::Rc::new(cond));
         // Push a marker value (nil) to keep stack consistent
         // The exception interrupt mechanism will handle the exception
@@ -119,10 +118,9 @@ pub fn handle_div(vm: &mut VM) -> Result<(), String> {
 
     if is_zero {
         // Create a division-by-zero Condition
-        // Exception ID 4 is "division-by-zero"
-        let mut cond = crate::value::Condition::new(4);
-        cond.set_field(0, a); // dividend
-        cond.set_field(1, b); // divisor
+        let cond = crate::value::Condition::division_by_zero("division by zero")
+            .with_field(0, a) // dividend
+            .with_field(1, b); // divisor
         vm.current_exception = Some(std::rc::Rc::new(cond));
         // Push a marker value (nil) to keep stack consistent
         vm.stack.push(Value::NIL);

@@ -39,6 +39,11 @@ pub fn prim_exception(args: &[Value]) -> LResult<Value> {
         use crate::value::heap::{alloc, HeapObject};
         // Convert new Condition to old Condition
         let mut old_cond = crate::value_old::Condition::new(cond.exception_id);
+        // Store message in old condition's FIELD_MESSAGE
+        old_cond.set_field(
+            crate::value_old::Condition::FIELD_MESSAGE,
+            crate::value_old::Value::String(cond.message.clone().into()),
+        );
         for (field_id, value) in cond.fields {
             let old_value = crate::primitives::coroutines::new_value_to_old(value);
             old_cond.set_field(field_id, old_value);

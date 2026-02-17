@@ -1177,7 +1177,18 @@ impl Lowerer {
                     });
                 }
 
-                // End label
+                // No handler matched — re-raise exception to propagate
+                // to next enclosing handler
+                self.emit(LirInstr::ReraiseException);
+                // Jump to unreachable label to prevent fall-through to ClearException
+                // The exception interrupt mechanism will jump to the next handler
+                let unreachable_label = self.next_label;
+                self.next_label += 1;
+                self.emit(LirInstr::JumpInline {
+                    label_id: unreachable_label,
+                });
+
+                // End label (reached by success path and matched handler paths)
                 self.emit(LirInstr::LabelMarker {
                     label_id: end_label,
                 });

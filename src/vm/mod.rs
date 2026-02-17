@@ -10,7 +10,8 @@ pub mod stack;
 pub mod types;
 pub mod variables;
 
-pub use core::{is_exception_subclass, CallFrame, VmResult, VM};
+pub use crate::value::condition::{exception_parent, is_exception_subclass};
+pub use core::{CallFrame, VmResult, VM};
 
 use crate::compiler::bytecode::{Bytecode, Instruction};
 use crate::value::Value;
@@ -19,7 +20,14 @@ use std::rc::Rc;
 
 impl VM {
     pub fn execute(&mut self, bytecode: &Bytecode) -> Result<Value, String> {
-        self.execute_bytecode(&bytecode.instructions, &bytecode.constants, None)
+        let result = self.execute_bytecode(&bytecode.instructions, &bytecode.constants, None)?;
+        // Check if an exception escaped all handlers at the top level
+        if let Some(exc) = &self.current_exception {
+            // Use the exception's message for the error
+            Err(format!("{}", exc))
+        } else {
+            Ok(result)
+        }
     }
 
     /// Check arity and set exception if mismatch
@@ -28,9 +36,10 @@ impl VM {
         match arity {
             crate::value_old::Arity::Exact(n) => {
                 if arg_count != *n {
-                    let mut cond = crate::value::Condition::new(6);
-                    cond.set_field(0, Value::int(*n as i64));
-                    cond.set_field(1, Value::int(arg_count as i64));
+                    let msg = format!("expected {} arguments, got {}", n, arg_count);
+                    let mut cond = crate::value::Condition::arity_error(msg)
+                        .with_field(0, Value::int(*n as i64))
+                        .with_field(1, Value::int(arg_count as i64));
                     if let Some(loc) = self.current_source_loc.clone() {
                         cond.location = Some(loc);
                     }
@@ -40,9 +49,10 @@ impl VM {
             }
             crate::value_old::Arity::AtLeast(n) => {
                 if arg_count < *n {
-                    let mut cond = crate::value::Condition::new(6);
-                    cond.set_field(0, Value::int(*n as i64));
-                    cond.set_field(1, Value::int(arg_count as i64));
+                    let msg = format!("expected at least {} arguments, got {}", n, arg_count);
+                    let mut cond = crate::value::Condition::arity_error(msg)
+                        .with_field(0, Value::int(*n as i64))
+                        .with_field(1, Value::int(arg_count as i64));
                     if let Some(loc) = self.current_source_loc.clone() {
                         cond.location = Some(loc);
                     }
@@ -52,9 +62,10 @@ impl VM {
             }
             crate::value_old::Arity::Range(min, max) => {
                 if arg_count < *min || arg_count > *max {
-                    let mut cond = crate::value::Condition::new(6);
-                    cond.set_field(0, Value::int(*min as i64));
-                    cond.set_field(1, Value::int(arg_count as i64));
+                    let msg = format!("expected {}-{} arguments, got {}", min, max, arg_count);
+                    let mut cond = crate::value::Condition::arity_error(msg)
+                        .with_field(0, Value::int(*min as i64))
+                        .with_field(1, Value::int(arg_count as i64));
                     if let Some(loc) = self.current_source_loc.clone() {
                         cond.location = Some(loc);
                     }
@@ -112,7 +123,8 @@ impl VM {
     }
 
     /// Inner execution loop that handles all instructions except tail calls
-    fn execute_bytecode_inner_with_ip(
+    /// This is the implementation; the public wrapper handles handler isolation.
+    fn execute_bytecode_inner_impl(
         &mut self,
         bytecode: &[u8],
         constants: &[Value],
@@ -228,11 +240,28 @@ impl VM {
                     if let Some(f) = func.as_native_fn() {
                         let result = match f(args.as_slice()) {
                             Ok(val) => val,
-                            Err(e) if matches!(e.kind, crate::error::ErrorKind::DivisionByZero) => {
-                                // Create a division-by-zero exception
-                                let mut cond = crate::value::Condition::new(4);
-                                // Try to set dividend and divisor if we have the arguments
-                                if args.len() >= 2 {
+                            Err(e) => {
+                                // Convert error to exception
+                                let msg = e.description();
+                                let mut cond = match &e.kind {
+                                    crate::error::ErrorKind::DivisionByZero => {
+                                        crate::value::Condition::division_by_zero(msg)
+                                    }
+                                    crate::error::ErrorKind::TypeMismatch { .. } => {
+                                        crate::value::Condition::type_error(msg)
+                                    }
+                                    crate::error::ErrorKind::UndefinedVariable { .. } => {
+                                        crate::value::Condition::undefined_variable(msg)
+                                    }
+                                    crate::error::ErrorKind::ArityMismatch { .. }
+                                    | crate::error::ErrorKind::ArityAtLeast { .. }
+                                    | crate::error::ErrorKind::ArityRange { .. } => {
+                                        crate::value::Condition::arity_error(msg)
+                                    }
+                                    _ => crate::value::Condition::error(msg),
+                                };
+                                // Try to set dividend and divisor if we have the arguments (for division by zero)
+                                if cond.exception_id == 4 && args.len() >= 2 {
                                     cond.set_field(0, args[0]); // dividend
                                     cond.set_field(1, args[1]); // divisor
                                 }
@@ -240,7 +269,6 @@ impl VM {
                                 // Push Nil to keep stack consistent
                                 Value::NIL
                             }
-                            Err(e) => return Err(e.description()),
                         };
                         self.stack.push(result);
                     } else if let Some(f) = func.as_vm_aware_fn() {
@@ -467,23 +495,8 @@ impl VM {
                                 && !self.handling_exception
                                 && self.exception_handlers.is_empty()
                             {
-                                // No handler for this exception - propagate as error
-                                if let Some(exc) = &self.current_exception {
-                                    let details = if let Some(field) = exc.get_field(0) {
-                                        if let Some(sym_id) = field.as_symbol() {
-                                            format!(" (SymbolId({}))", sym_id)
-                                        } else {
-                                            String::new()
-                                        }
-                                    } else {
-                                        String::new()
-                                    };
-                                    return Err(format!(
-                                        "Unhandled exception: {}{}",
-                                        exc.exception_id, details
-                                    ));
-                                }
-                                return Err("Unhandled exception".to_string());
+                                // No local handler — propagate via current_exception
+                                return Ok(VmResult::Done(Value::NIL));
                             }
                             return Ok(VmResult::Done(Value::NIL));
                         }
@@ -540,23 +553,8 @@ impl VM {
                                 && !self.handling_exception
                                 && self.exception_handlers.is_empty()
                             {
-                                // No handler for this exception - propagate as error
-                                if let Some(exc) = &self.current_exception {
-                                    let details = if let Some(field) = exc.get_field(0) {
-                                        if let Some(sym_id) = field.as_symbol() {
-                                            format!(" (SymbolId({}))", sym_id)
-                                        } else {
-                                            String::new()
-                                        }
-                                    } else {
-                                        String::new()
-                                    };
-                                    return Err(format!(
-                                        "Unhandled exception: {}{}",
-                                        exc.exception_id, details
-                                    ));
-                                }
-                                return Err("Unhandled exception".to_string());
+                                // No local handler — propagate via current_exception
+                                return Ok(VmResult::Done(Value::NIL));
                             }
                             return Ok(VmResult::Done(Value::NIL));
                         } else if !jit_closure.code_ptr.is_null() {
@@ -868,6 +866,13 @@ impl VM {
                                 let new_cond = (**exc).clone();
                                 let mut old_cond =
                                     crate::value_old::Condition::new(new_cond.exception_id);
+                                // Store message in old condition's FIELD_MESSAGE
+                                old_cond.set_field(
+                                    crate::value_old::Condition::FIELD_MESSAGE,
+                                    crate::value_old::Value::String(
+                                        new_cond.message.clone().into(),
+                                    ),
+                                );
                                 for (field_id, value) in new_cond.fields {
                                     let old_value =
                                         crate::primitives::coroutines::new_value_to_old(value);
@@ -897,6 +902,18 @@ impl VM {
                     self.current_exception = None;
                     // No longer handling exception
                     self.handling_exception = false;
+                }
+
+                Instruction::ReraiseException => {
+                    // No handler clause matched — re-raise the exception.
+                    // Pop this handler so the interrupt mechanism doesn't loop
+                    // back to the same handler, and clear the handling flag so
+                    // the interrupt mechanism can fire again for the next handler.
+                    self.exception_handlers.pop();
+                    self.handling_exception = false;
+                    // current_exception remains set — the interrupt check at the
+                    // bottom of the loop will re-fire and find the next handler
+                    // (or the "no handler" path if none remain).
                 }
 
                 Instruction::InvokeRestart => {
@@ -947,6 +964,11 @@ impl VM {
                         // Convert new Condition to old Condition
                         let new_cond = (**exc).clone();
                         let mut old_cond = crate::value_old::Condition::new(new_cond.exception_id);
+                        // Store message in old condition's FIELD_MESSAGE
+                        old_cond.set_field(
+                            crate::value_old::Condition::FIELD_MESSAGE,
+                            crate::value_old::Value::String(new_cond.message.clone().into()),
+                        );
                         for (field_id, value) in new_cond.fields {
                             let old_value = crate::primitives::coroutines::new_value_to_old(value);
                             old_cond.set_field(field_id, old_value);
@@ -980,30 +1002,16 @@ impl VM {
                     // Jump to handler code (handler_offset is absolute bytecode position)
                     ip = handler.handler_offset as usize;
                 } else {
-                    // No handler for this exception - propagate as error
-                    if let Some(exc) = &self.current_exception {
-                        // Include field 0 info if it contains a symbol (for undefined-variable)
-                        let details = if let Some(field) = exc.get_field(0) {
-                            if let Some(sym_id) = field.as_symbol() {
-                                format!(" (SymbolId({}))", sym_id)
-                            } else {
-                                String::new()
-                            }
-                        } else {
-                            String::new()
-                        };
-                        return Err(format!(
-                            "Unhandled exception: {}{}",
-                            exc.exception_id, details
-                        ));
-                    }
-                    return Err("Unhandled exception".to_string());
+                    // No local handler — return normally, leaving current_exception set.
+                    // The caller's interrupt mechanism will handle it after handler
+                    // isolation restores the outer frame's handlers.
+                    return Ok(VmResult::Done(Value::NIL));
                 }
             }
         }
     }
 
-    /// Wrapper that calls execute_bytecode_inner_with_ip with start_ip = 0
+    /// Wrapper that calls execute_bytecode_inner_impl with start_ip = 0
     fn execute_bytecode_inner(
         &mut self,
         bytecode: &[u8],
@@ -1011,6 +1019,31 @@ impl VM {
         closure_env: Option<&Rc<Vec<Value>>>,
     ) -> Result<VmResult, String> {
         self.execute_bytecode_inner_with_ip(bytecode, constants, closure_env, 0)
+    }
+
+    /// Execute bytecode starting from a specific instruction pointer.
+    /// This is the main entry point for bytecode execution.
+    /// Handler isolation happens at the Call instruction level, not here.
+    fn execute_bytecode_inner_with_ip(
+        &mut self,
+        bytecode: &[u8],
+        constants: &[Value],
+        closure_env: Option<&Rc<Vec<Value>>>,
+        start_ip: usize,
+    ) -> Result<VmResult, String> {
+        // Each bytecode frame has its own exception handler scope.
+        // PushHandler/PopHandler are bytecode-local; the inner frame must not
+        // see (or jump to) the outer frame's handlers.
+        let saved_handlers = std::mem::take(&mut self.exception_handlers);
+        let saved_handling = self.handling_exception;
+        self.handling_exception = false;
+
+        let result = self.execute_bytecode_inner_impl(bytecode, constants, closure_env, start_ip);
+
+        self.exception_handlers = saved_handlers;
+        self.handling_exception = saved_handling;
+
+        result
     }
 
     /// Execute bytecode starting from a specific instruction pointer
@@ -1022,6 +1055,7 @@ impl VM {
         closure_env: Option<&Rc<Vec<Value>>>,
         start_ip: usize,
     ) -> Result<VmResult, String> {
+        // This goes through the wrapper which handles handler isolation
         self.execute_bytecode_inner_with_ip(bytecode, constants, closure_env, start_ip)
     }
 
@@ -1048,6 +1082,24 @@ impl VM {
                 current_constants = tail_constants;
                 current_env = Some(tail_env);
             } else {
+                // Check for unhandled exception at coroutine boundary
+                if let VmResult::Done(_) = &result {
+                    if let Some(exc) = self.current_exception.take() {
+                        let details = if let Some(field) = exc.get_field(0) {
+                            if let Some(sym_id) = field.as_symbol() {
+                                format!(" (SymbolId({}))", sym_id)
+                            } else {
+                                String::new()
+                            }
+                        } else {
+                            String::new()
+                        };
+                        return Err(format!(
+                            "Unhandled exception: {}{}",
+                            exc.exception_id, details
+                        ));
+                    }
+                }
                 return Ok(result);
             }
         }

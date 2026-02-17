@@ -9,16 +9,12 @@ fn eval(input: &str) -> Result<Value, String> {
 
     // Try to compile as a single expression first
     match compile_new(input, &mut symbols) {
-        Ok(result) => {
-            return vm.execute(&result.bytecode).map_err(|e| e.to_string());
-        }
+        Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
         Err(_) => {
             // If that fails, try wrapping in a begin
             let wrapped = format!("(begin {})", input);
             match compile_new(&wrapped, &mut symbols) {
-                Ok(result) => {
-                    return vm.execute(&result.bytecode).map_err(|e| e.to_string());
-                }
+                Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
                 Err(_) => {
                     // If that also fails, try compiling all expressions
                     let results = compile_all_new(input, &mut symbols)?;
@@ -26,7 +22,7 @@ fn eval(input: &str) -> Result<Value, String> {
                     for result in results {
                         last_result = vm.execute(&result.bytecode).map_err(|e| e.to_string())?;
                     }
-                    return Ok(last_result);
+                    Ok(last_result)
                 }
             }
         }
@@ -216,12 +212,12 @@ fn test_exception_message_all_types_as_data() {
 
 #[test]
 fn test_division_by_zero_creates_condition() {
-    // Division by zero should create an internal Condition, not an exception
-    // For now, division by zero still returns an error string
+    // Division by zero should create an internal Condition
+    // Error message now includes exception name and message
     let result = eval("(/ 10 0)");
     assert!(result.is_err());
     let err_msg = result.unwrap_err();
-    assert_eq!(err_msg, "Unhandled exception: 4");
+    assert_eq!(err_msg, "division-by-zero: division by zero");
 }
 
 #[test]
@@ -251,7 +247,8 @@ fn test_condition_creation_on_division_by_zero() {
     let result = eval("(/ 10 0)");
     assert!(result.is_err());
     let err_msg = result.unwrap_err();
-    assert_eq!(err_msg, "Unhandled exception: 4");
+    // Error message now includes exception name and message
+    assert_eq!(err_msg, "division-by-zero: division by zero");
 }
 
 #[test]
@@ -366,7 +363,11 @@ fn test_division_by_zero_interrupt_without_handler() {
     let result = eval("(/ 10 0)");
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.contains("Division by zero") || err.contains("exception"));
+    assert!(
+        err.contains("division by zero") || err.contains("division-by-zero"),
+        "Expected error message to contain 'division by zero', got: {}",
+        err
+    );
 }
 
 #[test]

@@ -217,9 +217,24 @@ impl Emitter {
                 func,
                 captures,
             } => {
-                // Push captures onto stack
-                for cap in captures {
-                    self.ensure_on_top(*cap);
+                // Check if captures are already in order on top of stack
+                let stack_len = self.stack.len();
+                let mut all_in_place = stack_len >= captures.len();
+                if all_in_place {
+                    let base = stack_len - captures.len();
+                    for (i, cap) in captures.iter().enumerate() {
+                        if self.reg_to_stack.get(cap) != Some(&(base + i)) {
+                            all_in_place = false;
+                            break;
+                        }
+                    }
+                }
+
+                if !all_in_place {
+                    // Captures not in place - need to arrange them
+                    for cap in captures {
+                        self.ensure_on_top(*cap);
+                    }
                 }
 
                 // Recursively emit the nested function
@@ -542,6 +557,10 @@ impl Emitter {
 
             LirInstr::ClearException => {
                 self.bytecode.emit(Instruction::ClearException);
+            }
+
+            LirInstr::ReraiseException => {
+                self.bytecode.emit(Instruction::ReraiseException);
             }
 
             LirInstr::Throw { value } => {

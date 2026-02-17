@@ -184,10 +184,9 @@ pub fn prim_div_vm(args: &[Value], _vm: &mut VM) -> LResult<Value> {
 
         if is_zero {
             // Create a division-by-zero Condition
-            // Exception ID 4 is "division-by-zero"
-            let mut cond = crate::value::Condition::new(4);
-            cond.set_field(0, result); // dividend
-            cond.set_field(1, *arg); // divisor
+            let cond = crate::value::Condition::division_by_zero("division by zero")
+                .with_field(0, result) // dividend
+                .with_field(1, *arg); // divisor
             _vm.current_exception = Some(std::rc::Rc::new(cond));
             return Ok(Value::NIL);
         }

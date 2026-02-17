@@ -283,13 +283,13 @@ fn test_yield_from_completion() {
 
 #[test]
 fn test_coroutine_as_iterator() {
-    // (each (x (make-coroutine (fn () (yield 1) (yield 2))))
+    // (each x (make-coroutine (fn () (yield 1) (yield 2)))
     //   (display x))
     // Should iterate over yielded values
     let result = eval(
         r#"
         (define results (list))
-        (each (x (make-coroutine (fn () (yield 1) (yield 2))))
+        (each x (make-coroutine (fn () (yield 1) (yield 2)))
           (set! results (cons x results)))
         results
         "#,
@@ -492,8 +492,6 @@ fn test_coroutine_state_after_error_during_resume() {
 #[test]
 fn test_coroutine_state_error_not_running_after_failure() {
     // After a coroutine fails, its state should be "error", not "running"
-    // This is important: if state stays "running", subsequent operations will
-    // incorrectly report "Coroutine is already running"
     let result = eval(
         r#"
         (define bad-gen (fn ()
@@ -501,15 +499,13 @@ fn test_coroutine_state_error_not_running_after_failure() {
           (undefined-variable-that-does-not-exist)))
         (define co (make-coroutine bad-gen))
         (coroutine-resume co)
-        (define resume-result
-          (try
-            (coroutine-resume co)
-            (catch (e) 'caught-error)))
+        (handler-case
+          (coroutine-resume co)
+          (error e nil))
         (coroutine-status co)
         "#,
     );
-    // Status should be "error", not "running"
-    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Value::string("error"));
 }
 
 #[test]
@@ -557,34 +553,20 @@ fn test_nested_coroutine_resume_from_coroutine() {
 
 #[test]
 fn test_coroutine_state_not_stuck_running_on_cps_error() {
-    // Regression test for issue #259: State stuck as "running" after CPS eval error
-    //
-    // In the CPS execution path, if interpreter.eval() fails before the trampoline
-    // runs, the coroutine state can get stuck as "running" because the error
-    // return bypasses the state update logic.
-    //
-    // This test attempts to trigger such an error by using an undefined variable
-    // at the start of a yielding coroutine (before any yield executes).
-    // The key is that we try to resume again - if the state is stuck as "running",
-    // we'll get "Coroutine is already running" error instead of the original error.
+    // If error occurs before first yield, state should be "error", not stuck on "running"
     let result = eval(
         r#"
         (define bad-start-gen (fn ()
           (+ undefined-at-start 1)
           (yield 1)))
         (define co (make-coroutine bad-start-gen))
-        (define first-result
-          (try
-            (coroutine-resume co)
-            (catch (e) 'first-error)))
-        (define second-result
-          (try
-            (coroutine-resume co)
-            (catch (e) e)))
-        (list first-result second-result)
+        (handler-case
+          (coroutine-resume co)
+          (error e nil))
+        (coroutine-status co)
         "#,
     );
-    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Value::string("error"));
 }
 
 // ============================================================================
@@ -609,13 +591,13 @@ fn test_error_in_coroutine_status() {
     let result = eval(
         r#"
         (define co (make-coroutine (fn () (/ 1 0))))
-        (coroutine-resume co)
+        (handler-case
+          (coroutine-resume co)
+          (error e nil))
         (coroutine-status co)
         "#,
     );
-    // The resume will fail, so we can't check status
-    // This documents the expected behavior
-    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Value::string("error"));
 }
 
 #[test]
@@ -658,13 +640,13 @@ fn test_coroutine_with_recursion() {
     // Coroutine that uses recursion
     let result = eval(
         r#"
-        (define (countdown n)
+        (define countdown (fn (n)
           (if (<= n 0)
             (yield 0)
             (begin
               (yield n)
-              (countdown (- n 1)))))
-        (define co (make-coroutine countdown 3))
+              (countdown (- n 1))))))
+        (define co (make-coroutine (fn () (countdown 3))))
         (coroutine-resume co)
         "#,
     );
@@ -690,12 +672,11 @@ fn test_coroutine_with_exception_handling() {
     // Coroutine with try-catch
     let result = eval(
         r#"
-        (define co (make-coroutine (fn ()
-          (try
-            (yield (/ 1 0))
-            (catch (e)
-              (yield "error"))))))
-        (coroutine-resume co)
+         (define co (make-coroutine (fn ()
+           (handler-case
+             (yield (/ 1 0))
+             (division-by-zero e (yield "error"))))))
+         (coroutine-resume co)
         "#,
     );
     assert!(result.is_ok());

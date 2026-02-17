@@ -168,6 +168,10 @@ pub enum Instruction {
 
     /// Empty list constant
     EmptyList,
+
+    /// Re-raise current exception: pop handler, clear handling_exception flag,
+    /// but leave current_exception set so the interrupt mechanism re-fires.
+    ReraiseException,
 }
 
 /// Inline cache entry for function lookups

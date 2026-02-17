@@ -9,16 +9,12 @@ fn eval(input: &str) -> Result<Value, String> {
 
     // Try to compile as a single expression first
     match compile_new(input, &mut symbols) {
-        Ok(result) => {
-            return vm.execute(&result.bytecode).map_err(|e| e.to_string());
-        }
+        Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
         Err(_) => {
             // If that fails, try wrapping in a begin
             let wrapped = format!("(begin {})", input);
             match compile_new(&wrapped, &mut symbols) {
-                Ok(result) => {
-                    return vm.execute(&result.bytecode).map_err(|e| e.to_string());
-                }
+                Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
                 Err(_) => {
                     // If that also fails, try compiling all expressions
                     let results = compile_all_new(input, &mut symbols)?;
@@ -26,7 +22,7 @@ fn eval(input: &str) -> Result<Value, String> {
                     for result in results {
                         last_result = vm.execute(&result.bytecode).map_err(|e| e.to_string())?;
                     }
-                    return Ok(last_result);
+                    Ok(last_result)
                 }
             }
         }
