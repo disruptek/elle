@@ -9,7 +9,7 @@
 use super::binding::{BindingId, BindingInfo, BindingKind, CaptureInfo, CaptureKind};
 use super::expr::{Hir, HirKind};
 use super::pattern::{HirPattern, PatternLiteral};
-use crate::compiler::effects::Effect;
+use crate::effects::Effect;
 use crate::symbol::SymbolTable;
 use crate::syntax::{Span, Syntax, SyntaxKind};
 use std::collections::HashMap;

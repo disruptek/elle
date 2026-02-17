@@ -3,9 +3,10 @@
 // to use HIR/LIR, this file should be updated to use compile_new/eval_new.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use elle::compiler::compile::compile;
 use elle::compiler::converters::value_to_expr;
 use elle::compiler::JitCoordinator;
-use elle::{compile, read_str, register_primitives, SymbolTable, VM};
+use elle::{read_str, register_primitives, SymbolTable, VM};
 
 // Benchmark: JIT Coordinator vs Bytecode for repeated operations
 fn bench_coordinator_overhead(c: &mut Criterion) {

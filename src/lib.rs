@@ -35,6 +35,7 @@
 pub mod arithmetic;
 pub mod binding;
 pub mod compiler;
+pub mod effects;
 pub mod error;
 pub mod ffi;
 pub mod formatter;
@@ -54,8 +55,7 @@ pub mod vm;
 pub use ffi::primitives as ffi_primitives;
 
 pub use compiler::{
-    compile, compile_jit, is_jit_compilable, Bytecode, JitCompiledFunction, JitCoordinator,
-    JitExecutor,
+    compile_jit, is_jit_compilable, Bytecode, JitCompiledFunction, JitCoordinator, JitExecutor,
 };
 pub use error::{RuntimeError, SourceLoc};
 pub use pipeline::{compile_all_new, compile_new, eval_new, CompileResult};
