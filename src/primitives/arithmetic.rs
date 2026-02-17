@@ -1,5 +1,5 @@
 use crate::arithmetic;
-use crate::error::{LError, LResult};
+use crate::error::LResult;
 use crate::value::{Condition, Value};
 use crate::vm::core::VM;
 
@@ -197,13 +197,22 @@ pub fn prim_odd(args: &[Value]) -> Result<Value, Condition> {
     }
 }
 
-pub fn prim_div_vm(args: &[Value], _vm: &mut VM) -> LResult<Value> {
+pub fn prim_div_vm(args: &[Value], vm: &mut VM) -> LResult<Value> {
     if args.is_empty() {
-        return Err(LError::arity_at_least(1, args.len()));
+        let cond = Condition::arity_error("/: expected at least 1 argument, got 0");
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        return Ok(Value::NIL);
     }
 
     if args.len() == 1 {
-        return arithmetic::reciprocal_value(&args[0]).map_err(LError::from);
+        match arithmetic::reciprocal_value(&args[0]) {
+            Ok(val) => return Ok(val),
+            Err(msg) => {
+                let cond = Condition::type_error(msg);
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                return Ok(Value::NIL);
+            }
+        }
     }
 
     let mut result = args[0];
@@ -228,11 +237,18 @@ pub fn prim_div_vm(args: &[Value], _vm: &mut VM) -> LResult<Value> {
             let cond = crate::value::Condition::division_by_zero("division by zero")
                 .with_field(0, result) // dividend
                 .with_field(1, *arg); // divisor
-            _vm.current_exception = Some(std::rc::Rc::new(cond));
+            vm.current_exception = Some(std::rc::Rc::new(cond));
             return Ok(Value::NIL);
         }
 
-        result = arithmetic::div_values(&result, arg).map_err(LError::from)?;
+        match arithmetic::div_values(&result, arg) {
+            Ok(val) => result = val,
+            Err(msg) => {
+                let cond = Condition::type_error(msg);
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                return Ok(Value::NIL);
+            }
+        }
     }
     Ok(result)
 }

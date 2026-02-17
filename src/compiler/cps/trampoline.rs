@@ -675,7 +675,7 @@ fn register_global_effects(effect_ctx: &mut EffectContext, vm: &VM) {
 
 /// Call a value as a function with the given arguments using the VM
 fn call_value_with_vm(func: &Value, args: &[Value], vm: &mut VM) -> Result<Value, String> {
-    if let Some(closure) = func.as_closure() {
+    let result = if let Some(closure) = func.as_closure() {
         // Build environment
         let mut new_env = Vec::new();
         new_env.extend((*closure.env).iter().cloned());
@@ -706,7 +706,14 @@ fn call_value_with_vm(func: &Value, args: &[Value], vm: &mut VM) -> Result<Value
         f(args, vm).map_err(|e| e.into())
     } else {
         Err(format!("Cannot call {}", func.type_name()))
+    };
+
+    // Check for exception set by the function
+    if let Some(exc) = vm.current_exception.take() {
+        return Err(format!("{}", exc));
     }
+
+    result
 }
 
 /// Call a value with VM access, returning VmResult to detect yields
@@ -715,7 +722,7 @@ fn call_value_with_vm_result(
     args: &[Value],
     vm: &mut VM,
 ) -> Result<crate::vm::VmResult, String> {
-    if let Some(closure) = func.as_closure() {
+    let result = if let Some(closure) = func.as_closure() {
         // Build environment
         let mut new_env = Vec::new();
         new_env.extend((*closure.env).iter().cloned());
@@ -760,7 +767,14 @@ fn call_value_with_vm_result(
         }
     } else {
         Err(format!("Cannot call {}", func.type_name()))
+    };
+
+    // Check for exception set by the function
+    if let Some(exc) = vm.current_exception.take() {
+        return Err(format!("{}", exc));
     }
+
+    result
 }
 
 impl Default for Trampoline {

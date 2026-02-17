@@ -165,7 +165,7 @@ fn test_resume_done_coroutine_fails() {
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
-        .contains("Cannot resume completed coroutine"));
+        .contains("cannot resume completed coroutine"));
 }
 
 #[test]

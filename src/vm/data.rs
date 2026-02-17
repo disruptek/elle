@@ -13,12 +13,18 @@ pub fn handle_car(vm: &mut VM) -> Result<(), String> {
 
     // car of nil is an error - enforces proper list invariant
     if val.is_nil() {
-        return Err("car: cannot take car of nil (improper list terminator)".to_string());
+        let cond = crate::value::Condition::type_error("car: cannot take car of nil");
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
     }
 
     // car of empty list is an error
     if val.is_empty_list() {
-        return Err("car: cannot take car of empty list".to_string());
+        let cond = crate::value::Condition::type_error("car: cannot take car of empty list");
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
     }
 
     // Handle cons cells
@@ -26,7 +32,13 @@ pub fn handle_car(vm: &mut VM) -> Result<(), String> {
         vm.stack.push(cons.first);
         Ok(())
     } else {
-        Err("car: expected cons cell".to_string())
+        let cond = crate::value::Condition::type_error(format!(
+            "car: expected cons cell, got {}",
+            val.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        Ok(())
     }
 }
 
@@ -35,12 +47,18 @@ pub fn handle_cdr(vm: &mut VM) -> Result<(), String> {
 
     // cdr of nil is an error - enforces proper list invariant
     if val.is_nil() {
-        return Err("cdr: cannot take cdr of nil (improper list terminator)".to_string());
+        let cond = crate::value::Condition::type_error("cdr: cannot take cdr of nil");
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
     }
 
     // cdr of empty list is an error
     if val.is_empty_list() {
-        return Err("cdr: cannot take cdr of empty list".to_string());
+        let cond = crate::value::Condition::type_error("cdr: cannot take cdr of empty list");
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
     }
 
     // Handle cons cells
@@ -48,7 +66,13 @@ pub fn handle_cdr(vm: &mut VM) -> Result<(), String> {
         vm.stack.push(cons.rest);
         Ok(())
     } else {
-        Err("cdr: expected cons cell".to_string())
+        let cond = crate::value::Condition::type_error(format!(
+            "cdr: expected cons cell, got {}",
+            val.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        Ok(())
     }
 }
 
@@ -66,19 +90,65 @@ pub fn handle_make_vector(vm: &mut VM, bytecode: &[u8], ip: &mut usize) -> Resul
 pub fn handle_vector_ref(vm: &mut VM) -> Result<(), String> {
     let idx = vm.stack.pop().ok_or("Stack underflow")?;
     let vec = vm.stack.pop().ok_or("Stack underflow")?;
-    let idx = idx.as_int().ok_or("Expected integer")? as usize;
-    let vec_ref = vec.as_vector().ok_or("Expected vector")?;
+    let Some(idx_val) = idx.as_int() else {
+        let cond = crate::value::Condition::type_error(format!(
+            "vector-ref: expected integer index, got {}",
+            idx.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    };
+    let Some(vec_ref) = vec.as_vector() else {
+        let cond = crate::value::Condition::type_error(format!(
+            "vector-ref: expected vector, got {}",
+            vec.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    };
     let vec_borrow = vec_ref.borrow();
-    vm.stack
-        .push(*vec_borrow.get(idx).ok_or("Vector index out of bounds")?);
-    Ok(())
+    match vec_borrow.get(idx_val as usize) {
+        Some(val) => {
+            vm.stack.push(*val);
+            Ok(())
+        }
+        None => {
+            let cond = crate::value::Condition::error(format!(
+                "vector-ref: index {} out of bounds (length {})",
+                idx_val,
+                vec_borrow.len()
+            ));
+            vm.current_exception = Some(std::rc::Rc::new(cond));
+            vm.stack.push(Value::NIL);
+            Ok(())
+        }
+    }
 }
 
 pub fn handle_vector_set(vm: &mut VM) -> Result<(), String> {
     let val = vm.stack.pop().ok_or("Stack underflow")?;
     let idx = vm.stack.pop().ok_or("Stack underflow")?;
-    let _vec = vm.stack.pop().ok_or("Stack underflow")?;
-    let _idx = idx.as_int().ok_or("Expected integer")? as usize;
+    let vec = vm.stack.pop().ok_or("Stack underflow")?;
+    let Some(_idx_val) = idx.as_int() else {
+        let cond = crate::value::Condition::type_error(format!(
+            "vector-set!: expected integer index, got {}",
+            idx.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    };
+    if vec.as_vector().is_none() {
+        let cond = crate::value::Condition::type_error(format!(
+            "vector-set!: expected vector, got {}",
+            vec.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    }
     // Note: Vectors are immutable in this implementation
     vm.stack.push(val);
     Ok(())

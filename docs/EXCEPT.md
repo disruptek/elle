@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress. Condition struct rework is the current step.
+Complete. All four phases implemented.
 
 ## Problem
 

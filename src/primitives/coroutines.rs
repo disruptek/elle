@@ -154,11 +154,12 @@ pub fn prim_is_coroutine(args: &[Value]) -> Result<Value, Condition> {
 /// If the coroutine completes, returns the final value.
 pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
     if args.is_empty() || args.len() > 2 {
-        return Err(format!(
-            "coroutine-resume requires 1 or 2 arguments, got {}",
+        let cond = Condition::arity_error(format!(
+            "coroutine-resume: expected 1-2 arguments, got {}",
             args.len()
-        )
-        .into());
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        return Ok(Value::NIL);
     }
 
     let resume_value = args.get(1).cloned().unwrap_or(Value::EMPTY_LIST);
@@ -299,18 +300,32 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                     }
                 }
             }
-            CoroutineState::Running => Err("Coroutine is already running".to_string().into()),
-            CoroutineState::Done => Err("Cannot resume completed coroutine".to_string().into()),
+            CoroutineState::Running => {
+                let cond = Condition::error("coroutine-resume: coroutine is already running");
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                Ok(Value::NIL)
+            }
+            CoroutineState::Done => {
+                let cond = Condition::error("coroutine-resume: cannot resume completed coroutine");
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                Ok(Value::NIL)
+            }
             CoroutineState::Error(e) => {
-                Err(format!("Cannot resume errored coroutine: {}", e).into())
+                let cond = Condition::error(format!(
+                    "coroutine-resume: cannot resume errored coroutine: {}",
+                    e
+                ));
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                Ok(Value::NIL)
             }
         }
     } else {
-        Err(format!(
-            "coroutine-resume requires a coroutine, got {}",
+        let cond = Condition::type_error(format!(
+            "coroutine-resume: expected coroutine, got {}",
             args[0].type_name()
-        )
-        .into())
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        Ok(Value::NIL)
     }
 }
 
@@ -514,7 +529,12 @@ fn register_global_effects(effect_ctx: &mut EffectContext, vm: &VM) {
 /// then returns the sub-coroutine's final value.
 pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> LResult<Value> {
     if args.len() != 1 {
-        return Err(format!("yield-from requires exactly 1 argument, got {}", args.len()).into());
+        let cond = Condition::arity_error(format!(
+            "yield-from: expected 1 argument, got {}",
+            args.len()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        return Ok(Value::NIL);
     }
 
     if let Some(co) = args[0].as_coroutine() {
@@ -535,15 +555,24 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> LResult<Value> {
                     &borrowed.yielded_value.clone().unwrap_or(OldValue::Nil),
                 ))
             }
-            CoroutineState::Error(e) => Err(e.clone().into()),
-            CoroutineState::Running => Err("Sub-coroutine is already running".to_string().into()),
+            CoroutineState::Error(e) => {
+                let cond = Condition::error(format!("yield-from: sub-coroutine errored: {}", e));
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                Ok(Value::NIL)
+            }
+            CoroutineState::Running => {
+                let cond = Condition::error("yield-from: sub-coroutine is already running");
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                Ok(Value::NIL)
+            }
         }
     } else {
-        Err(format!(
-            "yield-from requires a coroutine, got {}",
+        let cond = Condition::type_error(format!(
+            "yield-from: expected coroutine, got {}",
             args[0].type_name()
-        )
-        .into())
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        Ok(Value::NIL)
     }
 }
 
@@ -579,11 +608,12 @@ pub fn prim_coroutine_to_iterator(args: &[Value]) -> Result<Value, Condition> {
 /// Returns a pair of (value, done-flag).
 pub fn prim_coroutine_next(args: &[Value], vm: &mut VM) -> LResult<Value> {
     if args.len() != 1 {
-        return Err(format!(
-            "coroutine-next requires exactly 1 argument, got {}",
+        let cond = Condition::arity_error(format!(
+            "coroutine-next: expected 1 argument, got {}",
             args.len()
-        )
-        .into());
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        return Ok(Value::NIL);
     }
 
     if let Some(co) = args[0].as_coroutine() {
@@ -604,11 +634,12 @@ pub fn prim_coroutine_next(args: &[Value], vm: &mut VM) -> LResult<Value> {
             Ok(crate::value::cons(result, Value::bool(false)))
         }
     } else {
-        Err(format!(
-            "coroutine-next requires a coroutine, got {}",
+        let cond = Condition::type_error(format!(
+            "coroutine-next: expected coroutine, got {}",
             args[0].type_name()
-        )
-        .into())
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        Ok(Value::NIL)
     }
 }
 
@@ -795,7 +826,9 @@ mod tests {
     fn test_coroutine_resume_wrong_type() {
         let mut vm = VM::new();
         let result = prim_coroutine_resume(&[Value::int(42)], &mut vm);
-        assert!(result.is_err());
+        // Now returns Ok(NIL) with current_exception set
+        assert!(result.is_ok());
+        assert!(vm.current_exception.is_some());
     }
 
     #[test]
@@ -812,7 +845,9 @@ mod tests {
     fn test_yield_from_wrong_type() {
         let mut vm = VM::new();
         let result = prim_yield_from(&[Value::int(42)], &mut vm);
-        assert!(result.is_err());
+        // Now returns Ok(NIL) with current_exception set
+        assert!(result.is_ok());
+        assert!(vm.current_exception.is_some());
     }
 
     #[test]
@@ -827,7 +862,9 @@ mod tests {
     fn test_coroutine_next_wrong_type() {
         let mut vm = VM::new();
         let result = prim_coroutine_next(&[Value::int(42)], &mut vm);
-        assert!(result.is_err());
+        // Now returns Ok(NIL) with current_exception set
+        assert!(result.is_ok());
+        assert!(vm.current_exception.is_some());
     }
 
     #[test]

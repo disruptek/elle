@@ -770,7 +770,7 @@ impl<'a> CpsInterpreter<'a> {
 
     /// Call a value as a function with the given arguments
     fn call_value(&mut self, func: &Value, args: &[Value]) -> Result<Value, String> {
-        if let Some(closure_rc) = func.as_closure() {
+        let result = if let Some(closure_rc) = func.as_closure() {
             let closure = closure_rc.as_ref();
             // Build environment
             let mut new_env = Vec::new();
@@ -803,7 +803,14 @@ impl<'a> CpsInterpreter<'a> {
             f(args, self.vm).map_err(|e| e.into())
         } else {
             Err(format!("Cannot call {}", func.type_name()))
+        };
+
+        // Check for exception set by the function
+        if let Some(exc) = self.vm.current_exception.take() {
+            return Err(format!("{}", exc));
         }
+
+        result
     }
 }
 

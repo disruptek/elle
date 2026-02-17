@@ -3,52 +3,52 @@ use crate::arithmetic;
 use crate::value::Value;
 
 pub fn handle_add_int(vm: &mut VM) -> Result<(), String> {
-    let b = vm
-        .stack
-        .pop()
-        .ok_or("Stack underflow")?
-        .as_int()
-        .ok_or("Expected integer")?;
-    let a = vm
-        .stack
-        .pop()
-        .ok_or("Stack underflow")?
-        .as_int()
-        .ok_or("Expected integer")?;
+    let b_val = vm.stack.pop().ok_or("Stack underflow")?;
+    let a_val = vm.stack.pop().ok_or("Stack underflow")?;
+    let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
+        let cond = crate::value::Condition::type_error(format!(
+            "+: expected integers, got {} and {}",
+            a_val.type_name(),
+            b_val.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    };
     vm.stack.push(Value::int(a + b));
     Ok(())
 }
 
 pub fn handle_sub_int(vm: &mut VM) -> Result<(), String> {
-    let b = vm
-        .stack
-        .pop()
-        .ok_or("Stack underflow")?
-        .as_int()
-        .ok_or("Expected integer")?;
-    let a = vm
-        .stack
-        .pop()
-        .ok_or("Stack underflow")?
-        .as_int()
-        .ok_or("Expected integer")?;
+    let b_val = vm.stack.pop().ok_or("Stack underflow")?;
+    let a_val = vm.stack.pop().ok_or("Stack underflow")?;
+    let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
+        let cond = crate::value::Condition::type_error(format!(
+            "-: expected integers, got {} and {}",
+            a_val.type_name(),
+            b_val.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    };
     vm.stack.push(Value::int(a - b));
     Ok(())
 }
 
 pub fn handle_mul_int(vm: &mut VM) -> Result<(), String> {
-    let b = vm
-        .stack
-        .pop()
-        .ok_or("Stack underflow")?
-        .as_int()
-        .ok_or("Expected integer")?;
-    let a = vm
-        .stack
-        .pop()
-        .ok_or("Stack underflow")?
-        .as_int()
-        .ok_or("Expected integer")?;
+    let b_val = vm.stack.pop().ok_or("Stack underflow")?;
+    let a_val = vm.stack.pop().ok_or("Stack underflow")?;
+    let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
+        let cond = crate::value::Condition::type_error(format!(
+            "*: expected integers, got {} and {}",
+            a_val.type_name(),
+            b_val.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    };
     vm.stack.push(Value::int(a * b));
     Ok(())
 }
@@ -56,8 +56,16 @@ pub fn handle_mul_int(vm: &mut VM) -> Result<(), String> {
 pub fn handle_div_int(vm: &mut VM) -> Result<(), String> {
     let b_val = vm.stack.pop().ok_or("Stack underflow")?;
     let a_val = vm.stack.pop().ok_or("Stack underflow")?;
-    let b = b_val.as_int().ok_or("Expected integer")?;
-    let a = a_val.as_int().ok_or("Expected integer")?;
+    let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
+        let cond = crate::value::Condition::type_error(format!(
+            "/: expected integers, got {} and {}",
+            a_val.type_name(),
+            b_val.type_name()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.stack.push(Value::NIL);
+        return Ok(());
+    };
     if b == 0 {
         // Create a division-by-zero Condition
         let cond = crate::value::Condition::division_by_zero("division by zero")
@@ -76,25 +84,52 @@ pub fn handle_div_int(vm: &mut VM) -> Result<(), String> {
 pub fn handle_add(vm: &mut VM) -> Result<(), String> {
     let b = vm.stack.pop().ok_or("Stack underflow")?;
     let a = vm.stack.pop().ok_or("Stack underflow")?;
-    let result = arithmetic::add_values(&a, &b)?;
-    vm.stack.push(result);
-    Ok(())
+    match arithmetic::add_values(&a, &b) {
+        Ok(result) => {
+            vm.stack.push(result);
+            Ok(())
+        }
+        Err(msg) => {
+            let cond = crate::value::Condition::type_error(msg);
+            vm.current_exception = Some(std::rc::Rc::new(cond));
+            vm.stack.push(Value::NIL);
+            Ok(())
+        }
+    }
 }
 
 pub fn handle_sub(vm: &mut VM) -> Result<(), String> {
     let b = vm.stack.pop().ok_or("Stack underflow")?;
     let a = vm.stack.pop().ok_or("Stack underflow")?;
-    let result = arithmetic::sub_values(&a, &b)?;
-    vm.stack.push(result);
-    Ok(())
+    match arithmetic::sub_values(&a, &b) {
+        Ok(result) => {
+            vm.stack.push(result);
+            Ok(())
+        }
+        Err(msg) => {
+            let cond = crate::value::Condition::type_error(msg);
+            vm.current_exception = Some(std::rc::Rc::new(cond));
+            vm.stack.push(Value::NIL);
+            Ok(())
+        }
+    }
 }
 
 pub fn handle_mul(vm: &mut VM) -> Result<(), String> {
     let b = vm.stack.pop().ok_or("Stack underflow")?;
     let a = vm.stack.pop().ok_or("Stack underflow")?;
-    let result = arithmetic::mul_values(&a, &b)?;
-    vm.stack.push(result);
-    Ok(())
+    match arithmetic::mul_values(&a, &b) {
+        Ok(result) => {
+            vm.stack.push(result);
+            Ok(())
+        }
+        Err(msg) => {
+            let cond = crate::value::Condition::type_error(msg);
+            vm.current_exception = Some(std::rc::Rc::new(cond));
+            vm.stack.push(Value::NIL);
+            Ok(())
+        }
+    }
 }
 
 pub fn handle_div(vm: &mut VM) -> Result<(), String> {
@@ -127,7 +162,16 @@ pub fn handle_div(vm: &mut VM) -> Result<(), String> {
         return Ok(());
     }
 
-    let result = arithmetic::div_values(&a, &b)?;
-    vm.stack.push(result);
-    Ok(())
+    match arithmetic::div_values(&a, &b) {
+        Ok(result) => {
+            vm.stack.push(result);
+            Ok(())
+        }
+        Err(msg) => {
+            let cond = crate::value::Condition::type_error(msg);
+            vm.current_exception = Some(std::rc::Rc::new(cond));
+            vm.stack.push(Value::NIL);
+            Ok(())
+        }
+    }
 }

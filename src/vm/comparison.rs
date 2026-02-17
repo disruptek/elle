@@ -28,7 +28,16 @@ pub fn handle_lt(vm: &mut VM) -> Result<(), String> {
                     Value::FALSE
                 }
             }
-            _ => return Err("Type error in comparison".to_string()),
+            _ => {
+                let cond = crate::value::Condition::type_error(format!(
+                    "<: expected numbers, got {} and {}",
+                    a.type_name(),
+                    b.type_name()
+                ));
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.stack.push(Value::NIL);
+                return Ok(());
+            }
         },
     };
     vm.stack.push(result);
@@ -54,7 +63,16 @@ pub fn handle_gt(vm: &mut VM) -> Result<(), String> {
                     Value::FALSE
                 }
             }
-            _ => return Err("Type error in comparison".to_string()),
+            _ => {
+                let cond = crate::value::Condition::type_error(format!(
+                    ">: expected numbers, got {} and {}",
+                    a.type_name(),
+                    b.type_name()
+                ));
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.stack.push(Value::NIL);
+                return Ok(());
+            }
         },
     };
     vm.stack.push(result);
@@ -80,7 +98,16 @@ pub fn handle_le(vm: &mut VM) -> Result<(), String> {
                     Value::FALSE
                 }
             }
-            _ => return Err("Type error in comparison".to_string()),
+            _ => {
+                let cond = crate::value::Condition::type_error(format!(
+                    "<=: expected numbers, got {} and {}",
+                    a.type_name(),
+                    b.type_name()
+                ));
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.stack.push(Value::NIL);
+                return Ok(());
+            }
         },
     };
     vm.stack.push(result);
@@ -106,7 +133,16 @@ pub fn handle_ge(vm: &mut VM) -> Result<(), String> {
                     Value::FALSE
                 }
             }
-            _ => return Err("Type error in comparison".to_string()),
+            _ => {
+                let cond = crate::value::Condition::type_error(format!(
+                    ">=: expected numbers, got {} and {}",
+                    a.type_name(),
+                    b.type_name()
+                ));
+                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.stack.push(Value::NIL);
+                return Ok(());
+            }
         },
     };
     vm.stack.push(result);

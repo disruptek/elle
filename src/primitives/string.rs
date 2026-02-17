@@ -708,9 +708,14 @@ pub fn prim_any_to_string(args: &[Value]) -> Result<Value, Condition> {
 
 /// Convert symbol to string
 /// `(symbol->string sym)`
-pub fn prim_symbol_to_string(args: &[Value], _vm: &mut VM) -> LResult<Value> {
+pub fn prim_symbol_to_string(args: &[Value], vm: &mut VM) -> LResult<Value> {
     if args.len() != 1 {
-        return Err(LError::arity_mismatch(1, args.len()));
+        let cond = Condition::arity_error(format!(
+            "symbol->string: expected 1 argument, got {}",
+            args.len()
+        ));
+        vm.current_exception = Some(std::rc::Rc::new(cond));
+        return Ok(Value::NIL);
     }
 
     match args[0].as_symbol() {
@@ -723,16 +728,25 @@ pub fn prim_symbol_to_string(args: &[Value], _vm: &mut VM) -> LResult<Value> {
                     if let Some(name) = symbols.name(sym_id) {
                         Ok(Value::string(name))
                     } else {
+                        // Symbol ID not found is a VM bug - the symbol table should be consistent
                         Err(LError::generic(format!(
                             "Symbol ID {} not found in symbol table",
                             id
                         )))
                     }
                 } else {
+                    // Symbol table not available is a VM bug - it should always be set
                     Err(LError::generic("Symbol table not available"))
                 }
             }
         }
-        None => Err(LError::type_mismatch("symbol", args[0].type_name())),
+        None => {
+            let cond = Condition::type_error(format!(
+                "symbol->string: expected symbol, got {}",
+                args[0].type_name()
+            ));
+            vm.current_exception = Some(std::rc::Rc::new(cond));
+            Ok(Value::NIL)
+        }
     }
 }
