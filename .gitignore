@@ -2,7 +2,6 @@
 /elle-lint/target
 /elle-lsp/target
 site/
-test_value
 
 # Profiling data
 perf.data
