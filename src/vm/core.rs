@@ -389,6 +389,7 @@ mod coroutine_vm_tests {
             source_ast: None,
             effect: Effect::Pure,
             cell_params_mask: 0,
+            symbol_names: Rc::new(std::collections::HashMap::new()),
         });
         let co = Rc::new(RefCell::new(Coroutine::new(closure)));
 
@@ -418,6 +419,7 @@ mod coroutine_vm_tests {
                 source_ast: None,
                 effect: Effect::Pure,
                 cell_params_mask: 0,
+                symbol_names: Rc::new(std::collections::HashMap::new()),
             });
             Rc::new(RefCell::new(Coroutine::new(closure)))
         };

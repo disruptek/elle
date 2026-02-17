@@ -1471,6 +1471,7 @@ fn test_spawn_primitive() {
         source_ast: None,
         effect: elle::compiler::effects::Effect::Pure,
         cell_params_mask: 0,
+        symbol_names: std::rc::Rc::new(std::collections::HashMap::new()),
     });
 
     let result = call_primitive(&spawn, &[closure]);
@@ -1586,6 +1587,7 @@ fn test_profile_primitive() {
         source_ast: None,
         effect: elle::compiler::effects::Effect::Pure,
         cell_params_mask: 0,
+        symbol_names: std::rc::Rc::new(std::collections::HashMap::new()),
     });
 
     let result = call_primitive(&profile, &[closure]);
@@ -1935,6 +1937,7 @@ fn test_json_serialize_errors() {
         source_ast: None,
         effect: elle::compiler::effects::Effect::Pure,
         cell_params_mask: 0,
+        symbol_names: std::rc::Rc::new(std::collections::HashMap::new()),
     });
     let result = call_primitive(&json_serialize, &[closure]);
     assert!(result.is_err());

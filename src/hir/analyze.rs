@@ -631,9 +631,16 @@ impl<'a> Analyzer<'a> {
             .as_symbol()
             .ok_or_else(|| format!("{}: set! target must be a symbol", span))?;
 
-        let target = self
-            .lookup(name)
-            .ok_or_else(|| format!("{}: undefined variable '{}'", span, name))?;
+        let target = match self.lookup(name) {
+            Some(id) => id,
+            None => {
+                // Treat as global reference (may have been defined in a previous form)
+                let sym = self.symbols.intern(name);
+                let id = self.ctx.fresh_binding();
+                self.ctx.register_binding(BindingInfo::global(id, sym));
+                id
+            }
+        };
 
         // Mark as mutated
         if let Some(info) = self.ctx.get_binding_mut(target) {

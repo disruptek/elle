@@ -95,9 +95,9 @@ pub struct Closure {
     pub num_locals: usize,
 
     /// Bitmask indicating which env slots are Cells that auto-deref.
-    /// Bit N = 1 means env[N] is a Cell created by the compiler for
+    /// Bit N = 1 means env\[N\] is a Cell created by the compiler for
     /// a mutable captured variable. The VM should auto-deref these.
-    /// Bit N = 0 means env[N] is a direct value or a user-created Cell
+    /// Bit N = 0 means env\[N\] is a direct value or a user-created Cell
     /// (via `box`) that should NOT be auto-derefed.
     pub cell_mask: u64,
 
@@ -179,7 +179,7 @@ impl Closure {
         self.effect
     }
 
-    /// Check if env[index] should be auto-derefed as a Cell.
+    /// Check if env\[index\] should be auto-derefed as a Cell.
     #[inline]
     pub fn is_cell_capture(&self, index: usize) -> bool {
         if index >= 64 {

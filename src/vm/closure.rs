@@ -31,6 +31,7 @@ pub fn handle_make_closure(
             source_ast: template_closure.source_ast.clone(),
             effect: template_closure.effect,
             cell_params_mask: template_closure.cell_params_mask,
+            symbol_names: template_closure.symbol_names.clone(),
         };
 
         vm.stack.push(Value::closure(closure));

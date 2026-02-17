@@ -858,6 +858,7 @@ fn create_cps_closure(
         source_ast: None,
         effect: Effect::Yields,
         cell_params_mask: 0,
+        symbol_names: Rc::new(std::collections::HashMap::new()),
     };
 
     Value::closure(closure)

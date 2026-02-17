@@ -34,8 +34,9 @@ pub fn compile_new(source: &str, symbols: &mut SymbolTable) -> Result<CompileRes
     let mut lowerer = Lowerer::new().with_bindings(analysis.bindings);
     let lir_func = lowerer.lower(&analysis.hir)?;
 
-    // Phase 5: Emit bytecode
-    let mut emitter = Emitter::new();
+    // Phase 5: Emit bytecode with symbol names for cross-thread portability
+    let symbol_snapshot = symbols.all_names();
+    let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
     let bytecode = emitter.emit(&lir_func);
 
     Ok(CompileResult {
@@ -51,18 +52,21 @@ pub fn compile_all_new(
 ) -> Result<Vec<CompileResult>, String> {
     let syntaxes = read_syntax_all(source)?;
     let mut expander = Expander::new();
-    let mut analyzer = Analyzer::new(symbols);
     let mut results = Vec::new();
 
     for syntax in syntaxes {
         let expanded = expander.expand(syntax)?;
 
+        // Create analyzer for each form to avoid borrow conflicts
+        let mut analyzer = Analyzer::new(symbols);
         let analysis = analyzer.analyze(&expanded)?;
+        // Analyzer is dropped here, releasing the mutable borrow
 
         let mut lowerer = Lowerer::new().with_bindings(analysis.bindings);
         let lir_func = lowerer.lower(&analysis.hir)?;
 
-        let mut emitter = Emitter::new();
+        let symbol_snapshot = symbols.all_names();
+        let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
         let bytecode = emitter.emit(&lir_func);
 
         results.push(CompileResult {

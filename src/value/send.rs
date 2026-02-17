@@ -36,7 +36,8 @@ pub enum SendValue {
     Struct(BTreeMap<crate::value::heap::TableKey, SendValue>),
 
     /// Deep copy of mutable cells (if contents are sendable)
-    Cell(Box<SendValue>),
+    /// The bool indicates if it's a local cell (auto-unwrapped) or user cell
+    Cell(Box<SendValue>, bool),
 
     /// Float values that couldn't be stored inline
     Float(f64),
@@ -100,12 +101,12 @@ impl SendValue {
             }
 
             // Cells - deep copy the contents if sendable
-            HeapObject::Cell(cell_ref, _) => {
+            HeapObject::Cell(cell_ref, is_local) => {
                 let borrowed = cell_ref
                     .try_borrow()
                     .map_err(|_| "Cannot borrow cell for sending".to_string())?;
                 let contents = SendValue::from_value(*borrowed)?;
-                Ok(SendValue::Cell(Box::new(contents)))
+                Ok(SendValue::Cell(Box::new(contents), *is_local))
             }
 
             // Float values that couldn't be stored inline
@@ -167,10 +168,10 @@ impl SendValue {
                     .collect();
                 alloc(HeapObject::Struct(values))
             }
-            SendValue::Cell(contents) => {
+            SendValue::Cell(contents, is_local) => {
                 let val = contents.into_value();
-                // Cells sent across threads become user cells (not auto-unwrapped)
-                alloc(HeapObject::Cell(std::cell::RefCell::new(val), false))
+                // Preserve the cell type (local vs user) across thread boundary
+                alloc(HeapObject::Cell(std::cell::RefCell::new(val), is_local))
             }
             SendValue::Float(f) => alloc(HeapObject::Float(f)),
         }

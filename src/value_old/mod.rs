@@ -122,6 +122,10 @@ pub struct Closure {
     /// Effect of the closure body
     pub effect: Effect,
     pub cell_params_mask: u64,
+    /// Symbol ID → name mapping for cross-thread portability.
+    /// When bytecode is sent to a new thread, symbol IDs may differ.
+    /// This map allows remapping globals to the correct IDs.
+    pub symbol_names: Rc<std::collections::HashMap<u32, String>>,
 }
 
 impl Closure {
@@ -778,6 +782,7 @@ mod coroutine_tests {
             source_ast: None,
             effect: Effect::Pure,
             cell_params_mask: 0,
+            symbol_names: Rc::new(std::collections::HashMap::new()),
         });
 
         let co = Coroutine::new(closure);
@@ -811,6 +816,7 @@ mod coroutine_tests {
             source_ast: None,
             effect: Effect::Pure,
             cell_params_mask: 0,
+            symbol_names: Rc::new(std::collections::HashMap::new()),
         });
 
         let mut co = Coroutine::new(closure.clone());

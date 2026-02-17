@@ -1251,6 +1251,7 @@ impl Compiler {
             source_ast,
             effect,
             cell_params_mask: 0,
+            symbol_names: Rc::new(lambda_compiler.bytecode.symbol_names),
         };
 
         let idx = self.bytecode.add_constant(Value::closure(closure));
@@ -1538,6 +1539,7 @@ pub fn compile_lambda_to_closure(
         source_ast,
         effect,
         cell_params_mask: 0,
+        symbol_names: Rc::new(lambda_compiler.bytecode.symbol_names),
     };
 
     Ok(closure)

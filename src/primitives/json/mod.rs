@@ -343,6 +343,7 @@ mod tests {
             source_ast: None,
             effect: crate::compiler::effects::Effect::Pure,
             cell_params_mask: 0,
+            symbol_names: Rc::new(std::collections::HashMap::new()),
         });
         assert!(serialize_value(&closure).is_err());
 

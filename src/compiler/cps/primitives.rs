@@ -175,6 +175,7 @@ mod tests {
             source_ast: None,
             effect: Effect::Pure,
             cell_params_mask: 0,
+            symbol_names: Rc::new(std::collections::HashMap::new()),
         })
     }
 

@@ -169,6 +169,7 @@ fn is_value_sendable(value: &Value) -> bool {
 /// Extracts closure data, validates sendability, and executes in a fresh VM
 fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
     use crate::value::SendValue;
+    use std::collections::HashMap;
 
     // Check that all captured values are sendable
     for (i, captured) in closure.env.iter().enumerate() {
@@ -212,6 +213,10 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
     // Extract the closure bytecode for thread safety
     let bytecode_data: Vec<u8> = (*closure.bytecode).clone();
 
+    // Extract symbol names for cross-thread portability
+    // This allows remapping symbol IDs in the new thread's symbol table
+    let symbol_names_for_thread: HashMap<u32, String> = (*closure.symbol_names).clone();
+
     // Create a holder for the result
     let result_holder: Arc<Mutex<Option<Result<crate::value::SendValue, String>>>> =
         Arc::new(Mutex::new(None));
@@ -224,6 +229,24 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
         let mut symbols = SymbolTable::new();
         // Register primitives so they're available in the spawned thread
         register_primitives(&mut vm, &mut symbols);
+
+        // Remap globals so bytecode symbol IDs resolve correctly.
+        // The bytecode was compiled with symbol IDs from the parent thread's symbol table.
+        // The new thread has a fresh symbol table with potentially different IDs.
+        // We need to ensure that when the bytecode looks up a symbol by its old ID,
+        // it finds the correct value (which was registered under a new ID).
+        for (old_id, name) in &symbol_names_for_thread {
+            // Find what register_primitives registered this name under
+            if let Some(new_id) = symbols.get(name) {
+                if new_id.0 != *old_id {
+                    // The bytecode expects this symbol under old_id, but register_primitives
+                    // put it under new_id. Copy the value to the old_id slot.
+                    if let Some(val) = vm.globals.get(&new_id.0).copied() {
+                        vm.globals.insert(*old_id, val);
+                    }
+                }
+            }
+        }
 
         // Reconstruct values from SendValue
         let bytecode_rc = Rc::new(bytecode_data);
