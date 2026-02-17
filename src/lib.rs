@@ -7,18 +7,14 @@
 //! ## Quick Start
 //!
 //! ```
-//! use elle::{read_str, compile, register_primitives, SymbolTable, VM};
-//! use elle::compiler::converters::value_to_expr;
+//! use elle::{eval_new, register_primitives, SymbolTable, VM};
 //!
 //! let mut vm = VM::new();
 //! let mut symbols = SymbolTable::new();
 //! register_primitives(&mut vm, &mut symbols);
 //!
 //! let code = "(+ 1 2 3)";
-//! let value = read_str(code, &mut symbols).unwrap();
-//! let expr = value_to_expr(&value, &mut symbols).unwrap();
-//! let bytecode = compile(&expr);
-//! let result = vm.execute(&bytecode).unwrap();
+//! let result = eval_new(code, &mut symbols, &mut vm).unwrap();
 //! ```
 //!
 //! ## Architecture
@@ -48,7 +44,6 @@ pub mod pipeline;
 pub mod primitives;
 pub mod reader;
 pub mod repl;
-pub mod resident_compiler;
 pub mod symbol;
 pub mod syntax;
 pub mod value;

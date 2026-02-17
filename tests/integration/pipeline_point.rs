@@ -350,7 +350,6 @@ fn test_handler_case_with_let_binding() {
 }
 
 #[test]
-#[ignore = "BUG: handler-case inside lambda fails in new pipeline (works in legacy pipeline, see handler_case.rs)"]
 fn test_handler_case_in_function() {
     // handler-case works inside function definitions
     let result = eval("((fn () (handler-case (/ 10 0) (4 e 99))))");

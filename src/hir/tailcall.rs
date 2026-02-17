@@ -12,7 +12,7 @@
 //! - The body of `let`/`letrec` inherits tail position
 //! - Clause bodies and else branch of `cond` inherit tail position
 //! - Arm bodies of `match` inherit tail position
-//! - Body and handler bodies of `handler-case` inherit tail position
+//! - Handler bodies of `handler-case` inherit tail position (but NOT the protected body)
 //! - The last expression of `and`/`or` inherits tail position
 //! - The body of `block` inherits tail position (last expression)
 //!
@@ -114,9 +114,12 @@ fn mark(hir: &mut Hir, in_tail: bool) {
             }
         }
 
-        // HandlerCase: body and handler bodies inherit tail position
+        // HandlerCase: body is NOT in tail position (calls in the protected
+        // body must not tail-call because the handler frame must remain active
+        // to catch exceptions). Handler bodies inherit tail position since the
+        // exception has been caught and cleared before they execute.
         HirKind::HandlerCase { body, handlers } => {
-            mark(body, in_tail);
+            mark(body, false);
             for (_, _, handler_body) in handlers {
                 mark(handler_body, in_tail);
             }
@@ -445,5 +448,15 @@ mod tests {
         let calls = find_calls(&hir);
         // Calls: = (not tail), f (tail), = (not tail), g (tail), h (tail)
         assert_eq!(calls, vec![false, true, false, true, true]);
+    }
+
+    #[test]
+    fn test_handler_case_body_not_tail() {
+        // (fn () (handler-case (f) (error e (g))))
+        // f is in the protected body — NOT tail (handler must stay active)
+        // g is in the handler body — IS tail (exception already caught)
+        let hir = analyze_and_mark("(fn () (handler-case (f) (error e (g))))");
+        let calls = find_calls(&hir);
+        assert_eq!(calls, vec![false, true]);
     }
 }
