@@ -245,21 +245,12 @@ pub enum CoroutineState {
     Error(String),
 }
 
-/// Saved call frame for coroutine resumption
-#[derive(Debug, Clone)]
-pub struct CoroutineCallFrame {
-    pub return_ip: usize,
-    pub base_pointer: usize,
-    pub closure: Rc<Closure>,
-}
-
 /// Saved execution context for suspended coroutines
 #[derive(Debug, Clone)]
 pub struct CoroutineContext {
-    pub ip: usize,                            // Instruction pointer
-    pub stack: Vec<Value>,                    // Operand stack snapshot
-    pub locals: Vec<Value>,                   // Local variables
-    pub call_frames: Vec<CoroutineCallFrame>, // Call stack
+    pub ip: usize,
+    pub stack: Vec<crate::value::Value>,
+    pub env: Option<std::rc::Rc<Vec<crate::value::Value>>>,
 }
 
 /// A coroutine value
@@ -767,13 +758,11 @@ mod coroutine_tests {
     fn test_coroutine_context_creation() {
         let ctx = CoroutineContext {
             ip: 42,
-            stack: vec![Value::Int(1), Value::Int(2)],
-            locals: vec![Value::Nil],
-            call_frames: vec![],
+            stack: vec![crate::value::Value::int(1), crate::value::Value::int(2)],
+            env: None,
         };
         assert_eq!(ctx.ip, 42);
         assert_eq!(ctx.stack.len(), 2);
-        assert_eq!(ctx.locals.len(), 1);
     }
 
     #[test]
@@ -830,13 +819,8 @@ mod coroutine_tests {
         // Simulate saving context on yield
         co.saved_context = Some(CoroutineContext {
             ip: 10,
-            stack: vec![Value::Int(42)],
-            locals: vec![],
-            call_frames: vec![CoroutineCallFrame {
-                return_ip: 5,
-                base_pointer: 0,
-                closure: closure.clone(),
-            }],
+            stack: vec![crate::value::Value::int(42)],
+            env: Some(std::rc::Rc::new(vec![])),
         });
 
         assert!(co.saved_context.is_some());

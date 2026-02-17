@@ -276,11 +276,11 @@ impl VM {
                             let mut new_env = Vec::new();
                             new_env.extend((*closure.env).iter().cloned());
 
-                            // Add parameters, wrapping in cells if cell_params_mask indicates
+                            // Add parameters, wrapping in local cells if cell_params_mask indicates
                             for (i, arg) in args.iter().enumerate() {
                                 if i < 64 && (closure.cell_params_mask & (1 << i)) != 0 {
-                                    // This parameter is mutated - wrap it in a cell
-                                    new_env.push(Value::cell(*arg));
+                                    // This parameter is mutated - wrap it in a local cell
+                                    new_env.push(Value::local_cell(*arg));
                                 } else {
                                     new_env.push(*arg);
                                 }
@@ -298,7 +298,7 @@ impl VM {
                             // These will be initialized when define statements execute
                             // LocalCell is auto-unwrapped by LoadUpvalue (unlike user Cell)
                             for _ in 0..num_locally_defined {
-                                let empty_cell = Value::cell(Value::NIL);
+                                let empty_cell = Value::local_cell(Value::NIL);
                                 new_env.push(empty_cell);
                             }
 
@@ -382,11 +382,11 @@ impl VM {
                             let mut new_env = Vec::new();
                             new_env.extend((*source.env).iter().cloned());
 
-                            // Add parameters, wrapping in cells if cell_params_mask indicates
+                            // Add parameters, wrapping in local cells if cell_params_mask indicates
                             for (i, arg) in args.iter().enumerate() {
                                 if i < 64 && (source.cell_params_mask & (1 << i)) != 0 {
-                                    // This parameter is mutated - wrap it in a cell
-                                    new_env.push(Value::cell(*arg));
+                                    // This parameter is mutated - wrap it in a local cell
+                                    new_env.push(Value::local_cell(*arg));
                                 } else {
                                     new_env.push(*arg);
                                 }
@@ -402,7 +402,7 @@ impl VM {
 
                             // Add empty LocalCells for locally-defined variables
                             for _ in 0..num_locally_defined {
-                                let empty_cell = Value::cell(Value::NIL);
+                                let empty_cell = Value::local_cell(Value::NIL);
                                 new_env.push(empty_cell);
                             }
 
@@ -488,11 +488,11 @@ impl VM {
                         self.tail_call_env_cache
                             .extend((*closure.env).iter().cloned());
 
-                        // Add parameters, wrapping in cells if cell_params_mask indicates
+                        // Add parameters, wrapping in local cells if cell_params_mask indicates
                         for (i, arg) in args.iter().enumerate() {
                             if i < 64 && (closure.cell_params_mask & (1 << i)) != 0 {
-                                // This parameter is mutated - wrap it in a cell
-                                self.tail_call_env_cache.push(Value::cell(*arg));
+                                // This parameter is mutated - wrap it in a local cell
+                                self.tail_call_env_cache.push(Value::local_cell(*arg));
                             } else {
                                 self.tail_call_env_cache.push(*arg);
                             }
@@ -508,7 +508,7 @@ impl VM {
 
                         // Add empty LocalCells for locally-defined variables
                         for _ in 0..num_locally_defined {
-                            let empty_cell = Value::cell(Value::NIL);
+                            let empty_cell = Value::local_cell(Value::NIL);
                             self.tail_call_env_cache.push(empty_cell);
                         }
 
@@ -572,11 +572,11 @@ impl VM {
                             self.tail_call_env_cache
                                 .extend((*source.env).iter().cloned());
 
-                            // Add parameters, wrapping in cells if cell_params_mask indicates
+                            // Add parameters, wrapping in local cells if cell_params_mask indicates
                             for (i, arg) in args.iter().enumerate() {
                                 if i < 64 && (source.cell_params_mask & (1 << i)) != 0 {
-                                    // This parameter is mutated - wrap it in a cell
-                                    self.tail_call_env_cache.push(Value::cell(*arg));
+                                    // This parameter is mutated - wrap it in a local cell
+                                    self.tail_call_env_cache.push(Value::local_cell(*arg));
                                 } else {
                                     self.tail_call_env_cache.push(*arg);
                                 }
@@ -592,7 +592,7 @@ impl VM {
 
                             // Add empty LocalCells for locally-defined variables
                             for _ in 0..num_locally_defined {
-                                let empty_cell = Value::cell(Value::NIL);
+                                let empty_cell = Value::local_cell(Value::NIL);
                                 self.tail_call_env_cache.push(empty_cell);
                             }
 
@@ -913,23 +913,21 @@ impl VM {
                         None => return Err("yield used outside of coroutine".to_string()),
                     };
 
-                    // 3. Save execution context
-                    // The stack contains locals at the bottom and operands on top
-                    // We need to save it so we can restore when resuming
-                    // TODO: Convert repr::Value to value_old::Value for coroutine context
+                    // 3. Save execution context — the LIVE operand stack and environment
+                    let saved_stack: Vec<Value> = self.stack.drain(..).collect();
+                    let saved_env = closure_env.cloned();
+
                     let saved_context = CoroutineContext {
-                        ip,                  // Current IP (will resume at next instruction)
-                        stack: vec![], // TODO: convert stack values from repr::Value to value_old::Value
-                        locals: vec![], // Locals are on the stack, not separate
-                        call_frames: vec![], // TODO: save call frames if we support nested calls in coroutines
+                        ip,
+                        stack: saved_stack,
+                        env: saved_env,
                     };
 
                     // 4. Update coroutine state
                     {
                         let mut co = coroutine.borrow_mut();
                         co.state = CoroutineState::Suspended;
-                        // TODO: Convert repr::Value to value_old::Value
-                        co.yielded_value = None; // TODO: convert yielded_value
+                        co.yielded_value = None;
                         co.saved_context = Some(saved_context);
                     }
 
@@ -1047,11 +1045,15 @@ impl VM {
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
     ) -> Result<VmResult, String> {
+        // Save the caller's stack — the Yield handler will drain self.stack
+        // to capture the coroutine's operand state, so we must isolate it.
+        let saved_stack = std::mem::take(&mut self.stack);
+
         let mut current_bytecode = bytecode.to_vec();
         let mut current_constants = constants.to_vec();
         let mut current_env = closure_env.cloned();
 
-        loop {
+        let result = loop {
             let result = self.execute_bytecode_inner(
                 &current_bytecode,
                 &current_constants,
@@ -1063,27 +1065,19 @@ impl VM {
                 current_constants = tail_constants;
                 current_env = Some(tail_env);
             } else {
-                // Check for unhandled exception at coroutine boundary
-                if let VmResult::Done(_) = &result {
-                    if let Some(exc) = self.current_exception.take() {
-                        let details = if let Some(field) = exc.get_field(0) {
-                            if let Some(sym_id) = field.as_symbol() {
-                                format!(" (SymbolId({}))", sym_id)
-                            } else {
-                                String::new()
-                            }
-                        } else {
-                            String::new()
-                        };
-                        return Err(format!(
-                            "Unhandled exception: {}{}",
-                            exc.exception_id, details
-                        ));
-                    }
-                }
-                return Ok(result);
+                // If there's an unhandled exception from the coroutine body,
+                // leave it on current_exception. The caller (prim_coroutine_resume)
+                // will check it and route through the proper exception channel.
+                // Do NOT convert to Err(String) — that's the VM bug channel,
+                // uncatchable by handler-case.
+                break result;
             }
-        }
+        };
+
+        // Restore the caller's stack
+        self.stack = saved_stack;
+
+        Ok(result)
     }
 }
 

@@ -138,7 +138,7 @@ impl PartialEq for Value {
                 }
 
                 // Cell comparison (compare contents)
-                (HeapObject::Cell(c1), HeapObject::Cell(c2)) => *c1.borrow() == *c2.borrow(),
+                (HeapObject::Cell(c1, _), HeapObject::Cell(c2, _)) => *c1.borrow() == *c2.borrow(),
 
                 // Float comparison
                 (HeapObject::Float(f1), HeapObject::Float(f2)) => f1 == f2,
@@ -506,12 +506,21 @@ impl Value {
         alloc(HeapObject::Closure(Rc::new(c)))
     }
 
-    /// Create a cell (mutable box).
+    /// Create a user cell (mutable box) — NOT auto-unwrapped by LoadUpvalue.
     #[inline]
     pub fn cell(value: Value) -> Self {
         use crate::value::heap::{alloc, HeapObject};
         use std::cell::RefCell;
-        alloc(HeapObject::Cell(RefCell::new(value)))
+        alloc(HeapObject::Cell(RefCell::new(value), false))
+    }
+
+    /// Create a compiler local cell — auto-unwrapped by LoadUpvalue.
+    /// Used for mutable captured variables.
+    #[inline]
+    pub fn local_cell(value: Value) -> Self {
+        use crate::value::heap::{alloc, HeapObject};
+        use std::cell::RefCell;
+        alloc(HeapObject::Cell(RefCell::new(value), true))
     }
 
     /// Create a coroutine value.
@@ -718,9 +727,19 @@ impl Value {
             return None;
         }
         match unsafe { deref(*self) } {
-            HeapObject::Cell(c) => Some(c),
+            HeapObject::Cell(c, _) => Some(c),
             _ => None,
         }
+    }
+
+    /// Check if this is a compiler-created local cell (auto-unwrapped by LoadUpvalue).
+    #[inline]
+    pub fn is_local_cell(&self) -> bool {
+        use crate::value::heap::{deref, HeapObject};
+        if !self.is_heap() {
+            return false;
+        }
+        unsafe { matches!(deref(*self), HeapObject::Cell(_, true)) }
     }
 
     /// Extract as native function if this is a native function.

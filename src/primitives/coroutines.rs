@@ -214,7 +214,7 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
 
                 // Add empty LocalCells for locally-defined variables
                 for _ in env.len()..num_captures + num_locally_defined {
-                    let empty_cell = Value::cell(Value::EMPTY_LIST);
+                    let empty_cell = Value::local_cell(Value::EMPTY_LIST);
                     env.push(empty_cell);
                 }
 
@@ -233,9 +233,22 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                 let mut borrowed = co.borrow_mut();
                 match result {
                     Ok(VmResult::Done(value)) => {
-                        borrowed.state = CoroutineState::Done;
-                        borrowed.yielded_value = Some(new_value_to_old(value));
-                        Ok(value)
+                        // Check if the coroutine body raised an uncaught exception.
+                        // If so, leave it on vm.current_exception for handler-case
+                        // to catch, and transition the coroutine to Error state.
+                        if vm.current_exception.is_some() {
+                            let msg = vm
+                                .current_exception
+                                .as_ref()
+                                .map(|e| e.message.clone())
+                                .unwrap_or_default();
+                            borrowed.state = CoroutineState::Error(msg);
+                            Ok(Value::NIL)
+                        } else {
+                            borrowed.state = CoroutineState::Done;
+                            borrowed.yielded_value = Some(new_value_to_old(value));
+                            Ok(value)
+                        }
                     }
                     Ok(VmResult::Yielded(value)) => {
                         // Coroutine yielded - state already updated by Yield instruction
@@ -285,9 +298,22 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                 let mut borrowed = co.borrow_mut();
                 match result {
                     Ok(VmResult::Done(value)) => {
-                        borrowed.state = CoroutineState::Done;
-                        borrowed.yielded_value = Some(new_value_to_old(value));
-                        Ok(value)
+                        // Check if the coroutine body raised an uncaught exception.
+                        // If so, leave it on vm.current_exception for handler-case
+                        // to catch, and transition the coroutine to Error state.
+                        if vm.current_exception.is_some() {
+                            let msg = vm
+                                .current_exception
+                                .as_ref()
+                                .map(|e| e.message.clone())
+                                .unwrap_or_default();
+                            borrowed.state = CoroutineState::Error(msg);
+                            Ok(Value::NIL)
+                        } else {
+                            borrowed.state = CoroutineState::Done;
+                            borrowed.yielded_value = Some(new_value_to_old(value));
+                            Ok(value)
+                        }
                     }
                     Ok(VmResult::Yielded(value)) => {
                         // Coroutine yielded again - state already updated by Yield instruction
@@ -356,7 +382,7 @@ fn execute_coroutine_cps(
     let num_locally_defined = num_locals.saturating_sub(num_captures);
 
     for _ in env.len()..num_captures + num_locally_defined {
-        let empty_cell = Value::cell(Value::EMPTY_LIST);
+        let empty_cell = Value::local_cell(Value::EMPTY_LIST);
         env.push(empty_cell);
     }
 
@@ -707,7 +733,7 @@ pub fn new_value_to_old(val: Value) -> OldValue {
                     // For now, we can't convert coroutines
                     OldValue::Nil
                 }
-                HeapObject::Cell(c) => {
+                HeapObject::Cell(c, _) => {
                     let borrowed = c.borrow();
                     OldValue::Cell(std::rc::Rc::new(std::cell::RefCell::new(Box::new(
                         new_value_to_old(*borrowed),

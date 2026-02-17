@@ -1159,6 +1159,11 @@ impl Lowerer {
                         src: exc_reg,
                     });
 
+                    // Clear the exception BEFORE executing the handler body.
+                    // This ensures that if the handler body yields, the exception
+                    // won't be propagated to the caller.
+                    self.emit(LirInstr::ClearException);
+
                     // Compile handler body (now can find var_id via LoadLocal)
                     let handler_reg = self.lower_expr(handler_body)?;
                     self.emit(LirInstr::Move {
@@ -1192,7 +1197,8 @@ impl Lowerer {
                 self.emit(LirInstr::LabelMarker {
                     label_id: end_label,
                 });
-                self.emit(LirInstr::ClearException);
+                // Note: ClearException is now emitted BEFORE the handler body,
+                // not after, to ensure it's executed even if the handler yields.
 
                 Ok(result_reg)
             }

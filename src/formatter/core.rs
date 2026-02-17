@@ -128,7 +128,7 @@ fn format_value(
             HeapObject::CHandle(_, _) => return "#<c-handle>".to_string(),
             HeapObject::Condition(_) => return "#<condition>".to_string(),
             HeapObject::ThreadHandle(_) => return "#<thread-handle>".to_string(),
-            HeapObject::Cell(_) => return "#<cell>".to_string(),
+            HeapObject::Cell(_, _) => return "#<cell>".to_string(),
             HeapObject::Float(_) => return "#<float>".to_string(),
             HeapObject::Coroutine(_) => return "#<coroutine>".to_string(),
         }

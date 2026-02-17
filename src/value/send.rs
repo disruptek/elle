@@ -100,7 +100,7 @@ impl SendValue {
             }
 
             // Cells - deep copy the contents if sendable
-            HeapObject::Cell(cell_ref) => {
+            HeapObject::Cell(cell_ref, _) => {
                 let borrowed = cell_ref
                     .try_borrow()
                     .map_err(|_| "Cannot borrow cell for sending".to_string())?;
@@ -169,7 +169,8 @@ impl SendValue {
             }
             SendValue::Cell(contents) => {
                 let val = contents.into_value();
-                alloc(HeapObject::Cell(std::cell::RefCell::new(val)))
+                // Cells sent across threads become user cells (not auto-unwrapped)
+                alloc(HeapObject::Cell(std::cell::RefCell::new(val), false))
             }
             SendValue::Float(f) => alloc(HeapObject::Float(f)),
         }

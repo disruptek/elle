@@ -11,13 +11,39 @@
 
 use elle::ffi::primitives::context::set_symbol_table;
 use elle::pipeline::{compile_all_new, compile_new};
-use elle::primitives::register_primitives;
+use elle::primitives::{init_stdlib, register_primitives};
 use elle::{SymbolTable, Value, VM};
 
 fn eval(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
     register_primitives(&mut vm, &mut symbols);
+    set_symbol_table(&mut symbols as *mut SymbolTable);
+
+    match compile_new(input, &mut symbols) {
+        Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
+        Err(_) => {
+            let wrapped = format!("(begin {})", input);
+            match compile_new(&wrapped, &mut symbols) {
+                Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
+                Err(_) => {
+                    let results = compile_all_new(input, &mut symbols)?;
+                    let mut last_result = Value::NIL;
+                    for result in results {
+                        last_result = vm.execute(&result.bytecode).map_err(|e| e.to_string())?;
+                    }
+                    Ok(last_result)
+                }
+            }
+        }
+    }
+}
+
+fn eval_with_stdlib(input: &str) -> Result<Value, String> {
+    let mut vm = VM::new();
+    let mut symbols = SymbolTable::new();
+    register_primitives(&mut vm, &mut symbols);
+    init_stdlib(&mut vm, &mut symbols);
     set_symbol_table(&mut symbols as *mut SymbolTable);
 
     match compile_new(input, &mut symbols) {
@@ -657,14 +683,14 @@ fn test_coroutine_with_recursion() {
 #[test]
 fn test_coroutine_with_higher_order_functions() {
     // Coroutine that uses map, filter, etc.
-    let result = eval(
+    let result = eval_with_stdlib(
         r#"
         (define co (make-coroutine (fn ()
           (yield (map (fn (x) (* x 2)) (list 1 2 3))))))
-        (coroutine-resume co)
+         (coroutine-resume co)
         "#,
     );
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
 }
 
 #[test]
@@ -676,7 +702,7 @@ fn test_coroutine_with_exception_handling() {
            (handler-case
              (yield (/ 1 0))
              (division-by-zero e (yield "error"))))))
-         (coroutine-resume co)
+        (coroutine-resume co)
         "#,
     );
     assert!(result.is_ok());

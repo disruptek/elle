@@ -86,9 +86,10 @@ pub enum HeapObject {
     /// Suspendable computation
     Coroutine(Rc<RefCell<Coroutine>>),
 
-    /// Mutable cell for captured variables
-    /// Unifies the old Cell and LocalCell types
-    Cell(RefCell<Value>),
+    /// Mutable cell for captured variables.
+    /// The boolean distinguishes compiler-created cells (true, auto-unwrapped
+    /// by LoadUpvalue) from user-created cells via `box` (false, not auto-unwrapped).
+    Cell(RefCell<Value>, bool),
 
     /// Float value that couldn't be stored inline (NaN payload)
     Float(f64),
@@ -130,7 +131,7 @@ impl HeapObject {
             HeapObject::JitClosure(_) => HeapTag::Closure, // Same tag for now
             HeapObject::Condition(_) => HeapTag::Condition,
             HeapObject::Coroutine(_) => HeapTag::Coroutine,
-            HeapObject::Cell(_) => HeapTag::Cell,
+            HeapObject::Cell(_, _) => HeapTag::Cell,
             HeapObject::Float(_) => HeapTag::Float,
             HeapObject::NativeFn(_) => HeapTag::NativeFn,
             HeapObject::VmAwareFn(_) => HeapTag::VmAwareFn,
@@ -151,7 +152,7 @@ impl HeapObject {
             HeapObject::Closure(_) | HeapObject::JitClosure(_) => "closure",
             HeapObject::Condition(_) => "condition",
             HeapObject::Coroutine(_) => "coroutine",
-            HeapObject::Cell(_) => "cell",
+            HeapObject::Cell(_, _) => "cell",
             HeapObject::Float(_) => "float",
             HeapObject::NativeFn(_) => "native-function",
             HeapObject::VmAwareFn(_) => "vm-aware-function",
@@ -180,7 +181,7 @@ impl std::fmt::Debug for HeapObject {
             HeapObject::JitClosure(_) => write!(f, "<jit-closure>"),
             HeapObject::Condition(c) => write!(f, "<condition:{}>", c.exception_id),
             HeapObject::Coroutine(_) => write!(f, "<coroutine>"),
-            HeapObject::Cell(_) => write!(f, "<cell>"),
+            HeapObject::Cell(_, _) => write!(f, "<cell>"),
             HeapObject::Float(n) => write!(f, "{}", n),
             HeapObject::NativeFn(_) => write!(f, "<native-fn>"),
             HeapObject::VmAwareFn(_) => write!(f, "<vm-aware-fn>"),

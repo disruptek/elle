@@ -114,11 +114,13 @@ pub fn handle_load_upvalue(
         if idx < env.len() {
             let val = env[idx];
             // Handle different value types:
-            // - Cell: auto-unwrap (internal cells for locally-defined variables)
-            // - Symbol: load from global scope
+            // - LocalCell: auto-unwrap (compiler-created cells for mutable captures)
+            // - Cell (user box): push as-is (NOT auto-unwrapped)
+            // - Symbol: push as-is (literal symbol values)
             // - Other: push as-is
-            if val.is_cell() {
-                // Auto-unwrap internal cells for locally-defined variables
+
+            if val.is_local_cell() {
+                // Auto-unwrap compiler-created local cells
                 if let Some(cell_ref) = val.as_cell() {
                     let inner = *cell_ref.borrow();
                     vm.stack.push(inner);

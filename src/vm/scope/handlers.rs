@@ -73,9 +73,9 @@ pub fn handle_make_cell(vm: &mut VM) -> Result<(), String> {
         // Already a cell (e.g., locally-defined variable from outer lambda) — don't double-wrap
         vm.stack.push(value);
     } else {
-        // Create a cell for compiler-generated cells (mutable captures)
-        // Cell is auto-unwrapped by LoadUpvalue
-        let cell = Value::cell(value);
+        // Create a local cell for compiler-generated cells (mutable captures)
+        // LocalCell is auto-unwrapped by LoadUpvalue
+        let cell = Value::local_cell(value);
         vm.stack.push(cell);
     }
     Ok(())

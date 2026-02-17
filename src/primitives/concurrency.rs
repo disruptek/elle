@@ -148,7 +148,7 @@ fn is_value_sendable(value: &Value) -> bool {
         HeapObject::ThreadHandle(_) => false,
 
         // Cells are safe if their contents are sendable
-        HeapObject::Cell(cell) => {
+        HeapObject::Cell(cell, _) => {
             if let Ok(val) = cell.try_borrow() {
                 is_value_sendable(&val)
             } else {
