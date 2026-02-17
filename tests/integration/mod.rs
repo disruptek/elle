@@ -149,3 +149,11 @@ mod new_pipeline {
 mod new_pipeline_property {
     include!("new_pipeline_property.rs");
 }
+
+mod pipeline_property {
+    include!("pipeline_property.rs");
+}
+
+mod pipeline_point {
+    include!("pipeline_point.rs");
+}
