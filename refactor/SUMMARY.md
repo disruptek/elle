@@ -41,6 +41,15 @@ are locals. Mutable captures use `LocalCell`. `cell_params_mask` on
 | 3 | #278 | Exception handler state in continuations, O(1) frame append, edge case tests |
 | 4 | #279 | Yield as LIR terminator, multi-block functions, `LoadResumeValue` pseudo-instruction |
 
+### Phase B: Hammer time (Feb 2026)
+
+| PR | What |
+|----|------|
+| B.1 | JIT deletion: removed Cranelift, old compiler, ~12,500 lines |
+| B.2 | value_old migration: all types now in `value/` submodules |
+| B.3 | LocationMap: source locations flow through entire pipeline |
+| B.4 | Thread transfer tests: closures transfer with location data |
+
 ### Tail call optimization (Feb 2025, PR #272)
 HIR tail-call marking pass (`hir/tailcall.rs`). Lowerer emits
 `LirInstr::TailCall`. VM trampoline via `pending_tail_call`. Handles
@@ -51,12 +60,6 @@ Both products use the new pipeline exclusively. HIR-based linter and symbol
 extraction. No dependency on old `Expr` type.
 
 ## Not yet done
-
-### Blocked on Phase B (hammer time)
-- `value_old/` removal — types need migration to `value/`
-- JIT removal — Cranelift code depends on `Expr` and old `Value`
-- LocationMap — error messages need file:line:col
-- Old compiler removal — ~12,500 lines of dead code
 
 ### Semantic gaps
 - `handler-bind` (non-unwinding handlers): stub
@@ -81,9 +84,9 @@ Documented in `docs/EXCEPT.md`. Functional but not elegant.
 | `Expr` as intermediate between Syntax and HIR | Skipped — Syntax → HIR directly |
 | CPS as canonical IR for all yielding code | Replaced by bytecode continuations |
 | Unified `LError` error system | Two-channel system instead |
-| `Closure`/`JitClosure` merge in Value | JIT being removed entirely |
+| `Closure`/`JitClosure` merge in Value | JIT removed entirely (Phase B) |
 | Arena-based memory | Deferred indefinitely |
-| Tiered JIT | Deferred to post-cleanup JIT rewrite |
+| Tiered JIT | Deferred to future Phase E |
 | Bytecode format redesign (32-bit instructions) | Not planned |
 
 ## File inventory

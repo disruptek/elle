@@ -4,7 +4,7 @@
 
 ## Where we are
 
-Elle has a working new compilation pipeline:
+Elle has a single, clean compilation pipeline:
 
 ```
 Source → Reader → Syntax → Expander → Syntax → Analyzer → HIR → Lowerer → LIR → Emitter → Bytecode → VM
@@ -15,43 +15,12 @@ analysis with `LocalCell` for mutable captures, effect inference (`Pure`,
 `Yields`, `Polymorphic`), tail call optimization, `handler-case` exception
 handling, and coroutines with first-class continuations.
 
-The CPS tree-walking interpreter is gone (~4,400 lines deleted). Coroutines
-run on bytecode with continuation frames that capture and restore full VM
-state across yield boundaries, including exception handler state.
+Source locations flow through the entire pipeline: Syntax spans → HIR spans →
+LIR `SpannedInstr` → `LocationMap` in bytecode. Error messages include
+file:line:col information.
 
 Yield is a proper LIR terminator that splits functions into multiple basic
 blocks. The emitter carries stack simulation state across yield boundaries.
-
-### What still exists but shouldn't
-
-- **`value_old/`** — runtime types (`Closure`, `Coroutine`, `Condition`,
-  `Arity`, `SymbolId`, etc.) still live here and are re-exported through
-  `value/mod.rs`. The old `Value` enum also lives here, used only by
-  bridge code and the JIT.
-
-- **Cranelift JIT** — `compiler/cranelift/` (~5,300 lines), plus
-  `jit_coordinator.rs`, `jit_executor.rs`, `jit_wrapper.rs`,
-  `primitives/jit.rs`. Compiles from the old `Expr` AST, not LIR.
-  The new pipeline never populates `source_ast` on closures, so the JIT
-  is effectively inert for all new-pipeline code.
-
-- **Old compiler** — `compiler/compile/` (~1,935 lines), zero production
-  callers. `compiler/converters/` (~2,020 lines), `compiler/ast.rs` (the
-  `Expr` type), `compiler/analysis.rs`, `compiler/optimize.rs`,
-  `compiler/patterns.rs`, `compiler/macros.rs`, `compiler/linter/`,
-  `compiler/symbol_index.rs`. All replaced by HIR/LIR equivalents.
-
-- **Old effect inference** — `effects/inference.rs` (~616 lines) operates
-  on `Expr`. The new pipeline does effect inference inline in
-  `hir/analyze.rs`.
-
-- **Empty LocationMap** — the infrastructure for instruction-offset to
-  source-location mapping exists (`LocationMap`, `VM.location_map`,
-  `capture_stack_trace`), but it's never populated. Error messages lack
-  file:line:col information.
-
-- **8 ignored tests** — yield-from delegation (1), defmacro persistence
-  (3), macro? primitive (1), expand-macro (1), module-qualified names (2).
 
 ### What works well
 
@@ -60,66 +29,50 @@ blocks. The emitter carries stack simulation state across yield boundaries.
 - First-class continuations for coroutines across call boundaries
 - Exception handlers preserved across yield/resume
 - NaN-boxed 8-byte Value (Copy semantics)
-- elle-lint and elle-lsp use the new pipeline exclusively
+- Source location tracking via LocationMap
+- elle-lint and elle-lsp use the pipeline exclusively
 - elle-doc generates the documentation site from Elle code
 - Clean clippy, all tests pass
 
-## What we're doing next
+### What still needs work
 
-### Phase B: Hammer time
+- **8 ignored tests** — yield-from delegation (1), defmacro persistence
+  (3), macro? primitive (1), expand-macro (1), module-qualified names (2).
 
-Remove dead code, migrate types, implement source location tracking.
+## Completed phases
 
-#### PR 1: Unwire JIT, delete old pipeline
+### Phase B: Hammer time (COMPLETED)
 
-Delete:
-- `src/compiler/cranelift/` (14 files)
-- `src/compiler/compile/` (2 files)
-- `src/compiler/converters/` (8 files)
-- `src/compiler/ast.rs`, `analysis.rs`, `optimize.rs`, `patterns.rs`,
-  `capture_resolution.rs`, `macros.rs`, `linter/`, `symbol_index.rs`
-- `src/compiler/jit_coordinator.rs`, `jit_executor.rs`, `jit_wrapper.rs`
-- `src/effects/inference.rs`
-- `src/primitives/jit.rs`
-- `src/value/closure.rs` (unused unified type)
-- `benches/cranelift_jit_benchmarks.rs`, `jit_vs_bytecode.rs`
+Removed dead code, migrated types, implemented source location tracking.
 
-Remove from types: `JitLambda`, `JitClosure`, `source_ast` on Closure.
-Remove from VM: JitClosure dispatch paths, JIT encoding functions.
-Remove from Cargo.toml: cranelift dependencies.
-Remove from main.rs: `--jit` flag, JIT context init/cleanup.
+#### B.1: JIT deletion
+- Deleted `src/compiler/cranelift/`, `compile/`, `converters/`, `ast.rs`,
+  `jit_*.rs`, `primitives/jit.rs`, `effects/inference.rs`
+- Removed `JitLambda`, `JitClosure`, `source_ast` from types
+- Removed cranelift dependencies from Cargo.toml
+- Removed `--jit` flag from main.rs
+- ~12,500 lines removed, 4 crate dependencies removed
 
-Estimated removal: ~12,500 lines, 4 crate dependencies.
+#### B.2: value_old migration
+- Migrated all types to `value/` submodules
+- `Closure` in `value/closure.rs` (with `location_map`)
+- `Coroutine`, `CoroutineState` in `value/coroutine.rs`
+- `Arity`, `SymbolId`, `NativeFn`, `VmAwareFn` in `value/types.rs`
+- `LibHandle`, `CHandle` in `value/ffi.rs`
+- Deleted `value_old/` module entirely
 
-#### PR 2: Migrate value_old into value/
-
-Move all types from `value_old/mod.rs` into `value/` submodules:
-- `SymbolId`, `Arity`, `TableKey`, `NativeFn`, `VmAwareFn` → `value/types.rs`
-- `Closure` (minus `source_ast`) → `value/closure.rs`
-- `Coroutine`, `CoroutineState` → `value/coroutine.rs`
-- `LibHandle`, `CHandle` → `value/ffi.rs`
-- Wire in the new `Condition` (already in `value/condition.rs`)
-- `ThreadHandle` data already in `value/heap.rs`
-
-Eliminate: old `Value` enum, `old_value_to_new`/`new_value_to_old` bridges,
-`is_value_sendable_old`. Delete `value_old/`.
-
-#### PR 3: Implement LocationMap
-
-Source locations flow: Syntax Span → HIR span → LIR span → bytecode offset.
-
-- Add `span: Option<Span>` to LIR instructions (via wrapper type)
+#### B.3: LocationMap implementation
+- `SpannedInstr` wraps `LirInstr` with `Span`
 - Lowerer propagates HIR spans to LIR
 - Emitter builds `LocationMap` during emission
-- `Closure` gains `location_map: Rc<LocationMap>`
-- `CompileResult` carries location map
+- `Closure` has `location_map: Rc<LocationMap>`
 - VM uses per-closure location map in `capture_stack_trace`
-- Thread transfer clones location map alongside bytecode
 
-#### PR 4: Thread transfer tests
+#### B.4: Thread transfer tests
+- Property tests for closure transfer with location data
+- Integration tests for cross-thread error reporting
 
-Property tests and integration tests confirming closures transfer correctly
-between threads with source location data intact.
+## What we're doing next
 
 ### Phase C: Macros and modules
 
@@ -136,10 +89,9 @@ Un-ignore the 7 macro/module tests by implementing:
 - **Module-qualified names** — `string/upcase`, `math/abs` syntax in the
   new pipeline. The HIR analyzer needs to resolve `module/name` references.
 
-### Phase D: Hammer time #2
+### Phase D: Documentation cleanup
 
 Final cleanup pass:
-- Update all AGENTS.md and README.md files
 - Update `docs/CPS_REWORK.md` to reflect completed state
 - Audit file sizes (300-line target)
 - Remove stale documentation (`docs/CPS_DESIGN.md`,
@@ -150,7 +102,7 @@ Final cleanup pass:
 
 Rewrite Cranelift JIT to consume LIR instead of Expr. This is a from-scratch
 implementation using the preserved git history as reference. Prerequisites:
-all of the above is done, LIR is stable, LocationMap works.
+Phase C complete, LIR stable.
 
 ## Decisions made
 
@@ -167,10 +119,9 @@ all of the above is done, LIR is stable, LocationMap works.
 
 ## Known defects
 
-- LocationMap is unpopulated — errors lack source locations
 - `handler-bind` is a stub (parsed, codegen ignores handlers)
 - `InvokeRestart` opcode allocated but VM handler is no-op
 - `signal`/`warn`/`error` are constructors, not signaling primitives
 - yield-from delegation not implemented
 - defmacro doesn't persist across compilation units
-- Module-qualified names not supported in new pipeline
+- Module-qualified names not supported
