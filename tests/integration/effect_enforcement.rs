@@ -160,11 +160,11 @@ fn test_effect_polymorphic_local_higher_order() {
     // When we call (my-map gen ...), we look up my-map's effect
     // Since my-map is defined with a lambda, we track its body effect
     // The body calls f which is a parameter - we can't resolve that statically
-    // So this will be Pure (conservative)
+    // So this is Yields (sound: unknown callee may yield)
     assert_eq!(
         result.hir.effect,
-        Effect::Pure,
-        "Local higher-order function with unknown parameter effect is conservatively Pure"
+        Effect::Yields,
+        "Local higher-order function with unknown parameter effect is conservatively Yields"
     );
 }
 
@@ -181,11 +181,11 @@ fn test_effect_polymorphic_direct_call() {
     .unwrap();
     // apply-fn's body calls f which is a parameter
     // We can't statically resolve the parameter's effect
-    // So this is conservatively Pure
+    // So this is Yields (sound: unknown callee may yield)
     assert_eq!(
         result.hir.effect,
-        Effect::Pure,
-        "Higher-order function with parameter call is conservatively Pure"
+        Effect::Yields,
+        "Higher-order function with parameter call is conservatively Yields"
     );
 }
 
@@ -411,4 +411,37 @@ fn test_lambda_body_effect_nested_yield() {
     } else {
         panic!("Expected Lambda");
     }
+}
+
+// ============================================================================
+// 9. UNKNOWN CALLEE SOUNDNESS TESTS
+// ============================================================================
+
+#[test]
+fn test_effect_parameter_call_is_yields() {
+    // Calling a function parameter should be Yields (we can't know its effect)
+    let mut symbols = setup();
+    let result = analyze_new("(fn (f) (f 42))", &mut symbols).unwrap();
+    if let HirKind::Lambda { body, .. } = &result.hir.kind {
+        assert_eq!(
+            body.effect,
+            Effect::Yields,
+            "Calling a function parameter should be Yields (unknown effect)"
+        );
+    } else {
+        panic!("Expected Lambda");
+    }
+}
+
+#[test]
+fn test_effect_let_bound_non_lambda_call_is_yields() {
+    // Calling a let-bound non-lambda should be Yields
+    let mut symbols = setup();
+    let result = analyze_new("(let ((f (first fns))) (f 42))", &mut symbols).unwrap();
+    // f is not a lambda literal, effect unknown → Yields
+    assert_eq!(
+        result.hir.effect,
+        Effect::Yields,
+        "Calling a let-bound non-lambda should be Yields (unknown effect)"
+    );
 }

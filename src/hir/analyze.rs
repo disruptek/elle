@@ -1251,16 +1251,18 @@ impl<'a> Analyzer<'a> {
                             .unwrap_or(Effect::Pure);
                         self.resolve_polymorphic_effect(effect, args)
                     } else {
-                        // Unknown local — conservatively Pure
-                        Effect::Pure
+                        // Unknown local (parameter or local bound to non-lambda) —
+                        // conservatively Yields for soundness. If we can't prove it's
+                        // pure, we must assume it may yield.
+                        Effect::Yields
                     }
                 } else {
-                    Effect::Pure
+                    Effect::Yields
                 }
             }
 
-            // Anything else (computed function): conservatively Pure
-            _ => Effect::Pure,
+            // Anything else (computed function): conservatively Yields for soundness
+            _ => Effect::Yields,
         }
     }
 
@@ -1290,8 +1292,9 @@ impl<'a> Analyzer<'a> {
                         .filter(|info| matches!(info.kind, BindingKind::Global))
                         .and_then(|info| self.primitive_effects.get(&info.name).copied())
                 })
-                .unwrap_or(Effect::Pure),
-            _ => Effect::Pure,
+                .unwrap_or(Effect::Yields),
+            // Unknown argument effect — conservatively Yields for soundness
+            _ => Effect::Yields,
         }
     }
 
