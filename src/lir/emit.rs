@@ -228,7 +228,8 @@ impl Emitter {
                 self.bytecode.emit(Instruction::StoreUpvalue);
                 self.bytecode.emit_byte(0); // depth (currently unused)
                 self.bytecode.emit_byte(*index as u8);
-                self.pop();
+                // StoreCapture: VM pops value, stores in cell, pushes it back.
+                // Net stack effect is 0, so don't adjust simulated stack.
             }
 
             LirInstr::LoadGlobal { dst, sym } => {

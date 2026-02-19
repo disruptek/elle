@@ -259,6 +259,11 @@ impl Lowerer {
                             index: slot,
                             src: init_reg,
                         });
+                        // StoreCapture (via StoreUpvalue) pops the value, stores it,
+                        // and pushes it back. For let bindings, we don't need the
+                        // pushed-back value (the body loads from the closure env),
+                        // so pop it to keep the stack clean.
+                        self.emit(LirInstr::Pop { src: init_reg });
                     } else {
                         // Outside lambdas, use stack-based locals
                         if needs_cell {
@@ -896,15 +901,16 @@ impl Lowerer {
                         });
 
                         // If false, jump to exit (short-circuit)
-                        // This pops expr_reg, but result_reg (the dup) remains
+                        // Test the duplicate (result_reg) which is on top of the stack.
+                        // This pops result_reg, leaving expr_reg on the stack.
                         self.emit(LirInstr::JumpIfFalseInline {
-                            cond: expr_reg,
+                            cond: result_reg,
                             label_id: exit_label_id,
                         });
 
-                        // If we didn't short-circuit, pop the duplicate
+                        // If we didn't short-circuit, pop the original
                         // (we'll compute a new result in the next iteration)
-                        self.emit(LirInstr::Pop { src: result_reg });
+                        self.emit(LirInstr::Pop { src: expr_reg });
                     } else {
                         // Last expression - just move to result_reg
                         self.emit(LirInstr::Move {
@@ -949,24 +955,26 @@ impl Lowerer {
                         self.next_label += 1;
 
                         // If false, jump to next (don't short-circuit)
-                        // This pops expr_reg, but result_reg (the dup) remains
+                        // Test the duplicate (result_reg) which is on top of the stack.
+                        // This pops result_reg, leaving expr_reg on the stack.
                         self.emit(LirInstr::JumpIfFalseInline {
-                            cond: expr_reg,
+                            cond: result_reg,
                             label_id: next_label_id,
                         });
 
-                        // If we get here, expr was true, jump to exit
+                        // If we get here, expr was true - short-circuit to exit
+                        // expr_reg is still on stack and will be our result
                         self.emit(LirInstr::JumpInline {
                             label_id: exit_label_id,
                         });
 
-                        // Next label - we didn't short-circuit
+                        // Next label - we didn't short-circuit (expr was false)
                         self.emit(LirInstr::LabelMarker {
                             label_id: next_label_id,
                         });
 
-                        // Pop the duplicate (we'll compute a new result in the next iteration)
-                        self.emit(LirInstr::Pop { src: result_reg });
+                        // Pop the original (we'll compute a new result in the next iteration)
+                        self.emit(LirInstr::Pop { src: expr_reg });
                     } else {
                         // Last expression - just move to result_reg
                         self.emit(LirInstr::Move {
