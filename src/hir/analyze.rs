@@ -1248,7 +1248,7 @@ impl<'a> Analyzer<'a> {
                             .primitive_effects
                             .get(&info.name)
                             .copied()
-                            .unwrap_or(Effect::Pure);
+                            .unwrap_or(Effect::Yields);
                         self.resolve_polymorphic_effect(effect, args)
                     } else {
                         // Unknown local (parameter or local bound to non-lambda) —

@@ -193,20 +193,20 @@ fn test_effect_polymorphic_direct_call() {
 fn test_effect_polymorphic_with_pure_arg() {
     // Calling a global function (map) with pure lambda
     // Since map isn't in primitive_effects (it's defined in stdlib),
-    // the call is conservatively Pure
+    // the call is conservatively Yields (sound: unknown global may yield)
     let mut symbols = setup();
     let result = analyze_new("(map (fn (x) (+ x 1)) (list 1 2 3))", &mut symbols).unwrap();
     assert_eq!(
         result.hir.effect,
-        Effect::Pure,
-        "Call to unknown global with pure function is Pure"
+        Effect::Yields,
+        "Call to unknown global is Yields (sound default)"
     );
 }
 
 #[test]
 fn test_effect_polymorphic_with_yielding_arg_unknown_global() {
     // Calling a global function (map) that isn't in primitive_effects
-    // Even with a yielding argument, we can't resolve the effect
+    // Unknown globals default to Yields for soundness
     let mut symbols = setup();
     let result = analyze_new(
         "(begin (define gen (fn (x) (yield x))) (map gen (list 1 2 3)))",
@@ -214,11 +214,11 @@ fn test_effect_polymorphic_with_yielding_arg_unknown_global() {
     )
     .unwrap();
     // map is not in primitive_effects (it's defined in stdlib, not as a primitive)
-    // So we can't resolve its polymorphic effect
+    // Unknown globals are Yields for soundness
     assert_eq!(
         result.hir.effect,
-        Effect::Pure,
-        "Call to unknown global is conservatively Pure"
+        Effect::Yields,
+        "Call to unknown global is Yields (sound default)"
     );
 }
 
@@ -231,19 +231,19 @@ fn test_effect_set_invalidation() {
     // (define f (lambda () 42))
     // (set! f (lambda () (yield 1)))
     // After set!, effect tracking for f is invalidated
-    // Calling f should conservatively be Pure (we don't know the new effect)
+    // Calling f should be Yields (sound: we can't prove it's pure)
     let mut symbols = setup();
     let result = analyze_new(
         "(begin (define f (fn () 42)) (set! f (fn () (yield 1))) (f))",
         &mut symbols,
     )
     .unwrap();
-    // After set!, we conservatively treat the effect as Pure
-    // This is safe because we don't produce false positives
+    // After set!, we conservatively treat the effect as Yields
+    // This is sound: we can't prove the new value is pure
     assert_eq!(
         result.hir.effect,
-        Effect::Pure,
-        "After set!, effect should be conservatively Pure"
+        Effect::Yields,
+        "After set!, effect should be Yields (sound default)"
     );
 }
 
@@ -414,7 +414,29 @@ fn test_lambda_body_effect_nested_yield() {
 }
 
 // ============================================================================
-// 9. UNKNOWN CALLEE SOUNDNESS TESTS
+// 9. UNKNOWN GLOBAL SOUNDNESS TESTS
+// ============================================================================
+
+#[test]
+fn test_effect_unknown_global_is_yields() {
+    // Unknown global functions default to Yields (sound)
+    // This is the fix for effect soundness: if we can't prove a global is pure,
+    // we must assume it may yield (since it could be redefined via set!)
+    let mut symbols = setup();
+    let result = analyze_new(
+        "(begin (define f (fn () 42)) (set! f (fn () (yield 1))) (f))",
+        &mut symbols,
+    )
+    .unwrap();
+    assert_eq!(
+        result.hir.effect,
+        Effect::Yields,
+        "Unknown global should be Yields for soundness"
+    );
+}
+
+// ============================================================================
+// 10. UNKNOWN CALLEE SOUNDNESS TESTS
 // ============================================================================
 
 #[test]
