@@ -164,13 +164,23 @@ impl VM {
                                         return Ok(None);
                                     }
                                     Err(e) => {
-                                        panic!(
-                                            "JIT compilation failed for pure function: {}. \
-                                             This is a bug — all pure functions should be JIT-compilable. \
-                                             Error: {}",
-                                            closure.lir_function.as_ref().map(|f| f.name.as_deref().unwrap_or("<anon>")).unwrap_or("<no lir>"),
-                                            e
-                                        );
+                                        match &e {
+                                            crate::jit::JitError::UnsupportedInstruction(_) => {
+                                                // MakeClosure and other instructions not yet in JIT.
+                                                // Fall back to interpreter — the function still works.
+                                            }
+                                            _ => {
+                                                panic!(
+                                                    "JIT compilation failed for pure function: {}. \
+                                                     This is a bug — pure functions should be JIT-compilable. \
+                                                     Error: {}",
+                                                    closure.lir_function.as_ref()
+                                                        .map(|f| f.name.as_deref().unwrap_or("<anon>"))
+                                                        .unwrap_or("<no lir>"),
+                                                    e
+                                                );
+                                            }
+                                        }
                                     }
                                 }
                             }

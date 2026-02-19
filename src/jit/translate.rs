@@ -608,10 +608,12 @@ impl<'a> FunctionTranslator<'a> {
                 // Use Value::float to handle NaN-boxing correctly
                 crate::value::Value::float(*f).to_bits()
             }
-            LirConst::String(_) => {
-                // Strings require heap allocation - not supported in Phase 1
-                // Return NIL as placeholder
-                TAG_NIL
+            LirConst::String(s) => {
+                // Create the heap-allocated string Value at compile time
+                // and embed its NaN-boxed bits as a constant.
+                // The string lives on the Rc heap and will be kept alive
+                // by the LirFunction's constant pool.
+                crate::value::Value::string(s.clone()).to_bits()
             }
             LirConst::Symbol(id) => crate::value::Value::symbol(id.0).to_bits(),
             LirConst::Keyword(id) => crate::value::Value::keyword(id.0).to_bits(),

@@ -605,14 +605,15 @@ impl Emitter {
             }
 
             Terminator::Jump(label) => {
-                // Save stack state for the target block.
-                // This is used for control flow merges (e.g., if/and/or) where
-                // multiple blocks jump to the same target. The target block
-                // will restore this stack state instead of resetting.
-                // Note: If multiple blocks jump to the same target, they should
-                // have the same stack state. We just overwrite with the latest.
-                self.yield_stack_state
-                    .insert(*label, (self.stack.clone(), self.reg_to_stack.clone()));
+                // Save stack state for the target block, but only if it hasn't
+                // been processed yet. This is used for control flow merges
+                // (e.g., if/and/or) where multiple blocks jump to the same target.
+                // If the target block has already been processed (because blocks
+                // are sorted by label), we don't overwrite the saved state.
+                if !self.label_offsets.contains_key(label) {
+                    self.yield_stack_state
+                        .insert(*label, (self.stack.clone(), self.reg_to_stack.clone()));
+                }
 
                 self.bytecode.emit(Instruction::Jump);
                 let pos = self.bytecode.current_pos();
@@ -626,6 +627,22 @@ impl Emitter {
                 else_label,
             } => {
                 self.ensure_on_top(*cond);
+
+                // JumpIfFalse pops the condition from the stack
+                self.pop();
+
+                // Save stack state for both branches, but only if they haven't
+                // been processed yet. This handles the case where blocks are
+                // sorted by label and a target block might be processed before
+                // the branch that jumps to it.
+                if !self.label_offsets.contains_key(then_label) {
+                    self.yield_stack_state
+                        .insert(*then_label, (self.stack.clone(), self.reg_to_stack.clone()));
+                }
+                if !self.label_offsets.contains_key(else_label) {
+                    self.yield_stack_state
+                        .insert(*else_label, (self.stack.clone(), self.reg_to_stack.clone()));
+                }
 
                 // JumpIfFalse to else_label
                 self.bytecode.emit(Instruction::JumpIfFalse);

@@ -72,13 +72,44 @@ impl Lowerer {
             HirPattern::Var(binding_id) => {
                 // Bind the value to the variable
                 let slot = self.allocate_slot(*binding_id);
-                self.emit(LirInstr::StoreLocal {
-                    slot,
-                    src: value_reg,
-                });
+                // Inside lambdas, pattern-bound variables are part of the closure environment
+                if self.in_lambda {
+                    self.upvalue_bindings.insert(*binding_id);
+                    self.emit(LirInstr::StoreCapture {
+                        index: slot,
+                        src: value_reg,
+                    });
+                } else {
+                    self.emit(LirInstr::StoreLocal {
+                        slot,
+                        src: value_reg,
+                    });
+                }
                 Ok(())
             }
             HirPattern::Cons { head, tail } => {
+                // Store value to temp slot before any operations, so we can
+                // reload it after the block boundary.
+                // Inside a lambda, slots need to account for the captures offset.
+                let temp_slot = if self.in_lambda {
+                    self.num_captures + self.current_func.num_locals
+                } else {
+                    self.current_func.num_locals
+                };
+                self.current_func.num_locals += 1;
+
+                if self.in_lambda {
+                    self.emit(LirInstr::StoreCapture {
+                        index: temp_slot,
+                        src: value_reg,
+                    });
+                } else {
+                    self.emit(LirInstr::StoreLocal {
+                        slot: temp_slot,
+                        src: value_reg,
+                    });
+                }
+
                 // Check if value is a pair
                 let is_pair_reg = self.fresh_reg();
                 self.emit(LirInstr::IsPair {
@@ -95,21 +126,47 @@ impl Lowerer {
                 self.finish_block();
                 self.current_block = BasicBlock::new(continue_label);
 
-                // Extract head and tail
+                // Reload for car
+                let reloaded_for_car = self.fresh_reg();
+                if self.in_lambda {
+                    self.emit(LirInstr::LoadCapture {
+                        dst: reloaded_for_car,
+                        index: temp_slot,
+                    });
+                } else {
+                    self.emit(LirInstr::LoadLocal {
+                        dst: reloaded_for_car,
+                        slot: temp_slot,
+                    });
+                }
+
                 let head_reg = self.fresh_reg();
                 self.emit(LirInstr::Car {
                     dst: head_reg,
-                    pair: value_reg,
+                    pair: reloaded_for_car,
                 });
+
+                // Reload for cdr
+                let reloaded_for_cdr = self.fresh_reg();
+                if self.in_lambda {
+                    self.emit(LirInstr::LoadCapture {
+                        dst: reloaded_for_cdr,
+                        index: temp_slot,
+                    });
+                } else {
+                    self.emit(LirInstr::LoadLocal {
+                        dst: reloaded_for_cdr,
+                        slot: temp_slot,
+                    });
+                }
 
                 let tail_reg = self.fresh_reg();
                 self.emit(LirInstr::Cdr {
                     dst: tail_reg,
-                    pair: value_reg,
+                    pair: reloaded_for_cdr,
                 });
 
                 // Recursively match head and tail
-                // Both must match, so they both branch to fail_label on failure
                 self.lower_pattern_match(head, head_reg, fail_label)?;
                 self.lower_pattern_match(tail, tail_reg, fail_label)?;
 
@@ -122,6 +179,28 @@ impl Lowerer {
                 let mut current_reg = value_reg;
 
                 for pat in patterns.iter() {
+                    // Store current to a temporary slot BEFORE IsPair, so we can
+                    // reload it after the block boundary.
+                    // Inside a lambda, slots need to account for the captures offset.
+                    let temp_slot = if self.in_lambda {
+                        self.num_captures + self.current_func.num_locals
+                    } else {
+                        self.current_func.num_locals
+                    };
+                    self.current_func.num_locals += 1;
+
+                    if self.in_lambda {
+                        self.emit(LirInstr::StoreCapture {
+                            index: temp_slot,
+                            src: current_reg,
+                        });
+                    } else {
+                        self.emit(LirInstr::StoreLocal {
+                            slot: temp_slot,
+                            src: current_reg,
+                        });
+                    }
+
                     // Check if current is a pair
                     let is_pair_reg = self.fresh_reg();
                     self.emit(LirInstr::IsPair {
@@ -138,20 +217,19 @@ impl Lowerer {
                     self.finish_block();
                     self.current_block = BasicBlock::new(continue_label);
 
-                    // Store current to a temporary slot so we can load it twice
-                    let temp_slot = self.current_func.num_locals;
-                    self.current_func.num_locals += 1;
-                    self.emit(LirInstr::StoreLocal {
-                        slot: temp_slot,
-                        src: current_reg,
-                    });
-
                     // Load for car extraction
                     let current_for_car = self.fresh_reg();
-                    self.emit(LirInstr::LoadLocal {
-                        dst: current_for_car,
-                        slot: temp_slot,
-                    });
+                    if self.in_lambda {
+                        self.emit(LirInstr::LoadCapture {
+                            dst: current_for_car,
+                            index: temp_slot,
+                        });
+                    } else {
+                        self.emit(LirInstr::LoadLocal {
+                            dst: current_for_car,
+                            slot: temp_slot,
+                        });
+                    }
 
                     // Extract head
                     let head_reg = self.fresh_reg();
@@ -165,10 +243,17 @@ impl Lowerer {
 
                     // Load for cdr extraction
                     let current_for_cdr = self.fresh_reg();
-                    self.emit(LirInstr::LoadLocal {
-                        dst: current_for_cdr,
-                        slot: temp_slot,
-                    });
+                    if self.in_lambda {
+                        self.emit(LirInstr::LoadCapture {
+                            dst: current_for_cdr,
+                            index: temp_slot,
+                        });
+                    } else {
+                        self.emit(LirInstr::LoadLocal {
+                            dst: current_for_cdr,
+                            slot: temp_slot,
+                        });
+                    }
 
                     // Extract tail for next iteration
                     let tail_reg = self.fresh_reg();

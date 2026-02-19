@@ -63,6 +63,14 @@ impl Lowerer {
                     dst: dup_reg,
                     src: val_reg,
                 });
+
+                // Use Move to track the result with result_reg
+                // This ensures the emitter knows result_reg is at the same position as val_reg
+                self.emit(LirInstr::Move {
+                    dst: result_reg,
+                    src: val_reg,
+                });
+
                 let next_label = self.fresh_label();
                 // Branch on the duplicate (which will be popped by JumpIfFalse)
                 self.terminate(Terminator::Branch {
@@ -74,7 +82,7 @@ impl Lowerer {
 
                 // Next block: pop the original value and continue
                 self.current_block = BasicBlock::new(next_label);
-                self.emit(LirInstr::Pop { src: val_reg });
+                self.emit(LirInstr::Pop { src: result_reg });
             } else {
                 // Last expression — this is the result, jump to done
                 self.emit(LirInstr::Move {
@@ -120,6 +128,14 @@ impl Lowerer {
                     dst: dup_reg,
                     src: val_reg,
                 });
+
+                // Use Move to track the result with result_reg
+                // This ensures the emitter knows result_reg is at the same position as val_reg
+                self.emit(LirInstr::Move {
+                    dst: result_reg,
+                    src: val_reg,
+                });
+
                 let next_label = self.fresh_label();
                 // Branch on the duplicate (which will be popped by JumpIfFalse)
                 self.terminate(Terminator::Branch {
@@ -131,7 +147,7 @@ impl Lowerer {
 
                 // Next block: pop the original value and continue
                 self.current_block = BasicBlock::new(next_label);
-                self.emit(LirInstr::Pop { src: val_reg });
+                self.emit(LirInstr::Pop { src: result_reg });
             } else {
                 // Last expression — this is the result, jump to done
                 self.emit(LirInstr::Move {

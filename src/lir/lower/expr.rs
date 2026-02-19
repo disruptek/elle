@@ -280,17 +280,29 @@ impl Lowerer {
 
     fn lower_for(&mut self, var: BindingId, iter: &Hir, body: &Hir) -> Result<Reg, String> {
         // Allocate separate slots for iterator and loop variable
-        let iter_slot = self.current_func.num_locals;
+        // Inside a lambda, slots need to account for the captures offset.
+        let iter_slot = if self.in_lambda {
+            self.num_captures + self.current_func.num_locals
+        } else {
+            self.current_func.num_locals
+        };
         self.current_func.num_locals += 1;
 
         let var_slot = self.allocate_slot(var);
 
         // Store initial iterator
         let iter_reg = self.lower_expr(iter)?;
-        self.emit(LirInstr::StoreLocal {
-            slot: iter_slot,
-            src: iter_reg,
-        });
+        if self.in_lambda {
+            self.emit(LirInstr::StoreCapture {
+                index: iter_slot,
+                src: iter_reg,
+            });
+        } else {
+            self.emit(LirInstr::StoreLocal {
+                slot: iter_slot,
+                src: iter_reg,
+            });
+        }
 
         // Allocate result register (for returns nil)
         let result_reg = self.fresh_reg();
@@ -310,10 +322,17 @@ impl Lowerer {
         // Condition block: check if iterator is a pair
         self.current_block = BasicBlock::new(cond_label);
         let current_iter = self.fresh_reg();
-        self.emit(LirInstr::LoadLocal {
-            dst: current_iter,
-            slot: iter_slot,
-        });
+        if self.in_lambda {
+            self.emit(LirInstr::LoadCapture {
+                dst: current_iter,
+                index: iter_slot,
+            });
+        } else {
+            self.emit(LirInstr::LoadLocal {
+                dst: current_iter,
+                slot: iter_slot,
+            });
+        }
         let is_pair = self.fresh_reg();
         self.emit(LirInstr::IsPair {
             dst: is_pair,
@@ -331,38 +350,68 @@ impl Lowerer {
 
         // Extract car and store to VAR slot (not iter slot!)
         let iter_for_car = self.fresh_reg();
-        self.emit(LirInstr::LoadLocal {
-            dst: iter_for_car,
-            slot: iter_slot,
-        });
+        if self.in_lambda {
+            self.emit(LirInstr::LoadCapture {
+                dst: iter_for_car,
+                index: iter_slot,
+            });
+        } else {
+            self.emit(LirInstr::LoadLocal {
+                dst: iter_for_car,
+                slot: iter_slot,
+            });
+        }
         let car_reg = self.fresh_reg();
         self.emit(LirInstr::Car {
             dst: car_reg,
             pair: iter_for_car,
         });
-        self.emit(LirInstr::StoreLocal {
-            slot: var_slot, // Store to loop variable, not iterator!
-            src: car_reg,
-        });
+        // var_slot is allocated via allocate_slot, which handles lambda case
+        // But we need to use the right instruction based on in_lambda
+        if self.in_lambda {
+            self.emit(LirInstr::StoreCapture {
+                index: var_slot,
+                src: car_reg,
+            });
+        } else {
+            self.emit(LirInstr::StoreLocal {
+                slot: var_slot,
+                src: car_reg,
+            });
+        }
 
         // Evaluate body
         self.lower_expr(body)?;
 
         // Advance iterator: iter_slot = cdr(iter_slot)
         let iter_for_cdr = self.fresh_reg();
-        self.emit(LirInstr::LoadLocal {
-            dst: iter_for_cdr,
-            slot: iter_slot,
-        });
+        if self.in_lambda {
+            self.emit(LirInstr::LoadCapture {
+                dst: iter_for_cdr,
+                index: iter_slot,
+            });
+        } else {
+            self.emit(LirInstr::LoadLocal {
+                dst: iter_for_cdr,
+                slot: iter_slot,
+            });
+        }
         let cdr_reg = self.fresh_reg();
         self.emit(LirInstr::Cdr {
             dst: cdr_reg,
             pair: iter_for_cdr,
         });
-        self.emit(LirInstr::StoreLocal {
-            slot: iter_slot, // Update iterator, not var
-            src: cdr_reg,
-        });
+        if self.in_lambda {
+            self.emit(LirInstr::StoreCapture {
+                index: iter_slot,
+                src: cdr_reg,
+            });
+        } else {
+            self.emit(LirInstr::StoreLocal {
+                slot: iter_slot,
+                src: cdr_reg,
+            });
+        }
 
         // Loop back to condition
         self.terminate(Terminator::Jump(cond_label));
