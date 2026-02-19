@@ -145,7 +145,7 @@ pub extern "C" fn elle_jit_store_capture(env_ptr: *mut u64, index: u64, value: u
 pub extern "C" fn elle_jit_load_global(sym_id: u64, vm: *mut ()) -> u64 {
     let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
     let sym = sym_id as u32;
-    match vm.globals.get(&sym) {
+    match vm.globals.get(sym as usize).filter(|v| !v.is_undefined()) {
         Some(val) => val.to_bits(),
         None => {
             eprintln!("JIT: undefined global {}", sym);
@@ -160,7 +160,11 @@ pub extern "C" fn elle_jit_store_global(sym_id: u64, value: u64, vm: *mut ()) ->
     let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
     let sym = sym_id as u32;
     let val = unsafe { Value::from_bits(value) };
-    vm.globals.insert(sym, val);
+    let idx = sym as usize;
+    if idx >= vm.globals.len() {
+        vm.globals.resize(idx + 1, Value::UNDEFINED);
+    }
+    vm.globals[idx] = val;
     TAG_NIL
 }
 
@@ -303,7 +307,7 @@ fn build_closure_env_for_jit(
     closure: &crate::value::Closure,
     args: &[Value],
 ) -> std::rc::Rc<Vec<Value>> {
-    let mut new_env = Vec::new();
+    let mut new_env = Vec::with_capacity(closure.env_capacity());
     new_env.extend((*closure.env).iter().cloned());
 
     // Add parameters, wrapping in local cells if cell_params_mask indicates

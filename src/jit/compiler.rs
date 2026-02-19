@@ -332,18 +332,25 @@ impl JitCompiler {
         // Create translator context
         let mut translator = FunctionTranslator::new(&mut self.module, &self.helpers, lir);
 
-        // Declare variables for all registers
-        for i in 0..lir.num_regs {
+        // Declare variables for all registers, local slots, arg variables, and locally-defined variables
+        // - Registers: 0..num_regs (used by LIR instructions)
+        // - Local slots: 0..num_locals (used by LoadLocal/StoreLocal)
+        // - Arg variables: num_regs..num_regs+arity (used for self-tail-call)
+        // - Locally-defined variables: num_regs+arity..num_regs+arity+num_locally_defined
+        //   (used for let-bindings inside the function body)
+        // All use the same Cranelift variable namespace, so declare enough for all
+        let arg_var_base = lir.num_regs;
+        let num_locally_defined = lir.num_locals.saturating_sub(lir.arity) as u32;
+        let local_var_base = arg_var_base + lir.arity as u32;
+        let max_var = std::cmp::max(
+            std::cmp::max(lir.num_regs, lir.num_locals as u32),
+            local_var_base + num_locally_defined,
+        );
+        for i in 0..max_var {
             builder.declare_var(var(i), I64);
         }
-
-        // Declare arg variables for self-tail-call support
-        // These are stored at indices [num_regs, num_regs + arity)
-        let arg_var_base = lir.num_regs;
-        for i in 0..lir.arity as u32 {
-            builder.declare_var(var(arg_var_base + i), I64);
-        }
         translator.arg_var_base = arg_var_base;
+        translator.local_var_base = local_var_base;
 
         // Create blocks: entry, loop_header, and LIR blocks
         let entry_block = builder.create_block();
@@ -376,6 +383,12 @@ impl JitCompiler {
             let addr = builder.ins().iadd_imm(args_ptr, offset as i64);
             let val = builder.ins().load(I64, MemFlags::trusted(), addr, 0);
             builder.def_var(var(arg_var_base + i), val);
+        }
+
+        // Initialize locally-defined variables to LocalCell(NIL)
+        // These are let-bindings inside the function body
+        if num_locally_defined > 0 {
+            translator.init_locally_defined_vars(&mut builder, num_locally_defined)?;
         }
 
         builder.ins().jump(loop_header, &[]);
