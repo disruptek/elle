@@ -68,7 +68,7 @@ impl Lowerer {
         self.current_func.entry = Label(0);
         self.current_func.num_regs = self.next_reg;
         // Propagate effect from HIR to top-level LIR function
-        self.current_func.effect = hir.effect;
+        self.current_func.effect = hir.effect.clone();
 
         Ok(std::mem::replace(
             &mut self.current_func,
@@ -83,6 +83,7 @@ impl Lowerer {
         captures: &[crate::hir::CaptureInfo],
         body: &Hir,
         _num_locals: u16,
+        inferred_effect: crate::effects::Effect,
     ) -> Result<LirFunction, String> {
         // Save state
         let saved_func = std::mem::replace(
@@ -149,8 +150,8 @@ impl Lowerer {
 
         self.current_func.entry = Label(0);
         self.current_func.num_regs = self.next_reg;
-        // Propagate effect from HIR body to LIR function
-        self.current_func.effect = body.effect;
+        // Propagate inferred effect to LIR function
+        self.current_func.effect = inferred_effect.clone();
 
         let func = std::mem::replace(&mut self.current_func, saved_func);
 
@@ -365,6 +366,7 @@ impl Lowerer {
                 captures,
                 body,
                 num_locals,
+                inferred_effect,
             } => {
                 // Collect capture registers
                 let mut capture_regs = Vec::new();
@@ -445,7 +447,13 @@ impl Lowerer {
                 }
 
                 // Lower the lambda body to a separate LirFunction
-                let nested_lir = self.lower_lambda(params, captures, body, *num_locals)?;
+                let nested_lir = self.lower_lambda(
+                    params,
+                    captures,
+                    body,
+                    *num_locals,
+                    inferred_effect.clone(),
+                )?;
 
                 // Create closure with the nested function
                 let dst = self.fresh_reg();
