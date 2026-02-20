@@ -134,12 +134,14 @@ impl<'a> FunctionTranslator<'a> {
                 let arity = self.lir.arity;
                 if *index < num_captures {
                     // Load from closure environment (captures)
+                    // Must auto-unwrap LocalCell if present (matches interpreter's LoadUpvalue)
                     let env_ptr = self.env_ptr.ok_or_else(|| {
                         JitError::InvalidLir("LoadCapture without env pointer".to_string())
                     })?;
                     let offset = (*index as i32) * 8;
                     let addr = builder.ins().iadd_imm(env_ptr, offset as i64);
-                    let val = builder.ins().load(I64, MemFlags::trusted(), addr, 0);
+                    let raw = builder.ins().load(I64, MemFlags::trusted(), addr, 0);
+                    let val = self.call_helper_unary(builder, self.helpers.load_capture, raw)?;
                     builder.def_var(var(dst.0), val);
                 } else if *index < num_captures + arity {
                     // Load from arg variables (NOT args pointer)

@@ -99,6 +99,24 @@ pub extern "C" fn elle_jit_load_cell(cell_bits: u64) -> u64 {
     }
 }
 
+/// Load from env slot, auto-unwrapping LocalCell if present.
+/// This matches the interpreter's LoadUpvalue semantics:
+/// - LocalCell (compiler-created mutable capture): unwrap and return inner value
+/// - Everything else (plain value, user Cell, etc.): return as-is
+#[no_mangle]
+pub extern "C" fn elle_jit_load_capture(val_bits: u64) -> u64 {
+    let val = unsafe { Value::from_bits(val_bits) };
+    if val.is_local_cell() {
+        if let Some(cell_ref) = val.as_cell() {
+            cell_ref.borrow().to_bits()
+        } else {
+            val_bits // shouldn't happen, but safe fallback
+        }
+    } else {
+        val_bits
+    }
+}
+
 /// Store value into a LocalCell
 #[no_mangle]
 pub extern "C" fn elle_jit_store_cell(cell_bits: u64, value: u64) -> u64 {

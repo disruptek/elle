@@ -65,6 +65,7 @@ pub(crate) struct RuntimeHelpers {
     pub(crate) is_truthy: FuncId,
     pub(crate) make_cell: FuncId,
     pub(crate) load_cell: FuncId,
+    pub(crate) load_capture: FuncId,
     pub(crate) store_cell: FuncId,
     pub(crate) store_capture: FuncId,
     pub(crate) load_global: FuncId,
@@ -140,6 +141,10 @@ impl JitCompiler {
         builder.symbol(
             "elle_jit_load_cell",
             dispatch::elle_jit_load_cell as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_load_capture",
+            dispatch::elle_jit_load_capture as *const u8,
         );
         builder.symbol(
             "elle_jit_store_cell",
@@ -245,6 +250,7 @@ impl JitCompiler {
             is_truthy: declare(module, "elle_jit_is_truthy", &unary_sig)?,
             make_cell: declare(module, "elle_jit_make_cell", &unary_sig)?,
             load_cell: declare(module, "elle_jit_load_cell", &unary_sig)?,
+            load_capture: declare(module, "elle_jit_load_capture", &unary_sig)?,
             store_cell: declare(module, "elle_jit_store_cell", &binary_sig)?,
             store_capture: declare(module, "elle_jit_store_capture", &ternary_sig)?,
             load_global: declare(module, "elle_jit_load_global", &binary_sig)?,
