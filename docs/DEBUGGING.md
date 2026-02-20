@@ -337,7 +337,7 @@ would let `handler-case` subtract known types) is a future refinement.
 | `(if c t e)` | c.raises ∨ t.raises ∨ e.raises |
 | `(f args...)` | args.raises ∨ f.may_raise |
 | literal | `false` |
-| primitive call | `false` for now (future: annotate which primitives may raise) |
+| primitive call | Uses the primitive's registered `may_raise` flag (see §5) |
 
 ### 4.3 Key principle: conservative and correct
 
@@ -380,17 +380,86 @@ Once the boolean tracking is proven correct, we can extend to
 
 This is additive — the boolean version is a proper subset of the set version.
 
-## 5. Effect annotations for new primitives
+## 5. Primitive effect registration
 
-All introspection primitives (§1) and time primitives (§2) are `Pure`
-in the yield sense (they never yield). Add them to the pure list in
-`effects/primitives.rs`.
+Currently, primitive effects live in a separate side-table
+(`effects/primitives.rs`) that maps primitive names to `Effect` values.
+This is duplicated, fragile, and only tracks the yield axis. With the
+addition of `may_raise`, we unify effect declaration into primitive
+registration itself.
 
-For the raises axis:
-- Time primitives: `may_raise = false`
-- Introspection predicates: `may_raise = false`
-- `jit`, `jit!`: `may_raise = true` (may error on failure)
-- `call-count`: `may_raise = false`
+### 5.1 New registration signature
+
+`register_fn` and `register_vm_aware_fn` gain an `Effect` parameter:
+
+```rust
+fn register_fn(
+    vm: &mut VM,
+    symbols: &mut SymbolTable,
+    name: &str,
+    func: fn(&[Value]) -> Result<Value, Condition>,
+    effect: Effect,
+)
+```
+
+Every primitive declares its full effect at registration time. The
+compiler enforces this — you cannot register a primitive without
+specifying its effects. This eliminates the separate side-table and
+makes it impossible to forget an annotation.
+
+### 5.2 Effect values for primitives
+
+Most primitives are pure (no yield) and may raise (arity/type errors):
+
+```rust
+// The common case: pure, may raise
+register_fn(vm, symbols, "first", prim_first, Effect::pure_raises());
+
+// Type predicates: pure, never raise
+register_fn(vm, symbols, "nil?", prim_is_nil, Effect::pure());
+
+// Higher-order: polymorphic yield, may raise
+register_fn(vm, symbols, "map", prim_map, Effect::polymorphic_raises(0));
+
+// Division: VM-aware, may raise (division by zero)
+register_vm_aware_fn(vm, symbols, "/", prim_div_vm, Effect::pure_raises());
+```
+
+Convenience constructors on `Effect`:
+- `Effect::pure()` — does not yield, does not raise
+- `Effect::pure_raises()` — does not yield, may raise
+- `Effect::yields()` — may yield, does not raise
+- `Effect::yields_raises()` — may yield, may raise
+- `Effect::polymorphic(n)` — yield depends on param n, does not raise
+- `Effect::polymorphic_raises(n)` — yield depends on param n, may raise
+
+### 5.3 Migration
+
+This is a cross-cutting change: every `register_fn` and
+`register_vm_aware_fn` call in `registration.rs` gains an `Effect`
+argument. The default should be `Effect::pure_raises()` (conservative:
+most primitives can raise on bad input). Then audit each primitive and
+tighten to `Effect::pure()` where appropriate (type predicates, boolean
+ops, constants).
+
+`effects/primitives.rs` is deleted. Its two functions
+(`register_primitive_effects`, `get_primitive_effects`) are replaced by
+the registration-time declarations. The analyzer reads effects from the
+same map the VM uses, populated during registration.
+
+### 5.4 Effect annotations for debugging primitives
+
+| Primitive | Effect |
+|-----------|--------|
+| `now`, `elapsed`, `cpu-time` | `Effect::pure()` |
+| `duration`, `duration->seconds`, `duration->nanoseconds` | `Effect::pure_raises()` |
+| `duration<`, `instant?`, `duration?` | `Effect::pure()` |
+| `closure?`, `jit?`, `pure?`, `coro?`, `mutates-params?` | `Effect::pure()` |
+| `arity`, `captures`, `bytecode-size` | `Effect::pure()` |
+| `raises?` | `Effect::pure()` |
+| `jit`, `jit!` | `Effect::pure_raises()` |
+| `call-count` | `Effect::pure()` |
+| `global?` | `Effect::pure()` |
 
 ## 6. Testing strategy
 
@@ -442,10 +511,10 @@ New file: `tests/integration/benchmarks.rs`
 | `src/primitives/debugging.rs` | New | All debugging toolkit primitives: introspection (`jit?`, `pure?`, `coro?`, `closure?`, `mutates-params?`, `arity`, `captures`, `bytecode-size`, `raises?`), time (`now`, `elapsed`, `cpu-time`, `duration`, `duration->seconds`, `duration->nanoseconds`, `duration<`, `instant?`, `duration?`), JIT control (`jit`, `jit!`, `call-count`). NativeFn and VmAwareFn. |
 | `src/primitives/debug.rs` | Modify | Remove placeholder `profile`. Keep `debug-print`, `trace`, `memory-usage`. |
 | `src/primitives/concurrency.rs` | Modify | Update `sleep` to accept duration values only |
-| `src/primitives/registration.rs` | Modify | Register new primitives |
+| `src/primitives/registration.rs` | Modify | Add `Effect` parameter to `register_fn`/`register_vm_aware_fn`; register all new primitives with effects; migrate all existing registrations |
 | `src/primitives/mod.rs` | Modify | Add `debugging` module |
 | `src/effects/mod.rs` | Modify | Restructure `Effect` as struct with `YieldBehavior` + `may_raise` |
-| `src/effects/primitives.rs` | Modify | Add effect annotations for new primitives |
+| `src/effects/primitives.rs` | Delete | Side-table replaced by registration-time effect declarations |
 | `lib/bench.lisp` | New | Benchmarking macros |
 | `examples/debugging.lisp` | New (replaces `debugging-profiling.lisp`) | Demonstrates introspection and benchmarking |
 | `tests/integration/debugging.rs` | New | Integration tests |

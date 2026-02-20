@@ -78,9 +78,7 @@ All debugging toolkit primitives in one file:
 
 **Modify**: `src/primitives/debug.rs` — remove placeholder `profile`
 **Modify**: `src/primitives/concurrency.rs` — `sleep` accepts duration only
-**Modify**: `src/primitives/registration.rs` — register all new primitives
 **Modify**: `src/primitives/mod.rs` — add `debugging` module
-**Modify**: `src/effects/primitives.rs` — add Pure annotations
 
 **Dependency**: Add `cpu-time` to `Cargo.toml`.
 
@@ -89,14 +87,29 @@ in new `tests/integration/debugging.rs`.
 
 **Verification**: `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`
 
-### Step 2: Raises effect tracking (~3-4 hours)
+### Step 2: Raises effect tracking and registration unification (~4-5 hours)
 
-Extend the effect system with a boolean `may_raise` field.
+Extend the effect system with `may_raise`, then unify effect declaration
+into primitive registration (eliminating the separate side-table).
 
 **Modify**: `src/effects/mod.rs`
-- Add `may_raise: bool` field to `Effect` (or as a parallel field on `Hir`)
-- Update `combine` to OR the raises flags
-- Update `Display`
+- Restructure `Effect` as struct: `YieldBehavior` enum + `may_raise: bool`
+- Add convenience constructors: `pure()`, `pure_raises()`, `yields()`,
+  `yields_raises()`, `polymorphic(n)`, `polymorphic_raises(n)`
+- Update `combine` to OR `may_raise` alongside yield combination
+- Update `Display`, `Hash`, `Eq`, `Default`
+
+**Modify**: `src/primitives/registration.rs`
+- Add `Effect` parameter to `register_fn` and `register_vm_aware_fn`
+- Migrate all existing primitive registrations with correct effects
+- Register all new debugging toolkit primitives with effects
+- Default: `Effect::pure_raises()` (conservative), then tighten where
+  appropriate (type predicates, boolean ops, constants → `Effect::pure()`)
+
+**Delete**: `src/effects/primitives.rs`
+- Side-table replaced by registration-time effect declarations
+- `register_primitive_effects` and `get_primitive_effects` removed
+- Analyzer reads effects from the registration-populated map
 
 **Modify**: `src/hir/analyze/special.rs`
 - `analyze_throw`: set `may_raise = true` on the Hir node
@@ -105,6 +118,7 @@ Extend the effect system with a boolean `may_raise` field.
 
 **Modify**: `src/hir/analyze/call.rs`
 - Propagate callee's `may_raise` into call expression
+- For primitive calls, use the registered `Effect` (not a hardcoded default)
 
 **Modify**: `src/hir/analyze/binding.rs`
 - Store `may_raise` in `effect_env` alongside yield effects
@@ -117,8 +131,7 @@ Extend the effect system with a boolean `may_raise` field.
 
 **Modify**: `src/pipeline.rs`
 - Track `may_raise` during fixpoint iteration
-
-**New primitive**: `raises?` in `src/primitives/debugging.rs`
+- Update primitive effects map construction (now from registration, not side-table)
 
 **Tests**: Integration tests in `tests/integration/effect_enforcement.rs`
 (extend existing) and `tests/integration/debugging.rs`.
