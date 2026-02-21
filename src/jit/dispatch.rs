@@ -29,10 +29,14 @@ fn jit_handle_primitive_signal(vm: &mut crate::vm::VM, bits: SignalBits, value: 
             TAG_NIL
         }
         _ => {
-            // Unexpected signal in JIT context — treat as error
-            let cond = Condition::error(format!("Unexpected signal {} in JIT-compiled code", bits));
-            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
-            TAG_NIL
+            // Reaching here means the effect system has a bug: a suspending
+            // primitive was called from JIT-compiled code, which should be
+            // impossible since the JIT gate rejects may_suspend() closures.
+            panic!(
+                "Effect system bug: signal {} reached JIT-compiled code. \
+                 Only SIG_OK and SIG_ERROR should appear in JIT context.",
+                bits
+            );
         }
     }
 }
@@ -197,7 +201,8 @@ pub extern "C" fn elle_jit_load_global(sym_id: u64, vm: *mut ()) -> u64 {
     match vm.globals.get(sym as usize).filter(|v| !v.is_undefined()) {
         Some(val) => val.to_bits(),
         None => {
-            eprintln!("JIT: undefined global {}", sym);
+            let cond = Condition::error(format!("Undefined global: {}", sym));
+            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
             TAG_NIL
         }
     }
@@ -222,7 +227,7 @@ pub extern "C" fn elle_jit_store_global(sym_id: u64, value: u64, vm: *mut ()) ->
 // =============================================================================
 
 /// Call a function from JIT code
-/// Dispatches to native functions, VM-aware functions, or closures
+/// Dispatches to native functions or closures
 #[no_mangle]
 pub extern "C" fn elle_jit_call(
     func_bits: u64,
@@ -261,12 +266,14 @@ pub extern "C" fn elle_jit_call(
         match result {
             Ok(val) => val.to_bits(),
             Err(e) => {
-                eprintln!("JIT call error: {}", e);
+                let cond = Condition::error(e);
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 TAG_NIL
             }
         }
     } else {
-        eprintln!("JIT call error: not a function");
+        let cond = Condition::type_error(format!("Cannot call {:?}", func));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         TAG_NIL
     }
 }
@@ -314,7 +321,8 @@ pub extern "C" fn elle_jit_tail_call(
         return TAIL_CALL_SENTINEL;
     }
 
-    eprintln!("JIT tail call error: not a function");
+    let cond = Condition::type_error(format!("Cannot call {:?}", func));
+    vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
     TAG_NIL
 }
 

@@ -93,7 +93,7 @@ These handle type checking and NaN-boxing.
 - **Data structures**: `elle_jit_cons`, `elle_jit_car`, `elle_jit_cdr`, `elle_jit_make_vector`, `elle_jit_is_pair`
 - **Cells**: `elle_jit_make_cell`, `elle_jit_load_cell`, `elle_jit_store_cell`, `elle_jit_store_capture`
 - **Globals**: `elle_jit_load_global`, `elle_jit_store_global` (require VM pointer)
-- **Function calls**: `elle_jit_call` (dispatches to native, VM-aware, or closures)
+- **Function calls**: `elle_jit_call` (dispatches to native functions or closures)
 
 ## Self-Tail-Call Optimization
 
@@ -126,6 +126,31 @@ Key implementation details:
 - **Arg evaluation order**: New arg values are read before any are updated,
   handling cases like `(f b a)` where args are swapped.
 
+## Fiber Integration
+
+The effect system ensures fibers and JIT coexist safely:
+
+- **JIT-safe fiber primitives**: `fiber/new`, `fiber/status`, `fiber/value`,
+  `fiber/bits`, `fiber/mask` have `Effect::raises()` — `may_suspend()` is
+  false, so closures calling them can be JIT-compiled. `fiber?` has
+  `Effect::none()`. These all return `SIG_OK` or `SIG_ERROR`, which
+  `jit_handle_primitive_signal` handles.
+
+- **JIT-excluded fiber primitives**: `fiber/resume` and `fiber/signal` have
+  `Effect::yields_raises()` — `may_suspend()` is true. Any closure calling
+  them transitively inherits this effect, so the JIT gate rejects them.
+
+- **Catch-all panic**: `jit_handle_primitive_signal` panics on unexpected
+  signal bits (not `SIG_OK` or `SIG_ERROR`). Reaching this means the effect
+  system has a bug — a suspending primitive was called from JIT code.
+
+## Error Handling in Dispatch
+
+All dispatch helpers (`elle_jit_call`, `elle_jit_tail_call`,
+`elle_jit_load_global`) set `vm.fiber.current_exception` on error and return
+`TAG_NIL`. The JIT checks for pending exceptions after each call via
+`elle_jit_has_exception`. No errors are silently swallowed.
+
 ## Invariants
 
 1. **Only non-suspending functions.** `JitCompiler::compile` returns
@@ -147,6 +172,9 @@ Key implementation details:
 6. **Self-tail-call identity.** The 5th parameter `self_bits` is the NaN-boxed
    closure pointer. Self-tail-calls are detected by comparing the callee's bits
    against `self_bits`.
+
+7. **No silent error swallowing.** Every error path in dispatch helpers sets
+   `vm.fiber.current_exception` before returning `TAG_NIL`.
 
 ## Future Phases
 

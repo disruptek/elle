@@ -1482,3 +1482,69 @@ fn test_jit_self_tail_call_fibonacci_iterative() {
     // fib(20) = 6765
     assert_eq!(result.unwrap().as_int(), Some(6765));
 }
+
+// =============================================================================
+// Fiber + JIT Gate Tests
+// =============================================================================
+
+#[test]
+fn test_jit_rejects_yields_raises_effect() {
+    // Effect::yields_raises() has may_suspend() = true.
+    // The JIT gate must reject this — fiber/resume and fiber/signal
+    // propagate this effect to their callers.
+    let mut func = LirFunction::new(0);
+    func.num_regs = 1;
+    func.num_captures = 0;
+    func.effect = Effect::yields_raises();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::Const {
+            dst: Reg(0),
+            value: LirConst::Int(42),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(0)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let compiler = JitCompiler::new().unwrap();
+    let result = compiler.compile(&func);
+    assert!(
+        matches!(result, Err(JitError::NotPure)),
+        "JIT should reject yields_raises effect: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_jit_accepts_raises_only_effect() {
+    // Effect::raises() has may_suspend() = false.
+    // The JIT gate should accept this — fiber/new, fiber/status, etc.
+    // have this effect and are safe to call from JIT code.
+    let mut func = LirFunction::new(0);
+    func.num_regs = 1;
+    func.num_captures = 0;
+    func.effect = Effect::raises();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::Const {
+            dst: Reg(0),
+            value: LirConst::Int(42),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(0)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let compiler = JitCompiler::new().unwrap();
+    let result = compiler.compile(&func);
+    assert!(
+        result.is_ok(),
+        "JIT should accept raises-only effect: {:?}",
+        result
+    );
+}
