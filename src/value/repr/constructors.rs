@@ -203,4 +203,13 @@ impl Value {
         use std::rc::Rc;
         alloc(HeapObject::Continuation(Rc::new(c)))
     }
+
+    /// Create a fiber value.
+    #[inline]
+    pub fn fiber(f: crate::value::fiber::Fiber) -> Self {
+        use crate::value::heap::{alloc, HeapObject};
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        alloc(HeapObject::Fiber(Rc::new(RefCell::new(f))))
+    }
 }

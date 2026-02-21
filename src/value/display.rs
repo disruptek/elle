@@ -115,6 +115,12 @@ impl fmt::Display for Value {
             return write!(f, "<coroutine>");
         }
 
+        // Fiber
+        if let Some(fib) = self.as_fiber() {
+            let status = fib.borrow().status.as_str();
+            return write!(f, "<fiber:{}>", status);
+        }
+
         // Condition
         if let Some(_cond) = self.as_condition() {
             return write!(f, "<condition>");

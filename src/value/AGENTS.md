@@ -20,6 +20,7 @@ Runtime value representation using NaN-boxing.
 | `types.rs` | `Arity`, `SymbolId`, `NativeFn`, `VmAwareFn`, `TableKey` |
 | `closure.rs` | `Closure` struct with bytecode, env, and `location_map` |
 | `coroutine.rs` | `Coroutine`, `CoroutineState` for suspendable computation |
+| `fiber.rs` | `Fiber`, `Frame`, `FiberStatus`, `SignalBits` for fiber execution contexts |
 | `continuation.rs` | `ContinuationData`, `ContinuationFrame` for first-class continuations |
 | `condition.rs` | `Condition` for the condition/restart system |
 | `ffi.rs` | `LibHandle`, `CHandle` for C interop |
@@ -34,7 +35,11 @@ Runtime value representation using NaN-boxing.
 |------|----------|---------|
 | `Value` | `repr.rs` | NaN-boxed 8-byte value (Copy) |
 | `Closure` | `closure.rs` | Bytecode + env + arity + effect + location_map |
-| `Coroutine` | `coroutine.rs` | Suspendable computation with continuation |
+| `Coroutine` | `coroutine.rs` | Suspendable computation with continuation (deprecated, replaced by Fiber) |
+| `Fiber` | `fiber.rs` | Independent execution context with stack, frames, signal mask |
+| `Frame` | `fiber.rs` | Single call frame (closure + ip + base) |
+| `FiberStatus` | `fiber.rs` | Fiber lifecycle: New, Alive, Suspended, Dead, Error |
+| `SignalBits` | `fiber.rs` | u32 bitmask for signal types |
 | `Arity` | `types.rs` | Function arity (Exact, AtLeast, Range) |
 | `SymbolId` | `types.rs` | Interned symbol identifier |
 | `SendValue` | `send.rs` | Thread-safe value wrapper |
@@ -79,6 +84,7 @@ Create values via methods: `Value::int(42)`, `Value::cons(a, b)`,
 | `types.rs` | ~150 | Arity, SymbolId, NativeFn, etc. |
 | `closure.rs` | ~70 | Closure struct |
 | `coroutine.rs` | ~100 | Coroutine, CoroutineState |
+| `fiber.rs` | ~260 | Fiber, Frame, FiberStatus, SignalBits |
 | `continuation.rs` | ~200 | ContinuationData, ContinuationFrame |
 | `condition.rs` | ~50 | Condition type |
 | `ffi.rs` | ~50 | LibHandle, CHandle |

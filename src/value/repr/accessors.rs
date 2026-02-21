@@ -159,6 +159,13 @@ impl Value {
         self.heap_tag() == Some(HeapTag::Continuation)
     }
 
+    /// Check if this is a fiber.
+    #[inline]
+    pub fn is_fiber(&self) -> bool {
+        use crate::value::heap::HeapTag;
+        self.heap_tag() == Some(HeapTag::Fiber)
+    }
+
     /// Check if this is a proper list (nil or cons ending in nil).
     pub fn is_list(&self) -> bool {
         let mut current = *self;
@@ -373,6 +380,19 @@ impl Value {
         }
         match unsafe { deref(*self) } {
             HeapObject::Continuation(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// Extract as fiber if this is a fiber.
+    #[inline]
+    pub fn as_fiber(&self) -> Option<&std::rc::Rc<std::cell::RefCell<crate::value::fiber::Fiber>>> {
+        use crate::value::heap::{deref, HeapObject};
+        if !self.is_heap() {
+            return None;
+        }
+        match unsafe { deref(*self) } {
+            HeapObject::Fiber(f) => Some(f),
             _ => None,
         }
     }

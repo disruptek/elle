@@ -87,6 +87,11 @@ impl PartialEq for Value {
                     std::ptr::eq(self_obj as *const _, other_obj as *const _)
                 }
 
+                // Fiber comparison (compare by reference)
+                (HeapObject::Fiber(_), HeapObject::Fiber(_)) => {
+                    std::ptr::eq(self_obj as *const _, other_obj as *const _)
+                }
+
                 // Different types are not equal
                 _ => false,
             }

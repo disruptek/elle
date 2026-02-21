@@ -96,6 +96,9 @@ fn is_value_sendable(value: &Value) -> bool {
 
         // Continuations are not sendable (contain frame data with closures)
         HeapObject::Continuation(_) => false,
+
+        // Fibers are not sendable (contain execution state with closures)
+        HeapObject::Fiber(_) => false,
     }
 }
 

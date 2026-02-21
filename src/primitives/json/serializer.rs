@@ -111,6 +111,7 @@ pub fn serialize_value(value: &Value) -> Result<String, String> {
             HeapTag::CHandle => Err("Cannot serialize C handles to JSON".to_string()),
             HeapTag::ThreadHandle => Err("Cannot serialize thread handles to JSON".to_string()),
             HeapTag::Continuation => Err("Cannot serialize continuations to JSON".to_string()),
+            HeapTag::Fiber => Err("Cannot serialize fibers to JSON".to_string()),
         }
     } else {
         Err("Cannot serialize unknown value type to JSON".to_string())
@@ -242,6 +243,7 @@ pub fn serialize_value_pretty(value: &Value, indent_level: usize) -> Result<Stri
             HeapTag::CHandle => Err("Cannot serialize C handles to JSON".to_string()),
             HeapTag::ThreadHandle => Err("Cannot serialize thread handles to JSON".to_string()),
             HeapTag::Continuation => Err("Cannot serialize continuations to JSON".to_string()),
+            HeapTag::Fiber => Err("Cannot serialize fibers to JSON".to_string()),
         }
     } else {
         Err("Cannot serialize unknown value type to JSON".to_string())

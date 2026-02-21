@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::value::continuation::ContinuationData;
 use crate::value::ffi::ThreadHandle;
+use crate::value::fiber::Fiber;
 use crate::value::Value;
 
 // Re-export types for convenience
@@ -53,6 +54,7 @@ pub enum HeapTag {
     CHandle = 13,
     ThreadHandle = 14,
     Continuation = 15,
+    Fiber = 16,
 }
 
 /// All heap-allocated value types.
@@ -110,6 +112,9 @@ pub enum HeapObject {
 
     /// First-class continuation for yield across call boundaries
     Continuation(Rc<ContinuationData>),
+
+    /// Fiber: independent execution context with its own stack and frames
+    Fiber(Rc<RefCell<Fiber>>),
 }
 
 /// Data for thread handles.
@@ -148,6 +153,7 @@ impl HeapObject {
             HeapObject::CHandle(_, _) => HeapTag::CHandle,
             HeapObject::ThreadHandle(_) => HeapTag::ThreadHandle,
             HeapObject::Continuation(_) => HeapTag::Continuation,
+            HeapObject::Fiber(_) => HeapTag::Fiber,
         }
     }
 
@@ -170,6 +176,7 @@ impl HeapObject {
             HeapObject::CHandle(_, _) => "c-handle",
             HeapObject::ThreadHandle(_) => "thread-handle",
             HeapObject::Continuation(_) => "continuation",
+            HeapObject::Fiber(_) => "fiber",
         }
     }
 }
@@ -199,6 +206,13 @@ impl std::fmt::Debug for HeapObject {
             HeapObject::CHandle(_, id) => write!(f, "<c-handle:{}>", id),
             HeapObject::ThreadHandle(_) => write!(f, "<thread-handle>"),
             HeapObject::Continuation(c) => write!(f, "<continuation:{} frames>", c.frames.len()),
+            HeapObject::Fiber(fib) => {
+                if let Ok(f_ref) = fib.try_borrow() {
+                    write!(f, "<fiber:{}>", f_ref.status.as_str())
+                } else {
+                    write!(f, "<fiber:borrowed>")
+                }
+            }
         }
     }
 }
