@@ -376,22 +376,28 @@ mod jit_tests {
     fn test_jit_fiber_status_in_hot_loop() {
         // fiber/status has Effect::raises() — JIT-safe.
         // Check status of a fiber repeatedly in a hot loop.
-        let result = eval(
+        let mut symbols = SymbolTable::new();
+        let mut vm = VM::new();
+        let _effects = register_primitives(&mut vm, &mut symbols);
+        elle::ffi::primitives::context::set_symbol_table(&mut symbols as *mut SymbolTable);
+        let result = eval_new(
             r#"(begin
                 (define f (fiber/new (fn () 42) 1))
                 (define (check-status n)
-                  (if (= n 0) (fiber/status f)
+                  (if (= n 0) (= (fiber/status f) :new)
                     (begin (fiber/status f) (check-status (- n 1)))))
                 (check-status 20))"#,
+            &mut symbols,
+            &mut vm,
         );
+        elle::ffi::primitives::context::clear_symbol_table();
         assert!(
             result.is_ok(),
             "fiber/status in hot loop failed: {:?}",
             result
         );
-        // Fiber hasn't been resumed, should be "new"
         let val = result.unwrap();
-        assert_eq!(val, Value::string("new"));
+        assert_eq!(val.as_bool(), Some(true));
     }
 
     #[test]

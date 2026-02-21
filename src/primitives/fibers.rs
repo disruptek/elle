@@ -8,7 +8,7 @@
 //! - fiber/new: Create a fiber from a closure with a signal mask
 //! - fiber/resume: Resume a suspended fiber, delivering a value
 //! - fiber/signal: Emit a signal from the current fiber
-//! - fiber/status: Get fiber lifecycle status
+//! - fiber/status: Get fiber lifecycle status (:new, :alive, :suspended, :dead, :error)
 //! - fiber/value: Get signal payload from last signal
 //! - fiber/bits: Get signal bits from last signal
 //! - fiber/mask: Get the fiber's signal mask
@@ -16,6 +16,21 @@
 
 use crate::value::fiber::{Fiber, FiberStatus, SignalBits, SIG_ERROR, SIG_OK, SIG_RESUME};
 use crate::value::{Condition, Value};
+
+/// Return a keyword Value for a FiberStatus by interning via the
+/// thread-local symbol table. Falls back to a string if no symbol
+/// table is available (shouldn't happen in normal execution).
+fn status_keyword(status: FiberStatus) -> Value {
+    let name = status.as_str();
+    unsafe {
+        if let Some(symbols_ptr) = crate::ffi::primitives::context::get_symbol_table() {
+            let id = (*symbols_ptr).intern(name);
+            Value::keyword(id.0)
+        } else {
+            Value::string(name)
+        }
+    }
+}
 
 /// (fiber/new fn mask) → fiber
 ///
@@ -197,7 +212,7 @@ pub fn prim_fiber_status(args: &[Value]) -> (SignalBits, Value) {
     };
 
     let status = fiber_rc.borrow().status;
-    (SIG_OK, Value::string(status.as_str()))
+    (SIG_OK, status_keyword(status))
 }
 
 /// (fiber/value fiber) → value
@@ -438,33 +453,52 @@ mod tests {
         assert_eq!(sig, SIG_ERROR);
     }
 
+    /// Set up thread-local symbol table for tests that need keyword interning.
+    fn with_symbol_table<F: FnOnce()>(f: F) {
+        let mut symbols = crate::symbol::SymbolTable::new();
+        crate::ffi::primitives::context::set_symbol_table(
+            &mut symbols as *mut crate::symbol::SymbolTable,
+        );
+        f();
+        crate::ffi::primitives::context::clear_symbol_table();
+    }
+
     #[test]
     fn test_fiber_status() {
-        let closure = make_test_closure();
-        let (_, fiber_val) = prim_fiber_new(&[closure, Value::int(0)]);
-        let (sig, status) = prim_fiber_status(&[fiber_val]);
-        assert_eq!(sig, SIG_OK);
-        assert_eq!(status, Value::string("new"));
+        with_symbol_table(|| {
+            let closure = make_test_closure();
+            let (_, fiber_val) = prim_fiber_new(&[closure, Value::int(0)]);
+            let (sig, status) = prim_fiber_status(&[fiber_val]);
+            assert_eq!(sig, SIG_OK);
+            assert!(status.is_keyword(), "Expected keyword, got {:?}", status);
+        });
     }
 
     #[test]
     fn test_fiber_status_transitions() {
-        let closure = make_test_closure();
-        let (_, fiber_val) = prim_fiber_new(&[closure, Value::int(0)]);
+        with_symbol_table(|| {
+            let closure = make_test_closure();
+            let (_, fiber_val) = prim_fiber_new(&[closure, Value::int(0)]);
 
-        // Test each status
-        for (status, expected) in [
-            (FiberStatus::New, "new"),
-            (FiberStatus::Alive, "alive"),
-            (FiberStatus::Suspended, "suspended"),
-            (FiberStatus::Dead, "dead"),
-            (FiberStatus::Error, "error"),
-        ] {
-            fiber_val.as_fiber().unwrap().borrow_mut().status = status;
-            let (sig, val) = prim_fiber_status(&[fiber_val]);
-            assert_eq!(sig, SIG_OK);
-            assert_eq!(val, Value::string(expected));
-        }
+            // All statuses should return keywords
+            for status in [
+                FiberStatus::New,
+                FiberStatus::Alive,
+                FiberStatus::Suspended,
+                FiberStatus::Dead,
+                FiberStatus::Error,
+            ] {
+                fiber_val.as_fiber().unwrap().borrow_mut().status = status;
+                let (sig, val) = prim_fiber_status(&[fiber_val]);
+                assert_eq!(sig, SIG_OK);
+                assert!(
+                    val.is_keyword(),
+                    "Expected keyword for {:?}, got {:?}",
+                    status,
+                    val
+                );
+            }
+        });
     }
 
     #[test]

@@ -1059,15 +1059,17 @@ mod tests {
     #[test]
     fn test_fiber_new_and_status() {
         let (mut symbols, mut vm) = setup();
+        crate::ffi::primitives::context::set_symbol_table(&mut symbols as *mut SymbolTable);
         let result = eval_new(
             r#"(let ((f (fiber/new (fn () 42) 0)))
-                 (fiber/status f))"#,
+                 (= (fiber/status f) :new))"#,
             &mut symbols,
             &mut vm,
         );
+        crate::ffi::primitives::context::clear_symbol_table();
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::string("new")),
-            Err(e) => panic!("Expected Ok, got Err: {}", e),
+            Ok(v) => assert_eq!(v, crate::value::Value::bool(true)),
+            Err(e) => panic!("Expected Ok(#t), got Err: {}", e),
         }
     }
 
@@ -1089,18 +1091,20 @@ mod tests {
 
     #[test]
     fn test_fiber_resume_dead_status() {
-        // After a fiber completes, its status should be "dead"
+        // After a fiber completes, its status should be :dead
         let (mut symbols, mut vm) = setup();
+        crate::ffi::primitives::context::set_symbol_table(&mut symbols as *mut SymbolTable);
         let result = eval_new(
             r#"(let ((f (fiber/new (fn () 42) 0)))
                  (fiber/resume f)
-                 (fiber/status f))"#,
+                 (= (fiber/status f) :dead))"#,
             &mut symbols,
             &mut vm,
         );
+        crate::ffi::primitives::context::clear_symbol_table();
         match result {
-            Ok(v) => assert_eq!(v, crate::value::Value::string("dead")),
-            Err(e) => panic!("Expected Ok(\"dead\"), got Err: {}", e),
+            Ok(v) => assert_eq!(v, crate::value::Value::bool(true)),
+            Err(e) => panic!("Expected Ok(#t), got Err: {}", e),
         }
     }
 
