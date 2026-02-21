@@ -92,7 +92,7 @@ pub fn prim_raises(args: &[Value]) -> Result<Value, Condition> {
         )));
     }
     if let Some(closure) = args[0].as_closure() {
-        Ok(Value::bool(closure.effect.may_raise))
+        Ok(Value::bool(closure.effect.may_raise()))
     } else {
         Ok(Value::FALSE)
     }

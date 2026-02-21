@@ -74,98 +74,35 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
     let mut effects = HashMap::new();
 
     // Arithmetic - all can raise (arity/type errors)
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "+",
-        prim_add,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "-",
-        prim_sub,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "*",
-        prim_mul,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "+", prim_add, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "-", prim_sub, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "*", prim_mul, Effect::raises());
     register_vm_aware_fn(
         vm,
         symbols,
         &mut effects,
         "/",
         prim_div_vm,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Comparisons - can raise on type errors
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "=",
-        prim_eq,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "eq?",
-        prim_eq,
-        Effect::pure_raises(),
-    ); // Alias for =
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "<",
-        prim_lt,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        ">",
-        prim_gt,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "<=",
-        prim_le,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        ">=",
-        prim_ge,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "=", prim_eq, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "eq?", prim_eq, Effect::raises()); // Alias for =
+    register_fn(vm, symbols, &mut effects, "<", prim_lt, Effect::raises());
+    register_fn(vm, symbols, &mut effects, ">", prim_gt, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "<=", prim_le, Effect::raises());
+    register_fn(vm, symbols, &mut effects, ">=", prim_ge, Effect::raises());
 
     // List operations
-    register_fn(vm, symbols, &mut effects, "cons", prim_cons, Effect::pure());
+    register_fn(vm, symbols, &mut effects, "cons", prim_cons, Effect::none());
     register_fn(
         vm,
         symbols,
         &mut effects,
         "first",
         prim_first,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -173,9 +110,9 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "rest",
         prim_rest,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
-    register_fn(vm, symbols, &mut effects, "list", prim_list, Effect::pure());
+    register_fn(vm, symbols, &mut effects, "list", prim_list, Effect::none());
 
     // Type predicates - all pure
     register_fn(
@@ -184,7 +121,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "nil?",
         prim_is_nil,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -192,7 +129,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "pair?",
         prim_is_pair,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -200,7 +137,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "list?",
         prim_is_list,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -208,7 +145,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "number?",
         prim_is_number,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -216,7 +153,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "symbol?",
         prim_is_symbol,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -224,7 +161,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string?",
         prim_is_string,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -232,7 +169,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "boolean?",
         prim_is_boolean,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -240,14 +177,14 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "keyword?",
         prim_is_keyword,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Logic - pure
-    register_fn(vm, symbols, &mut effects, "not", prim_not, Effect::pure());
-    register_fn(vm, symbols, &mut effects, "and", prim_and, Effect::pure());
-    register_fn(vm, symbols, &mut effects, "or", prim_or, Effect::pure());
-    register_fn(vm, symbols, &mut effects, "xor", prim_xor, Effect::pure());
+    register_fn(vm, symbols, &mut effects, "not", prim_not, Effect::none());
+    register_fn(vm, symbols, &mut effects, "and", prim_and, Effect::none());
+    register_fn(vm, symbols, &mut effects, "or", prim_or, Effect::none());
+    register_fn(vm, symbols, &mut effects, "xor", prim_xor, Effect::none());
 
     // Display - pure (no yield)
     register_fn(
@@ -256,7 +193,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "display",
         prim_display,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -264,7 +201,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "print",
         prim_print,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -272,7 +209,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "newline",
         prim_newline,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Additional list operations
@@ -282,7 +219,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "length",
         prim_length,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -290,7 +227,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "empty?",
         prim_empty,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -298,7 +235,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "append",
         prim_append,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -306,7 +243,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "reverse",
         prim_reverse,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Type conversions - can raise
@@ -316,7 +253,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "int",
         prim_to_int,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -324,7 +261,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "float",
         prim_to_float,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -332,7 +269,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string",
         prim_to_string,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     // Scheme-style conversion names
     register_fn(
@@ -341,7 +278,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string->int",
         prim_string_to_int,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -349,7 +286,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string->float",
         prim_string_to_float,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -357,36 +294,15 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "any->string",
         prim_any_to_string,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Min/Max - can raise
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "min",
-        prim_min,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "max",
-        prim_max,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "min", prim_min, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "max", prim_max, Effect::raises());
 
     // Absolute value - can raise
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "abs",
-        prim_abs,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "abs", prim_abs, Effect::raises());
 
     // String operations - can raise
     register_fn(
@@ -395,7 +311,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-append",
         prim_string_append,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -403,7 +319,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-upcase",
         prim_string_upcase,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -411,7 +327,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-downcase",
         prim_string_downcase,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -419,7 +335,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "substring",
         prim_substring,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -427,7 +343,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-index",
         prim_string_index,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -435,7 +351,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "char-at",
         prim_char_at,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -443,7 +359,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-split",
         prim_string_split,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -451,7 +367,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-replace",
         prim_string_replace,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -459,7 +375,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-trim",
         prim_string_trim,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -467,7 +383,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-contains?",
         prim_string_contains,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -475,7 +391,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-starts-with?",
         prim_string_starts_with,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -483,7 +399,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-ends-with?",
         prim_string_ends_with,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -491,7 +407,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "string-join",
         prim_string_join,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -499,7 +415,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "number->string",
         prim_number_to_string,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_vm_aware_fn(
         vm,
@@ -507,25 +423,18 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "symbol->string",
         prim_symbol_to_string,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // List utilities - can raise
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "nth",
-        prim_nth,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "nth", prim_nth, Effect::raises());
     register_fn(
         vm,
         symbols,
         &mut effects,
         "last",
         prim_last,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -533,7 +442,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "take",
         prim_take,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -541,7 +450,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "drop",
         prim_drop,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Vector operations - can raise
@@ -551,7 +460,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "vector",
         prim_vector,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -559,7 +468,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "vector-ref",
         prim_vector_ref,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -567,7 +476,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "vector-set!",
         prim_vector_set,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Table/Struct operations (polymorphic) - can raise
@@ -577,7 +486,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "table",
         prim_table,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -585,47 +494,26 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "struct",
         prim_struct,
-        Effect::pure(),
+        Effect::none(),
     );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "get",
-        prim_get,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "put",
-        prim_put,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "get", prim_get, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "put", prim_put, Effect::raises());
     register_fn(
         vm,
         symbols,
         &mut effects,
         "put!",
         prim_put,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "del",
-        prim_del,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "del", prim_del, Effect::raises());
     register_fn(
         vm,
         symbols,
         &mut effects,
         "del!",
         prim_del,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -633,7 +521,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "keys",
         prim_keys,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -641,7 +529,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "values",
         prim_values,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -649,7 +537,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "has-key?",
         prim_has_key,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -657,7 +545,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "struct-del",
         prim_struct_del,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Type info - pure
@@ -667,7 +555,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "type-of",
         prim_type_of,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Math functions - can raise
@@ -677,63 +565,21 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "sqrt",
         prim_sqrt,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "sin",
-        prim_sin,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "cos",
-        prim_cos,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "tan",
-        prim_tan,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "log",
-        prim_log,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "exp",
-        prim_exp,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "pow",
-        prim_pow,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "sin", prim_sin, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "cos", prim_cos, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "tan", prim_tan, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "log", prim_log, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "exp", prim_exp, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "pow", prim_pow, Effect::raises());
     register_fn(
         vm,
         symbols,
         &mut effects,
         "floor",
         prim_floor,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -741,7 +587,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "ceil",
         prim_ceil,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -749,47 +595,26 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "round",
         prim_round,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Math constants - pure
-    register_fn(vm, symbols, &mut effects, "pi", prim_pi, Effect::pure());
-    register_fn(vm, symbols, &mut effects, "e", prim_e, Effect::pure());
+    register_fn(vm, symbols, &mut effects, "pi", prim_pi, Effect::none());
+    register_fn(vm, symbols, &mut effects, "e", prim_e, Effect::none());
 
     // Additional utilities - can raise
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "mod",
-        prim_mod,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "%",
-        prim_mod,
-        Effect::pure_raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "rem",
-        prim_rem,
-        Effect::pure_raises(),
-    );
+    register_fn(vm, symbols, &mut effects, "mod", prim_mod, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "%", prim_mod, Effect::raises());
+    register_fn(vm, symbols, &mut effects, "rem", prim_rem, Effect::raises());
     register_fn(
         vm,
         symbols,
         &mut effects,
         "even?",
         prim_even,
-        Effect::pure(),
+        Effect::none(),
     );
-    register_fn(vm, symbols, &mut effects, "odd?", prim_odd, Effect::pure());
+    register_fn(vm, symbols, &mut effects, "odd?", prim_odd, Effect::none());
 
     // FFI primitives - can raise
     register_fn(
@@ -798,7 +623,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "load-library",
         ffi_primitives::prim_load_library_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -806,7 +631,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "list-libraries",
         ffi_primitives::prim_list_libraries_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -814,7 +639,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "call-c-function",
         ffi_primitives::prim_call_c_function_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -822,7 +647,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "load-header-with-lib",
         ffi_primitives::prim_load_header_with_lib_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -830,7 +655,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "define-enum",
         ffi_primitives::prim_define_enum_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -838,7 +663,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "make-c-callback",
         ffi_primitives::prim_make_c_callback_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -846,7 +671,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "free-callback",
         ffi_primitives::prim_free_callback_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -854,7 +679,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "register-allocation",
         ffi_primitives::prim_register_allocation_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -862,7 +687,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "memory-stats",
         ffi_primitives::prim_memory_stats_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -870,7 +695,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "type-check",
         ffi_primitives::prim_type_check_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -878,7 +703,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "null-pointer?",
         ffi_primitives::prim_null_pointer_wrapper,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -886,7 +711,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "ffi-last-error",
         ffi_primitives::prim_ffi_last_error_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -894,7 +719,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "with-ffi-safety-checks",
         ffi_primitives::prim_with_ffi_safety_checks_wrapper,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Exception handling (old string-based) - can raise
@@ -904,7 +729,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "throw",
         prim_throw,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -912,7 +737,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "exception",
         prim_exception,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -920,7 +745,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "exception-message",
         prim_exception_message,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -928,7 +753,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "exception-data",
         prim_exception_data,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Condition system (new CL-style) - can raise
@@ -938,7 +763,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "signal",
         prim_signal,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -946,7 +771,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "warn",
         prim_warn,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -954,7 +779,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "error",
         prim_error,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Exception introspection (Phase 8) - can raise
@@ -964,7 +789,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "exception-id",
         prim_exception_id,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -972,7 +797,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "condition-field",
         prim_condition_field,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -980,7 +805,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "condition-matches-type",
         prim_condition_matches_type,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -988,7 +813,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "condition-backtrace",
         prim_condition_backtrace,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Quoting and meta-programming - pure
@@ -998,7 +823,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "gensym",
         prim_gensym,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Package manager - can raise
@@ -1008,7 +833,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "package-version",
         prim_package_version,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1016,7 +841,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "package-info",
         prim_package_info,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Module loading - can raise
@@ -1026,7 +851,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "import-file",
         prim_import_file,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1034,7 +859,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "add-module-path",
         prim_add_module_path,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Macro expansion - can raise
@@ -1044,7 +869,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "expand-macro",
         prim_expand_macro,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1052,7 +877,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "macro?",
         prim_is_macro,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Concurrency primitives - can raise
@@ -1062,7 +887,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "spawn",
         prim_spawn,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1070,7 +895,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "join",
         prim_join,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1078,7 +903,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "sleep",
         prim_sleep,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1086,7 +911,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "current-thread-id",
         prim_current_thread_id,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Process control - can raise
@@ -1096,7 +921,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "exit",
         prim_exit,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Debugging and profiling primitives - pure
@@ -1106,7 +931,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "debug-print",
         prim_debug_print,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1114,7 +939,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "trace",
         prim_trace,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1122,7 +947,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "profile",
         prim_profile,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1130,7 +955,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "memory-usage",
         prim_memory_usage,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Closure introspection - pure
@@ -1140,7 +965,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "closure?",
         prim_is_closure,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1148,7 +973,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "jit?",
         prim_is_jit,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1156,7 +981,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "pure?",
         prim_is_pure,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1164,7 +989,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "coro?",
         prim_is_coro,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1172,7 +997,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "mutates-params?",
         prim_mutates_params,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1180,7 +1005,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "raises?",
         prim_raises,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1188,7 +1013,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "arity",
         prim_arity,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1196,7 +1021,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "captures",
         prim_captures,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1204,7 +1029,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "bytecode-size",
         prim_bytecode_size,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Bytecode and JIT disassembly - can raise
@@ -1214,7 +1039,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "disbit",
         prim_disbit,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1222,7 +1047,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "disjit",
         prim_disjit,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // File I/O primitives - can raise
@@ -1232,7 +1057,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "slurp",
         prim_slurp,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1240,7 +1065,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "spit",
         prim_spit,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1248,7 +1073,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "append-file",
         prim_append_file,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1256,7 +1081,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "file-exists?",
         prim_file_exists,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1264,7 +1089,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "directory?",
         prim_is_directory,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1272,7 +1097,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "file?",
         prim_is_file,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1280,7 +1105,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "delete-file",
         prim_delete_file,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1288,7 +1113,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "delete-directory",
         prim_delete_directory,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1296,7 +1121,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "create-directory",
         prim_create_directory,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1304,7 +1129,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "create-directory-all",
         prim_create_directory_all,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1312,7 +1137,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "rename-file",
         prim_rename_file,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1320,7 +1145,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "copy-file",
         prim_copy_file,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1328,7 +1153,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "file-size",
         prim_file_size,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1336,7 +1161,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "list-directory",
         prim_list_directory,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1344,7 +1169,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "absolute-path",
         prim_absolute_path,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1352,7 +1177,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "current-directory",
         prim_current_directory,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1360,7 +1185,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "change-directory",
         prim_change_directory,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1368,7 +1193,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "join-path",
         prim_join_path,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1376,7 +1201,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "file-extension",
         prim_file_extension,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1384,7 +1209,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "file-name",
         prim_file_name,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1392,7 +1217,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "parent-directory",
         prim_parent_directory,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1400,7 +1225,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "read-lines",
         prim_read_lines,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // JSON operations - can raise
@@ -1410,7 +1235,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "json-parse",
         prim_json_parse,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1418,7 +1243,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "json-serialize",
         prim_json_serialize,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1426,18 +1251,18 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "json-serialize-pretty",
         prim_json_serialize_pretty,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
 
     // Cell/Box primitives (mutable storage)
-    register_fn(vm, symbols, &mut effects, "box", prim_box, Effect::pure());
+    register_fn(vm, symbols, &mut effects, "box", prim_box, Effect::none());
     register_fn(
         vm,
         symbols,
         &mut effects,
         "unbox",
         prim_unbox,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1445,7 +1270,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "box-set!",
         prim_box_set,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1453,7 +1278,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "box?",
         prim_box_p,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // Coroutine primitives (Phase 6)
@@ -1463,7 +1288,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "make-coroutine",
         prim_make_coroutine,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1471,7 +1296,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "coroutine-status",
         prim_coroutine_status,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1479,7 +1304,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "coroutine-done?",
         prim_coroutine_done,
-        Effect::pure(),
+        Effect::none(),
     );
     register_fn(
         vm,
@@ -1487,7 +1312,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "coroutine-value",
         prim_coroutine_value,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_fn(
         vm,
@@ -1495,7 +1320,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "coroutine?",
         prim_is_coroutine,
-        Effect::pure(),
+        Effect::none(),
     );
 
     // VM-aware coroutine primitives (Phase 6) - yields
@@ -1521,7 +1346,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "coroutine->iterator",
         prim_coroutine_to_iterator,
-        Effect::pure_raises(),
+        Effect::raises(),
     );
     register_vm_aware_fn(
         vm,

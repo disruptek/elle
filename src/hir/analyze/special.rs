@@ -28,7 +28,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let value = self.analyze_expr(&items[1])?;
-        let effect = value.effect.clone();
+        let effect = value.effect;
 
         Ok(Hir::new(HirKind::Throw(Box::new(value)), span, effect))
     }
@@ -42,7 +42,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let value = self.analyze_expr(&items[1])?;
-        let mut effect = value.effect.clone();
+        let mut effect = value.effect;
         let mut arms = Vec::new();
 
         for arm in &items[2..] {
@@ -59,14 +59,14 @@ impl<'a> Analyzer<'a> {
             // Check for guard
             let (guard, body_idx) = if parts.len() >= 3 && parts[1].as_symbol() == Some("when") {
                 let guard_expr = self.analyze_expr(&parts[2])?;
-                effect = effect.combine(guard_expr.effect.clone());
+                effect = effect.combine(guard_expr.effect);
                 (Some(guard_expr), 3)
             } else {
                 (None, 1)
             };
 
             let body = self.analyze_body(&parts[body_idx..], span.clone())?;
-            effect = effect.combine(body.effect.clone());
+            effect = effect.combine(body.effect);
             self.pop_scope();
 
             arms.push((pattern, guard, body));
@@ -141,7 +141,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let body = self.analyze_expr(&items[1])?;
-        let mut effect = body.effect.clone();
+        let mut effect = body.effect;
         let mut handlers = Vec::new();
 
         for handler_syntax in &items[2..] {
@@ -181,7 +181,7 @@ impl<'a> Analyzer<'a> {
             self.push_scope(false);
             let var_id = self.bind(var_name, BindingKind::Local { index: 0 });
             let handler_body = self.analyze_body(&parts[2..], span.clone())?;
-            effect = effect.combine(handler_body.effect.clone());
+            effect = effect.combine(handler_body.effect);
             self.pop_scope();
 
             handlers.push((cond_type, var_id, Box::new(handler_body)));
@@ -211,7 +211,7 @@ impl<'a> Analyzer<'a> {
             .ok_or_else(|| format!("{}: handler-bind handlers must be a list", span))?;
 
         let mut handlers = Vec::new();
-        let mut effect = Effect::pure();
+        let mut effect = Effect::none();
 
         for handler_syntax in handlers_syntax {
             let parts = handler_syntax
@@ -230,12 +230,12 @@ impl<'a> Analyzer<'a> {
             };
 
             let handler_fn = self.analyze_expr(&parts[1])?;
-            effect = effect.combine(handler_fn.effect.clone());
+            effect = effect.combine(handler_fn.effect);
             handlers.push((cond_type, Box::new(handler_fn)));
         }
 
         let body = self.analyze_body(&items[2..], span.clone())?;
-        effect = effect.combine(body.effect.clone());
+        effect = effect.combine(body.effect);
 
         Ok(Hir::new(
             HirKind::HandlerBind {
@@ -279,7 +279,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let body = self.analyze_body(&items[body_start..], span.clone())?;
-        let effect = body.effect.clone();
+        let effect = body.effect;
 
         Ok(Hir::new(
             HirKind::Module {

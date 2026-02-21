@@ -4,8 +4,9 @@ JIT compilation for Elle using Cranelift.
 
 ## Responsibility
 
-Compile pure `LirFunction` to native x86_64 code. Only `Effect::Pure` functions
-are JIT candidates (no yield/coroutine complexity).
+Compile non-suspending `LirFunction` to native x86_64 code. Only functions
+where `!effect.may_suspend()` are JIT candidates (no yield/debug/polymorphic
+complexity — Cranelift native frames can't be snapshot/restored mid-execution).
 
 ## Architecture
 
@@ -127,8 +128,10 @@ Key implementation details:
 
 ## Invariants
 
-1. **Only pure functions.** `JitCompiler::compile` returns `JitError::NotPure`
-   for functions with `Effect::Yields` or `Effect::Polymorphic`.
+1. **Only non-suspending functions.** `JitCompiler::compile` returns
+   `JitError::NotPure` for functions where `effect.may_suspend()` is true
+   (yields, debug, or polymorphic). Errors (SIG_ERROR) and FFI (SIG_FFI)
+   are fine — they don't require frame snapshot/restore.
 
 2. **NaN-boxing correctness.** The JIT uses the exact same bit patterns as
    `Value::int()`, `Value::float()`, etc. Constants are encoded at compile time.

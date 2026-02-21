@@ -25,8 +25,8 @@ pub fn prim_make_coroutine(args: &[Value]) -> Result<Value, Condition> {
     }
 
     if let Some(c) = args[0].as_closure() {
-        if c.effect.is_pure() {
-            eprintln!("warning: make-coroutine: closure has Pure effect and will never yield");
+        if !c.effect.may_yield() {
+            eprintln!("warning: make-coroutine: closure cannot yield and will complete without suspending");
         }
         let coroutine = Coroutine::new((*c).clone());
         Ok(Value::coroutine(coroutine))
@@ -209,9 +209,9 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
 
         match &borrowed.state {
             CoroutineState::Created => {
-                // Warn on first resume if closure has Pure effect
-                if borrowed.closure.effect.is_pure() {
-                    eprintln!("warning: coroutine-resume: coroutine's closure has Pure effect; it will complete without yielding");
+                // Warn on first resume if closure cannot yield
+                if !borrowed.closure.effect.may_yield() {
+                    eprintln!("warning: coroutine-resume: closure cannot yield; it will complete without suspending");
                 }
                 // First resume - start execution using bytecode path
                 borrowed.state = CoroutineState::Running;
@@ -603,7 +603,7 @@ mod tests {
             num_locals: 0,
             num_captures: 0,
             constants: Rc::new(vec![Value::NIL]),
-            effect: Effect::pure(),
+            effect: Effect::none(),
             cell_params_mask: 0,
             symbol_names: Rc::new(std::collections::HashMap::new()),
             location_map: Rc::new(crate::error::LocationMap::new()),

@@ -101,9 +101,9 @@ impl VM {
                 return None;
             }
 
-            // JIT compilation and dispatch — only for pure closures
-            // Non-pure closures can never be JIT-compiled, so skip profiling overhead
-            if closure.effect.is_pure() {
+            // JIT compilation and dispatch — only for non-suspending closures
+            // Suspending closures can never be JIT-compiled, so skip profiling overhead
+            if !closure.effect.may_suspend() {
                 let bytecode_ptr = closure.bytecode.as_ptr();
                 let is_hot = self.record_closure_call(bytecode_ptr);
 

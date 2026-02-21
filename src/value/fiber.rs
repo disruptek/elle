@@ -20,12 +20,14 @@ pub const SIG_ERROR: SignalBits = 1 << 0; // exception / panic
 pub const SIG_YIELD: SignalBits = 1 << 1; // cooperative suspension
 pub const SIG_DEBUG: SignalBits = 1 << 2; // breakpoint / trace
 pub const SIG_RESUME: SignalBits = 1 << 3; // fiber resumption (VM-internal)
+pub const SIG_FFI: SignalBits = 1 << 4; // calls foreign code
 
 // Signal bit partitioning:
 //
 //   Bits 0-2:   User-facing signals (error, yield, debug)
 //   Bit  3:     VM operation (resume) — not visible to user code
-//   Bits 4-15:  Reserved for future use
+//   Bit  4:     FFI — calls foreign code
+//   Bits 5-15:  Reserved for future use
 //   Bits 16-31: User-defined signal types
 //
 // The VM dispatch loop checks all bits. User code only sees
@@ -182,7 +184,7 @@ mod tests {
             num_locals: 0,
             num_captures: 0,
             constants: Rc::new(vec![]),
-            effect: Effect::pure(),
+            effect: Effect::none(),
             cell_params_mask: 0,
             symbol_names: Rc::new(HashMap::new()),
             location_map: Rc::new(LocationMap::new()),

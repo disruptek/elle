@@ -25,7 +25,7 @@ impl Hir {
         Hir {
             kind,
             span,
-            effect: Effect::pure(),
+            effect: Effect::none(),
         }
     }
 }

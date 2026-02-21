@@ -22,7 +22,7 @@ Does NOT:
 | Type | Purpose |
 |------|---------|
 | `VM` | Global state + root Fiber. Per-execution state lives on `vm.fiber` |
-| `SignalBits` | Internal return type: `SIG_OK`, `SIG_ERROR`, `SIG_YIELD` |
+| `SignalBits` | Internal return type: `SIG_OK`, `SIG_ERROR`, `SIG_YIELD`, `SIG_DEBUG`, `SIG_RESUME`, `SIG_FFI` |
 | `CallFrame` | Function name, IP, frame base |
 | `ExceptionHandler` | Handler offset, finally offset, stack depth |
 

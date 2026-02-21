@@ -7,13 +7,12 @@
 // - Pure functions remain pure
 // - set! invalidates effect tracking
 
-use elle::effects::{Effect, YieldBehavior};
+use elle::effects::Effect;
 use elle::hir::HirKind;
 use elle::pipeline::{analyze_all_new, analyze_new};
 use elle::primitives::register_primitives;
 use elle::symbol::SymbolTable;
 use elle::vm::VM;
-use std::collections::BTreeSet;
 
 fn setup() -> SymbolTable {
     let mut symbols = SymbolTable::new();
@@ -34,7 +33,7 @@ fn test_effect_direct_yield() {
     let result = analyze_new("(fn () (yield 1))", &mut symbols).unwrap();
 
     // Lambda creation is pure
-    assert_eq!(result.hir.effect, Effect::pure());
+    assert_eq!(result.hir.effect, Effect::none());
 
     // But the body should be Yields
     if let HirKind::Lambda { body, .. } = &result.hir.kind {
@@ -103,7 +102,7 @@ fn test_effect_pure_call() {
     let result = analyze_new("(begin (define f (fn (x) (+ x 1))) (f 42))", &mut symbols).unwrap();
     assert_eq!(
         result.hir.effect,
-        Effect::pure(),
+        Effect::none(),
         "Calling a pure function should remain Pure"
     );
 }
@@ -271,7 +270,7 @@ fn test_effect_direct_lambda_call_pure() {
     let result = analyze_new("((fn () 42))", &mut symbols).unwrap();
     assert_eq!(
         result.hir.effect,
-        Effect::pure(),
+        Effect::none(),
         "Direct call to pure lambda should be Pure"
     );
 }
@@ -367,7 +366,7 @@ fn test_effect_pure_primitives() {
         let result = analyze_new(call, &mut symbols).unwrap();
         assert_eq!(
             result.hir.effect,
-            Effect::pure(),
+            Effect::none(),
             "Primitive call '{}' should be Pure",
             call
         );
@@ -384,7 +383,7 @@ fn test_lambda_body_effect_pure() {
     let result = analyze_new("(fn (x) (+ x 1))", &mut symbols).unwrap();
 
     if let HirKind::Lambda { body, .. } = &result.hir.kind {
-        assert_eq!(body.effect, Effect::pure());
+        assert_eq!(body.effect, Effect::none());
     } else {
         panic!("Expected Lambda");
     }
@@ -509,7 +508,7 @@ fn test_polymorphic_inference_resolves_pure() {
     .unwrap();
     assert_eq!(
         result.hir.effect,
-        Effect::pure(),
+        Effect::none(),
         "Calling polymorphic function with pure arg should be Pure"
     );
 }
@@ -550,7 +549,7 @@ fn test_polymorphic_inference_my_map() {
     // When called with +, which is Pure, the result is Pure.
     assert_eq!(
         result.hir.effect,
-        Effect::pure(),
+        Effect::none(),
         "Recursive higher-order function with pure arg should be Pure"
     );
 }
@@ -571,7 +570,7 @@ fn test_polymorphic_inference_non_recursive_map() {
     // apply-to-list is Polymorphic(0), + is Pure, so the call is Pure
     assert_eq!(
         result.hir.effect,
-        Effect::pure(),
+        Effect::none(),
         "Non-recursive higher-order function with pure arg should be Pure"
     );
 }
@@ -622,10 +621,10 @@ fn test_polymorphic_inference_two_params() {
             assert_eq!(
                 *inferred_effect,
                 Effect {
-                    yield_behavior: YieldBehavior::Polymorphic(BTreeSet::from([0, 1])),
-                    may_raise: false,
+                    bits: 0,
+                    propagates: 0b11, // params 0 and 1
                 },
-                "Function calling two params should be Polymorphic({{0, 1}})"
+                "Function calling two params should propagate params 0 and 1"
             );
         } else {
             panic!("Expected Lambda");
@@ -646,7 +645,7 @@ fn test_polymorphic_inference_two_params_resolves_pure() {
     .unwrap();
     assert_eq!(
         result.hir.effect,
-        Effect::pure(),
+        Effect::none(),
         "Calling Polymorphic({{0,1}}) with two pure args should be Pure"
     );
 }
@@ -711,7 +710,7 @@ fn test_polymorphic_inference_nested_call() {
     // wrapper should be Polymorphic(0) and the final call with + should be Pure
     assert_eq!(
         result.hir.effect,
-        Effect::pure(),
+        Effect::none(),
         "Nested polymorphic calls with pure arg should be Pure"
     );
 }
@@ -764,7 +763,7 @@ fn test_polymorphic_inference_pure_function() {
         {
             assert_eq!(
                 *inferred_effect,
-                Effect::pure(),
+                Effect::none(),
                 "Pure function should have Pure effect"
             );
         } else {
@@ -804,7 +803,7 @@ fn test_cross_form_effect_tracking_pure_helper() {
         {
             assert_eq!(
                 *inferred_effect,
-                Effect::pure(),
+                Effect::none(),
                 "Caller of pure helper should be Pure"
             );
         } else {
@@ -839,7 +838,7 @@ fn test_cross_form_effect_tracking_polymorphic_helper() {
         {
             assert_eq!(
                 *inferred_effect,
-                Effect::pure(),
+                Effect::none(),
                 "Caller of polymorphic helper with pure arg should be Pure"
             );
         } else {
@@ -874,7 +873,7 @@ fn test_cross_form_effect_tracking_mutual_recursion() {
         {
             assert_eq!(
                 *inferred_effect,
-                Effect::pure(),
+                Effect::none(),
                 "safe? calling pure check-safe-helper should be Pure"
             );
         } else {

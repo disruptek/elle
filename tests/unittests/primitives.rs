@@ -1461,7 +1461,7 @@ fn test_spawn_primitive() {
         num_captures: 0,
         constants: std::rc::Rc::new(vec![]),
 
-        effect: elle::effects::Effect::pure(),
+        effect: elle::effects::Effect::none(),
         cell_params_mask: 0,
         symbol_names: std::rc::Rc::new(std::collections::HashMap::new()),
         location_map: std::rc::Rc::new(elle::error::LocationMap::new()),
@@ -1580,7 +1580,7 @@ fn test_profile_primitive() {
         num_captures: 0,
         constants: std::rc::Rc::new(vec![]),
 
-        effect: elle::effects::Effect::pure(),
+        effect: elle::effects::Effect::none(),
         cell_params_mask: 0,
         symbol_names: std::rc::Rc::new(std::collections::HashMap::new()),
         location_map: std::rc::Rc::new(elle::error::LocationMap::new()),
@@ -1933,7 +1933,7 @@ fn test_json_serialize_errors() {
         num_captures: 0,
         constants: std::rc::Rc::new(vec![]),
 
-        effect: elle::effects::Effect::pure(),
+        effect: elle::effects::Effect::none(),
         cell_params_mask: 0,
         symbol_names: std::rc::Rc::new(std::collections::HashMap::new()),
         location_map: std::rc::Rc::new(elle::error::LocationMap::new()),

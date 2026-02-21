@@ -91,7 +91,7 @@ pub fn compile_new(source: &str, symbols: &mut SymbolTable) -> Result<CompileRes
 /// Uses fixpoint iteration to correctly infer effects for mutually recursive
 /// top-level defines. The algorithm:
 /// 1. Pre-scan all forms for `(define name (fn ...))` patterns
-/// 2. Seed `global_effects` with `Effect::pure()` for all such defines (optimistic)
+/// 2. Seed `global_effects` with `Effect::none()` for all such defines (optimistic)
 /// 3. Analyze all forms, collecting actual inferred effects
 /// 4. If any effect changed, re-analyze with corrected effects
 /// 5. Repeat until stable (max 10 iterations)
@@ -113,7 +113,7 @@ pub fn compile_all_new(
     let mut global_effects: HashMap<SymbolId, Effect> = HashMap::new();
     for form in &expanded_forms {
         if let Some(sym) = scan_define_lambda(form, symbols) {
-            global_effects.insert(sym, Effect::pure());
+            global_effects.insert(sym, Effect::none());
         }
     }
 
@@ -215,7 +215,7 @@ pub fn analyze_all_new(
     let mut global_effects: HashMap<SymbolId, Effect> = HashMap::new();
     for form in &expanded_forms {
         if let Some(sym) = scan_define_lambda(form, symbols) {
-            global_effects.insert(sym, Effect::pure());
+            global_effects.insert(sym, Effect::none());
         }
     }
 
@@ -982,13 +982,13 @@ mod tests {
         assert!(results.is_ok(), "Compilation should succeed");
         let results = results.unwrap();
 
-        // Check that the closures have Pure effect
+        // Check that the closures don't suspend
         for (i, result) in results.iter().enumerate() {
             for constant in &result.bytecode.constants {
                 if let Some(closure) = constant.as_closure() {
                     assert!(
-                        closure.effect.is_pure(),
-                        "Form {} closure should be Pure, got {:?}",
+                        !closure.effect.may_suspend(),
+                        "Form {} closure should not suspend, got {:?}",
                         i,
                         closure.effect
                     );
@@ -1036,15 +1036,15 @@ mod tests {
         assert!(results.is_ok(), "Compilation should succeed");
         let results = results.unwrap();
 
-        // Check that all closures have Pure effect
+        // Check that all closures don't suspend
         let mut found_closures = 0;
         for (i, result) in results.iter().enumerate() {
             for constant in &result.bytecode.constants {
                 if let Some(closure) = constant.as_closure() {
                     found_closures += 1;
                     assert!(
-                        closure.effect.is_pure(),
-                        "Form {} closure should be Pure, got {:?}",
+                        !closure.effect.may_suspend(),
+                        "Form {} closure should not suspend, got {:?}",
                         i,
                         closure.effect
                     );

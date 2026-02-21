@@ -37,13 +37,15 @@ pub const SIG_OK:       SignalBits = 0;        // no bits set = normal return
 pub const SIG_ERROR:    SignalBits = 1 << 0;   // exception / panic
 pub const SIG_YIELD:    SignalBits = 1 << 1;   // cooperative suspension
 pub const SIG_DEBUG:    SignalBits = 1 << 2;   // breakpoint / trace
-pub const SIG_RESUME:   SignalBits = 1 << 3;   // fiber resumption request
+pub const SIG_RESUME:   SignalBits = 1 << 3;   // fiber resumption (VM-internal)
+pub const SIG_FFI:      SignalBits = 1 << 4;   // calls foreign code
 
 /// Signal bit partitioning:
 ///
-///   Bits 0-2:  User-facing signals (error, yield, debug)
-///   Bit  3:    VM operation (resume) — not visible to user code
-///   Bits 4-15: Reserved for future use
+///   Bits 0-2:   User-facing signals (error, yield, debug)
+///   Bit  3:     VM operation (resume) — not visible to user code
+///   Bit  4:     FFI — calls foreign code
+///   Bits 5-15:  Reserved for future use
 ///   Bits 16-31: User-defined signal types
 ///
 /// The VM dispatch loop checks all bits. User code only sees
@@ -78,14 +80,13 @@ pub struct Frame {
 /// The fiber: an independent execution context.
 pub struct Fiber {
     /// Operand stack (temporaries — locals are in Frame.closure.env)
-    pub stack: Vec<Value>,
-    /// Call frame stack
+    pub stack: SmallVec<[Value; 256]>,
+    /// Call frame stack (for fiber execution — closure + ip + base)
     pub frames: Vec<Frame>,
     /// Current status
     pub status: FiberStatus,
     /// Signal mask: which of this fiber's signals are caught by its parent.
     /// Set at creation time by the parent. Immutable after creation.
-    /// The parent checks child.mask & bits to decide catch vs. propagate.
     pub mask: SignalBits,
     /// Parent fiber (Weak to avoid Rc cycles)
     pub parent: Option<Weak<RefCell<Fiber>>>,
@@ -97,10 +98,20 @@ pub struct Fiber {
     pub env: Option<HashMap<u32, Value>>,
     /// Signal value from this fiber. Canonical location for both
     /// signal payloads and normal return values.
-    /// - On signal: set to (bits, payload) before suspending
-    /// - On normal return: set to (0, return_value) before completing
-    /// Read via (fiber/value f). Always valid after status is not :new/:alive.
+    /// - On signal: (bits, payload) before suspending
+    /// - On normal return: (SIG_OK, return_value) before completing
     pub signal: Option<(SignalBits, Value)>,
+
+    // --- Execution state migrated from VM (Step 2) ---
+    pub call_depth: usize,
+    pub call_stack: Vec<CallFrame>,
+    pub exception_handlers: SmallVec<[ExceptionHandler; 2]>,
+    pub current_exception: Option<Rc<Condition>>,
+    pub handling_exception: bool,
+    pub coroutine_stack: Vec<Rc<RefCell<Coroutine>>>,
+    pub pending_yield: Option<Value>,
+    /// FIXME: Remove in Step 8 when fibers replace continuations.
+    pub continuation: Option<Value>,
 }
 ```
 
@@ -458,66 +469,72 @@ after cleanup.
 Both are future work but the fiber model supports them naturally.
 
 
-## Phase 2: Signal-Based Effect Type
+## Phase 2: Signal-Based Effect Type (Implemented)
 
 ### Goal
 
-Replace `Effect { yield_behavior, may_raise }` with `SignalBits`.
+Replace `Effect { yield_behavior, may_raise }` with signal-bits-based Effect.
 
 ### The new Effect type
 
 ```rust
 /// Effect is a simple Copy pair — no allocation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Effect {
-    /// Base effect bits (what signals this function itself might emit)
+    /// Signal bits this function itself might emit.
     pub bits: SignalBits,
     /// Bitmask of parameter indices whose effects this function propagates.
     /// Bit i set means this function may exhibit parameter i's effects.
     pub propagates: u32,
 }
-
-impl Effect {
-    pub const fn pure() -> Self {
-        Effect { bits: 0, propagates: 0 }
-    }
-
-    pub const fn raises() -> Self {
-        Effect { bits: SIG_ERROR, propagates: 0 }
-    }
-
-    pub const fn yields() -> Self {
-        Effect { bits: SIG_YIELD, propagates: 0 }
-    }
-
-    pub const fn yields_raises() -> Self {
-        Effect { bits: SIG_YIELD | SIG_ERROR, propagates: 0 }
-    }
-
-    pub fn is_pure(&self) -> bool {
-        self.bits == 0 && self.propagates == 0
-    }
-    // ... rest unchanged
-}
-
-// Effect bounds (constraining what effects parameters may have) are
-// deferred to a future phase. When needed, they'll be tracked in the
-// analysis environment, not on the Effect struct itself — keeping
-// Effect as a simple Copy pair.
 ```
+
+### Constructors
+
+| Constructor | bits | propagates | Purpose |
+|-------------|------|------------|---------|
+| `Effect::none()` | 0 | 0 | No effects |
+| `Effect::raises()` | SIG_ERROR | 0 | May raise (most primitives) |
+| `Effect::yields()` | SIG_YIELD | 0 | May yield |
+| `Effect::yields_raises()` | SIG_YIELD \| SIG_ERROR | 0 | May yield and raise |
+| `Effect::ffi()` | SIG_FFI | 0 | Calls foreign code |
+| `Effect::polymorphic(n)` | 0 | 1 << n | Effect depends on param n |
+| `Effect::polymorphic_raises(n)` | SIG_ERROR | 1 << n | Polymorphic + may raise |
+
+### Predicates
+
+Each predicate asks a specific question. No vague "is_pure".
+
+| Predicate | Meaning | Used by |
+|-----------|---------|---------|
+| `may_suspend()` | bits & (SIG_YIELD \| SIG_DEBUG) != 0 \|\| propagates != 0 | JIT gate, coroutine warnings |
+| `may_yield()` | bits & SIG_YIELD != 0 | Coroutine checks |
+| `may_raise()` | bits & SIG_ERROR != 0 | Error handling |
+| `may_ffi()` | bits & SIG_FFI != 0 | FFI tracking |
+| `is_polymorphic()` | propagates != 0 | Call analysis |
+| `propagated_params()` | Iterator over set bit indices in propagates | Call effect resolution |
+
+### Backward compatibility (deprecated)
+
+| Deprecated | Replacement |
+|------------|-------------|
+| `Effect::pure()` | `Effect::none()` |
+| `Effect::pure_raises()` | `Effect::raises()` |
+| `effect.is_pure()` | `!effect.may_suspend()` |
 
 ### Migration mapping
 
 | Old | New |
 |-----|-----|
-| `Effect::pure()` | `Effect { bits: 0, propagates: 0 }` |
-| `Effect::pure_raises()` | `Effect { bits: SIG_ERROR, propagates: 0 }` |
-| `Effect::yields()` | `Effect { bits: SIG_YIELD, propagates: 0 }` |
-| `Effect::yields_raises()` | `Effect { bits: SIG_YIELD \| SIG_ERROR, propagates: 0 }` |
-| `YieldBehavior::Polymorphic({0})` | `Effect { bits: 0, propagates: 1 }` |
-| `effect.is_pure()` | `effect.bits == 0 && effect.propagates == 0` |
-| `effect.may_raise` | `effect.bits & SIG_ERROR != 0` |
-| `effect.yield_behavior == Yields` | `effect.bits & SIG_YIELD != 0` |
+| `Effect::pure()` | `Effect::none()` |
+| `Effect::pure_raises()` | `Effect::raises()` |
+| `Effect::yields()` | `Effect::yields()` (unchanged) |
+| `Effect::yields_raises()` | `Effect::yields_raises()` (unchanged) |
+| `YieldBehavior::Polymorphic({0})` | `Effect::polymorphic(0)` |
+| `effect.is_pure()` | `!effect.may_suspend()` |
+| `effect.may_raise` (field) | `effect.may_raise()` (method) |
+| `effect.yield_behavior == Yields` | `effect.may_yield()` |
+| `effect.clone()` | `effect` (Effect is Copy) |
 
 
 ## Phase 3: New Bytecode Instructions
