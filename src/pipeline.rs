@@ -1053,4 +1053,127 @@ mod tests {
         }
         assert_eq!(found_closures, 4, "Should have 4 closures");
     }
+
+    // === Fiber integration tests ===
+
+    #[test]
+    fn test_fiber_new_and_status() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            r#"(let ((f (fiber/new (fn () 42) 0)))
+                 (fiber/status f))"#,
+            &mut symbols,
+            &mut vm,
+        );
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::string("new")),
+            Err(e) => panic!("Expected Ok, got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_fiber_resume_simple() {
+        // A fiber that just returns a value
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            r#"(let ((f (fiber/new (fn () 42) 0)))
+                 (fiber/resume f))"#,
+            &mut symbols,
+            &mut vm,
+        );
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::int(42)),
+            Err(e) => panic!("Expected Ok(42), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_fiber_resume_dead_status() {
+        // After a fiber completes, its status should be "dead"
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            r#"(let ((f (fiber/new (fn () 42) 0)))
+                 (fiber/resume f)
+                 (fiber/status f))"#,
+            &mut symbols,
+            &mut vm,
+        );
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::string("dead")),
+            Err(e) => panic!("Expected Ok(\"dead\"), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_fiber_signal_and_resume() {
+        // A fiber that signals, then is resumed to completion
+        let (mut symbols, mut vm) = setup();
+        // SIG_YIELD = 2, mask catches it
+        let result = eval_new(
+            r#"(let ((f (fiber/new (fn () (fiber/signal 2 99) 42) 2)))
+                 (fiber/resume f)
+                 (fiber/value f))"#,
+            &mut symbols,
+            &mut vm,
+        );
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::int(99)),
+            Err(e) => panic!("Expected Ok(99), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_fiber_signal_resume_continues() {
+        // Resume after signal should continue execution and return final value
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            r#"(let ((f (fiber/new (fn () (fiber/signal 2 99) 42) 2)))
+                 (fiber/resume f)
+                 (fiber/resume f))"#,
+            &mut symbols,
+            &mut vm,
+        );
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::int(42)),
+            Err(e) => panic!("Expected Ok(42), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_fiber_is_fiber() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            r#"(fiber? (fiber/new (fn () 42) 0))"#,
+            &mut symbols,
+            &mut vm,
+        );
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::bool(true)),
+            Err(e) => panic!("Expected Ok(#t), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_fiber_not_fiber() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(r#"(fiber? 42)"#, &mut symbols, &mut vm);
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::bool(false)),
+            Err(e) => panic!("Expected Ok(#f), got Err: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_fiber_mask() {
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            r#"(fiber/mask (fiber/new (fn () 42) 3))"#,
+            &mut symbols,
+            &mut vm,
+        );
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::int(3)),
+            Err(e) => panic!("Expected Ok(3), got Err: {}", e),
+        }
+    }
 }

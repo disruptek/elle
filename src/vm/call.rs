@@ -7,10 +7,12 @@
 //! - Tail call optimization
 //! - JIT compilation and dispatch (when jit feature is enabled)
 
+use crate::value::fiber::{FiberStatus, SavedContext};
 use crate::value::{
-    Condition, CoroutineState, ResumeOp, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_RESUME,
+    Condition, CoroutineState, Fiber, ResumeOp, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_RESUME,
     SIG_YIELD,
 };
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::core::VM;
@@ -537,8 +539,12 @@ impl VM {
                 None // let the dispatch loop's interrupt handler deal with it
             }
             SIG_RESUME => {
-                // Coroutine primitive returned SIG_RESUME — execute the coroutine
-                self.handle_coroutine_resume_signal(value, bytecode, constants, closure_env, ip)
+                // Primitive returned SIG_RESUME — dispatch to coroutine or fiber handler
+                if value.is_fiber() {
+                    self.handle_fiber_resume_signal(value, bytecode, constants, closure_env, ip)
+                } else {
+                    self.handle_coroutine_resume_signal(value, bytecode, constants, closure_env, ip)
+                }
             }
             _ => {
                 // Any other signal (SIG_YIELD, user-defined)
@@ -569,9 +575,12 @@ impl VM {
                 SIG_OK
             }
             SIG_RESUME => {
-                // Coroutine primitive in tail position — execute the coroutine
-                // and store the result in fiber.signal.
-                self.handle_coroutine_resume_signal_tail(value)
+                // Primitive in tail position — dispatch to coroutine or fiber handler
+                if value.is_fiber() {
+                    self.handle_fiber_resume_signal_tail(value)
+                } else {
+                    self.handle_coroutine_resume_signal_tail(value)
+                }
             }
             _ => {
                 self.fiber.signal = Some((bits, value));
@@ -1139,5 +1148,233 @@ impl VM {
         let pair = crate::value::cons(result_value, Value::bool(is_done));
         self.fiber.stack.push(pair);
         None
+    }
+
+    // ── SIG_RESUME: fiber execution ───────────────────────────────
+
+    /// Handle SIG_RESUME from a fiber primitive (Call position).
+    ///
+    /// Swaps the child fiber into `vm.fiber`, executes it, then swaps back.
+    /// The child's signal determines what the parent sees:
+    /// - If the child's signal bits are caught by the mask → parent handles
+    /// - If not caught → propagate up
+    ///
+    /// Returns `None` to continue the dispatch loop (result pushed to stack),
+    /// or `Some(bits)` to exit (e.g., signal propagation).
+    fn handle_fiber_resume_signal(
+        &mut self,
+        fiber_value: Value,
+        _bytecode: &[u8],
+        _constants: &[Value],
+        _closure_env: Option<&Rc<Vec<Value>>>,
+        _ip: &mut usize,
+    ) -> Option<SignalBits> {
+        let fiber_rc = match fiber_value.as_fiber() {
+            Some(f) => f.clone(),
+            None => {
+                let cond = Condition::error("SIG_RESUME with non-fiber value");
+                self.fiber.current_exception = Some(Rc::new(cond));
+                self.fiber.stack.push(Value::NIL);
+                return None;
+            }
+        };
+
+        let (result_bits, result_value) = self.do_fiber_resume(&fiber_rc);
+
+        // Check the child's signal against its mask
+        let mask = fiber_rc.borrow().mask;
+
+        if result_bits == SIG_OK {
+            // Child completed normally — push return value
+            self.fiber.stack.push(result_value);
+            None
+        } else if mask & result_bits != 0 {
+            // Signal is caught by the mask — parent handles it.
+            // Push the signal value; parent can inspect via fiber/bits, fiber/value.
+            self.fiber.stack.push(result_value);
+            None
+        } else {
+            // Signal is NOT caught — propagate to parent.
+            // Save parent's execution context for potential resumption.
+            self.fiber.signal = Some((result_bits, result_value));
+            Some(result_bits)
+        }
+    }
+
+    /// Handle SIG_RESUME from a fiber primitive (TailCall position).
+    fn handle_fiber_resume_signal_tail(&mut self, fiber_value: Value) -> SignalBits {
+        let fiber_rc = match fiber_value.as_fiber() {
+            Some(f) => f.clone(),
+            None => {
+                let cond = Condition::error("SIG_RESUME with non-fiber value");
+                self.fiber.current_exception = Some(Rc::new(cond));
+                self.fiber.signal = Some((SIG_OK, Value::NIL));
+                return SIG_OK;
+            }
+        };
+
+        let (result_bits, result_value) = self.do_fiber_resume(&fiber_rc);
+
+        let mask = fiber_rc.borrow().mask;
+
+        if result_bits == SIG_OK {
+            self.fiber.signal = Some((SIG_OK, result_value));
+            SIG_OK
+        } else if mask & result_bits != 0 {
+            // Caught by mask — return value to parent
+            self.fiber.signal = Some((SIG_OK, result_value));
+            SIG_OK
+        } else {
+            // Propagate signal
+            self.fiber.signal = Some((result_bits, result_value));
+            result_bits
+        }
+    }
+
+    /// Execute a fiber resume: swap fibers, run, swap back.
+    ///
+    /// Returns (signal_bits, signal_value) from the child fiber's execution.
+    fn do_fiber_resume(&mut self, fiber_rc: &Rc<RefCell<Fiber>>) -> (SignalBits, Value) {
+        // Take the resume value that prim_fiber_resume stored
+        let resume_value = {
+            let mut child = fiber_rc.borrow_mut();
+            child.signal.take().map(|(_, v)| v).unwrap_or(Value::NIL)
+        };
+
+        let is_first_resume = fiber_rc.borrow().status == FiberStatus::New;
+
+        // 1. Take child fiber out of its Rc<RefCell>
+        let dummy = Fiber::new(
+            Rc::new(crate::value::Closure {
+                bytecode: Rc::new(vec![]),
+                arity: crate::value::Arity::Exact(0),
+                env: Rc::new(vec![]),
+                num_locals: 0,
+                num_captures: 0,
+                constants: Rc::new(vec![]),
+                effect: crate::effects::Effect::none(),
+                cell_params_mask: 0,
+                symbol_names: Rc::new(std::collections::HashMap::new()),
+                location_map: Rc::new(crate::error::LocationMap::new()),
+                jit_code: None,
+                lir_function: None,
+            }),
+            0,
+        );
+        let mut child_fiber = std::mem::replace(&mut *fiber_rc.borrow_mut(), dummy);
+
+        // 2. Swap parent out, child in
+        std::mem::swap(&mut self.fiber, &mut child_fiber);
+        // Now: self.fiber = child, child_fiber = parent
+
+        // 3. Set child status to Alive
+        self.fiber.status = FiberStatus::Alive;
+
+        // 4. Execute the child
+        let bits = if is_first_resume {
+            self.do_fiber_first_resume()
+        } else {
+            self.do_fiber_subsequent_resume(resume_value)
+        };
+
+        // 5. Update child status based on result
+        match bits {
+            SIG_OK => {
+                self.fiber.status = FiberStatus::Dead;
+            }
+            SIG_ERROR => {
+                self.fiber.status = FiberStatus::Error;
+            }
+            _ => {
+                // Any signal (SIG_YIELD, user-defined) → suspended
+                self.fiber.status = FiberStatus::Suspended;
+            }
+        }
+
+        // 6. Extract the result before swapping back
+        let result_value = self
+            .fiber
+            .signal
+            .as_ref()
+            .map(|(_, v)| *v)
+            .unwrap_or(Value::NIL);
+        let result_bits = self.fiber.signal.as_ref().map(|(b, _)| *b).unwrap_or(bits);
+
+        // 7. Swap back: parent in, child out
+        std::mem::swap(&mut self.fiber, &mut child_fiber);
+        // Now: self.fiber = parent, child_fiber = child
+
+        // 8. Put child fiber back into its Rc<RefCell>
+        *fiber_rc.borrow_mut() = child_fiber;
+
+        (result_bits, result_value)
+    }
+
+    /// First resume of a New fiber — build env and execute closure bytecode.
+    fn do_fiber_first_resume(&mut self) -> SignalBits {
+        let closure = self.fiber.closure.clone();
+        let env_rc = self.build_closure_env(&closure, &[]);
+
+        // Execute the closure's bytecode
+        let bits =
+            self.execute_bytecode_inner(&closure.bytecode, &closure.constants, Some(&env_rc));
+
+        // If the fiber signaled, save the execution context for resumption.
+        // The dispatch loop saves the IP into fiber.suspended_ip before returning.
+        if bits != SIG_OK {
+            let ip = self.fiber.suspended_ip.take().unwrap_or(0);
+            self.fiber.saved_context = Some(SavedContext {
+                bytecode: closure.bytecode.to_vec(),
+                constants: closure.constants.to_vec(),
+                env: Some(env_rc),
+                ip,
+                exception_handlers: self.fiber.exception_handlers.clone(),
+                handling_exception: self.fiber.handling_exception,
+            });
+        }
+
+        bits
+    }
+
+    /// Resume a Suspended fiber — continue from saved context.
+    fn do_fiber_subsequent_resume(&mut self, resume_value: Value) -> SignalBits {
+        let ctx = match self.fiber.saved_context.take() {
+            Some(ctx) => ctx,
+            None => {
+                let cond = Condition::error("fiber/resume: suspended fiber has no saved context");
+                self.fiber.current_exception = Some(Rc::new(cond));
+                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                return SIG_ERROR;
+            }
+        };
+
+        // Push the resume value onto the child's stack.
+        // This is the return value of the fiber/signal call that suspended it.
+        self.fiber.stack.push(resume_value);
+
+        // Resume from saved IP with saved exception handler state
+        let bits = self.execute_bytecode_from_ip_with_state(
+            &ctx.bytecode,
+            &ctx.constants,
+            ctx.env.as_ref(),
+            ctx.ip,
+            ctx.exception_handlers,
+            ctx.handling_exception,
+        );
+
+        // If signaled again, save context for next resume
+        if bits != SIG_OK {
+            let ip = self.fiber.suspended_ip.take().unwrap_or(0);
+            self.fiber.saved_context = Some(SavedContext {
+                bytecode: ctx.bytecode,
+                constants: ctx.constants,
+                env: ctx.env,
+                ip,
+                exception_handlers: self.fiber.exception_handlers.clone(),
+                handling_exception: self.fiber.handling_exception,
+            });
+        }
+
+        bits
     }
 }

@@ -7,6 +7,7 @@ pub mod debug;
 pub mod debugging;
 pub mod display;
 pub mod exception;
+pub mod fibers;
 pub mod file_io;
 pub mod higher_order;
 pub mod higher_order_def;

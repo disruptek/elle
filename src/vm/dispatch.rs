@@ -130,11 +130,13 @@ impl VM {
                 Instruction::Call => {
                     if let Some(bits) = self.handle_call(bytecode, constants, closure_env, &mut ip)
                     {
+                        self.fiber.suspended_ip = Some(ip);
                         return bits;
                     }
                 }
                 Instruction::TailCall => {
                     if let Some(bits) = self.handle_tail_call(&mut ip, bytecode) {
+                        self.fiber.suspended_ip = Some(ip);
                         return bits;
                     }
                 }
@@ -329,6 +331,7 @@ impl VM {
 
                 // Yield
                 Instruction::Yield => {
+                    self.fiber.suspended_ip = Some(ip);
                     return self.handle_yield(bytecode, constants, closure_env, ip);
                 }
             }
@@ -350,6 +353,7 @@ impl VM {
 
             // Check for pending yield from yield-from delegation
             if let Some(yielded_value) = self.take_pending_yield() {
+                self.fiber.suspended_ip = Some(ip);
                 return self.handle_pending_yield(
                     bytecode,
                     constants,

@@ -70,16 +70,22 @@ dispatches the return signal in `handle_primitive_signal()` (`call.rs`):
 - `SIG_OK` → push value to stack
 - `SIG_ERROR` → extract `Condition` from value, set `fiber.current_exception`
 - `SIG_YIELD` → store in `fiber.signal`, return yield
-- `SIG_RESUME` → execute coroutine via `handle_coroutine_resume_signal()`
+- `SIG_RESUME` → dispatch to coroutine or fiber handler
 
 Coroutine primitives (`coroutine-resume`, `yield-from`, `coroutine-next`) set a
 `ResumeOp` on the coroutine and return `(SIG_RESUME, coroutine_value)`. The VM
 reads and clears the `ResumeOp` in the SIG_RESUME handler, then performs the
 actual bytecode execution.
 
+Fiber primitives (`fiber/resume`) return `(SIG_RESUME, fiber_value)`. The VM
+swaps the child fiber into `vm.fiber` via `std::mem::swap`, executes the child,
+then swaps back. The child's `saved_context` stores bytecode/constants/env/IP
+for resumption after signals. The dispatch loop saves the IP into
+`fiber.suspended_ip` before returning on signal paths.
+
 ## Dependents
 
-- `primitives/` - NativeFn primitives; SIG_RESUME signals trigger VM-side coroutine execution
+- `primitives/` - NativeFn primitives; SIG_RESUME signals trigger VM-side execution
 - `repl.rs` - runs compiled code
 - `main.rs` - file execution
 

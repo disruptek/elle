@@ -24,6 +24,10 @@ use super::debugging::{
 };
 use super::display::{prim_display, prim_newline, prim_print};
 use super::exception::{prim_exception, prim_exception_data, prim_exception_message, prim_throw};
+use super::fibers::{
+    prim_fiber_bits, prim_fiber_mask, prim_fiber_new, prim_fiber_resume, prim_fiber_signal,
+    prim_fiber_status, prim_fiber_value, prim_is_fiber,
+};
 use super::file_io::{
     prim_absolute_path, prim_append_file, prim_change_directory, prim_copy_file,
     prim_create_directory, prim_create_directory_all, prim_current_directory,
@@ -1354,6 +1358,72 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         "coroutine-next",
         prim_coroutine_next,
         Effect::yields_raises(),
+    );
+
+    // Fiber primitives
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/new",
+        prim_fiber_new,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/resume",
+        prim_fiber_resume,
+        Effect::yields_raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/signal",
+        prim_fiber_signal,
+        Effect::yields_raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/status",
+        prim_fiber_status,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/value",
+        prim_fiber_value,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/bits",
+        prim_fiber_bits,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/mask",
+        prim_fiber_mask,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber?",
+        prim_is_fiber,
+        Effect::none(),
     );
 
     effects

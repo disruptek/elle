@@ -12,6 +12,22 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
+/// Saved execution context for a suspended fiber.
+///
+/// When a fiber suspends (via `fiber/signal`), the VM saves the bytecode,
+/// constants, environment, and instruction pointer so execution can resume
+/// from exactly where it left off. The fiber's stack and exception handlers
+/// are already on the Fiber struct and don't need separate saving.
+#[derive(Debug, Clone)]
+pub struct SavedContext {
+    pub bytecode: Vec<u8>,
+    pub constants: Vec<Value>,
+    pub env: Option<Rc<Vec<Value>>>,
+    pub ip: usize,
+    pub exception_handlers: SmallVec<[ExceptionHandler; 2]>,
+    pub handling_exception: bool,
+}
+
 /// Signal type bits. The first 16 are compiler-reserved.
 pub type SignalBits = u32;
 
@@ -111,6 +127,12 @@ pub struct Fiber {
     /// - On signal: (bits, payload) before suspending
     /// - On normal return: (SIG_OK, return_value) before completing
     pub signal: Option<(SignalBits, Value)>,
+    /// Saved execution context for resuming a suspended fiber.
+    /// Set when the fiber suspends; consumed when it resumes.
+    pub saved_context: Option<SavedContext>,
+    /// IP at the point the dispatch loop exited due to a signal.
+    /// Set by the dispatch loop; consumed by fiber resume.
+    pub suspended_ip: Option<usize>,
 
     // --- Execution state migrated from VM ---
     /// Call depth counter (for stack overflow detection)
@@ -145,6 +167,8 @@ impl Fiber {
             closure,
             env: None,
             signal: None,
+            saved_context: None,
+            suspended_ip: None,
             call_depth: 0,
             call_stack: Vec::new(),
             exception_handlers: SmallVec::new(),
