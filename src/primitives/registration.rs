@@ -55,11 +55,12 @@ use super::package::{prim_package_info, prim_package_version};
 use super::process::prim_exit;
 use super::signaling::{prim_error, prim_signal, prim_warn};
 use super::string::{
-    prim_any_to_string, prim_char_at, prim_number_to_string, prim_string_append,
-    prim_string_contains, prim_string_downcase, prim_string_ends_with, prim_string_index,
-    prim_string_join, prim_string_replace, prim_string_split, prim_string_starts_with,
-    prim_string_to_float, prim_string_to_int, prim_string_trim, prim_string_upcase, prim_substring,
-    prim_symbol_to_string, prim_to_float, prim_to_int, prim_to_string,
+    prim_any_to_string, prim_char_at, prim_keyword_to_string, prim_number_to_string,
+    prim_string_append, prim_string_contains, prim_string_downcase, prim_string_ends_with,
+    prim_string_index, prim_string_join, prim_string_replace, prim_string_split,
+    prim_string_starts_with, prim_string_to_float, prim_string_to_int, prim_string_trim,
+    prim_string_upcase, prim_substring, prim_symbol_to_string, prim_to_float, prim_to_int,
+    prim_to_string,
 };
 use super::structs::{prim_struct, prim_struct_del};
 use super::table::{
@@ -426,6 +427,14 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         &mut effects,
         "symbol->string",
         prim_symbol_to_string,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "keyword->string",
+        prim_keyword_to_string,
         Effect::raises(),
     );
 

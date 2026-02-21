@@ -329,7 +329,7 @@ impl VM {
                     self.handle_load_exception();
                 }
 
-                // Yield
+                // Yield — capture continuation and suspend
                 Instruction::Yield => {
                     self.fiber.suspended_ip = Some(ip);
                     return self.handle_yield(bytecode, constants, closure_env, ip);
@@ -417,6 +417,11 @@ impl VM {
     }
 
     /// Handle the Yield instruction.
+    ///
+    /// Captures a continuation frame (bytecode, constants, env, IP, stack,
+    /// exception handlers) so that resume can continue from this exact point.
+    /// This is what makes yield-through-nested-calls work: each call level
+    /// appends its frame to the continuation chain.
     fn handle_yield(
         &mut self,
         bytecode: &[u8],
@@ -429,16 +434,6 @@ impl VM {
             .stack
             .pop()
             .expect("VM bug: Stack underflow on yield");
-
-        let coroutine = match self.current_coroutine() {
-            Some(co) => co.clone(),
-            None => {
-                let cond = Condition::error("yield used outside of coroutine");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
-                return SIG_ERROR;
-            }
-        };
 
         let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
@@ -455,7 +450,8 @@ impl VM {
         let cont_data = crate::value::ContinuationData::new(frame);
         let continuation = Value::continuation(cont_data);
 
-        {
+        // If we're in a coroutine (legacy path), update its state
+        if let Some(coroutine) = self.current_coroutine() {
             let mut co = coroutine.borrow_mut();
             co.state = CoroutineState::Suspended;
             co.yielded_value = None;

@@ -214,32 +214,35 @@ impl VM {
                         self.fiber.stack.push(value);
                     }
                     SIG_YIELD => {
-                        let (_, value) = self.fiber.signal.take().unwrap();
-                        let continuation = self.fiber.continuation.take().unwrap();
+                        // Chain continuation frames if yield instruction was
+                        // used (continuation exists). If fiber/signal was used
+                        // (no continuation), just propagate the signal.
+                        if let Some(continuation) = self.fiber.continuation.take() {
+                            let (_, value) = self.fiber.signal.take().unwrap();
 
-                        // Capture the caller's frame and append it to the continuation
-                        let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
+                            let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
-                        let caller_frame = crate::value::ContinuationFrame {
-                            bytecode: Rc::new(bytecode.to_vec()),
-                            constants: Rc::new(constants.to_vec()),
-                            env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
-                            ip: *ip,
-                            stack: caller_stack,
-                            exception_handlers: self.fiber.exception_handlers.clone(),
-                            handling_exception: self.fiber.handling_exception,
-                        };
+                            let caller_frame = crate::value::ContinuationFrame {
+                                bytecode: Rc::new(bytecode.to_vec()),
+                                constants: Rc::new(constants.to_vec()),
+                                env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
+                                ip: *ip,
+                                stack: caller_stack,
+                                exception_handlers: self.fiber.exception_handlers.clone(),
+                                handling_exception: self.fiber.handling_exception,
+                            };
 
-                        let mut cont_data = continuation
-                            .as_continuation()
-                            .expect("Yielded continuation must be a continuation value")
-                            .as_ref()
-                            .clone();
-                        cont_data.append_frame(caller_frame);
+                            let mut cont_data = continuation
+                                .as_continuation()
+                                .expect("Yielded continuation must be a continuation value")
+                                .as_ref()
+                                .clone();
+                            cont_data.append_frame(caller_frame);
 
-                        let new_continuation = Value::continuation(cont_data);
-                        self.fiber.signal = Some((SIG_YIELD, value));
-                        self.fiber.continuation = Some(new_continuation);
+                            let new_continuation = Value::continuation(cont_data);
+                            self.fiber.signal = Some((SIG_YIELD, value));
+                            self.fiber.continuation = Some(new_continuation);
+                        }
                         return Some(SIG_YIELD);
                     }
                     _ => {
@@ -248,10 +251,9 @@ impl VM {
                     }
                 }
             } else {
-                // Non-coroutine path: use execute_bytecode_coroutine to
-                // save/restore the caller's stack, and propagate signals.
-                // This is essential for fibers — fiber/signal in a nested
-                // call must propagate up through the call chain.
+                // Use execute_bytecode_coroutine to save/restore the caller's
+                // stack and propagate signals. Essential for both fibers
+                // (fiber/signal propagation) and yield-through-nested-calls.
                 let bits = self.execute_bytecode_coroutine(
                     &closure.bytecode,
                     &closure.constants,
@@ -265,8 +267,46 @@ impl VM {
                         let (_, value) = self.fiber.signal.take().unwrap();
                         self.fiber.stack.push(value);
                     }
+                    SIG_YIELD => {
+                        // Yield propagated from a nested call. Two cases:
+                        //
+                        // 1. yield instruction: continuation exists — append the
+                        //    caller's frame so resume replays the full call stack.
+                        //
+                        // 2. fiber/signal: no continuation — just propagate the
+                        //    signal. The fiber uses SavedContext for resumption,
+                        //    which resumes from the fiber body level (intermediate
+                        //    frames are abandoned).
+                        if let Some(continuation) = self.fiber.continuation.take() {
+                            let (_, value) = self.fiber.signal.take().unwrap();
+
+                            let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
+                            let caller_frame = crate::value::ContinuationFrame {
+                                bytecode: Rc::new(bytecode.to_vec()),
+                                constants: Rc::new(constants.to_vec()),
+                                env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
+                                ip: *ip,
+                                stack: caller_stack,
+                                exception_handlers: self.fiber.exception_handlers.clone(),
+                                handling_exception: self.fiber.handling_exception,
+                            };
+
+                            let mut cont_data = continuation
+                                .as_continuation()
+                                .expect("Yielded continuation must be a continuation value")
+                                .as_ref()
+                                .clone();
+                            cont_data.append_frame(caller_frame);
+
+                            let new_continuation = Value::continuation(cont_data);
+                            self.fiber.signal = Some((SIG_YIELD, value));
+                            self.fiber.continuation = Some(new_continuation);
+                        }
+                        // In both cases, propagate SIG_YIELD to the caller.
+                        return Some(SIG_YIELD);
+                    }
                     _ => {
-                        // Signal (yield, error, etc.) — propagate to caller.
+                        // Other signal (error, etc.) — propagate to caller.
                         return Some(bits);
                     }
                 }
@@ -577,6 +617,10 @@ impl VM {
                     let cond = Condition::error(msg);
                     self.fiber.current_exception = Some(Rc::new(cond));
                 }
+                // Return SIG_OK so the dispatch loop continues to the next
+                // iteration, where the interrupt handler can dispatch to any
+                // active exception handler (handler-case). Returning SIG_ERROR
+                // here would bypass exception handlers.
                 self.fiber.signal = Some((SIG_OK, Value::NIL));
                 SIG_OK
             }
@@ -1185,6 +1229,12 @@ impl VM {
             }
         };
 
+        // Check if coroutine-next requested pair wrapping
+        let wrap_next = fiber_rc.borrow().wrap_next;
+        if wrap_next {
+            fiber_rc.borrow_mut().wrap_next = false;
+        }
+
         let (result_bits, result_value) = self.do_fiber_resume(&fiber_rc);
 
         // Check the child's signal against its mask
@@ -1192,18 +1242,37 @@ impl VM {
 
         if result_bits == SIG_OK {
             // Child completed normally — push return value
-            self.fiber.stack.push(result_value);
+            if wrap_next {
+                let pair = crate::value::cons(result_value, Value::bool(true));
+                self.fiber.stack.push(pair);
+            } else {
+                self.fiber.stack.push(result_value);
+            }
             None
         } else if mask & result_bits != 0 {
             // Signal is caught by the mask — parent handles it.
-            // Push the signal value; parent can inspect via fiber/bits, fiber/value.
-            self.fiber.stack.push(result_value);
+            if wrap_next {
+                let pair = crate::value::cons(result_value, Value::bool(false));
+                self.fiber.stack.push(pair);
+            } else {
+                self.fiber.stack.push(result_value);
+            }
             None
         } else {
             // Signal is NOT caught — propagate to parent.
-            // Save parent's execution context for potential resumption.
-            self.fiber.signal = Some((result_bits, result_value));
-            Some(result_bits)
+            if result_bits == SIG_ERROR {
+                // Copy the child's exception to the parent so the parent's
+                // exception handling machinery can process it.
+                let child_exception = fiber_rc.borrow().current_exception.clone();
+                if let Some(exc) = child_exception {
+                    self.fiber.current_exception = Some(exc);
+                }
+                self.fiber.stack.push(Value::NIL);
+                None // Let the dispatch loop's interrupt handler deal with it
+            } else {
+                self.fiber.signal = Some((result_bits, result_value));
+                Some(result_bits)
+            }
         }
     }
 
@@ -1219,19 +1288,40 @@ impl VM {
             }
         };
 
+        let wrap_next = fiber_rc.borrow().wrap_next;
+        if wrap_next {
+            fiber_rc.borrow_mut().wrap_next = false;
+        }
+
         let (result_bits, result_value) = self.do_fiber_resume(&fiber_rc);
 
         let mask = fiber_rc.borrow().mask;
 
         if result_bits == SIG_OK {
-            self.fiber.signal = Some((SIG_OK, result_value));
+            let value = if wrap_next {
+                crate::value::cons(result_value, Value::bool(true))
+            } else {
+                result_value
+            };
+            self.fiber.signal = Some((SIG_OK, value));
             SIG_OK
         } else if mask & result_bits != 0 {
-            // Caught by mask — return value to parent
-            self.fiber.signal = Some((SIG_OK, result_value));
+            let value = if wrap_next {
+                crate::value::cons(result_value, Value::bool(false))
+            } else {
+                result_value
+            };
+            self.fiber.signal = Some((SIG_OK, value));
             SIG_OK
+        } else if result_bits == SIG_ERROR {
+            // Copy the child's exception to the parent
+            let child_exception = fiber_rc.borrow().current_exception.clone();
+            if let Some(exc) = child_exception {
+                self.fiber.current_exception = Some(exc);
+            }
+            self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+            SIG_ERROR
         } else {
-            // Propagate signal
             self.fiber.signal = Some((result_bits, result_value));
             result_bits
         }
@@ -1277,11 +1367,22 @@ impl VM {
         self.fiber.status = FiberStatus::Alive;
 
         // 4. Execute the child
-        let bits = if is_first_resume {
+        let mut bits = if is_first_resume {
             self.do_fiber_first_resume()
         } else {
             self.do_fiber_subsequent_resume(resume_value)
         };
+
+        // If execution returned SIG_OK but an unhandled exception remains,
+        // treat it as SIG_ERROR. This happens when a primitive in tail position
+        // errors: handle_primitive_signal_tail sets current_exception and returns
+        // SIG_OK (so the dispatch loop's interrupt handler can catch it), but
+        // the TailCall handler exits the dispatch loop before the interrupt
+        // handler runs.
+        if bits == SIG_OK && self.fiber.current_exception.is_some() {
+            bits = SIG_ERROR;
+            self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+        }
 
         // 5. Update child status based on result
         match bits {
@@ -1317,13 +1418,21 @@ impl VM {
     }
 
     /// First resume of a New fiber — build env and execute closure bytecode.
+    ///
+    /// Uses execute_bytecode_coroutine (not execute_bytecode_inner) because the
+    /// fiber body may end with a TailCall. execute_bytecode_coroutine handles
+    /// pending tail calls in a loop, while execute_bytecode_inner does not.
+    /// Without this, a TailCall at the end of the fiber body returns SIG_OK
+    /// immediately, losing the tail-called function's execution entirely.
     fn do_fiber_first_resume(&mut self) -> SignalBits {
         let closure = self.fiber.closure.clone();
         let env_rc = self.build_closure_env(&closure, &[]);
 
-        // Execute the closure's bytecode
+        // Execute the closure's bytecode.
+        // execute_bytecode_coroutine handles pending tail calls and propagates
+        // signals (SIG_YIELD, SIG_ERROR) correctly.
         let bits =
-            self.execute_bytecode_inner(&closure.bytecode, &closure.constants, Some(&env_rc));
+            self.execute_bytecode_coroutine(&closure.bytecode, &closure.constants, Some(&env_rc));
 
         // If the fiber signaled, save the execution context for resumption.
         // The dispatch loop saves the IP into fiber.suspended_ip before returning.
@@ -1342,8 +1451,17 @@ impl VM {
         bits
     }
 
-    /// Resume a Suspended fiber — continue from saved context.
+    /// Resume a Suspended fiber — continue from saved context or continuation.
     fn do_fiber_subsequent_resume(&mut self, resume_value: Value) -> SignalBits {
+        // If the fiber has a continuation (from yield instruction), use it.
+        // Continuations capture the full call chain so yield-through-nested-calls
+        // resumes from the exact point of yield.
+        if let Some(continuation) = self.fiber.continuation.take() {
+            return self.resume_continuation(continuation, resume_value);
+        }
+
+        // Otherwise, use SavedContext (from fiber/signal).
+        // This resumes from the fiber body level — intermediate frames are abandoned.
         let ctx = match self.fiber.saved_context.take() {
             Some(ctx) => ctx,
             None => {

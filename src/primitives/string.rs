@@ -903,6 +903,52 @@ pub fn prim_any_to_string(args: &[Value]) -> (SignalBits, Value) {
     prim_to_string(args)
 }
 
+/// Convert keyword to string (without colon prefix)
+/// `(keyword->string kw)` → `"name"`
+pub fn prim_keyword_to_string(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            Value::condition(Condition::arity_error(format!(
+                "keyword->string: expected 1 argument, got {}",
+                args.len()
+            ))),
+        );
+    }
+
+    match args[0].as_keyword() {
+        Some(id) => unsafe {
+            if let Some(symbols_ptr) = crate::ffi::primitives::context::get_symbol_table() {
+                let symbols = &*symbols_ptr;
+                let sym_id = crate::value::SymbolId(id);
+                if let Some(name) = symbols.name(sym_id) {
+                    (SIG_OK, Value::string(name))
+                } else {
+                    (
+                        SIG_ERROR,
+                        Value::condition(Condition::error(format!(
+                            "Keyword ID {} not found in symbol table",
+                            id
+                        ))),
+                    )
+                }
+            } else {
+                (
+                    SIG_ERROR,
+                    Value::condition(Condition::error("Symbol table not available".to_string())),
+                )
+            }
+        },
+        None => (
+            SIG_ERROR,
+            Value::condition(Condition::type_error(format!(
+                "keyword->string: expected keyword, got {}",
+                args[0].type_name()
+            ))),
+        ),
+    }
+}
+
 /// Convert symbol to string
 /// `(symbol->string sym)`
 pub fn prim_symbol_to_string(args: &[Value]) -> (SignalBits, Value) {

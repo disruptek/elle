@@ -152,6 +152,9 @@ pub struct Fiber {
     /// FIXME: Remove in Step 8 when fibers replace continuations.
     /// Temporary storage for the continuation value on yield.
     pub continuation: Option<Value>,
+    /// When true, the VM wraps the resume result in a (value . done?) pair.
+    /// Set by coroutine-next, cleared by the VM after wrapping.
+    pub wrap_next: bool,
 }
 
 impl Fiber {
@@ -177,6 +180,7 @@ impl Fiber {
             coroutine_stack: Vec::new(),
             pending_yield: None,
             continuation: None,
+            wrap_next: false,
         }
     }
 }
