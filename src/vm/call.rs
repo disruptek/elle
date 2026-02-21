@@ -248,20 +248,26 @@ impl VM {
                     }
                 }
             } else {
-                match self.execute_bytecode(
+                // Non-coroutine path: use execute_bytecode_coroutine to
+                // save/restore the caller's stack, and propagate signals.
+                // This is essential for fibers — fiber/signal in a nested
+                // call must propagate up through the call chain.
+                let bits = self.execute_bytecode_coroutine(
                     &closure.bytecode,
                     &closure.constants,
                     Some(&new_env_rc),
-                ) {
-                    Ok(result) => {
-                        self.fiber.call_depth -= 1;
-                        self.fiber.stack.push(result);
+                );
+
+                self.fiber.call_depth -= 1;
+
+                match bits {
+                    SIG_OK => {
+                        let (_, value) = self.fiber.signal.take().unwrap();
+                        self.fiber.stack.push(value);
                     }
-                    Err(e) => {
-                        self.fiber.call_depth -= 1;
-                        let cond = Condition::error(e);
-                        self.fiber.current_exception = Some(Rc::new(cond));
-                        self.fiber.stack.push(Value::NIL);
+                    _ => {
+                        // Signal (yield, error, etc.) — propagate to caller.
+                        return Some(bits);
                     }
                 }
             }

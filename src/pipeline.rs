@@ -1168,6 +1168,26 @@ mod tests {
     }
 
     #[test]
+    fn test_fiber_signal_through_nested_call() {
+        // A fiber whose body calls a function that signals.
+        // This tests yield propagation through nested calls.
+        let (mut symbols, mut vm) = setup();
+        let result = eval_new(
+            r#"(begin
+                 (define (inner) (fiber/signal 2 99))
+                 (let ((f (fiber/new (fn () (inner) 42) 2)))
+                   (fiber/resume f)
+                   (fiber/value f)))"#,
+            &mut symbols,
+            &mut vm,
+        );
+        match result {
+            Ok(v) => assert_eq!(v, crate::value::Value::int(99)),
+            Err(e) => panic!("Expected Ok(99), got Err: {}", e),
+        }
+    }
+
+    #[test]
     fn test_fiber_mask() {
         let (mut symbols, mut vm) = setup();
         let result = eval_new(
