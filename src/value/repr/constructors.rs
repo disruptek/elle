@@ -189,11 +189,11 @@ impl Value {
         alloc(HeapObject::NativeFn(f))
     }
 
-    /// Create a VM-aware native function value.
+    /// Create a condition value (for signal-based error returns).
     #[inline]
-    pub fn vm_aware_fn(f: crate::value::heap::VmAwareFn) -> Self {
+    pub fn condition(c: crate::value::Condition) -> Self {
         use crate::value::heap::{alloc, HeapObject};
-        alloc(HeapObject::VmAwareFn(f))
+        alloc(HeapObject::Condition(c))
     }
 
     /// Create a continuation value.

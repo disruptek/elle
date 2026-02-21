@@ -64,13 +64,6 @@ impl PartialEq for Value {
                     std::ptr::eq(self_obj as *const _, other_obj as *const _)
                 }
 
-                // VmAwareFn comparison (compare by reference)
-                (HeapObject::VmAwareFn(_), HeapObject::VmAwareFn(_)) => {
-                    // Function pointers are compared by reference (pointer equality)
-                    // Since they're stored in an Rc, we compare the Rc pointers
-                    std::ptr::eq(self_obj as *const _, other_obj as *const _)
-                }
-
                 // LibHandle comparison
                 (HeapObject::LibHandle(h1), HeapObject::LibHandle(h2)) => h1 == h2,
 

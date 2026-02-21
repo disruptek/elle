@@ -32,11 +32,11 @@ pub use send::SendValue;
 pub use continuation::{ContinuationData, ContinuationFrame, ExceptionHandler};
 
 // Export core types
-pub use types::{Arity, NativeFn, SymbolId, TableKey, VmAwareFn};
+pub use types::{Arity, NativeFn, SymbolId, TableKey};
 
 // Export closure, coroutine, and fiber types
 pub use closure::Closure;
-pub use coroutine::{Coroutine, CoroutineState};
+pub use coroutine::{Coroutine, CoroutineState, ResumeOp};
 pub use fiber::{
     CallFrame, Fiber, FiberStatus, Frame, SignalBits, SIG_DEBUG, SIG_ERROR, SIG_OK, SIG_RESUME,
     SIG_YIELD,

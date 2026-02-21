@@ -1,5 +1,4 @@
 use crate::effects::Effect;
-use crate::error::LResult;
 use crate::ffi_primitives;
 use crate::symbol::SymbolTable;
 use crate::value::{SymbolId, Value};
@@ -77,7 +76,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
     register_fn(vm, symbols, &mut effects, "+", prim_add, Effect::raises());
     register_fn(vm, symbols, &mut effects, "-", prim_sub, Effect::raises());
     register_fn(vm, symbols, &mut effects, "*", prim_mul, Effect::raises());
-    register_vm_aware_fn(
+    register_fn(
         vm,
         symbols,
         &mut effects,
@@ -417,7 +416,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         prim_number_to_string,
         Effect::raises(),
     );
-    register_vm_aware_fn(
+    register_fn(
         vm,
         symbols,
         &mut effects,
@@ -1323,8 +1322,8 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         Effect::none(),
     );
 
-    // VM-aware coroutine primitives (Phase 6) - yields
-    register_vm_aware_fn(
+    // Coroutine primitives - return SIG_RESUME for VM to handle
+    register_fn(
         vm,
         symbols,
         &mut effects,
@@ -1332,7 +1331,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         prim_coroutine_resume,
         Effect::yields_raises(),
     );
-    register_vm_aware_fn(
+    register_fn(
         vm,
         symbols,
         &mut effects,
@@ -1348,7 +1347,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         prim_coroutine_to_iterator,
         Effect::raises(),
     );
-    register_vm_aware_fn(
+    register_fn(
         vm,
         symbols,
         &mut effects,
@@ -1366,24 +1365,10 @@ fn register_fn(
     symbols: &mut SymbolTable,
     effects: &mut HashMap<SymbolId, Effect>,
     name: &str,
-    func: fn(&[Value]) -> Result<Value, crate::value::Condition>,
+    func: fn(&[Value]) -> (crate::value::fiber::SignalBits, Value),
     effect: Effect,
 ) {
     let sym_id = symbols.intern(name);
     vm.set_global(sym_id.0, Value::native_fn(func));
-    effects.insert(sym_id, effect);
-}
-
-/// Register a VM-aware primitive function with the VM
-fn register_vm_aware_fn(
-    vm: &mut VM,
-    symbols: &mut SymbolTable,
-    effects: &mut HashMap<SymbolId, Effect>,
-    name: &str,
-    func: fn(&[Value], &mut VM) -> LResult<Value>,
-    effect: Effect,
-) {
-    let sym_id = symbols.intern(name);
-    vm.set_global(sym_id.0, Value::vm_aware_fn(func));
     effects.insert(sym_id, effect);
 }

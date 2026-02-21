@@ -18,7 +18,7 @@ use crate::value::Value;
 pub use crate::value::closure::Closure;
 pub use crate::value::condition::Condition;
 pub use crate::value::coroutine::Coroutine;
-pub use crate::value::types::{Arity, NativeFn, TableKey, VmAwareFn};
+pub use crate::value::types::{Arity, NativeFn, TableKey};
 
 /// Cons cell for list construction using NaN-boxed values.
 #[derive(Debug, Clone, PartialEq)]
@@ -49,7 +49,6 @@ pub enum HeapTag {
     Cell = 8,
     Float = 9, // For NaN values that can't be inline
     NativeFn = 10,
-    VmAwareFn = 11,
     LibHandle = 12,
     CHandle = 13,
     ThreadHandle = 14,
@@ -98,9 +97,6 @@ pub enum HeapObject {
     /// Native function (Rust function)
     NativeFn(NativeFn),
 
-    /// VM-aware native function
-    VmAwareFn(VmAwareFn),
-
     /// FFI library handle
     LibHandle(u32),
 
@@ -148,7 +144,6 @@ impl HeapObject {
             HeapObject::Cell(_, _) => HeapTag::Cell,
             HeapObject::Float(_) => HeapTag::Float,
             HeapObject::NativeFn(_) => HeapTag::NativeFn,
-            HeapObject::VmAwareFn(_) => HeapTag::VmAwareFn,
             HeapObject::LibHandle(_) => HeapTag::LibHandle,
             HeapObject::CHandle(_, _) => HeapTag::CHandle,
             HeapObject::ThreadHandle(_) => HeapTag::ThreadHandle,
@@ -171,7 +166,6 @@ impl HeapObject {
             HeapObject::Cell(_, _) => "cell",
             HeapObject::Float(_) => "float",
             HeapObject::NativeFn(_) => "native-function",
-            HeapObject::VmAwareFn(_) => "vm-aware-function",
             HeapObject::LibHandle(_) => "library-handle",
             HeapObject::CHandle(_, _) => "c-handle",
             HeapObject::ThreadHandle(_) => "thread-handle",
@@ -201,7 +195,6 @@ impl std::fmt::Debug for HeapObject {
             HeapObject::Cell(_, _) => write!(f, "<cell>"),
             HeapObject::Float(n) => write!(f, "{}", n),
             HeapObject::NativeFn(_) => write!(f, "<native-fn>"),
-            HeapObject::VmAwareFn(_) => write!(f, "<vm-aware-fn>"),
             HeapObject::LibHandle(id) => write!(f, "<lib-handle:{}>", id),
             HeapObject::CHandle(_, id) => write!(f, "<c-handle:{}>", id),
             HeapObject::ThreadHandle(_) => write!(f, "<thread-handle>"),

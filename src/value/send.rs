@@ -121,9 +121,6 @@ impl SendValue {
             // Unsafe: native functions (contain function pointers)
             HeapObject::NativeFn(_) => Err("Cannot send native function".to_string()),
 
-            // Unsafe: VM-aware functions (contain function pointers)
-            HeapObject::VmAwareFn(_) => Err("Cannot send VM-aware function".to_string()),
-
             // Unsafe: FFI handles
             HeapObject::LibHandle(_) => Err("Cannot send library handle".to_string()),
             HeapObject::CHandle(_, _) => Err("Cannot send C handle".to_string()),

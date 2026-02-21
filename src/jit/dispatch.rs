@@ -3,8 +3,39 @@
 //! These functions handle complex operations that interact with heap types
 //! or require VM access: data structures, cells, globals, and function calls.
 
+use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use crate::value::repr::TAG_NIL;
-use crate::value::Value;
+use crate::value::{Condition, Value};
+
+// =============================================================================
+// Primitive Signal Handling (for JIT dispatch)
+// =============================================================================
+
+/// Handle signal bits from a primitive call in JIT context.
+///
+/// JIT-compiled code only runs non-suspending functions, so SIG_YIELD and
+/// SIG_RESUME should never appear here. SIG_ERROR sets the exception on
+/// the fiber for the JIT caller to check.
+fn jit_handle_primitive_signal(vm: &mut crate::vm::VM, bits: SignalBits, value: Value) -> u64 {
+    match bits {
+        SIG_OK => value.to_bits(),
+        SIG_ERROR => {
+            if let Some(cond) = value.as_condition() {
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond.clone()));
+            } else {
+                let cond = Condition::error(format!("{}", value));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+            }
+            TAG_NIL
+        }
+        _ => {
+            // Unexpected signal in JIT context — treat as error
+            let cond = Condition::error(format!("Unexpected signal {} in JIT-compiled code", bits));
+            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+            TAG_NIL
+        }
+    }
+}
 
 // =============================================================================
 // Tail Call Support
@@ -207,26 +238,10 @@ pub extern "C" fn elle_jit_call(
         .map(|i| unsafe { Value::from_bits(*args_ptr.add(i)) })
         .collect();
 
-    // Dispatch to native function
+    // Dispatch to native function (unified signal-based)
     if let Some(f) = func.as_native_fn() {
-        match f(&args) {
-            Ok(val) => return val.to_bits(),
-            Err(cond) => {
-                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
-                return TAG_NIL;
-            }
-        }
-    }
-
-    // Dispatch to VM-aware function
-    if let Some(f) = func.as_vm_aware_fn() {
-        match f(&args, vm) {
-            Ok(val) => return val.to_bits(),
-            Err(e) => {
-                eprintln!("JIT call error: {}", e.description());
-                return TAG_NIL;
-            }
-        }
+        let (bits, value) = f(&args);
+        return jit_handle_primitive_signal(vm, bits, value);
     }
 
     // Dispatch to closure
@@ -276,24 +291,8 @@ pub extern "C" fn elle_jit_tail_call(
 
     // Handle native functions — just call them directly (no tail call needed)
     if let Some(f) = func.as_native_fn() {
-        match f(&args) {
-            Ok(val) => return val.to_bits(),
-            Err(cond) => {
-                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
-                return TAG_NIL;
-            }
-        }
-    }
-
-    // Handle VM-aware functions — call directly
-    if let Some(f) = func.as_vm_aware_fn() {
-        match f(&args, vm) {
-            Ok(val) => return val.to_bits(),
-            Err(e) => {
-                eprintln!("JIT tail call error: {}", e.description());
-                return TAG_NIL;
-            }
-        }
+        let (bits, value) = f(&args);
+        return jit_handle_primitive_signal(vm, bits, value);
     }
 
     // Handle closures — set up pending_tail_call

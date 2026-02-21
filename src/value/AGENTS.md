@@ -17,9 +17,9 @@ Runtime value representation using NaN-boxing.
 | `repr/accessors.rs` | Value field access and type checking |
 | `repr/traits.rs` | `Display`, `Debug`, `Clone` implementations |
 | `repr/tests.rs` | NaN-boxing tests |
-| `types.rs` | `Arity`, `SymbolId`, `NativeFn`, `VmAwareFn`, `TableKey` |
+| `types.rs` | `Arity`, `SymbolId`, `NativeFn`, `TableKey` |
 | `closure.rs` | `Closure` struct with bytecode, env, and `location_map` |
-| `coroutine.rs` | `Coroutine`, `CoroutineState` for suspendable computation |
+| `coroutine.rs` | `Coroutine`, `CoroutineState`, `ResumeOp` for suspendable computation |
 | `fiber.rs` | `Fiber`, `Frame`, `FiberStatus`, `SignalBits` for fiber execution contexts |
 | `continuation.rs` | `ContinuationData`, `ContinuationFrame` for first-class continuations |
 | `condition.rs` | `Condition` for the condition/restart system |

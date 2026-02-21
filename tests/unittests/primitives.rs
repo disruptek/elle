@@ -22,19 +22,17 @@ fn get_primitive(vm: &VM, symbols: &mut SymbolTable, name: &str) -> Value {
 #[allow(clippy::result_large_err)]
 fn call_primitive(prim: &Value, args: &[Value]) -> Result<Value, LError> {
     if let Some(f) = prim.as_native_fn() {
-        f(args).map_err(|c| LError::from(c.to_string()))
-    } else if let Some(f) = prim.as_vm_aware_fn() {
-        // VM-aware functions need a VM instance
-        let mut vm = VM::new();
-        let result = f(args, &mut vm);
-        // Check if an exception was set
-        if let Some(exc) = &vm.fiber.current_exception {
-            return Err(LError::from(format!(
-                "Unhandled exception: {}",
-                exc.exception_id
-            )));
+        let (bits, value) = f(args);
+        if bits == elle::value::fiber::SIG_OK {
+            Ok(value)
+        } else {
+            // SIG_ERROR or other — extract error message from condition
+            if let Some(cond) = value.as_condition() {
+                Err(LError::from(cond.message.clone()))
+            } else {
+                Err(LError::from(format!("Primitive returned signal {}", bits)))
+            }
         }
-        result
     } else {
         panic!("Not a function");
     }
@@ -452,8 +450,7 @@ fn test_throw() {
     // throw with string message should produce error
     let result = call_primitive(&throw_fn, &[Value::string("Test error")]);
     assert!(result.is_err());
-    // Condition::error formats as "error: {message}", then LError wraps as "Error: ..."
-    assert_eq!(result.unwrap_err().to_string(), "Error: error: Test error");
+    assert_eq!(result.unwrap_err().to_string(), "Error: Test error");
 }
 
 #[test]
@@ -1943,7 +1940,7 @@ fn test_json_serialize_errors() {
     let result = call_primitive(&json_serialize, &[closure]);
     assert!(result.is_err());
 
-    let native_fn: elle::value::NativeFn = |_| Ok(Value::NIL);
+    let native_fn: elle::value::NativeFn = |_| (elle::value::fiber::SIG_OK, Value::NIL);
     let fn_val = Value::native_fn(native_fn);
     let result = call_primitive(&json_serialize, &[fn_val]);
     assert!(result.is_err());

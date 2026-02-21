@@ -133,8 +133,10 @@ Things that look wrong but aren't:
 
 - Two cell types exist: `Cell` (user-created via `box`, explicit) and
   `LocalCell` (compiler-created for mutable captures, auto-unwrapped).
-- `VmAwareFn` exists because some primitives (like `coroutine-resume`) need
-  to execute bytecode, so they need VM access.
+- Coroutine primitives (`coroutine-resume`, `yield-from`, `coroutine-next`)
+  return `(SIG_RESUME, coroutine_value)` with a `ResumeOp` set on the
+  coroutine. The VM's SIG_RESUME handler in `vm/call.rs` performs the actual
+  bytecode execution. This avoids primitives needing VM access.
 - The `Cons` type in `value/heap.rs` is the heap-allocated cons cell data.
   `Value::cons(car, cdr)` creates a NaN-boxed pointer to a heap Cons.
 - `nil` and empty list `()` are distinct values with different truthiness:

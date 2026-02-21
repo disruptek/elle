@@ -25,18 +25,19 @@ Does NOT:
 | `register_primitives(vm, symbols)` | Install all primitives |
 | `init_stdlib(vm, symbols)` | Load stdlib.lisp |
 
-## Function types
+## Function type
 
-**NativeFn**: `fn(&[Value]) -> Result<Value, Condition>`
-- Simple primitives that don't need VM access
-- Return `Condition` for user-facing errors (type, arity, etc.)
-- Examples: `+`, `car`, `string-length`
+**NativeFn**: `fn(&[Value]) -> (SignalBits, Value)`
 
-**VmAwareFn**: `fn(&[Value], &mut VM) -> LResult<Value>`
-- Primitives that need to execute bytecode or access VM state
-- Set `vm.fiber.current_exception` directly for user-facing errors, return `Ok(Value::NIL)`
-- Return `Err(LError)` only for VM bugs
-- Examples: `coroutine-resume`, `/`
+All primitives use a single unified type. No primitive has VM access.
+Return values:
+- `(SIG_OK, value)` — success, push value onto stack
+- `(SIG_ERROR, Value::condition(cond))` — error, set `fiber.current_exception`
+- `(SIG_RESUME, coroutine_value)` — coroutine operation, VM handles execution
+
+Coroutine primitives (`coroutine-resume`, `yield-from`, `coroutine-next`)
+set a `ResumeOp` on the coroutine before returning SIG_RESUME. The VM's
+SIG_RESUME handler reads the op and performs the actual execution.
 
 ## Adding a primitive
 
@@ -46,36 +47,37 @@ Does NOT:
 
 ```rust
 // In arithmetic.rs
-pub fn prim_add(args: &[Value]) -> Result<Value, Condition> {
-    // Implementation — return Err(Condition::type_error(...)) for errors
+pub fn prim_add(args: &[Value]) -> (SignalBits, Value) {
+    // Implementation — return (SIG_ERROR, Value::condition(...)) for errors
 }
 
 pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
     let sym = symbols.intern("+");
-    vm.set_global(sym.0, Value::NativeFn(prim_add));
+    vm.set_global(sym.0, Value::native_fn(prim_add));
 }
 ```
 
 ## Dependents
 
-- `vm/mod.rs` - calls primitives during execution
+- `vm/call.rs` - dispatches primitive calls, handles signal bits
 - `repl.rs` - registers primitives at startup
 - `main.rs` - registers primitives at startup
 
 ## Invariants
 
-1. **Primitives validate arguments.** NativeFn returns `Condition::arity_error`
-   or `Condition::type_error` on bad input. VmAwareFn sets `vm.current_exception`
-   directly. Never panic.
+1. **Primitives validate arguments.** Return `(SIG_ERROR, Value::condition(...))`
+   for arity or type errors. Never panic.
 
-2. **NativeFn returns `Result<Value, Condition>`.** VmAwareFn returns
-   `LResult<Value>` but uses `vm.current_exception` for user-facing errors.
-   Errors propagate; they're not swallowed.
+2. **All primitives return `(SignalBits, Value)`.** No exceptions. Errors are
+   signaled via SIG_ERROR with a Condition value.
 
-3. **Symbol table pointers are set before use.** Some primitives (macros)
+3. **No primitive has VM access.** Operations that need the VM (coroutine
+   execution) return SIG_RESUME and let the VM dispatch loop handle it.
+
+4. **Symbol table pointers are set before use.** Some primitives (macros)
    need global access to symbol tables. Call `set_*_symbol_table` first.
 
-4. **Thread-local state exists for some primitives.** Macro symbol table.
+5. **Thread-local state exists for some primitives.** Macro symbol table.
    Clean up with `clear_*` functions.
 
 ## Modules
@@ -95,7 +97,7 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 | `type_check.rs` | `nil?`, `pair?`, `number?`, `string?`, etc. |
 | `higher_order.rs` | `map`, `filter`, `fold`, `apply` |
 | `concurrency.rs` | `spawn`, `join`, `channel`, `send`, `receive` |
-| `coroutines.rs` | `coroutine`, `coroutine-resume`, `coroutine-done?`, `yield-from` (delegation) |
+| `coroutines.rs` | `make-coroutine`, `coroutine-resume`, `coroutine-done?`, `yield-from`, `coroutine-next` |
 | `exception.rs` | `throw`, `try`, exception utilities |
 | `macros.rs` | `defmacro` (compile-time; `macro?` and `expand-macro` are now Expander operations) |
 | `introspection.rs` | `type-of`, `procedure?`, `arity` |
@@ -106,6 +108,6 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 | File | Lines | Content |
 |------|-------|---------|
 | `mod.rs` | 38 | Re-exports |
-| `registration.rs` | ~100 | `register_primitives` |
+| `registration.rs` | ~1370 | `register_primitives`, `register_fn` |
 | `module_init.rs` | ~50 | `init_stdlib` |
 | (others) | varies | Individual primitive implementations |

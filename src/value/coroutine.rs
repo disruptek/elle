@@ -22,6 +22,20 @@ pub enum CoroutineState {
     Error(String),
 }
 
+/// Operation to perform when the VM handles SIG_RESUME for this coroutine.
+///
+/// Primitives set this before returning (SIG_RESUME, coroutine_value).
+/// The VM's SIG_RESUME handler reads it to determine what to do.
+#[derive(Debug, Clone)]
+pub enum ResumeOp {
+    /// Plain resume: resume the coroutine with the given value
+    Resume(Value),
+    /// yield-from delegation: resume sub-coroutine, set up delegation on outer
+    YieldFrom,
+    /// coroutine-next: resume and wrap result in (value . done?) pair
+    Next,
+}
+
 /// A coroutine value - a suspendable computation
 #[derive(Debug, Clone)]
 pub struct Coroutine {
@@ -37,6 +51,9 @@ pub struct Coroutine {
     /// Sub-coroutine for yield-from delegation.
     /// When set, coroutine-resume transparently forwards to this delegate.
     pub delegate: Option<Value>,
+    /// Pending resume operation set by primitives before returning SIG_RESUME.
+    /// The VM's SIG_RESUME handler reads and clears this.
+    pub resume_op: Option<ResumeOp>,
 }
 
 impl Coroutine {
@@ -48,6 +65,7 @@ impl Coroutine {
             yielded_value: None,
             saved_value_continuation: None,
             delegate: None,
+            resume_op: None,
         }
     }
 }

@@ -29,9 +29,9 @@ together:
    Elle code. Used for both VM bugs (stack underflow) and data errors (type
    mismatch on `car`).
 
-2. **`Err(LError)`** — Primitives (`NativeFn`, `VmAwareFn`) return
-   `Result<Value, LError>`. The `Call` handler translates some `LError` variants
-   to `Exception` objects. `TailCall` does not — it converts to `Err(String)`
+2. **`Err(LError)`** — Primitives (`NativeFn`) returned
+   `Result<Value, LError>`. The `Call` handler translated some `LError` variants
+   to `Exception` objects. `TailCall` did not — it converted to `Err(String)`
    via `.description()`.
 
 3. **`current_exception`** (`Option<Rc<Exception>>`) — The Elle-level exception
@@ -75,10 +75,10 @@ Rejected. Conflates VM bugs with program behavior.
 Keep `Err(LError)` for primitives. Add explicit `current_exception` setup at
 each instruction handler site.
 
-Rejected. Primitives are `fn(&[Value]) -> LResult<Value>` — they don't have
-access to the VM, so they can't set `current_exception`. Either every fallible
-primitive becomes a `VmAwareFn` (massive API change), or primitive errors remain
-uncatchable.
+Rejected (in the pre-fiber design). Primitives were `fn(&[Value]) -> LResult<Value>` —
+they didn't have access to the VM, so they couldn't set `current_exception`.
+Now resolved: primitives return `(SignalBits, Value)` and the VM handles signal
+dispatch.
 
 ### C: Convert at the Call boundary
 
@@ -100,28 +100,24 @@ Rejected for three reasons:
 
 ## Chosen Design
 
-### `NativeFn`: `Result<Value, Exception>`
+### `NativeFn`: `(SignalBits, Value)`
 
-Primitives return `Exception` directly as their error type. The `Call` and
-`TailCall` handlers receive it and set `current_exception`. No translation, no
-inconsistency, no gap.
+Primitives return `(SignalBits, Value)`. On `SIG_ERROR`, the value contains a
+`Condition`. The VM's `handle_primitive_signal()` dispatches by signal bits:
 
 ```rust
 // Call handler for NativeFn
-Err(exc) => {
-    self.current_exception = Some(Rc::new(exc));
-    Value::NIL  // pushed to keep stack consistent
-}
+SIG_OK => push value to stack
+SIG_ERROR => extract Condition from value, set fiber.current_exception
+SIG_RESUME => execute coroutine via handle_coroutine_resume_signal()
 ```
 
-### `VmAwareFn`: keeps `Result<Value, String>`, sets exceptions directly
+### Coroutine primitives: SIG_RESUME
 
-`VmAwareFn` has `&mut VM`. For user-facing errors, it sets
-`vm.current_exception` directly and returns `Ok(Value::NIL)`. For VM bugs
-(e.g., bytecode execution failure inside `coroutine-resume`), it returns
-`Err(String)`. The Call handler propagates `Err(String)` as a VM bug.
-
-This is the pattern `prim_div_vm` already uses. No signature change needed.
+Primitives that need VM-side bytecode execution (like `coroutine-resume`) return
+`(SIG_RESUME, coroutine_value)` with a `ResumeOp` set on the coroutine. The VM
+reads the `ResumeOp` and performs the actual execution. This avoids giving
+primitives direct VM access.
 
 ### Instruction handlers: two exit paths
 
@@ -232,17 +228,13 @@ message is always present and sufficient for display.
 6. Update all `Exception::new(N)` call sites to use named constructors.
 7. Update tests.
 
-### Phase 2: NativeFn signature change
+### Phase 2: NativeFn signature change (completed)
 
-1. Change `NativeFn` from `fn(&[Value]) -> Result<Value, LError>` to
-   `fn(&[Value]) -> Result<Value, Exception>`.
-2. Migrate primitives mechanically: `LError::type_mismatch(...)` →
-   `Exception::type_error(...)`. The compiler catches every site.
-3. In the `Call` handler: `Err(exc)` → set `current_exception`, push NIL.
-   Remove the `ErrorKind` → exception ID translation.
-4. In the `TailCall` handler: same treatment. `Err(exc)` → set
-   `current_exception`, return `Ok(VmResult::Done(Value::NIL))`. **TailCall
-   must not convert to `Err(String)` — that bypasses all handlers.**
+1. Changed `NativeFn` from `fn(&[Value]) -> Result<Value, Condition>` to
+   `fn(&[Value]) -> (SignalBits, Value)`.
+2. Migrated all ~170 primitives to new signature.
+3. VM dispatches signal bits via `handle_primitive_signal()` in `call.rs`.
+4. `VmAwareFn` eliminated — coroutine primitives use SIG_RESUME pattern.
 
 ### Phase 3: Instruction handler migration
 
@@ -291,7 +283,7 @@ message is always present and sufficient for display.
   equivalents).
 - Handler isolation (save/restore `exception_handlers` across call boundaries).
 - The exception hierarchy (exception → error → type-error, etc.).
-- `NativeFn` remains a bare function pointer (`fn`), not a trait object.
+- `NativeFn` remains a bare function pointer (`fn(&[Value]) -> (SignalBits, Value)`), not a trait object.
 
 ## Surface Syntax: try/catch/finally
 
@@ -363,10 +355,10 @@ call other functions that throw, so the bail-out mechanism is essential
 for correctness.
 
 Tail calls from JIT code (`TailCall` instruction) use `elle_jit_tail_call`
-which sets `vm.pending_tail_call` for closure targets. Native functions and
-VM-aware functions are called directly (no TCO needed). After JIT code returns,
-the VM detects `pending_tail_call` and hands off to the interpreter's trampoline
-loop, which handles chains of tail calls with O(1) stack usage.
+which sets `vm.pending_tail_call` for closure targets. Native functions are
+called directly (no TCO needed). After JIT code returns, the VM detects
+`pending_tail_call` and hands off to the interpreter's trampoline loop, which
+handles chains of tail calls with O(1) stack usage.
 
 Future work: inline exception checks in JIT code (check a flag instead of
 calling a runtime helper), JIT-native try/catch (would require Cranelift
@@ -384,9 +376,8 @@ landing pads or setjmp/longjmp).
 - **FFI errors go through the same path.** FFI is just another primitive from
   Elle's perspective.
 
-- **`VmAwareFn` keeps its current return type.** It has `&mut VM` and sets
-  `current_exception` directly for user-facing errors. `Err(String)` is
-  reserved for VM bugs.
+- **All primitives are `NativeFn`.** `VmAwareFn` has been eliminated. Primitives
+  that need VM-side execution return `(SIG_RESUME, value)` with a `ResumeOp`.
 
 - **TailCall is in scope.** It's a separate code path from Call and must
   convert `Err(Exception)` to `current_exception`, not to `Err(String)`.

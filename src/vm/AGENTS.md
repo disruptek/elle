@@ -49,12 +49,13 @@ execute_bytecode()  ← public API, returns Result<Value, String>
 Result<Value, String>  ← translation boundary
 ```
 
-## Signal-based returns (Step 3)
+## Signal-based returns
 
 Internal VM methods return `SignalBits` instead of `Result<VmResult, String>`:
 - `SIG_OK` (0): Normal completion. Value in `fiber.signal`.
 - `SIG_ERROR` (1): Exception. Exception in `fiber.current_exception`.
 - `SIG_YIELD` (2): Coroutine yield. Value in `fiber.signal`, continuation in `fiber.continuation`.
+- `SIG_RESUME` (8): VM-internal. Coroutine primitive requests VM-side execution.
 
 The public `execute_bytecode` method is the translation boundary — it converts
 `SignalBits` to `Result<Value, String>` for external callers.
@@ -62,9 +63,23 @@ The public `execute_bytecode` method is the translation boundary — it converts
 Instruction handlers no longer return `Result<(), String>`. VM bugs panic
 immediately. User errors set `fiber.current_exception` and return normally.
 
+## Primitive dispatch (NativeFn)
+
+All primitives are `NativeFn`: `fn(&[Value]) -> (SignalBits, Value)`. The VM
+dispatches the return signal in `handle_primitive_signal()` (`call.rs`):
+- `SIG_OK` → push value to stack
+- `SIG_ERROR` → extract `Condition` from value, set `fiber.current_exception`
+- `SIG_YIELD` → store in `fiber.signal`, return yield
+- `SIG_RESUME` → execute coroutine via `handle_coroutine_resume_signal()`
+
+Coroutine primitives (`coroutine-resume`, `yield-from`, `coroutine-next`) set a
+`ResumeOp` on the coroutine and return `(SIG_RESUME, coroutine_value)`. The VM
+reads and clears the `ResumeOp` in the SIG_RESUME handler, then performs the
+actual bytecode execution.
+
 ## Dependents
 
-- `primitives/` - `VmAwareFn` primitives call back into VM
+- `primitives/` - NativeFn primitives; SIG_RESUME signals trigger VM-side coroutine execution
 - `repl.rs` - runs compiled code
 - `main.rs` - file execution
 
@@ -175,7 +190,7 @@ Exception handling across resume:
 |------|-------|---------|
 | `mod.rs` | ~350 | VM struct, VmResult, public interface |
 | `dispatch.rs` | ~556 | Main execution loop, instruction dispatch |
-| `call.rs` | ~250 | Call, TailCall, Return, exception handling |
+| `call.rs` | ~550 | Call, TailCall, Return, exception handling, SIG_RESUME handler |
 | `execute.rs` | ~300 | Helper functions for instruction execution |
 | `core.rs` | ~590 | `resume_continuation`, continuation replay |
 | `stack.rs` | ~100 | Stack operations: LoadConst, Pop, Dup |

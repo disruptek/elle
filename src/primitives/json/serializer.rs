@@ -106,7 +106,7 @@ pub fn serialize_value(value: &Value) -> Result<String, String> {
                 Err("Cannot serialize non-finite float value to JSON".to_string())
             }
             HeapTag::NativeFn => Err("Cannot serialize native functions to JSON".to_string()),
-            HeapTag::VmAwareFn => Err("Cannot serialize VM-aware functions to JSON".to_string()),
+
             HeapTag::LibHandle => Err("Cannot serialize library handles to JSON".to_string()),
             HeapTag::CHandle => Err("Cannot serialize C handles to JSON".to_string()),
             HeapTag::ThreadHandle => Err("Cannot serialize thread handles to JSON".to_string()),
@@ -238,7 +238,7 @@ pub fn serialize_value_pretty(value: &Value, indent_level: usize) -> Result<Stri
                 Err("Cannot serialize non-finite float value to JSON".to_string())
             }
             HeapTag::NativeFn => Err("Cannot serialize native functions to JSON".to_string()),
-            HeapTag::VmAwareFn => Err("Cannot serialize VM-aware functions to JSON".to_string()),
+
             HeapTag::LibHandle => Err("Cannot serialize library handles to JSON".to_string()),
             HeapTag::CHandle => Err("Cannot serialize C handles to JSON".to_string()),
             HeapTag::ThreadHandle => Err("Cannot serialize thread handles to JSON".to_string()),

@@ -122,7 +122,6 @@ fn format_value(
             }
             HeapObject::Closure(_) => return "#<closure>".to_string(),
             HeapObject::NativeFn(_) => return "#<native-fn>".to_string(),
-            HeapObject::VmAwareFn(_) => return "#<vm-aware-fn>".to_string(),
             HeapObject::LibHandle(_) => return "#<lib-handle>".to_string(),
             HeapObject::CHandle(_, _) => return "#<c-handle>".to_string(),
             HeapObject::Condition(_) => return "#<condition>".to_string(),

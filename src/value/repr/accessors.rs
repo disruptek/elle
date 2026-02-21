@@ -315,19 +315,6 @@ impl Value {
         }
     }
 
-    /// Extract as VM-aware function if this is a VM-aware function.
-    #[inline]
-    pub fn as_vm_aware_fn(&self) -> Option<&crate::value::heap::VmAwareFn> {
-        use crate::value::heap::{deref, HeapObject};
-        if !self.is_heap() {
-            return None;
-        }
-        match unsafe { deref(*self) } {
-            HeapObject::VmAwareFn(f) => Some(f),
-            _ => None,
-        }
-    }
-
     /// Extract as condition if this is a condition.
     #[inline]
     pub fn as_condition(&self) -> Option<&crate::value::Condition> {
