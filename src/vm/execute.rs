@@ -1,12 +1,15 @@
 //! Bytecode execution entry points and helpers.
 //!
 //! This module contains the public execution methods and the tail call loop.
+//! The `run()` method is the new signal-based entry point; the older
+//! `execute_bytecode*` methods are kept for backward compatibility and
+//! will be removed in Step 8.
 
-use crate::value::{ExceptionHandler, Value};
+use crate::value::{ExceptionHandler, SignalBits, Value, SIG_OK};
 use smallvec::SmallVec;
 use std::rc::Rc;
 
-use super::core::{VmResult, VM};
+use super::core::VM;
 
 impl VM {
     /// Execute bytecode starting from a specific instruction pointer.
@@ -18,18 +21,18 @@ impl VM {
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
         start_ip: usize,
-    ) -> Result<VmResult, String> {
+    ) -> SignalBits {
         // Each bytecode frame has its own exception handler scope.
         let saved_handlers = std::mem::take(&mut self.fiber.exception_handlers);
         let saved_handling = self.fiber.handling_exception;
         self.fiber.handling_exception = false;
 
-        let result = self.execute_bytecode_inner_impl(bytecode, constants, closure_env, start_ip);
+        let bits = self.execute_bytecode_inner_impl(bytecode, constants, closure_env, start_ip);
 
         self.fiber.exception_handlers = saved_handlers;
         self.fiber.handling_exception = saved_handling;
 
-        result
+        bits
     }
 
     /// Wrapper that calls execute_bytecode_inner_impl with start_ip = 0
@@ -38,7 +41,7 @@ impl VM {
         bytecode: &[u8],
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
-    ) -> Result<VmResult, String> {
+    ) -> SignalBits {
         self.execute_bytecode_inner_with_ip(bytecode, constants, closure_env, 0)
     }
 
@@ -50,7 +53,7 @@ impl VM {
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
         start_ip: usize,
-    ) -> Result<VmResult, String> {
+    ) -> SignalBits {
         self.execute_bytecode_inner_with_ip(bytecode, constants, closure_env, start_ip)
     }
 
@@ -71,7 +74,7 @@ impl VM {
         start_ip: usize,
         handlers: SmallVec<[ExceptionHandler; 2]>,
         handling: bool,
-    ) -> Result<VmResult, String> {
+    ) -> SignalBits {
         // Save outer state
         let saved_handlers = std::mem::replace(&mut self.fiber.exception_handlers, handlers);
         let saved_handling = std::mem::replace(&mut self.fiber.handling_exception, handling);
@@ -82,13 +85,18 @@ impl VM {
         let mut current_env = closure_env.cloned();
         let mut current_ip = start_ip;
 
-        let result = loop {
-            let result = self.execute_bytecode_inner_impl(
+        let bits = loop {
+            let bits = self.execute_bytecode_inner_impl(
                 &current_bytecode,
                 &current_constants,
                 current_env.as_ref(),
                 current_ip,
-            )?;
+            );
+
+            // If not OK, break immediately (yield, error, etc.)
+            if bits != SIG_OK {
+                break bits;
+            }
 
             // Check for pending tail call
             if let Some((tail_bytecode, tail_constants, tail_env)) = self.pending_tail_call.take() {
@@ -97,7 +105,7 @@ impl VM {
                 current_env = Some(tail_env);
                 current_ip = 0; // Tail calls start from the beginning
             } else {
-                break result;
+                break bits;
             }
         };
 
@@ -105,16 +113,17 @@ impl VM {
         self.fiber.exception_handlers = saved_handlers;
         self.fiber.handling_exception = saved_handling;
 
-        Ok(result)
+        bits
     }
 
-    /// Execute bytecode returning VmResult (for coroutine execution).
+    /// Execute bytecode returning SignalBits (for coroutine execution).
+    /// The result value is stored in `self.fiber.signal`.
     pub fn execute_bytecode_coroutine(
         &mut self,
         bytecode: &[u8],
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
-    ) -> Result<VmResult, String> {
+    ) -> SignalBits {
         // Save the caller's stack
         let saved_stack = std::mem::take(&mut self.fiber.stack);
 
@@ -122,25 +131,30 @@ impl VM {
         let mut current_constants = constants.to_vec();
         let mut current_env = closure_env.cloned();
 
-        let result = loop {
-            let result = self.execute_bytecode_inner(
+        let bits = loop {
+            let bits = self.execute_bytecode_inner(
                 &current_bytecode,
                 &current_constants,
                 current_env.as_ref(),
-            )?;
+            );
+
+            // If not OK, break immediately (yield, error, etc.)
+            if bits != SIG_OK {
+                break bits;
+            }
 
             if let Some((tail_bytecode, tail_constants, tail_env)) = self.pending_tail_call.take() {
                 current_bytecode = tail_bytecode;
                 current_constants = tail_constants;
                 current_env = Some(tail_env);
             } else {
-                break result;
+                break bits;
             }
         };
 
         // Restore the caller's stack
         self.fiber.stack = saved_stack;
 
-        Ok(result)
+        bits
     }
 }

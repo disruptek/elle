@@ -1,18 +1,17 @@
 use super::core::VM;
 use crate::value::Value;
 
-pub fn handle_eq(vm: &mut VM) -> Result<(), String> {
-    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_eq(vm: &mut VM) {
+    let b = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Eq");
+    let a = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Eq");
     vm.fiber
         .stack
         .push(if a == b { Value::TRUE } else { Value::FALSE });
-    Ok(())
 }
 
-pub fn handle_lt(vm: &mut VM) -> Result<(), String> {
-    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_lt(vm: &mut VM) {
+    let b = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Lt");
+    let a = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Lt");
     let result = match (a.as_int(), b.as_int()) {
         (Some(x), Some(y)) => {
             if x < y {
@@ -37,17 +36,16 @@ pub fn handle_lt(vm: &mut VM) -> Result<(), String> {
                 ));
                 vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 vm.fiber.stack.push(Value::NIL);
-                return Ok(());
+                return;
             }
         },
     };
     vm.fiber.stack.push(result);
-    Ok(())
 }
 
-pub fn handle_gt(vm: &mut VM) -> Result<(), String> {
-    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_gt(vm: &mut VM) {
+    let b = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Gt");
+    let a = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Gt");
     let result = match (a.as_int(), b.as_int()) {
         (Some(x), Some(y)) => {
             if x > y {
@@ -72,17 +70,16 @@ pub fn handle_gt(vm: &mut VM) -> Result<(), String> {
                 ));
                 vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 vm.fiber.stack.push(Value::NIL);
-                return Ok(());
+                return;
             }
         },
     };
     vm.fiber.stack.push(result);
-    Ok(())
 }
 
-pub fn handle_le(vm: &mut VM) -> Result<(), String> {
-    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_le(vm: &mut VM) {
+    let b = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Le");
+    let a = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Le");
     let result = match (a.as_int(), b.as_int()) {
         (Some(x), Some(y)) => {
             if x <= y {
@@ -107,17 +104,16 @@ pub fn handle_le(vm: &mut VM) -> Result<(), String> {
                 ));
                 vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 vm.fiber.stack.push(Value::NIL);
-                return Ok(());
+                return;
             }
         },
     };
     vm.fiber.stack.push(result);
-    Ok(())
 }
 
-pub fn handle_ge(vm: &mut VM) -> Result<(), String> {
-    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_ge(vm: &mut VM) {
+    let b = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Ge");
+    let a = vm.fiber.stack.pop().expect("VM bug: Stack underflow on Ge");
     let result = match (a.as_int(), b.as_int()) {
         (Some(x), Some(y)) => {
             if x >= y {
@@ -142,10 +138,9 @@ pub fn handle_ge(vm: &mut VM) -> Result<(), String> {
                 ));
                 vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 vm.fiber.stack.push(Value::NIL);
-                return Ok(());
+                return;
             }
         },
     };
     vm.fiber.stack.push(result);
-    Ok(())
 }

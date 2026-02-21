@@ -8,10 +8,10 @@
 //! - Tail call optimization
 //! - JIT compilation and dispatch (when jit feature is enabled)
 
-use crate::value::{CoroutineState, Value};
+use crate::value::{Condition, CoroutineState, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
 use std::rc::Rc;
 
-use super::core::{VmResult, VM};
+use super::core::VM;
 
 use crate::jit::{JitCode, JitCompiler, TAIL_CALL_SENTINEL};
 
@@ -21,19 +21,31 @@ impl VM {
     /// Pops the function and arguments from the stack, calls the function,
     /// and pushes the result. Handles native functions, VM-aware functions,
     /// and closures with proper environment setup.
+    ///
+    /// Returns `Some(SignalBits)` if execution should return immediately,
+    /// or `None` if the dispatch loop should continue.
     pub(super) fn handle_call(
         &mut self,
         bytecode: &[u8],
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
         ip: &mut usize,
-    ) -> Result<Option<VmResult>, String> {
+    ) -> Option<SignalBits> {
         let arg_count = self.read_u8(bytecode, ip) as usize;
-        let func = self.fiber.stack.pop().ok_or("Stack underflow")?;
+        let func = self
+            .fiber
+            .stack
+            .pop()
+            .expect("VM bug: Stack underflow on Call");
 
         let mut args = Vec::with_capacity(arg_count);
         for _ in 0..arg_count {
-            args.push(self.fiber.stack.pop().ok_or("Stack underflow")?);
+            args.push(
+                self.fiber
+                    .stack
+                    .pop()
+                    .expect("VM bug: Stack underflow on Call"),
+            );
         }
         args.reverse();
 
@@ -41,16 +53,23 @@ impl VM {
             let result = match f(args.as_slice()) {
                 Ok(val) => val,
                 Err(cond) => {
-                    self.fiber.current_exception = Some(std::rc::Rc::new(cond));
+                    self.fiber.current_exception = Some(Rc::new(cond));
                     Value::NIL
                 }
             };
             self.fiber.stack.push(result);
-            return Ok(None);
+            return None;
         }
 
         if let Some(f) = func.as_vm_aware_fn() {
-            let result = f(args.as_slice(), self)?;
+            let result = match f(args.as_slice(), self) {
+                Ok(val) => val,
+                Err(e) => {
+                    let cond = Condition::error(e.description());
+                    self.fiber.current_exception = Some(Rc::new(cond));
+                    Value::NIL
+                }
+            };
             self.fiber.stack.push(result);
 
             // Check for pending yield from yield-from delegation
@@ -63,20 +82,23 @@ impl VM {
                     yielded_value,
                 );
             }
-            return Ok(None);
+            return None;
         }
 
         if let Some(closure) = func.as_closure() {
             self.fiber.call_depth += 1;
             if self.fiber.call_depth > 1000 {
-                return Err("Stack overflow".to_string());
+                let cond = Condition::error("Stack overflow");
+                self.fiber.current_exception = Some(Rc::new(cond));
+                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                return Some(SIG_ERROR);
             }
 
             // Validate argument count
             if !self.check_arity(&closure.arity, args.len()) {
                 self.fiber.call_depth -= 1;
                 self.fiber.stack.push(Value::NIL);
-                return Ok(None);
+                return None;
             }
 
             // JIT compilation and dispatch — only for pure closures
@@ -92,7 +114,7 @@ impl VM {
                     if self.fiber.current_exception.is_some() {
                         self.fiber.call_depth -= 1;
                         self.fiber.stack.push(Value::NIL);
-                        return Ok(None); // Let the dispatch loop's interrupt handler deal with it
+                        return None; // Let the dispatch loop's interrupt handler deal with it
                     }
                     // Check for pending tail call (JIT function did a TailCall)
                     if result.to_bits() == TAIL_CALL_SENTINEL {
@@ -104,18 +126,22 @@ impl VM {
                                 Ok(val) => {
                                     self.fiber.call_depth -= 1;
                                     self.fiber.stack.push(val);
-                                    return Ok(None);
+                                    return None;
                                 }
                                 Err(e) => {
+                                    // execute_bytecode returned Err — convert to exception
                                     self.fiber.call_depth -= 1;
-                                    return Err(e);
+                                    let cond = Condition::error(e);
+                                    self.fiber.current_exception = Some(Rc::new(cond));
+                                    self.fiber.stack.push(Value::NIL);
+                                    return None;
                                 }
                             }
                         }
                     }
                     self.fiber.call_depth -= 1;
                     self.fiber.stack.push(result);
-                    return Ok(None);
+                    return None;
                 }
 
                 // If hot, attempt JIT compilation
@@ -134,7 +160,7 @@ impl VM {
                                         if self.fiber.current_exception.is_some() {
                                             self.fiber.call_depth -= 1;
                                             self.fiber.stack.push(Value::NIL);
-                                            return Ok(None); // Let the dispatch loop's interrupt handler deal with it
+                                            return None; // Let the dispatch loop's interrupt handler deal with it
                                         }
                                         // Check for pending tail call (JIT function did a TailCall)
                                         if result.to_bits() == TAIL_CALL_SENTINEL {
@@ -150,18 +176,22 @@ impl VM {
                                                     Ok(val) => {
                                                         self.fiber.call_depth -= 1;
                                                         self.fiber.stack.push(val);
-                                                        return Ok(None);
+                                                        return None;
                                                     }
                                                     Err(e) => {
                                                         self.fiber.call_depth -= 1;
-                                                        return Err(e);
+                                                        let cond = Condition::error(e);
+                                                        self.fiber.current_exception =
+                                                            Some(Rc::new(cond));
+                                                        self.fiber.stack.push(Value::NIL);
+                                                        return None;
                                                     }
                                                 }
                                             }
                                         }
                                         self.fiber.call_depth -= 1;
                                         self.fiber.stack.push(result);
-                                        return Ok(None);
+                                        return None;
                                     }
                                     Err(e) => {
                                         match &e {
@@ -197,22 +227,23 @@ impl VM {
 
             // Execute the closure (interpreter path)
             if self.in_coroutine() {
-                let result = self.execute_bytecode_coroutine(
+                let bits = self.execute_bytecode_coroutine(
                     &closure.bytecode,
                     &closure.constants,
                     Some(&new_env_rc),
-                )?;
+                );
 
                 self.fiber.call_depth -= 1;
 
-                match result {
-                    VmResult::Done(v) => {
-                        self.fiber.stack.push(v);
+                match bits {
+                    SIG_OK => {
+                        let (_, value) = self.fiber.signal.take().unwrap();
+                        self.fiber.stack.push(value);
                     }
-                    VmResult::Yielded {
-                        value,
-                        continuation,
-                    } => {
+                    SIG_YIELD => {
+                        let (_, value) = self.fiber.signal.take().unwrap();
+                        let continuation = self.fiber.continuation.take().unwrap();
+
                         // Capture the caller's frame and append it to the continuation
                         let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
@@ -234,60 +265,100 @@ impl VM {
                         cont_data.append_frame(caller_frame);
 
                         let new_continuation = Value::continuation(cont_data);
-                        return Ok(Some(VmResult::Yielded {
-                            value,
-                            continuation: new_continuation,
-                        }));
+                        self.fiber.signal = Some((SIG_YIELD, value));
+                        self.fiber.continuation = Some(new_continuation);
+                        return Some(SIG_YIELD);
+                    }
+                    _ => {
+                        // Error or other signal — propagate
+                        return Some(bits);
                     }
                 }
             } else {
-                let result = self.execute_bytecode(
+                match self.execute_bytecode(
                     &closure.bytecode,
                     &closure.constants,
                     Some(&new_env_rc),
-                )?;
-
-                self.fiber.call_depth -= 1;
-                self.fiber.stack.push(result);
+                ) {
+                    Ok(result) => {
+                        self.fiber.call_depth -= 1;
+                        self.fiber.stack.push(result);
+                    }
+                    Err(e) => {
+                        self.fiber.call_depth -= 1;
+                        let cond = Condition::error(e);
+                        self.fiber.current_exception = Some(Rc::new(cond));
+                        self.fiber.stack.push(Value::NIL);
+                    }
+                }
             }
-            return Ok(None);
+            return None;
         }
 
-        Err(format!("Cannot call {:?}", func))
+        // Cannot call this value — set exception
+        let cond = Condition::type_error(format!("Cannot call {:?}", func));
+        self.fiber.current_exception = Some(Rc::new(cond));
+        self.fiber.stack.push(Value::NIL);
+        None
     }
 
     /// Handle the TailCall instruction.
     ///
     /// Similar to Call but sets up a pending tail call instead of recursing,
     /// enabling tail call optimization.
+    ///
+    /// Returns `Some(SignalBits)` if execution should return immediately,
+    /// or `None` if the dispatch loop should continue.
     pub(super) fn handle_tail_call(
         &mut self,
         ip: &mut usize,
         bytecode: &[u8],
-    ) -> Result<Option<VmResult>, String> {
+    ) -> Option<SignalBits> {
         let arg_count = self.read_u8(bytecode, ip) as usize;
-        let func = self.fiber.stack.pop().ok_or("Stack underflow")?;
+        let func = self
+            .fiber
+            .stack
+            .pop()
+            .expect("VM bug: Stack underflow on TailCall");
 
         let mut args = Vec::with_capacity(arg_count);
         for _ in 0..arg_count {
-            args.push(self.fiber.stack.pop().ok_or("Stack underflow")?);
+            args.push(
+                self.fiber
+                    .stack
+                    .pop()
+                    .expect("VM bug: Stack underflow on TailCall"),
+            );
         }
         args.reverse();
 
         if let Some(f) = func.as_native_fn() {
             match f(&args) {
-                Ok(val) => return Ok(Some(VmResult::Done(val))),
+                Ok(val) => {
+                    self.fiber.signal = Some((SIG_OK, val));
+                    return Some(SIG_OK);
+                }
                 Err(cond) => {
-                    self.fiber.current_exception = Some(std::rc::Rc::new(cond));
-                    return Ok(Some(VmResult::Done(Value::NIL)));
+                    self.fiber.current_exception = Some(Rc::new(cond));
+                    self.fiber.signal = Some((SIG_OK, Value::NIL));
+                    return Some(SIG_OK);
                 }
             }
         }
 
         if let Some(f) = func.as_vm_aware_fn() {
-            return f(&args, self)
-                .map(|v| Some(VmResult::Done(v)))
-                .map_err(|e| e.description());
+            match f(&args, self) {
+                Ok(val) => {
+                    self.fiber.signal = Some((SIG_OK, val));
+                    return Some(SIG_OK);
+                }
+                Err(e) => {
+                    let cond = Condition::error(e.description());
+                    self.fiber.current_exception = Some(Rc::new(cond));
+                    self.fiber.signal = Some((SIG_OK, Value::NIL));
+                    return Some(SIG_OK);
+                }
+            }
         }
 
         if let Some(closure) = func.as_closure() {
@@ -297,9 +368,11 @@ impl VM {
                     && !self.fiber.handling_exception
                     && self.fiber.exception_handlers.is_empty()
                 {
-                    return Ok(Some(VmResult::Done(Value::NIL)));
+                    self.fiber.signal = Some((SIG_OK, Value::NIL));
+                    return Some(SIG_OK);
                 }
-                return Ok(Some(VmResult::Done(Value::NIL)));
+                self.fiber.signal = Some((SIG_OK, Value::NIL));
+                return Some(SIG_OK);
             }
 
             // Build proper environment using cached vector
@@ -333,7 +406,7 @@ impl VM {
                 self.tail_call_env_cache.push(Value::local_cell(Value::NIL));
             }
 
-            let new_env_rc = std::rc::Rc::new(self.tail_call_env_cache.clone());
+            let new_env_rc = Rc::new(self.tail_call_env_cache.clone());
 
             // Store the tail call information
             self.pending_tail_call = Some((
@@ -342,10 +415,15 @@ impl VM {
                 new_env_rc,
             ));
 
-            return Ok(Some(VmResult::Done(Value::NIL)));
+            self.fiber.signal = Some((SIG_OK, Value::NIL));
+            return Some(SIG_OK);
         }
 
-        Err(format!("Cannot call {:?}", func))
+        // Cannot call this value — set exception
+        let cond = Condition::type_error(format!("Cannot call {:?}", func));
+        self.fiber.current_exception = Some(Rc::new(cond));
+        self.fiber.signal = Some((SIG_OK, Value::NIL));
+        Some(SIG_OK)
     }
 
     /// Call a JIT-compiled function.
@@ -430,11 +508,14 @@ impl VM {
         closure_env: Option<&Rc<Vec<Value>>>,
         ip: usize,
         yielded_value: Value,
-    ) -> Result<Option<VmResult>, String> {
+    ) -> Option<SignalBits> {
         let coroutine = match self.current_coroutine() {
             Some(co) => co.clone(),
             None => {
-                return Err("pending yield outside of coroutine".to_string());
+                let cond = Condition::error("pending yield outside of coroutine");
+                self.fiber.current_exception = Some(Rc::new(cond));
+                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                return Some(SIG_ERROR);
             }
         };
 
@@ -459,9 +540,8 @@ impl VM {
             co.yielded_value = Some(yielded_value);
         }
 
-        Ok(Some(VmResult::Yielded {
-            value: yielded_value,
-            continuation,
-        }))
+        self.fiber.signal = Some((SIG_YIELD, yielded_value));
+        self.fiber.continuation = Some(continuation);
+        Some(SIG_YIELD)
     }
 }

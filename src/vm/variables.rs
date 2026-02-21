@@ -2,12 +2,7 @@ use super::core::VM;
 use crate::value::{Condition, Value};
 use std::rc::Rc;
 
-pub fn handle_load_global(
-    vm: &mut VM,
-    bytecode: &[u8],
-    ip: &mut usize,
-    constants: &[Value],
-) -> Result<(), String> {
+pub fn handle_load_global(vm: &mut VM, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
     let idx = vm.read_u16(bytecode, ip) as usize;
     if let Some(sym_id) = constants[idx].as_symbol() {
         // First, check if variable exists in current scope (scope-aware lookup)
@@ -15,7 +10,7 @@ pub fn handle_load_global(
             // Don't automatically unwrap cells - closures need to capture the cell
             // for shared mutable captures. Unwrapping happens at use sites.
             vm.fiber.stack.push(val);
-            return Ok(());
+            return;
         }
 
         // Fall back to global scope
@@ -36,22 +31,19 @@ pub fn handle_load_global(
             }
             vm.fiber.current_exception = Some(Rc::new(cond));
             vm.fiber.stack.push(Value::NIL); // Push placeholder
-            return Ok(());
         }
     } else {
-        return Err("LoadGlobal expects symbol constant".to_string());
+        panic!("VM bug: LoadGlobal expects symbol constant");
     }
-    Ok(())
 }
 
-pub fn handle_store_global(
-    vm: &mut VM,
-    bytecode: &[u8],
-    ip: &mut usize,
-    constants: &[Value],
-) -> Result<(), String> {
+pub fn handle_store_global(vm: &mut VM, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
     let idx = vm.read_u16(bytecode, ip) as usize;
-    let val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    let val = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on StoreGlobal");
     if let Some(sym_id) = constants[idx].as_symbol() {
         // Check scope stack first (for proper shadowing)
         if let Some(existing) = vm.scope_stack.get(sym_id) {
@@ -93,19 +85,18 @@ pub fn handle_store_global(
         }
         vm.fiber.stack.push(val);
     } else {
-        return Err("StoreGlobal expects symbol constant".to_string());
+        panic!("VM bug: StoreGlobal expects symbol constant");
     }
-    Ok(())
 }
 
-pub fn handle_store_local(vm: &mut VM, bytecode: &[u8], ip: &mut usize) -> Result<(), String> {
+pub fn handle_store_local(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
     let _depth = vm.read_u8(bytecode, ip);
     let idx = vm.read_u8(bytecode, ip) as usize;
     let value = vm
         .fiber
         .stack
         .pop()
-        .ok_or("Stack underflow on StoreLocal")?;
+        .expect("VM bug: Stack underflow on StoreLocal");
     let frame_base = vm.current_frame_base();
     let abs_idx = frame_base + idx;
     if abs_idx >= vm.fiber.stack.len() {
@@ -117,7 +108,6 @@ pub fn handle_store_local(vm: &mut VM, bytecode: &[u8], ip: &mut usize) -> Resul
     vm.fiber.stack[abs_idx] = value;
     // Push the value back so it can be used as the result of set!
     vm.fiber.stack.push(value);
-    Ok(())
 }
 
 pub fn handle_load_upvalue(
@@ -125,42 +115,37 @@ pub fn handle_load_upvalue(
     bytecode: &[u8],
     ip: &mut usize,
     closure_env: Option<&std::rc::Rc<Vec<Value>>>,
-) -> Result<(), String> {
+) {
     let _depth = vm.read_u8(bytecode, ip);
     let idx = vm.read_u8(bytecode, ip) as usize;
 
     // Load from closure environment
-    if let Some(env) = closure_env {
-        if idx < env.len() {
-            let val = env[idx];
-            // Handle different value types:
-            // - LocalCell: auto-unwrap (compiler-created cells for mutable captures)
-            // - Cell (user box): push as-is (NOT auto-unwrapped)
-            // - Symbol: push as-is (literal symbol values)
-            // - Other: push as-is
+    let env = closure_env.expect("VM bug: LoadUpvalue used outside of closure");
+    if idx >= env.len() {
+        panic!(
+            "VM bug: Upvalue index {} out of bounds (env size: {})",
+            idx,
+            env.len()
+        );
+    }
+    let val = env[idx];
+    // Handle different value types:
+    // - LocalCell: auto-unwrap (compiler-created cells for mutable captures)
+    // - Cell (user box): push as-is (NOT auto-unwrapped)
+    // - Symbol: push as-is (literal symbol values)
+    // - Other: push as-is
 
-            if val.is_local_cell() {
-                // Auto-unwrap compiler-created local cells
-                if let Some(cell_ref) = val.as_cell() {
-                    let inner = *cell_ref.borrow();
-                    vm.fiber.stack.push(inner);
-                }
-            } else {
-                // Everything else (including symbols and user Cell) pushed as-is
-                // Symbols in the environment are literal symbol values, not variable references
-                vm.fiber.stack.push(val);
-            }
-        } else {
-            return Err(format!(
-                "Upvalue index {} out of bounds (env size: {})",
-                idx,
-                env.len()
-            ));
+    if val.is_local_cell() {
+        // Auto-unwrap compiler-created local cells
+        if let Some(cell_ref) = val.as_cell() {
+            let inner = *cell_ref.borrow();
+            vm.fiber.stack.push(inner);
         }
     } else {
-        return Err("LoadUpvalue used outside of closure".to_string());
+        // Everything else (including symbols and user Cell) pushed as-is
+        // Symbols in the environment are literal symbol values, not variable references
+        vm.fiber.stack.push(val);
     }
-    Ok(())
 }
 
 pub fn handle_load_upvalue_raw(
@@ -168,26 +153,21 @@ pub fn handle_load_upvalue_raw(
     bytecode: &[u8],
     ip: &mut usize,
     closure_env: Option<&std::rc::Rc<Vec<Value>>>,
-) -> Result<(), String> {
+) {
     let _depth = vm.read_u8(bytecode, ip);
     let idx = vm.read_u8(bytecode, ip) as usize;
 
     // Load from closure environment WITHOUT unwrapping cells
     // This is used when forwarding captures to nested closures
-    if let Some(env) = closure_env {
-        if idx < env.len() {
-            vm.fiber.stack.push(env[idx]);
-        } else {
-            return Err(format!(
-                "Upvalue index {} out of bounds (env size: {})",
-                idx,
-                env.len()
-            ));
-        }
-    } else {
-        return Err("LoadUpvalueRaw used outside of closure".to_string());
+    let env = closure_env.expect("VM bug: LoadUpvalueRaw used outside of closure");
+    if idx >= env.len() {
+        panic!(
+            "VM bug: Upvalue index {} out of bounds (env size: {})",
+            idx,
+            env.len()
+        );
     }
-    Ok(())
+    vm.fiber.stack.push(env[idx]);
 }
 
 pub fn handle_store_upvalue(
@@ -195,46 +175,44 @@ pub fn handle_store_upvalue(
     bytecode: &[u8],
     ip: &mut usize,
     closure_env: Option<&std::rc::Rc<Vec<Value>>>,
-) -> Result<(), String> {
+) {
     let _depth = vm.read_u8(bytecode, ip);
     let idx = vm.read_u8(bytecode, ip) as usize;
-    let val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    let val = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on StoreUpvalue");
 
     // Store to closure environment
-    if let Some(env) = closure_env {
-        if idx < env.len() {
-            // Handle cell-based storage for shared mutable captures
-            // If the closure environment contains a cell at this index, update the cell
-            let env_val = env[idx];
-            if env_val.is_cell() {
-                // Update the cell's contents
-                if let Some(cell_ref) = env_val.as_cell() {
-                    let mut cell_mut = cell_ref.borrow_mut();
-                    *cell_mut = val;
-                }
-                vm.fiber.stack.push(val);
-                Ok(())
-            } else if let Some(sym) = env_val.as_symbol() {
-                // This is a global variable reference - update it in the global scope
-                let idx = sym as usize;
-                if idx >= vm.globals.len() {
-                    vm.globals.resize(idx + 1, Value::UNDEFINED);
-                }
-                vm.globals[idx] = val;
-                vm.fiber.stack.push(val);
-                Ok(())
-            } else {
-                // If it's not a cell or symbol, we cannot mutate it
-                Err("Cannot mutate non-cell closure environment variables".to_string())
-            }
-        } else {
-            Err(format!(
-                "Upvalue index {} out of bounds (env size: {})",
-                idx,
-                env.len()
-            ))
+    let env = closure_env.expect("VM bug: StoreUpvalue used outside of closure");
+    if idx >= env.len() {
+        panic!(
+            "VM bug: Upvalue index {} out of bounds (env size: {})",
+            idx,
+            env.len()
+        );
+    }
+    // Handle cell-based storage for shared mutable captures
+    // If the closure environment contains a cell at this index, update the cell
+    let env_val = env[idx];
+    if env_val.is_cell() {
+        // Update the cell's contents
+        if let Some(cell_ref) = env_val.as_cell() {
+            let mut cell_mut = cell_ref.borrow_mut();
+            *cell_mut = val;
         }
+        vm.fiber.stack.push(val);
+    } else if let Some(sym) = env_val.as_symbol() {
+        // This is a global variable reference - update it in the global scope
+        let idx = sym as usize;
+        if idx >= vm.globals.len() {
+            vm.globals.resize(idx + 1, Value::UNDEFINED);
+        }
+        vm.globals[idx] = val;
+        vm.fiber.stack.push(val);
     } else {
-        Err("StoreUpvalue used outside of closure".to_string())
+        // If it's not a cell or symbol, we cannot mutate it
+        panic!("VM bug: Cannot mutate non-cell closure environment variables");
     }
 }

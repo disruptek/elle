@@ -15,10 +15,10 @@ pub mod variables;
 
 pub use crate::value::condition::{exception_parent, is_exception_subclass};
 pub use crate::value::fiber::CallFrame;
-pub use core::{VmResult, VM};
+pub use core::VM;
 
 use crate::compiler::bytecode::Bytecode;
-use crate::value::Value;
+use crate::value::{Value, SIG_ERROR, SIG_OK, SIG_YIELD};
 
 impl VM {
     pub fn execute(&mut self, bytecode: &Bytecode) -> Result<Value, String> {
@@ -88,6 +88,9 @@ impl VM {
     /// to execute closures in spawned threads.
     ///
     /// This function handles tail calls without recursion by using a loop-based approach.
+    ///
+    /// This is the translation boundary: internally uses SignalBits, externally
+    /// returns `Result<Value, String>` for backward compatibility.
     pub fn execute_bytecode(
         &mut self,
         bytecode: &[u8],
@@ -100,11 +103,11 @@ impl VM {
         let mut current_env = closure_env.cloned();
 
         loop {
-            let result = self.execute_bytecode_inner(
+            let bits = self.execute_bytecode_inner(
                 &current_bytecode,
                 &current_constants,
                 current_env.as_ref(),
-            )?;
+            );
 
             // Check if there's a pending tail call
             if let Some((tail_bytecode, tail_constants, tail_env)) = self.pending_tail_call.take() {
@@ -113,12 +116,23 @@ impl VM {
                 current_env = Some(tail_env);
                 // Continue the loop to execute the tail call
             } else {
-                // No pending tail call, return the result
-                return match result {
-                    VmResult::Done(v) => Ok(v),
-                    VmResult::Yielded { .. } => {
+                // No pending tail call, translate signal to Result
+                return match bits {
+                    SIG_OK => {
+                        let (_, value) = self.fiber.signal.take().unwrap();
+                        Ok(value)
+                    }
+                    SIG_YIELD => {
                         // Yield should be handled by coroutine_resume, not here
                         Err("Unexpected yield outside coroutine context".to_string())
+                    }
+                    SIG_ERROR => {
+                        // Exception is on current_exception — return Ok(Value::NIL)
+                        // to preserve existing behavior where execute() checks current_exception
+                        Ok(Value::NIL)
+                    }
+                    _ => {
+                        panic!("VM bug: Unexpected signal: {}", bits);
                     }
                 };
             }

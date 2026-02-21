@@ -125,6 +125,9 @@ pub struct Fiber {
     pub coroutine_stack: Vec<Rc<RefCell<Coroutine>>>,
     /// Pending yield value from yield-from delegation
     pub pending_yield: Option<Value>,
+    /// FIXME: Remove in Step 8 when fibers replace continuations.
+    /// Temporary storage for the continuation value on yield.
+    pub continuation: Option<Value>,
 }
 
 impl Fiber {
@@ -147,6 +150,7 @@ impl Fiber {
             handling_exception: false,
             coroutine_stack: Vec::new(),
             pending_yield: None,
+            continuation: None,
         }
     }
 }

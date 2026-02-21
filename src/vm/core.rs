@@ -1,7 +1,7 @@
 use crate::error::{LocationMap, StackFrame};
 use crate::ffi::FFISubsystem;
 use crate::value::fiber::CallFrame;
-use crate::value::{Closure, Coroutine, Fiber, Value};
+use crate::value::{Closure, Coroutine, Fiber, SignalBits, Value, SIG_OK, SIG_YIELD};
 use crate::vm::scope::ScopeStack;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -17,20 +17,6 @@ pub use crate::value::continuation::ExceptionHandler;
 pub use crate::value::fiber::CallFrame as FiberCallFrame;
 
 type TailCallInfo = (Vec<u8>, Vec<Value>, Rc<Vec<Value>>);
-
-/// Result of VM execution - can be normal completion or a yield
-#[derive(Debug, Clone)]
-pub enum VmResult {
-    /// Normal completion with a value
-    Done(Value),
-    /// Coroutine yielded with a value and its continuation
-    Yielded {
-        /// The value being yielded
-        value: Value,
-        /// The continuation capturing the full frame chain
-        continuation: Value,
-    },
-}
 
 pub struct VM {
     /// The current fiber holding all per-execution state:
@@ -347,18 +333,18 @@ impl VM {
     /// innermost to outermost, threading the resume value through.
     ///
     /// Frame ordering: `frames\[0\]` = innermost (yielder), `frames\[last\]` = outermost (caller)
-    pub fn resume_continuation(
-        &mut self,
-        continuation: Value,
-        resume_value: Value,
-    ) -> Result<VmResult, String> {
+    ///
+    /// Returns SignalBits. The result value is stored in `self.fiber.signal`.
+    /// For yields, the continuation is stored in `self.fiber.continuation`.
+    pub fn resume_continuation(&mut self, continuation: Value, resume_value: Value) -> SignalBits {
         let cont_data = continuation
             .as_continuation()
-            .ok_or("Expected continuation value")?;
+            .expect("VM bug: Expected continuation value in resume_continuation");
 
         let frames = &cont_data.frames;
         if frames.is_empty() {
-            return Ok(VmResult::Done(resume_value));
+            self.fiber.signal = Some((SIG_OK, resume_value));
+            return SIG_OK;
         }
 
         // Save current stack state
@@ -378,31 +364,32 @@ impl VM {
             self.fiber.stack.push(current_value);
 
             // Execute with the frame's saved exception handler state
-            let result = self.execute_bytecode_from_ip_with_state(
+            let bits = self.execute_bytecode_from_ip_with_state(
                 &frame.bytecode,
                 &frame.constants,
                 Some(&frame.env),
                 frame.ip,
                 frame.exception_handlers.clone(),
                 frame.handling_exception,
-            )?;
+            );
 
-            match result {
-                VmResult::Done(v) => {
+            match bits {
+                SIG_OK => {
+                    let (_, v) = self.fiber.signal.take().unwrap();
                     if self.fiber.current_exception.is_some() && i + 1 < frames.len() {
                         current_value = Value::NIL;
                     } else {
                         current_value = v;
                     }
                 }
-                VmResult::Yielded {
-                    value,
-                    continuation: new_cont,
-                } => {
+                SIG_YIELD => {
+                    let (_, value) = self.fiber.signal.take().unwrap();
+                    let new_cont = self.fiber.continuation.take().unwrap();
+
                     if i + 1 < frames.len() {
                         let mut new_cont_data = new_cont
                             .as_continuation()
-                            .ok_or("Expected continuation")?
+                            .expect("VM bug: Expected continuation in resume_continuation yield")
                             .as_ref()
                             .clone();
                         for f in frames[i + 1..].iter() {
@@ -410,22 +397,26 @@ impl VM {
                         }
                         let merged_cont = Value::continuation(new_cont_data);
                         self.fiber.stack = saved_stack;
-                        return Ok(VmResult::Yielded {
-                            value,
-                            continuation: merged_cont,
-                        });
+                        self.fiber.signal = Some((SIG_YIELD, value));
+                        self.fiber.continuation = Some(merged_cont);
+                        return SIG_YIELD;
                     }
                     self.fiber.stack = saved_stack;
-                    return Ok(VmResult::Yielded {
-                        value,
-                        continuation: new_cont,
-                    });
+                    self.fiber.signal = Some((SIG_YIELD, value));
+                    self.fiber.continuation = Some(new_cont);
+                    return SIG_YIELD;
+                }
+                _ => {
+                    // Error or other signal — propagate
+                    self.fiber.stack = saved_stack;
+                    return bits;
                 }
             }
         }
 
         self.fiber.stack = saved_stack;
-        Ok(VmResult::Done(current_value))
+        self.fiber.signal = Some((SIG_OK, current_value));
+        SIG_OK
     }
 }
 
@@ -518,35 +509,19 @@ mod coroutine_vm_tests {
     }
 
     #[test]
-    fn test_vm_result_enum() {
-        use crate::value::ContinuationData;
+    fn test_signal_bits() {
+        use crate::value::{SIG_ERROR, SIG_OK, SIG_YIELD};
 
-        let done = VmResult::Done(Value::int(42));
-        let cont_data = ContinuationData { frames: vec![] };
-        let yielded = VmResult::Yielded {
-            value: Value::int(100),
-            continuation: Value::continuation(cont_data),
-        };
+        // Test signal bit values
+        assert_eq!(SIG_OK, 0);
+        assert_eq!(SIG_ERROR, 1);
+        assert_eq!(SIG_YIELD, 2);
 
-        if let VmResult::Done(v) = done {
-            if let Some(n) = v.as_int() {
-                assert_eq!(n, 42);
-            } else {
-                panic!("Expected Done");
-            }
-        } else {
-            panic!("Expected Done");
-        }
-
-        if let VmResult::Yielded { value, .. } = yielded {
-            if let Some(n) = value.as_int() {
-                assert_eq!(n, 100);
-            } else {
-                panic!("Expected Yielded");
-            }
-        } else {
-            panic!("Expected Yielded");
-        }
+        // Test signal combinations
+        let mask = SIG_ERROR | SIG_YIELD;
+        assert_ne!(mask & SIG_ERROR, 0);
+        assert_ne!(mask & SIG_YIELD, 0);
+        assert_eq!(mask & SIG_OK, 0);
     }
 
     #[test]

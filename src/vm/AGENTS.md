@@ -22,7 +22,7 @@ Does NOT:
 | Type | Purpose |
 |------|---------|
 | `VM` | Global state + root Fiber. Per-execution state lives on `vm.fiber` |
-| `VmResult` | `Done(Value)` or `Yielded(Value)` |
+| `SignalBits` | Internal return type: `SIG_OK`, `SIG_ERROR`, `SIG_YIELD` |
 | `CallFrame` | Function name, IP, frame base |
 | `ExceptionHandler` | Handler offset, finally offset, stack depth |
 
@@ -32,17 +32,35 @@ Does NOT:
 Bytecode + Constants
     │
     ▼
-execute_bytecode()
+execute_bytecode()  ← public API, returns Result<Value, String>
     │
-    ├─► fetch instruction
-    ├─► dispatch by opcode
-    ├─► modify stack/locals/globals
-    ├─► check for exceptions
-    └─► loop until Return/Yield
+    ├─► execute_bytecode_inner() → SignalBits
+    │       │
+    │       ├─► fetch instruction
+    │       ├─► dispatch by opcode
+    │       ├─► modify stack/locals/globals
+    │       ├─► check for exceptions
+    │       └─► loop until Return/Yield/Error
+    │       │
+    │       ▼
+    │   SignalBits (result in fiber.signal)
     │
     ▼
-VmResult
+Result<Value, String>  ← translation boundary
 ```
+
+## Signal-based returns (Step 3)
+
+Internal VM methods return `SignalBits` instead of `Result<VmResult, String>`:
+- `SIG_OK` (0): Normal completion. Value in `fiber.signal`.
+- `SIG_ERROR` (1): Exception. Exception in `fiber.current_exception`.
+- `SIG_YIELD` (2): Coroutine yield. Value in `fiber.signal`, continuation in `fiber.continuation`.
+
+The public `execute_bytecode` method is the translation boundary — it converts
+`SignalBits` to `Result<Value, String>` for external callers.
+
+Instruction handlers no longer return `Result<(), String>`. VM bugs panic
+immediately. User errors set `fiber.current_exception` and return normally.
 
 ## Dependents
 
@@ -52,8 +70,9 @@ VmResult
 
 ## Invariants
 
-1. **Stack underflow is an error.** Every pop must have a preceding push.
-   If you see "Stack underflow," the bytecode or emitter is broken.
+1. **Stack underflow is a VM bug.** Every pop must have a preceding push.
+   If you see "Stack underflow," the bytecode or emitter is broken. Handlers
+   panic on stack underflow.
 
 2. **Closure environments are immutable Rc<Vec>.** The vec is created at
    closure call time; mutations go through cells, not env modification.
@@ -80,13 +99,13 @@ VmResult
    values from an inner coroutine. When the delegate completes, control
    returns to the outer coroutine.
 
-7. **Instruction handlers have two error channels.** `Err(String)` is for VM
-   bugs (stack underflow, bad bytecode). `Ok(())` with `current_exception`
-   set is for runtime errors on bad data (type mismatch, division by zero).
-   The handler pushes `Value::NIL` to keep the stack consistent and returns
-   `Ok(())`. The interrupt mechanism at the bottom of the instruction loop
-   handles the exception. See `handle_div_int` and `handle_load_global` for
-   the canonical pattern.
+7. **VM bugs panic, user errors set exceptions.** Instruction handlers return
+   `()` (not `Result`). VM bugs (stack underflow, bad bytecode) panic
+   immediately. User errors (type mismatch, division by zero) set
+   `fiber.current_exception`, push `Value::NIL` to keep the stack consistent,
+   and return normally. The interrupt mechanism at the bottom of the
+   instruction loop handles the exception. See `handle_div_int` and
+   `handle_load_global` for the canonical pattern.
 
 ## Key VM fields
 
@@ -110,6 +129,8 @@ VmResult
 | `coroutine_stack` | `Vec<Rc<RefCell<Coroutine>>>` | Active coroutines |
 | `pending_yield` | `Option<Value>` | Pending yield from delegation |
 | `pending_tail_call` | `Option<(bytecode, constants, env)>` | Deferred tail call |
+| `signal` | `Option<(SignalBits, Value)>` | Signal value from execution |
+| `continuation` | `Option<Value>` | Continuation on yield (temporary, Step 8 removes) |
 
 ## Exception hierarchy
 

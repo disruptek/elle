@@ -10,8 +10,8 @@
 //! - coroutine-next: Get next value from coroutine iterator
 
 use crate::error::LResult;
-use crate::value::{Condition, Coroutine, CoroutineState, Value};
-use crate::vm::{VmResult, VM};
+use crate::value::{Condition, Coroutine, CoroutineState, Value, SIG_OK, SIG_YIELD};
+use crate::vm::VM;
 
 /// F1: Create a coroutine from a function
 ///
@@ -248,7 +248,7 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                 vm.enter_coroutine(co.clone());
 
                 // Execute the closure with coroutine support
-                let result = vm.execute_bytecode_coroutine(&bytecode, &constants, Some(&env_rc));
+                let bits = vm.execute_bytecode_coroutine(&bytecode, &constants, Some(&env_rc));
 
                 // Check for pending yield from yield-from delegation BEFORE exiting
                 // coroutine context. If there's a pending yield, the coroutine should
@@ -269,8 +269,9 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
 
                 // Re-borrow to update state
                 let mut borrowed = co.borrow_mut();
-                match result {
-                    Ok(VmResult::Done(value)) => {
+                match bits {
+                    SIG_OK => {
+                        let (_, value) = vm.fiber.signal.take().unwrap();
                         // Check if the coroutine body raised an uncaught exception.
                         // If so, leave it on vm.fiber.current_exception for handler-case
                         // to catch, and transition the coroutine to Error state.
@@ -289,10 +290,9 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                             Ok(value)
                         }
                     }
-                    Ok(VmResult::Yielded {
-                        value,
-                        continuation,
-                    }) => {
+                    SIG_YIELD => {
+                        let (_, value) = vm.fiber.signal.take().unwrap();
+                        let continuation = vm.fiber.continuation.take().unwrap();
                         // Coroutine yielded - save the continuation for later resume
                         borrowed.state = CoroutineState::Suspended;
                         borrowed.yielded_value = Some(value);
@@ -300,9 +300,17 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                         borrowed.saved_value_continuation = Some(continuation);
                         Ok(value)
                     }
-                    Err(e) => {
-                        borrowed.state = CoroutineState::Error(e.clone());
-                        Err(e.into())
+                    _ => {
+                        // SIG_ERROR or other
+                        let msg = vm
+                            .fiber
+                            .current_exception
+                            .as_ref()
+                            .map(|e| e.message.clone())
+                            .unwrap_or_else(|| "unknown error".to_string());
+                        borrowed.state = CoroutineState::Error(msg);
+                        // Return Ok(NIL) — exception is on current_exception
+                        Ok(Value::NIL)
                     }
                 }
             }
@@ -317,12 +325,13 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                 drop(borrowed); // Release borrow before VM call
 
                 vm.enter_coroutine(co.clone());
-                let result = vm.resume_continuation(continuation, resume_value);
+                let bits = vm.resume_continuation(continuation, resume_value);
                 vm.exit_coroutine();
 
                 let mut borrowed = co.borrow_mut();
-                match result {
-                    Ok(VmResult::Done(value)) => {
+                match bits {
+                    SIG_OK => {
+                        let (_, value) = vm.fiber.signal.take().unwrap();
                         if vm.fiber.current_exception.is_some() {
                             let msg = vm
                                 .fiber
@@ -339,18 +348,24 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                             Ok(value)
                         }
                     }
-                    Ok(VmResult::Yielded {
-                        value,
-                        continuation: new_cont,
-                    }) => {
+                    SIG_YIELD => {
+                        let (_, value) = vm.fiber.signal.take().unwrap();
+                        let new_cont = vm.fiber.continuation.take().unwrap();
                         borrowed.state = CoroutineState::Suspended;
                         borrowed.saved_value_continuation = Some(new_cont);
                         borrowed.yielded_value = Some(value);
                         Ok(value)
                     }
-                    Err(e) => {
-                        borrowed.state = CoroutineState::Error(e.clone());
-                        Err(e.into())
+                    _ => {
+                        // SIG_ERROR or other
+                        let msg = vm
+                            .fiber
+                            .current_exception
+                            .as_ref()
+                            .map(|e| e.message.clone())
+                            .unwrap_or_else(|| "unknown error".to_string());
+                        borrowed.state = CoroutineState::Error(msg);
+                        Ok(Value::NIL)
                     }
                 }
             }

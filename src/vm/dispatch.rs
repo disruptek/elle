@@ -4,10 +4,10 @@
 //! instructions to their handlers.
 
 use crate::compiler::bytecode::Instruction;
-use crate::value::{CoroutineState, Value};
+use crate::value::{Condition, CoroutineState, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
 use std::rc::Rc;
 
-use super::core::{VmResult, VM};
+use super::core::VM;
 use super::{
     arithmetic, closure, comparison, control, data, literals, scope, stack, types, variables,
 };
@@ -15,13 +15,16 @@ use super::{
 impl VM {
     /// Inner execution loop that handles all instructions.
     /// This is the implementation; the public wrapper handles handler isolation.
+    ///
+    /// Returns SignalBits. The result value is stored in `self.fiber.signal`.
+    /// For yields, the continuation is stored in `self.fiber.continuation`.
     pub(super) fn execute_bytecode_inner_impl(
         &mut self,
         bytecode: &[u8],
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
         start_ip: usize,
-    ) -> Result<VmResult, String> {
+    ) -> SignalBits {
         let mut ip = start_ip;
         let mut instruction_count = 0;
         const MAX_INSTRUCTIONS: usize = 100000;
@@ -34,13 +37,16 @@ impl VM {
                 } else {
                     255
                 };
-                return Err(format!(
+                let cond = Condition::error(format!(
                     "Instruction limit exceeded at ip={} (instr={}), stack depth={}, exception={}",
                     ip,
                     instr_byte,
                     self.fiber.stack.len(),
                     self.fiber.current_exception.is_some()
                 ));
+                self.fiber.current_exception = Some(Rc::new(cond));
+                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                return SIG_ERROR;
             }
 
             // Check for pending exception at the START of each iteration
@@ -53,12 +59,14 @@ impl VM {
                     ip = handler.handler_offset as usize;
                     continue;
                 } else {
-                    return Ok(VmResult::Done(Value::NIL));
+                    // Exception escaped all handlers
+                    self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                    return SIG_ERROR;
                 }
             }
 
             if ip >= bytecode.len() {
-                return Err("Unexpected end of bytecode".to_string());
+                panic!("VM bug: Unexpected end of bytecode");
             }
 
             let instr_byte = bytecode[ip];
@@ -72,36 +80,36 @@ impl VM {
                     stack::handle_load_const(self, bytecode, &mut ip, constants);
                 }
                 Instruction::LoadLocal => {
-                    stack::handle_load_local(self, bytecode, &mut ip)?;
+                    stack::handle_load_local(self, bytecode, &mut ip);
                 }
                 Instruction::Pop => {
-                    stack::handle_pop(self)?;
+                    stack::handle_pop(self);
                 }
                 Instruction::Dup => {
-                    stack::handle_dup(self)?;
+                    stack::handle_dup(self);
                 }
                 Instruction::DupN => {
-                    stack::handle_dup_n(self, bytecode, &mut ip)?;
+                    stack::handle_dup_n(self, bytecode, &mut ip);
                 }
 
                 // Variable access
                 Instruction::LoadGlobal => {
-                    variables::handle_load_global(self, bytecode, &mut ip, constants)?;
+                    variables::handle_load_global(self, bytecode, &mut ip, constants);
                 }
                 Instruction::StoreGlobal => {
-                    variables::handle_store_global(self, bytecode, &mut ip, constants)?;
+                    variables::handle_store_global(self, bytecode, &mut ip, constants);
                 }
                 Instruction::StoreLocal => {
-                    variables::handle_store_local(self, bytecode, &mut ip)?;
+                    variables::handle_store_local(self, bytecode, &mut ip);
                 }
                 Instruction::LoadUpvalue => {
-                    variables::handle_load_upvalue(self, bytecode, &mut ip, closure_env)?;
+                    variables::handle_load_upvalue(self, bytecode, &mut ip, closure_env);
                 }
                 Instruction::LoadUpvalueRaw => {
-                    variables::handle_load_upvalue_raw(self, bytecode, &mut ip, closure_env)?;
+                    variables::handle_load_upvalue_raw(self, bytecode, &mut ip, closure_env);
                 }
                 Instruction::StoreUpvalue => {
-                    variables::handle_store_upvalue(self, bytecode, &mut ip, closure_env)?;
+                    variables::handle_store_upvalue(self, bytecode, &mut ip, closure_env);
                 }
 
                 // Control flow
@@ -109,10 +117,10 @@ impl VM {
                     control::handle_jump(bytecode, &mut ip, self);
                 }
                 Instruction::JumpIfFalse => {
-                    control::handle_jump_if_false(bytecode, &mut ip, self)?;
+                    control::handle_jump_if_false(bytecode, &mut ip, self);
                 }
                 Instruction::JumpIfTrue => {
-                    control::handle_jump_if_true(bytecode, &mut ip, self)?;
+                    control::handle_jump_if_true(bytecode, &mut ip, self);
                 }
                 Instruction::Return => {
                     return self.handle_return(bytecode, constants, closure_env, ip);
@@ -120,129 +128,128 @@ impl VM {
 
                 // Call instructions
                 Instruction::Call => {
-                    if let Some(result) =
-                        self.handle_call(bytecode, constants, closure_env, &mut ip)?
+                    if let Some(bits) = self.handle_call(bytecode, constants, closure_env, &mut ip)
                     {
-                        return Ok(result);
+                        return bits;
                     }
                 }
                 Instruction::TailCall => {
-                    if let Some(result) = self.handle_tail_call(&mut ip, bytecode)? {
-                        return Ok(result);
+                    if let Some(bits) = self.handle_tail_call(&mut ip, bytecode) {
+                        return bits;
                     }
                 }
 
                 // Closures
                 Instruction::MakeClosure => {
-                    closure::handle_make_closure(self, bytecode, &mut ip, constants)?;
+                    closure::handle_make_closure(self, bytecode, &mut ip, constants);
                 }
 
                 // Data structures
                 Instruction::Cons => {
-                    data::handle_cons(self)?;
+                    data::handle_cons(self);
                 }
                 Instruction::Car => {
-                    data::handle_car(self)?;
+                    data::handle_car(self);
                 }
                 Instruction::Cdr => {
-                    data::handle_cdr(self)?;
+                    data::handle_cdr(self);
                 }
                 Instruction::MakeVector => {
-                    data::handle_make_vector(self, bytecode, &mut ip)?;
+                    data::handle_make_vector(self, bytecode, &mut ip);
                 }
                 Instruction::VectorRef => {
-                    data::handle_vector_ref(self)?;
+                    data::handle_vector_ref(self);
                 }
                 Instruction::VectorSet => {
-                    data::handle_vector_set(self)?;
+                    data::handle_vector_set(self);
                 }
 
                 // Arithmetic (integer)
                 Instruction::AddInt => {
-                    arithmetic::handle_add_int(self)?;
+                    arithmetic::handle_add_int(self);
                 }
                 Instruction::SubInt => {
-                    arithmetic::handle_sub_int(self)?;
+                    arithmetic::handle_sub_int(self);
                 }
                 Instruction::MulInt => {
-                    arithmetic::handle_mul_int(self)?;
+                    arithmetic::handle_mul_int(self);
                 }
                 Instruction::DivInt => {
-                    arithmetic::handle_div_int(self)?;
+                    arithmetic::handle_div_int(self);
                 }
 
                 // Arithmetic (polymorphic)
                 Instruction::Add => {
-                    arithmetic::handle_add(self)?;
+                    arithmetic::handle_add(self);
                 }
                 Instruction::Sub => {
-                    arithmetic::handle_sub(self)?;
+                    arithmetic::handle_sub(self);
                 }
                 Instruction::Mul => {
-                    arithmetic::handle_mul(self)?;
+                    arithmetic::handle_mul(self);
                 }
                 Instruction::Div => {
-                    arithmetic::handle_div(self)?;
+                    arithmetic::handle_div(self);
                 }
                 Instruction::Rem => {
-                    arithmetic::handle_rem(self)?;
+                    arithmetic::handle_rem(self);
                 }
 
                 // Bitwise operations
                 Instruction::BitAnd => {
-                    arithmetic::handle_bit_and(self)?;
+                    arithmetic::handle_bit_and(self);
                 }
                 Instruction::BitOr => {
-                    arithmetic::handle_bit_or(self)?;
+                    arithmetic::handle_bit_or(self);
                 }
                 Instruction::BitXor => {
-                    arithmetic::handle_bit_xor(self)?;
+                    arithmetic::handle_bit_xor(self);
                 }
                 Instruction::BitNot => {
-                    arithmetic::handle_bit_not(self)?;
+                    arithmetic::handle_bit_not(self);
                 }
                 Instruction::Shl => {
-                    arithmetic::handle_shl(self)?;
+                    arithmetic::handle_shl(self);
                 }
                 Instruction::Shr => {
-                    arithmetic::handle_shr(self)?;
+                    arithmetic::handle_shr(self);
                 }
 
                 // Comparisons
                 Instruction::Eq => {
-                    comparison::handle_eq(self)?;
+                    comparison::handle_eq(self);
                 }
                 Instruction::Lt => {
-                    comparison::handle_lt(self)?;
+                    comparison::handle_lt(self);
                 }
                 Instruction::Gt => {
-                    comparison::handle_gt(self)?;
+                    comparison::handle_gt(self);
                 }
                 Instruction::Le => {
-                    comparison::handle_le(self)?;
+                    comparison::handle_le(self);
                 }
                 Instruction::Ge => {
-                    comparison::handle_ge(self)?;
+                    comparison::handle_ge(self);
                 }
 
                 // Type checks
                 Instruction::IsNil => {
-                    types::handle_is_nil(self)?;
+                    types::handle_is_nil(self);
                 }
                 Instruction::IsEmptyList => {
-                    types::handle_is_empty_list(self)?;
+                    types::handle_is_empty_list(self);
                 }
                 Instruction::IsPair => {
-                    types::handle_is_pair(self)?;
+                    types::handle_is_pair(self);
                 }
                 Instruction::IsNumber => {
-                    types::handle_is_number(self)?;
+                    types::handle_is_number(self);
                 }
                 Instruction::IsSymbol => {
-                    types::handle_is_symbol(self)?;
+                    types::handle_is_symbol(self);
                 }
                 Instruction::Not => {
-                    types::handle_not(self)?;
+                    types::handle_not(self);
                 }
 
                 // Literals
@@ -263,24 +270,24 @@ impl VM {
                 Instruction::PushScope => {
                     let scope_type_byte = bytecode[ip];
                     ip += 1;
-                    scope::handle_push_scope(self, scope_type_byte)?;
+                    scope::handle_push_scope(self, scope_type_byte);
                 }
                 Instruction::PopScope => {
-                    scope::handle_pop_scope(self)?;
+                    scope::handle_pop_scope(self);
                 }
                 Instruction::DefineLocal => {
-                    scope::handle_define_local(self, bytecode, &mut ip, constants)?;
+                    scope::handle_define_local(self, bytecode, &mut ip, constants);
                 }
 
                 // Cell operations
                 Instruction::MakeCell => {
-                    scope::handle_make_cell(self)?;
+                    scope::handle_make_cell(self);
                 }
                 Instruction::UnwrapCell => {
-                    scope::handle_unwrap_cell(self)?;
+                    scope::handle_unwrap_cell(self);
                 }
                 Instruction::UpdateCell => {
-                    scope::handle_update_cell(self)?;
+                    scope::handle_update_cell(self);
                 }
 
                 // Exception handling
@@ -296,14 +303,14 @@ impl VM {
                 }
                 Instruction::CheckException => {
                     if self.fiber.current_exception.is_none() {
-                        return Err("CheckException reached with no exception set".to_string());
+                        panic!("VM bug: CheckException reached with no exception set");
                     }
                 }
                 Instruction::MatchException => {
                     self.handle_match_exception(bytecode, &mut ip);
                 }
                 Instruction::BindException => {
-                    self.handle_bind_exception(bytecode, &mut ip, constants)?;
+                    self.handle_bind_exception(bytecode, &mut ip, constants);
                 }
                 Instruction::ClearException => {
                     self.fiber.current_exception = None;
@@ -335,7 +342,9 @@ impl VM {
                     self.fiber.handling_exception = true;
                     ip = handler.handler_offset as usize;
                 } else {
-                    return Ok(VmResult::Done(Value::NIL));
+                    // Exception escaped all handlers
+                    self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                    return SIG_ERROR;
                 }
             }
 
@@ -359,13 +368,16 @@ impl VM {
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
         ip: usize,
-    ) -> Result<VmResult, String> {
+    ) -> SignalBits {
         // Check for pending yield before returning
         if let Some(yielded_value) = self.take_pending_yield() {
             let coroutine = match self.current_coroutine() {
                 Some(co) => co.clone(),
                 None => {
-                    return Err("pending yield outside of coroutine".to_string());
+                    let cond = Condition::error("pending yield outside of coroutine");
+                    self.fiber.current_exception = Some(Rc::new(cond));
+                    self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                    return SIG_ERROR;
                 }
             };
 
@@ -390,14 +402,14 @@ impl VM {
                 co.yielded_value = Some(yielded_value);
             }
 
-            return Ok(VmResult::Yielded {
-                value: yielded_value,
-                continuation,
-            });
+            self.fiber.signal = Some((SIG_YIELD, yielded_value));
+            self.fiber.continuation = Some(continuation);
+            return SIG_YIELD;
         }
 
-        let value = control::handle_return(self)?;
-        Ok(VmResult::Done(value))
+        let value = control::handle_return(self);
+        self.fiber.signal = Some((SIG_OK, value));
+        SIG_OK
     }
 
     /// Handle the Yield instruction.
@@ -407,12 +419,21 @@ impl VM {
         constants: &[Value],
         closure_env: Option<&Rc<Vec<Value>>>,
         ip: usize,
-    ) -> Result<VmResult, String> {
-        let yielded_value = self.fiber.stack.pop().ok_or("Stack underflow on yield")?;
+    ) -> SignalBits {
+        let yielded_value = self
+            .fiber
+            .stack
+            .pop()
+            .expect("VM bug: Stack underflow on yield");
 
         let coroutine = match self.current_coroutine() {
             Some(co) => co.clone(),
-            None => return Err("yield used outside of coroutine".to_string()),
+            None => {
+                let cond = Condition::error("yield used outside of coroutine");
+                self.fiber.current_exception = Some(Rc::new(cond));
+                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                return SIG_ERROR;
+            }
         };
 
         let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
@@ -436,10 +457,9 @@ impl VM {
             co.yielded_value = None;
         }
 
-        Ok(VmResult::Yielded {
-            value: yielded_value,
-            continuation,
-        })
+        self.fiber.signal = Some((SIG_YIELD, yielded_value));
+        self.fiber.continuation = Some(continuation);
+        SIG_YIELD
     }
 
     /// Handle a pending yield from yield-from delegation.
@@ -450,11 +470,14 @@ impl VM {
         closure_env: Option<&Rc<Vec<Value>>>,
         ip: usize,
         yielded_value: Value,
-    ) -> Result<VmResult, String> {
+    ) -> SignalBits {
         let coroutine = match self.current_coroutine() {
             Some(co) => co.clone(),
             None => {
-                return Err("pending yield outside of coroutine".to_string());
+                let cond = Condition::error("pending yield outside of coroutine");
+                self.fiber.current_exception = Some(Rc::new(cond));
+                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                return SIG_ERROR;
             }
         };
 
@@ -479,10 +502,9 @@ impl VM {
             co.yielded_value = Some(yielded_value);
         }
 
-        Ok(VmResult::Yielded {
-            value: yielded_value,
-            continuation,
-        })
+        self.fiber.signal = Some((SIG_YIELD, yielded_value));
+        self.fiber.continuation = Some(continuation);
+        SIG_YIELD
     }
 
     /// Handle the PushHandler instruction.
@@ -519,32 +541,24 @@ impl VM {
     }
 
     /// Handle the BindException instruction.
-    fn handle_bind_exception(
-        &mut self,
-        bytecode: &[u8],
-        ip: &mut usize,
-        constants: &[Value],
-    ) -> Result<(), String> {
+    fn handle_bind_exception(&mut self, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
         let const_idx = self.read_u16(bytecode, ip) as usize;
 
         if let Some(exc) = &self.fiber.current_exception {
-            if let Some(const_val) = constants.get(const_idx) {
-                if let Some(sym_id) = const_val.as_symbol() {
-                    use crate::value::heap::{alloc, HeapObject};
-                    let exc_value = alloc(HeapObject::Condition((**exc).clone()));
-                    let idx = sym_id as usize;
-                    if idx >= self.globals.len() {
-                        self.globals.resize(idx + 1, Value::UNDEFINED);
-                    }
-                    self.globals[idx] = exc_value;
-                } else {
-                    return Err("BindException: Expected symbol in constants".to_string());
-                }
-            } else {
-                return Err("BindException: Expected symbol in constants".to_string());
+            let const_val = constants
+                .get(const_idx)
+                .expect("VM bug: BindException: constant index out of bounds");
+            let sym_id = const_val
+                .as_symbol()
+                .expect("VM bug: BindException: Expected symbol in constants");
+            use crate::value::heap::{alloc, HeapObject};
+            let exc_value = alloc(HeapObject::Condition((**exc).clone()));
+            let idx = sym_id as usize;
+            if idx >= self.globals.len() {
+                self.globals.resize(idx + 1, Value::UNDEFINED);
             }
+            self.globals[idx] = exc_value;
         }
-        Ok(())
     }
 
     /// Handle the LoadException instruction.

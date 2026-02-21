@@ -1,22 +1,33 @@
 use super::core::VM;
 use crate::value::{cons, Value};
 
-pub fn handle_cons(vm: &mut VM) -> Result<(), String> {
-    let rest = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let first = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_cons(vm: &mut VM) {
+    let rest = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on Cons");
+    let first = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on Cons");
     vm.fiber.stack.push(cons(first, rest));
-    Ok(())
 }
 
-pub fn handle_car(vm: &mut VM) -> Result<(), String> {
-    let val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_car(vm: &mut VM) {
+    let val = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on Car");
 
     // car of nil is an error - enforces proper list invariant
     if val.is_nil() {
         let cond = crate::value::Condition::type_error("car: cannot take car of nil");
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        return Ok(());
+        return;
     }
 
     // car of empty list is an error
@@ -24,13 +35,12 @@ pub fn handle_car(vm: &mut VM) -> Result<(), String> {
         let cond = crate::value::Condition::type_error("car: cannot take car of empty list");
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        return Ok(());
+        return;
     }
 
     // Handle cons cells
     if let Some(cons) = val.as_cons() {
         vm.fiber.stack.push(cons.first);
-        Ok(())
     } else {
         let cond = crate::value::Condition::type_error(format!(
             "car: expected cons cell, got {}",
@@ -38,19 +48,22 @@ pub fn handle_car(vm: &mut VM) -> Result<(), String> {
         ));
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        Ok(())
     }
 }
 
-pub fn handle_cdr(vm: &mut VM) -> Result<(), String> {
-    let val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_cdr(vm: &mut VM) {
+    let val = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on Cdr");
 
     // cdr of nil is an error - enforces proper list invariant
     if val.is_nil() {
         let cond = crate::value::Condition::type_error("cdr: cannot take cdr of nil");
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        return Ok(());
+        return;
     }
 
     // cdr of empty list is an error
@@ -58,13 +71,12 @@ pub fn handle_cdr(vm: &mut VM) -> Result<(), String> {
         let cond = crate::value::Condition::type_error("cdr: cannot take cdr of empty list");
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        return Ok(());
+        return;
     }
 
     // Handle cons cells
     if let Some(cons) = val.as_cons() {
         vm.fiber.stack.push(cons.rest);
-        Ok(())
     } else {
         let cond = crate::value::Condition::type_error(format!(
             "cdr: expected cons cell, got {}",
@@ -72,24 +84,35 @@ pub fn handle_cdr(vm: &mut VM) -> Result<(), String> {
         ));
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        Ok(())
     }
 }
 
-pub fn handle_make_vector(vm: &mut VM, bytecode: &[u8], ip: &mut usize) -> Result<(), String> {
+pub fn handle_make_vector(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
     let size = vm.read_u8(bytecode, ip) as usize;
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
-        vec.push(vm.fiber.stack.pop().ok_or("Stack underflow")?);
+        vec.push(
+            vm.fiber
+                .stack
+                .pop()
+                .expect("VM bug: Stack underflow on MakeVector"),
+        );
     }
     vec.reverse();
     vm.fiber.stack.push(Value::vector(vec));
-    Ok(())
 }
 
-pub fn handle_vector_ref(vm: &mut VM) -> Result<(), String> {
-    let idx = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let vec = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_vector_ref(vm: &mut VM) {
+    let idx = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on VectorRef");
+    let vec = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on VectorRef");
     let Some(idx_val) = idx.as_int() else {
         let cond = crate::value::Condition::type_error(format!(
             "vector-ref: expected integer index, got {}",
@@ -97,7 +120,7 @@ pub fn handle_vector_ref(vm: &mut VM) -> Result<(), String> {
         ));
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        return Ok(());
+        return;
     };
     let Some(vec_ref) = vec.as_vector() else {
         let cond = crate::value::Condition::type_error(format!(
@@ -106,13 +129,12 @@ pub fn handle_vector_ref(vm: &mut VM) -> Result<(), String> {
         ));
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        return Ok(());
+        return;
     };
     let vec_borrow = vec_ref.borrow();
     match vec_borrow.get(idx_val as usize) {
         Some(val) => {
             vm.fiber.stack.push(*val);
-            Ok(())
         }
         None => {
             let cond = crate::value::Condition::error(format!(
@@ -122,15 +144,26 @@ pub fn handle_vector_ref(vm: &mut VM) -> Result<(), String> {
             ));
             vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
             vm.fiber.stack.push(Value::NIL);
-            Ok(())
         }
     }
 }
 
-pub fn handle_vector_set(vm: &mut VM) -> Result<(), String> {
-    let val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let idx = vm.fiber.stack.pop().ok_or("Stack underflow")?;
-    let vec = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+pub fn handle_vector_set(vm: &mut VM) {
+    let val = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on VectorSet");
+    let idx = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on VectorSet");
+    let vec = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on VectorSet");
     let Some(_idx_val) = idx.as_int() else {
         let cond = crate::value::Condition::type_error(format!(
             "vector-set!: expected integer index, got {}",
@@ -138,7 +171,7 @@ pub fn handle_vector_set(vm: &mut VM) -> Result<(), String> {
         ));
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        return Ok(());
+        return;
     };
     if vec.as_vector().is_none() {
         let cond = crate::value::Condition::type_error(format!(
@@ -147,9 +180,8 @@ pub fn handle_vector_set(vm: &mut VM) -> Result<(), String> {
         ));
         vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
-        return Ok(());
+        return;
     }
     // Note: Vectors are immutable in this implementation
     vm.fiber.stack.push(val);
-    Ok(())
 }
