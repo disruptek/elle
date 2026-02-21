@@ -99,7 +99,6 @@ pub fn serialize_value(value: &Value) -> Result<String, String> {
             HeapTag::Struct => Err("Struct should have been handled above".to_string()),
             HeapTag::Closure => Err("Cannot serialize closures to JSON".to_string()),
             HeapTag::Condition => Err("Cannot serialize conditions to JSON".to_string()),
-            HeapTag::Coroutine => Err("Cannot serialize coroutines to JSON".to_string()),
             HeapTag::Cell => Err("Cell should have been handled above".to_string()),
             HeapTag::Float => {
                 // This is a heap-allocated float (for NaN values)
@@ -231,7 +230,6 @@ pub fn serialize_value_pretty(value: &Value, indent_level: usize) -> Result<Stri
             HeapTag::Struct => Err("Struct should have been handled above".to_string()),
             HeapTag::Closure => Err("Cannot serialize closures to JSON".to_string()),
             HeapTag::Condition => Err("Cannot serialize conditions to JSON".to_string()),
-            HeapTag::Coroutine => Err("Cannot serialize coroutines to JSON".to_string()),
             HeapTag::Cell => Err("Cell should have been handled above".to_string()),
             HeapTag::Float => {
                 // This is a heap-allocated float (for NaN values)

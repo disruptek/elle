@@ -85,9 +85,6 @@ fn is_value_sendable(value: &Value) -> bool {
             }
         }
 
-        // Coroutines are not sendable (contain closures with mutable state)
-        HeapObject::Coroutine(_) => false,
-
         // Float values that couldn't be stored inline
         HeapObject::Float(_) => true,
 

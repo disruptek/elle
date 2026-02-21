@@ -17,7 +17,6 @@ use crate::value::Value;
 // Re-export types for convenience
 pub use crate::value::closure::Closure;
 pub use crate::value::condition::Condition;
-pub use crate::value::coroutine::Coroutine;
 pub use crate::value::types::{Arity, NativeFn, TableKey};
 
 /// Cons cell for list construction using NaN-boxed values.
@@ -45,7 +44,6 @@ pub enum HeapTag {
     Struct = 4,
     Closure = 5,
     Condition = 6,
-    Coroutine = 7,
     Cell = 8,
     Float = 9, // For NaN values that can't be inline
     NativeFn = 10,
@@ -82,9 +80,6 @@ pub enum HeapObject {
 
     /// Exception/condition object
     Condition(Condition),
-
-    /// Suspendable computation
-    Coroutine(Rc<RefCell<Coroutine>>),
 
     /// Mutable cell for captured variables.
     /// The boolean distinguishes compiler-created cells (true, auto-unwrapped
@@ -140,7 +135,6 @@ impl HeapObject {
             HeapObject::Struct(_) => HeapTag::Struct,
             HeapObject::Closure(_) => HeapTag::Closure,
             HeapObject::Condition(_) => HeapTag::Condition,
-            HeapObject::Coroutine(_) => HeapTag::Coroutine,
             HeapObject::Cell(_, _) => HeapTag::Cell,
             HeapObject::Float(_) => HeapTag::Float,
             HeapObject::NativeFn(_) => HeapTag::NativeFn,
@@ -162,7 +156,6 @@ impl HeapObject {
             HeapObject::Struct(_) => "struct",
             HeapObject::Closure(_) => "closure",
             HeapObject::Condition(_) => "condition",
-            HeapObject::Coroutine(_) => "coroutine",
             HeapObject::Cell(_, _) => "cell",
             HeapObject::Float(_) => "float",
             HeapObject::NativeFn(_) => "native-function",
@@ -191,7 +184,6 @@ impl std::fmt::Debug for HeapObject {
             HeapObject::Struct(_) => write!(f, "<struct>"),
             HeapObject::Closure(_) => write!(f, "<closure>"),
             HeapObject::Condition(c) => write!(f, "<condition:{}>", c.exception_id),
-            HeapObject::Coroutine(_) => write!(f, "<coroutine>"),
             HeapObject::Cell(_, _) => write!(f, "<cell>"),
             HeapObject::Float(n) => write!(f, "{}", n),
             HeapObject::NativeFn(_) => write!(f, "<native-fn>"),

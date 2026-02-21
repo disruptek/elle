@@ -62,7 +62,7 @@ Unsupported (returns JitError::UnsupportedInstruction):
 - Exception handling: PushHandler, PopHandler, Throw, CheckException,
   MatchException, BindException, LoadException, ClearException, ReraiseException
   (effect system prevents pure functions from using these)
-- Coroutine: LoadResumeValue, Yield
+- Fiber/yield: LoadResumeValue, Yield
 
 ## Files
 

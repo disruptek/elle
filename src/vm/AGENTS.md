@@ -10,7 +10,7 @@ Execute bytecode instructions. Manage:
 - Call frames and stack traces
 - Closure environments
 - Exception handlers
-- Coroutine state
+- Fiber state
 
 Does NOT:
 - Compile code (that's `compiler/`, `hir/`, `lir/`)
@@ -54,8 +54,8 @@ Result<Value, String>  ← translation boundary
 Internal VM methods return `SignalBits` instead of `Result<VmResult, String>`:
 - `SIG_OK` (0): Normal completion. Value in `fiber.signal`.
 - `SIG_ERROR` (1): Exception. Exception in `fiber.current_exception`.
-- `SIG_YIELD` (2): Coroutine yield. Value in `fiber.signal`, continuation in `fiber.continuation`.
-- `SIG_RESUME` (8): VM-internal. Coroutine primitive requests VM-side execution.
+- `SIG_YIELD` (2): Fiber yield. Value in `fiber.signal`, continuation in `fiber.continuation`.
+- `SIG_RESUME` (8): VM-internal. Fiber primitive requests VM-side execution.
 
 The public `execute_bytecode` method is the translation boundary — it converts
 `SignalBits` to `Result<Value, String>` for external callers.
@@ -70,14 +70,10 @@ dispatches the return signal in `handle_primitive_signal()` (`call.rs`):
 - `SIG_OK` → push value to stack
 - `SIG_ERROR` → extract `Condition` from value, set `fiber.current_exception`
 - `SIG_YIELD` → store in `fiber.signal`, return yield
-- `SIG_RESUME` → dispatch to coroutine or fiber handler
+- `SIG_RESUME` → dispatch to fiber handler
 
-Coroutine primitives (`coroutine-resume`, `yield-from`, `coroutine-next`) set a
-`ResumeOp` on the coroutine and return `(SIG_RESUME, coroutine_value)`. The VM
-reads and clears the `ResumeOp` in the SIG_RESUME handler, then performs the
-actual bytecode execution.
-
-Fiber primitives (`fiber/resume`) return `(SIG_RESUME, fiber_value)`. The VM
+All SIG_RESUME primitives (including coroutine wrappers) return
+`(SIG_RESUME, fiber_value)`. The VM
 swaps the child fiber into `vm.fiber` via `std::mem::swap`, executes the child,
 then swaps back. The child's `saved_context` stores bytecode/constants/env/IP
 for resumption after signals. The dispatch loop saves the IP into
@@ -107,18 +103,11 @@ for resumption after signals. The dispatch loop saves the IP into
 5. **Exception handlers are a stack.** `PushHandler` adds, `PopHandler` removes.
    On exception, unwind to handler's stack_depth and jump to handler_offset.
 
-6. **Coroutines use first-class continuations.** On yield, a `ContinuationFrame`
+6. **Yield uses first-class continuations.** On yield, a `ContinuationFrame`
    captures bytecode, constants, env, IP, stack, and exception handler state.
    When yield propagates through Call instructions, each caller's frame is
    appended to form a chain. `resume_continuation` replays frames from
    innermost to outermost, restoring handler state for each frame.
-
-   **yield-from delegation**: The `Coroutine` struct has a `delegate` field
-   (`Option<Rc<RefCell<Coroutine>>>`). When set, `coroutine-resume` forwards
-   resume values to the delegate coroutine instead of the outer one. This
-   enables transparent delegation where an outer coroutine can yield all
-   values from an inner coroutine. When the delegate completes, control
-   returns to the outer coroutine.
 
 7. **VM bugs panic, user errors set exceptions.** Instruction handlers return
    `()` (not `Result`). VM bugs (stack underflow, bad bytecode) panic
@@ -132,7 +121,7 @@ for resumption after signals. The dispatch loop saves the IP into
 
 | Field | Type | Purpose |
 |-------|-------|---------|
-| `fiber` | `Fiber` | Root fiber: stack, call frames, exception state, coroutine state |
+| `fiber` | `Fiber` | Root fiber: stack, call frames, exception state |
 | `globals` | `Vec<Value>` | Global bindings by SymbolId |
 | `jit_cache` | `HashMap<*const u8, Rc<JitCode>>` | JIT code cache |
 | `scope_stack` | `ScopeStack` | Runtime scope stack |
@@ -147,11 +136,8 @@ for resumption after signals. The dispatch loop saves the IP into
 | `exception_handlers` | `SmallVec<[ExceptionHandler; 2]>` | Active handlers |
 | `current_exception` | `Option<Rc<Condition>>` | Exception being handled |
 | `handling_exception` | `bool` | In exception handler code |
-| `coroutine_stack` | `Vec<Rc<RefCell<Coroutine>>>` | Active coroutines |
-| `pending_yield` | `Option<Value>` | Pending yield from delegation |
-| `pending_tail_call` | `Option<(bytecode, constants, env)>` | Deferred tail call |
 | `signal` | `Option<(SignalBits, Value)>` | Signal value from execution |
-| `continuation` | `Option<Value>` | Continuation on yield (temporary, Step 8 removes) |
+| `continuation` | `Option<Value>` | Continuation on yield (for yield-through-calls) |
 
 ## Exception hierarchy
 
@@ -171,7 +157,7 @@ Hierarchy data and `is_exception_subclass(child, parent)` live in
 
 ## Continuation mechanism
 
-When a coroutine yields:
+When a fiber yields (via the yield instruction):
 
 1. **Yield instruction** captures innermost frame: bytecode, constants, env,
    IP (after yield), stack, exception_handlers, handling_exception
@@ -196,9 +182,9 @@ Exception handling across resume:
 |------|-------|---------|
 | `mod.rs` | ~350 | VM struct, VmResult, public interface |
 | `dispatch.rs` | ~556 | Main execution loop, instruction dispatch |
-| `call.rs` | ~550 | Call, TailCall, Return, exception handling, SIG_RESUME handler |
-| `execute.rs` | ~300 | Helper functions for instruction execution |
-| `core.rs` | ~590 | `resume_continuation`, continuation replay |
+| `call.rs` | ~880 | Call, TailCall, Return, exception handling, SIG_RESUME fiber handler |
+| `execute.rs` | ~160 | Helper functions for instruction execution |
+| `core.rs` | ~460 | `resume_continuation`, continuation replay |
 | `stack.rs` | ~100 | Stack operations: LoadConst, Pop, Dup |
 | `variables.rs` | ~150 | LoadGlobal, StoreGlobal, LoadUpvalue, etc. |
 | `control.rs` | ~100 | Jump, JumpIfFalse, Return |

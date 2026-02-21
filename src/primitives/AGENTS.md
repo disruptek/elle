@@ -33,14 +33,10 @@ All primitives use a single unified type. No primitive has VM access.
 Return values:
 - `(SIG_OK, value)` — success, push value onto stack
 - `(SIG_ERROR, Value::condition(cond))` — error, set `fiber.current_exception`
-- `(SIG_RESUME, coroutine_value)` — coroutine operation, VM handles execution
 - `(SIG_RESUME, fiber_value)` — fiber resume, VM handles fiber swap
 
-Coroutine primitives (`coroutine-resume`, `yield-from`, `coroutine-next`)
-set a `ResumeOp` on the coroutine before returning SIG_RESUME. The VM's
-SIG_RESUME handler reads the op and performs the actual execution.
-
-Fiber primitives (`fiber/resume`) return SIG_RESUME with the fiber value.
+All SIG_RESUME primitives (including coroutine wrappers) return
+`(SIG_RESUME, fiber_value)`. Fiber primitives (`fiber/resume`) return SIG_RESUME with the fiber value.
 The VM swaps the child fiber into `vm.fiber`, executes it, then swaps back.
 `fiber/signal` returns the signal bits directly — the VM's catch-all handler
 stores them in `fiber.signal` and suspends the fiber.
@@ -77,7 +73,7 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 2. **All primitives return `(SignalBits, Value)`.** No exceptions. Errors are
    signaled via SIG_ERROR with a Condition value.
 
-3. **No primitive has VM access.** Operations that need the VM (coroutine
+3. **No primitive has VM access.** Operations that need the VM (fiber
    execution) return SIG_RESUME and let the VM dispatch loop handle it.
 
 4. **Symbol table pointers are set before use.** Some primitives (macros)
@@ -103,7 +99,7 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 | `type_check.rs` | `nil?`, `pair?`, `number?`, `string?`, etc. |
 | `higher_order.rs` | `map`, `filter`, `fold`, `apply` |
 | `concurrency.rs` | `spawn`, `join`, `channel`, `send`, `receive` |
-| `coroutines.rs` | `make-coroutine`, `coroutine-resume`, `coroutine-done?`, `yield-from`, `coroutine-next` |
+| `coroutines.rs` | `make-coroutine`, `coroutine-resume`, `coroutine-done?`, `coroutine-next` (fiber wrappers) |
 | `fibers.rs` | `fiber/new`, `fiber/resume`, `fiber/signal`, `fiber/status`, `fiber/value`, `fiber/bits`, `fiber/mask`, `fiber?` |
 | `exception.rs` | `throw`, `try`, exception utilities |
 | `macros.rs` | `defmacro` (compile-time; `macro?` and `expand-macro` are now Expander operations) |

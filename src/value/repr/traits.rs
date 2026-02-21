@@ -45,12 +45,6 @@ impl PartialEq for Value {
                 // Condition comparison
                 (HeapObject::Condition(cond1), HeapObject::Condition(cond2)) => cond1 == cond2,
 
-                // Coroutine comparison (compare by reference)
-                (HeapObject::Coroutine(co1), HeapObject::Coroutine(co2)) => {
-                    // Coroutines are compared by reference since they have mutable state
-                    std::ptr::eq(co1 as *const _, co2 as *const _)
-                }
-
                 // Cell comparison (compare contents)
                 (HeapObject::Cell(c1, _), HeapObject::Cell(c2, _)) => *c1.borrow() == *c2.borrow(),
 

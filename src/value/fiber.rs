@@ -6,7 +6,7 @@
 
 use crate::value::closure::Closure;
 use crate::value::continuation::ExceptionHandler;
-use crate::value::{Condition, Coroutine, Value};
+use crate::value::{Condition, Value};
 use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -101,7 +101,7 @@ pub struct CallFrame {
 /// The fiber: an independent execution context.
 ///
 /// Holds all per-execution state that was previously on the VM struct:
-/// operand stack, call frames, exception handlers, coroutine state.
+/// operand stack, call frames, exception handlers.
 /// The VM retains only global/shared state (globals, modules, JIT cache, FFI).
 pub struct Fiber {
     /// Operand stack (temporaries). SmallVec avoids heap allocation for
@@ -145,12 +145,9 @@ pub struct Fiber {
     pub current_exception: Option<Rc<Condition>>,
     /// True if we're currently in exception handler code
     pub handling_exception: bool,
-    /// Stack of active coroutines (temporary, until coroutines are replaced by fibers)
-    pub coroutine_stack: Vec<Rc<RefCell<Coroutine>>>,
-    /// Pending yield value from yield-from delegation
-    pub pending_yield: Option<Value>,
-    /// FIXME: Remove in Step 8 when fibers replace continuations.
-    /// Temporary storage for the continuation value on yield.
+    /// Storage for the continuation value on yield.
+    /// Used by the yield instruction to capture the call chain so
+    /// yield-through-nested-calls can resume from the exact point.
     pub continuation: Option<Value>,
     /// When true, the VM wraps the resume result in a (value . done?) pair.
     /// Set by coroutine-next, cleared by the VM after wrapping.
@@ -177,8 +174,6 @@ impl Fiber {
             exception_handlers: SmallVec::new(),
             current_exception: None,
             handling_exception: false,
-            coroutine_stack: Vec::new(),
-            pending_yield: None,
             continuation: None,
             wrap_next: false,
         }

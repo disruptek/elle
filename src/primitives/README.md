@@ -34,8 +34,8 @@ fn prim_add(args: &[Value]) -> (SignalBits, Value) {
 }
 ```
 
-No primitive has VM access. Operations that formerly needed the VM
-(coroutine execution) return `(SIG_RESUME, coroutine_value)` and the
+No primitive has VM access. Operations that need the VM
+(fiber execution) return `(SIG_RESUME, fiber_value)` and the
 VM's dispatch loop handles the actual execution.
 
 ## Adding a New Primitive

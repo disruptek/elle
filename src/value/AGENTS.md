@@ -5,7 +5,7 @@ Runtime value representation using NaN-boxing.
 ## Responsibility
 
 - Define the `Value` type (NaN-boxed 8-byte representation)
-- Provide heap-allocated types (Closure, Coroutine, Cons, etc.)
+- Provide heap-allocated types (Closure, Fiber, Cons, etc.)
 - Handle value display and thread-safe transfer
 
 ## Submodules
@@ -19,7 +19,6 @@ Runtime value representation using NaN-boxing.
 | `repr/tests.rs` | NaN-boxing tests |
 | `types.rs` | `Arity`, `SymbolId`, `NativeFn`, `TableKey` |
 | `closure.rs` | `Closure` struct with bytecode, env, and `location_map` |
-| `coroutine.rs` | `Coroutine`, `CoroutineState`, `ResumeOp` for suspendable computation |
 | `fiber.rs` | `Fiber`, `Frame`, `FiberStatus`, `SignalBits` for fiber execution contexts |
 | `continuation.rs` | `ContinuationData`, `ContinuationFrame` for first-class continuations |
 | `condition.rs` | `Condition` for the condition/restart system |
@@ -35,7 +34,6 @@ Runtime value representation using NaN-boxing.
 |------|----------|---------|
 | `Value` | `repr.rs` | NaN-boxed 8-byte value (Copy) |
 | `Closure` | `closure.rs` | Bytecode + env + arity + effect + location_map |
-| `Coroutine` | `coroutine.rs` | Suspendable computation with continuation (deprecated, replaced by Fiber) |
 | `Fiber` | `fiber.rs` | Independent execution context with stack, frames, signal mask |
 | `Frame` | `fiber.rs` | Single call frame (closure + ip + base) |
 | `FiberStatus` | `fiber.rs` | Fiber lifecycle: New, Alive, Suspended, Dead, Error |
@@ -67,7 +65,7 @@ Runtime value representation using NaN-boxing.
 NaN-boxing uses the NaN space of IEEE 754 doubles:
 
 - **Immediate**: nil, bool, int (i48), symbol, keyword, float
-- **Heap pointer**: cons, vector, table, closure, coroutine, cell, etc.
+- **Heap pointer**: cons, vector, table, closure, fiber, cell, etc.
 
 Create values via methods: `Value::int(42)`, `Value::cons(a, b)`,
 `Value::closure(c)`. Don't construct enum variants directly.
@@ -84,8 +82,7 @@ Create values via methods: `Value::int(42)`, `Value::cons(a, b)`,
 | `repr/tests.rs` | ~100 | NaN-boxing tests |
 | `types.rs` | ~150 | Arity, SymbolId, NativeFn, etc. |
 | `closure.rs` | ~70 | Closure struct |
-| `coroutine.rs` | ~100 | Coroutine, CoroutineState |
-| `fiber.rs` | ~260 | Fiber, Frame, FiberStatus, SignalBits |
+| `fiber.rs` | ~370 | Fiber, Frame, FiberStatus, SignalBits |
 | `continuation.rs` | ~200 | ContinuationData, ContinuationFrame |
 | `condition.rs` | ~50 | Condition type |
 | `ffi.rs` | ~50 | LibHandle, CHandle |

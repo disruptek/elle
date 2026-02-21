@@ -173,15 +173,6 @@ impl Value {
         alloc(HeapObject::Cell(RefCell::new(value), true))
     }
 
-    /// Create a coroutine value.
-    #[inline]
-    pub fn coroutine(c: crate::value::heap::Coroutine) -> Self {
-        use crate::value::heap::{alloc, HeapObject};
-        use std::cell::RefCell;
-        use std::rc::Rc;
-        alloc(HeapObject::Coroutine(Rc::new(RefCell::new(c))))
-    }
-
     /// Create a native function value.
     #[inline]
     pub fn native_fn(f: crate::value::heap::NativeFn) -> Self {

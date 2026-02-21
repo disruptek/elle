@@ -145,13 +145,6 @@ impl Value {
         self.heap_tag() == Some(HeapTag::Cell)
     }
 
-    /// Check if this is a coroutine.
-    #[inline]
-    pub fn is_coroutine(&self) -> bool {
-        use crate::value::heap::HeapTag;
-        self.heap_tag() == Some(HeapTag::Coroutine)
-    }
-
     /// Check if this is a continuation.
     #[inline]
     pub fn is_continuation(&self) -> bool {
@@ -324,21 +317,6 @@ impl Value {
         }
         match unsafe { deref(*self) } {
             HeapObject::Condition(c) => Some(c),
-            _ => None,
-        }
-    }
-
-    /// Extract as coroutine if this is a coroutine.
-    #[inline]
-    pub fn as_coroutine(
-        &self,
-    ) -> Option<&std::rc::Rc<std::cell::RefCell<crate::value::Coroutine>>> {
-        use crate::value::heap::{deref, HeapObject};
-        if !self.is_heap() {
-            return None;
-        }
-        match unsafe { deref(*self) } {
-            HeapObject::Coroutine(c) => Some(c),
             _ => None,
         }
     }

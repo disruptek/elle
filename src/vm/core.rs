@@ -1,9 +1,8 @@
 use crate::error::{LocationMap, StackFrame};
 use crate::ffi::FFISubsystem;
 use crate::value::fiber::CallFrame;
-use crate::value::{Closure, Coroutine, Fiber, SignalBits, Value, SIG_OK, SIG_YIELD};
+use crate::value::{Closure, Fiber, SignalBits, Value, SIG_OK, SIG_YIELD};
 use crate::vm::scope::ScopeStack;
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -296,36 +295,6 @@ impl VM {
         &mut self.ffi
     }
 
-    /// Enter a coroutine context (push onto coroutine stack)
-    pub fn enter_coroutine(&mut self, co: Rc<RefCell<Coroutine>>) {
-        self.fiber.coroutine_stack.push(co);
-    }
-
-    /// Exit a coroutine context (pop from coroutine stack)
-    pub fn exit_coroutine(&mut self) -> Option<Rc<RefCell<Coroutine>>> {
-        self.fiber.coroutine_stack.pop()
-    }
-
-    /// Get the currently executing coroutine, if any
-    pub fn current_coroutine(&self) -> Option<&Rc<RefCell<Coroutine>>> {
-        self.fiber.coroutine_stack.last()
-    }
-
-    /// Check if we're currently inside a coroutine
-    pub fn in_coroutine(&self) -> bool {
-        !self.fiber.coroutine_stack.is_empty()
-    }
-
-    /// Set a pending yield value (used by yield-from delegation)
-    pub fn set_pending_yield(&mut self, value: Value) {
-        self.fiber.pending_yield = Some(value);
-    }
-
-    /// Take the pending yield value, if any
-    pub fn take_pending_yield(&mut self) -> Option<Value> {
-        self.fiber.pending_yield.take()
-    }
-
     /// Resume execution from a saved continuation.
     ///
     /// A continuation captures the full chain of frames from a yield point
@@ -427,97 +396,17 @@ impl Default for VM {
 }
 
 #[cfg(test)]
-mod coroutine_vm_tests {
+mod tests {
     use super::*;
-    use crate::effects::Effect;
-    use crate::value::{Arity, Closure};
-
-    #[test]
-    fn test_vm_coroutine_stack_operations() {
-        let mut vm = VM::new();
-
-        // Initially not in coroutine
-        assert!(!vm.in_coroutine());
-        assert!(vm.current_coroutine().is_none());
-
-        // Create a test coroutine
-        let closure = Rc::new(Closure {
-            bytecode: Rc::new(vec![]),
-            arity: Arity::Exact(0),
-            env: Rc::new(vec![]),
-            num_locals: 0,
-            num_captures: 0,
-            constants: Rc::new(vec![]),
-            effect: Effect::none(),
-            cell_params_mask: 0,
-            symbol_names: Rc::new(std::collections::HashMap::new()),
-            location_map: Rc::new(crate::error::LocationMap::new()),
-            jit_code: None,
-            lir_function: None,
-        });
-        let co = Rc::new(RefCell::new(Coroutine::new(closure)));
-
-        // Enter coroutine
-        vm.enter_coroutine(co.clone());
-        assert!(vm.in_coroutine());
-        assert!(vm.current_coroutine().is_some());
-
-        // Exit coroutine
-        let exited = vm.exit_coroutine();
-        assert!(exited.is_some());
-        assert!(!vm.in_coroutine());
-    }
-
-    #[test]
-    fn test_vm_nested_coroutines() {
-        let mut vm = VM::new();
-
-        let make_co = || {
-            let closure = Rc::new(Closure {
-                bytecode: Rc::new(vec![]),
-                arity: Arity::Exact(0),
-                env: Rc::new(vec![]),
-                num_locals: 0,
-                num_captures: 0,
-                constants: Rc::new(vec![]),
-                effect: Effect::none(),
-                cell_params_mask: 0,
-                symbol_names: Rc::new(std::collections::HashMap::new()),
-                location_map: Rc::new(crate::error::LocationMap::new()),
-                jit_code: None,
-                lir_function: None,
-            });
-            Rc::new(RefCell::new(Coroutine::new(closure)))
-        };
-
-        let co1 = make_co();
-        let co2 = make_co();
-
-        vm.enter_coroutine(co1.clone());
-        vm.enter_coroutine(co2.clone());
-
-        // Should be at co2
-        assert!(Rc::ptr_eq(vm.current_coroutine().unwrap(), &co2));
-
-        vm.exit_coroutine();
-
-        // Should be at co1
-        assert!(Rc::ptr_eq(vm.current_coroutine().unwrap(), &co1));
-
-        vm.exit_coroutine();
-        assert!(!vm.in_coroutine());
-    }
 
     #[test]
     fn test_signal_bits() {
         use crate::value::{SIG_ERROR, SIG_OK, SIG_YIELD};
 
-        // Test signal bit values
         assert_eq!(SIG_OK, 0);
         assert_eq!(SIG_ERROR, 1);
         assert_eq!(SIG_YIELD, 2);
 
-        // Test signal combinations
         let mask = SIG_ERROR | SIG_YIELD;
         assert_ne!(mask & SIG_ERROR, 0);
         assert_ne!(mask & SIG_YIELD, 0);

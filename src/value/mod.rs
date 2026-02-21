@@ -6,7 +6,6 @@
 pub mod closure;
 pub mod condition;
 pub mod continuation;
-pub mod coroutine;
 pub mod display;
 pub mod ffi;
 pub mod fiber;
@@ -34,9 +33,8 @@ pub use continuation::{ContinuationData, ContinuationFrame, ExceptionHandler};
 // Export core types
 pub use types::{Arity, NativeFn, SymbolId, TableKey};
 
-// Export closure, coroutine, and fiber types
+// Export closure and fiber types
 pub use closure::Closure;
-pub use coroutine::{Coroutine, CoroutineState, ResumeOp};
 pub use fiber::{
     CallFrame, Fiber, FiberStatus, Frame, SavedContext, SignalBits, SIG_DEBUG, SIG_ERROR, SIG_OK,
     SIG_RESUME, SIG_YIELD,

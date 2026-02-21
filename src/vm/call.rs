@@ -3,15 +3,12 @@
 //! These are the most complex instructions in the VM, handling:
 //! - Native function calls (unified signal-based dispatch)
 //! - Closure calls with environment setup
-//! - Coroutine-aware execution
+//! - Fiber-aware execution (signal propagation, yield-through-calls)
 //! - Tail call optimization
 //! - JIT compilation and dispatch (when jit feature is enabled)
 
 use crate::value::fiber::{FiberStatus, SavedContext};
-use crate::value::{
-    Condition, CoroutineState, Fiber, ResumeOp, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_RESUME,
-    SIG_YIELD,
-};
+use crate::value::{Condition, Fiber, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_RESUME, SIG_YIELD};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -198,117 +195,62 @@ impl VM {
             // Build the new environment
             let new_env_rc = self.build_closure_env(closure, &args);
 
-            // Execute the closure (interpreter path)
-            if self.in_coroutine() {
-                let bits = self.execute_bytecode_coroutine(
-                    &closure.bytecode,
-                    &closure.constants,
-                    Some(&new_env_rc),
-                );
+            // Execute the closure using execute_bytecode_coroutine which
+            // saves/restores the caller's stack and propagates signals.
+            // Essential for fiber/signal propagation and yield-through-nested-calls.
+            let bits = self.execute_bytecode_coroutine(
+                &closure.bytecode,
+                &closure.constants,
+                Some(&new_env_rc),
+            );
 
-                self.fiber.call_depth -= 1;
+            self.fiber.call_depth -= 1;
 
-                match bits {
-                    SIG_OK => {
-                        let (_, value) = self.fiber.signal.take().unwrap();
-                        self.fiber.stack.push(value);
-                    }
-                    SIG_YIELD => {
-                        // Chain continuation frames if yield instruction was
-                        // used (continuation exists). If fiber/signal was used
-                        // (no continuation), just propagate the signal.
-                        if let Some(continuation) = self.fiber.continuation.take() {
-                            let (_, value) = self.fiber.signal.take().unwrap();
-
-                            let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
-
-                            let caller_frame = crate::value::ContinuationFrame {
-                                bytecode: Rc::new(bytecode.to_vec()),
-                                constants: Rc::new(constants.to_vec()),
-                                env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
-                                ip: *ip,
-                                stack: caller_stack,
-                                exception_handlers: self.fiber.exception_handlers.clone(),
-                                handling_exception: self.fiber.handling_exception,
-                            };
-
-                            let mut cont_data = continuation
-                                .as_continuation()
-                                .expect("Yielded continuation must be a continuation value")
-                                .as_ref()
-                                .clone();
-                            cont_data.append_frame(caller_frame);
-
-                            let new_continuation = Value::continuation(cont_data);
-                            self.fiber.signal = Some((SIG_YIELD, value));
-                            self.fiber.continuation = Some(new_continuation);
-                        }
-                        return Some(SIG_YIELD);
-                    }
-                    _ => {
-                        // Error or other signal — propagate
-                        return Some(bits);
-                    }
+            match bits {
+                SIG_OK => {
+                    let (_, value) = self.fiber.signal.take().unwrap();
+                    self.fiber.stack.push(value);
                 }
-            } else {
-                // Use execute_bytecode_coroutine to save/restore the caller's
-                // stack and propagate signals. Essential for both fibers
-                // (fiber/signal propagation) and yield-through-nested-calls.
-                let bits = self.execute_bytecode_coroutine(
-                    &closure.bytecode,
-                    &closure.constants,
-                    Some(&new_env_rc),
-                );
-
-                self.fiber.call_depth -= 1;
-
-                match bits {
-                    SIG_OK => {
+                SIG_YIELD => {
+                    // Yield propagated from a nested call. Two cases:
+                    //
+                    // 1. yield instruction: continuation exists — append the
+                    //    caller's frame so resume replays the full call stack.
+                    //
+                    // 2. fiber/signal: no continuation — just propagate the
+                    //    signal. The fiber uses SavedContext for resumption,
+                    //    which resumes from the fiber body level (intermediate
+                    //    frames are abandoned).
+                    if let Some(continuation) = self.fiber.continuation.take() {
                         let (_, value) = self.fiber.signal.take().unwrap();
-                        self.fiber.stack.push(value);
-                    }
-                    SIG_YIELD => {
-                        // Yield propagated from a nested call. Two cases:
-                        //
-                        // 1. yield instruction: continuation exists — append the
-                        //    caller's frame so resume replays the full call stack.
-                        //
-                        // 2. fiber/signal: no continuation — just propagate the
-                        //    signal. The fiber uses SavedContext for resumption,
-                        //    which resumes from the fiber body level (intermediate
-                        //    frames are abandoned).
-                        if let Some(continuation) = self.fiber.continuation.take() {
-                            let (_, value) = self.fiber.signal.take().unwrap();
 
-                            let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
-                            let caller_frame = crate::value::ContinuationFrame {
-                                bytecode: Rc::new(bytecode.to_vec()),
-                                constants: Rc::new(constants.to_vec()),
-                                env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
-                                ip: *ip,
-                                stack: caller_stack,
-                                exception_handlers: self.fiber.exception_handlers.clone(),
-                                handling_exception: self.fiber.handling_exception,
-                            };
+                        let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
+                        let caller_frame = crate::value::ContinuationFrame {
+                            bytecode: Rc::new(bytecode.to_vec()),
+                            constants: Rc::new(constants.to_vec()),
+                            env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
+                            ip: *ip,
+                            stack: caller_stack,
+                            exception_handlers: self.fiber.exception_handlers.clone(),
+                            handling_exception: self.fiber.handling_exception,
+                        };
 
-                            let mut cont_data = continuation
-                                .as_continuation()
-                                .expect("Yielded continuation must be a continuation value")
-                                .as_ref()
-                                .clone();
-                            cont_data.append_frame(caller_frame);
+                        let mut cont_data = continuation
+                            .as_continuation()
+                            .expect("Yielded continuation must be a continuation value")
+                            .as_ref()
+                            .clone();
+                        cont_data.append_frame(caller_frame);
 
-                            let new_continuation = Value::continuation(cont_data);
-                            self.fiber.signal = Some((SIG_YIELD, value));
-                            self.fiber.continuation = Some(new_continuation);
-                        }
-                        // In both cases, propagate SIG_YIELD to the caller.
-                        return Some(SIG_YIELD);
+                        let new_continuation = Value::continuation(cont_data);
+                        self.fiber.signal = Some((SIG_YIELD, value));
+                        self.fiber.continuation = Some(new_continuation);
                     }
-                    _ => {
-                        // Other signal (error, etc.) — propagate to caller.
-                        return Some(bits);
-                    }
+                    return Some(SIG_YIELD);
+                }
+                _ => {
+                    // Other signal (error, etc.) — propagate to caller.
+                    return Some(bits);
                 }
             }
             return None;
@@ -495,51 +437,6 @@ impl VM {
         Rc::new(new_env)
     }
 
-    /// Handle a pending yield after a primitive call that triggered yield-from.
-    fn handle_pending_yield_after_call(
-        &mut self,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: usize,
-        yielded_value: Value,
-    ) -> Option<SignalBits> {
-        let coroutine = match self.current_coroutine() {
-            Some(co) => co.clone(),
-            None => {
-                let cond = Condition::error("pending yield outside of coroutine");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
-                return Some(SIG_ERROR);
-            }
-        };
-
-        let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
-
-        let frame = crate::value::ContinuationFrame {
-            bytecode: Rc::new(bytecode.to_vec()),
-            constants: Rc::new(constants.to_vec()),
-            env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
-            ip,
-            stack: saved_stack,
-            exception_handlers: self.fiber.exception_handlers.clone(),
-            handling_exception: self.fiber.handling_exception,
-        };
-
-        let cont_data = crate::value::ContinuationData::new(frame);
-        let continuation = Value::continuation(cont_data);
-
-        {
-            let mut co = coroutine.borrow_mut();
-            co.state = CoroutineState::Suspended;
-            co.yielded_value = Some(yielded_value);
-        }
-
-        self.fiber.signal = Some((SIG_YIELD, yielded_value));
-        self.fiber.continuation = Some(continuation);
-        Some(SIG_YIELD)
-    }
-
     // ── Primitive signal dispatch ───────────────────────────────────
 
     /// Handle signal bits returned by a primitive in a Call position.
@@ -558,16 +455,6 @@ impl VM {
         match bits {
             SIG_OK => {
                 self.fiber.stack.push(value);
-                // Check for pending yield from yield-from delegation
-                if let Some(yielded_value) = self.take_pending_yield() {
-                    return self.handle_pending_yield_after_call(
-                        bytecode,
-                        constants,
-                        closure_env,
-                        *ip,
-                        yielded_value,
-                    );
-                }
                 None
             }
             SIG_ERROR => {
@@ -585,12 +472,8 @@ impl VM {
                 None // let the dispatch loop's interrupt handler deal with it
             }
             SIG_RESUME => {
-                // Primitive returned SIG_RESUME — dispatch to coroutine or fiber handler
-                if value.is_fiber() {
-                    self.handle_fiber_resume_signal(value, bytecode, constants, closure_env, ip)
-                } else {
-                    self.handle_coroutine_resume_signal(value, bytecode, constants, closure_env, ip)
-                }
+                // Primitive returned SIG_RESUME — dispatch to fiber handler
+                self.handle_fiber_resume_signal(value, bytecode, constants, closure_env, ip)
             }
             _ => {
                 // Any other signal (SIG_YIELD, user-defined)
@@ -625,579 +508,14 @@ impl VM {
                 SIG_OK
             }
             SIG_RESUME => {
-                // Primitive in tail position — dispatch to coroutine or fiber handler
-                if value.is_fiber() {
-                    self.handle_fiber_resume_signal_tail(value)
-                } else {
-                    self.handle_coroutine_resume_signal_tail(value)
-                }
+                // Primitive in tail position — dispatch to fiber handler
+                self.handle_fiber_resume_signal_tail(value)
             }
             _ => {
                 self.fiber.signal = Some((bits, value));
                 bits
             }
         }
-    }
-
-    /// Handle SIG_RESUME from a coroutine primitive in tail position.
-    ///
-    /// Similar to `handle_coroutine_resume_signal` but stores the result
-    /// in `fiber.signal` instead of pushing to the stack.
-    fn handle_coroutine_resume_signal_tail(&mut self, coroutine_value: Value) -> SignalBits {
-        let co = match coroutine_value.as_coroutine() {
-            Some(co) => co.clone(),
-            None => {
-                let cond = Condition::error("SIG_RESUME with non-coroutine value");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_OK, Value::NIL));
-                return SIG_OK;
-            }
-        };
-
-        let op = match co.borrow_mut().resume_op.take() {
-            Some(op) => op,
-            None => {
-                let cond = Condition::error("SIG_RESUME with no resume_op set");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_OK, Value::NIL));
-                return SIG_OK;
-            }
-        };
-
-        // For tail position, we use a simplified path: execute the coroutine
-        // and store the result directly in fiber.signal.
-        // We use empty bytecode/constants/env since we won't need pending yield
-        // propagation (we're returning from this frame anyway).
-        let dummy_bytecode: &[u8] = &[];
-        let dummy_constants: &[Value] = &[];
-        let dummy_env: Option<&Rc<Vec<Value>>> = None;
-        let mut dummy_ip: usize = 0;
-
-        match op {
-            ResumeOp::Resume(resume_value) => {
-                let result = self.do_coroutine_resume(
-                    &co,
-                    resume_value,
-                    dummy_bytecode,
-                    dummy_constants,
-                    dummy_env,
-                    &mut dummy_ip,
-                );
-                // do_coroutine_resume pushes to stack — pop and store in signal
-                if result.is_some() {
-                    // Yield propagation — pass through
-                    return result.unwrap_or(SIG_OK);
-                }
-                let value = self.fiber.stack.pop().unwrap_or(Value::NIL);
-                if self.fiber.current_exception.is_some() {
-                    self.fiber.signal = Some((SIG_OK, Value::NIL));
-                    SIG_OK
-                } else {
-                    self.fiber.signal = Some((SIG_OK, value));
-                    SIG_OK
-                }
-            }
-            ResumeOp::YieldFrom => {
-                // yield-from in tail position is unusual but possible
-                let result = self.do_yield_from(
-                    &co,
-                    coroutine_value,
-                    dummy_bytecode,
-                    dummy_constants,
-                    dummy_env,
-                    &mut dummy_ip,
-                );
-                if result.is_some() {
-                    return result.unwrap_or(SIG_OK);
-                }
-                let value = self.fiber.stack.pop().unwrap_or(Value::NIL);
-                self.fiber.signal = Some((SIG_OK, value));
-                SIG_OK
-            }
-            ResumeOp::Next => {
-                let result = self.do_coroutine_next(
-                    &co,
-                    dummy_bytecode,
-                    dummy_constants,
-                    dummy_env,
-                    &mut dummy_ip,
-                );
-                if result.is_some() {
-                    return result.unwrap_or(SIG_OK);
-                }
-                let value = self.fiber.stack.pop().unwrap_or(Value::NIL);
-                self.fiber.signal = Some((SIG_OK, value));
-                SIG_OK
-            }
-        }
-    }
-
-    // ── SIG_RESUME: coroutine execution ────────────────────────────
-
-    /// Handle SIG_RESUME from a coroutine primitive.
-    ///
-    /// The coroutine's `resume_op` field tells us what to do:
-    /// - Resume: execute the coroutine (first time or subsequent)
-    /// - YieldFrom: resume sub-coroutine, set up delegation
-    /// - Next: resume and wrap result in (value . done?) pair
-    ///
-    /// Returns `None` to continue the dispatch loop (result pushed to stack),
-    /// or `Some(bits)` to exit (e.g., SIG_YIELD for yield propagation).
-    fn handle_coroutine_resume_signal(
-        &mut self,
-        coroutine_value: Value,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        let co = match coroutine_value.as_coroutine() {
-            Some(co) => co.clone(),
-            None => {
-                let cond = Condition::error("SIG_RESUME with non-coroutine value");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.stack.push(Value::NIL);
-                return None;
-            }
-        };
-
-        // Take the resume operation
-        let op = match co.borrow_mut().resume_op.take() {
-            Some(op) => op,
-            None => {
-                let cond = Condition::error("SIG_RESUME with no resume_op set");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.stack.push(Value::NIL);
-                return None;
-            }
-        };
-
-        match op {
-            ResumeOp::Resume(resume_value) => {
-                self.do_coroutine_resume(&co, resume_value, bytecode, constants, closure_env, ip)
-            }
-            ResumeOp::YieldFrom => {
-                self.do_yield_from(&co, coroutine_value, bytecode, constants, closure_env, ip)
-            }
-            ResumeOp::Next => self.do_coroutine_next(&co, bytecode, constants, closure_env, ip),
-        }
-    }
-
-    /// Execute a coroutine resume (Created or Suspended state).
-    ///
-    /// This contains the logic formerly in `prim_coroutine_resume`.
-    fn do_coroutine_resume(
-        &mut self,
-        co: &Rc<std::cell::RefCell<crate::value::Coroutine>>,
-        resume_value: Value,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        // Check for yield-from delegation first
-        {
-            let borrowed = co.borrow();
-            if let Some(delegate_val) = borrowed.delegate {
-                drop(borrowed);
-                return self.do_delegated_resume(
-                    co,
-                    delegate_val,
-                    resume_value,
-                    bytecode,
-                    constants,
-                    closure_env,
-                    ip,
-                );
-            }
-        }
-
-        let state = {
-            let borrowed = co.borrow();
-            borrowed.state.clone()
-        };
-
-        match state {
-            CoroutineState::Created => {
-                self.do_first_resume(co, bytecode, constants, closure_env, ip)
-            }
-            CoroutineState::Suspended => {
-                self.do_subsequent_resume(co, resume_value, bytecode, constants, closure_env, ip)
-            }
-            // Running/Done/Error should have been caught by the primitive
-            _ => {
-                let cond = Condition::error("coroutine-resume: invalid state for resume");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.stack.push(Value::NIL);
-                None
-            }
-        }
-    }
-
-    /// First resume of a Created coroutine — set up env and execute bytecode.
-    fn do_first_resume(
-        &mut self,
-        co: &Rc<std::cell::RefCell<crate::value::Coroutine>>,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        let (bc, consts, env_rc) = {
-            let mut borrowed = co.borrow_mut();
-            if !borrowed.closure.effect.may_yield() {
-                eprintln!("warning: coroutine-resume: closure cannot yield; it will complete without suspending");
-            }
-            borrowed.state = CoroutineState::Running;
-
-            let bc = borrowed.closure.bytecode.clone();
-            let consts = borrowed.closure.constants.clone();
-            let closure_env_inner = borrowed.closure.env.clone();
-            let num_locals = borrowed.closure.num_locals;
-            let num_captures = borrowed.closure.num_captures;
-
-            let mut env = (*closure_env_inner).clone();
-            let num_locally_defined = num_locals.saturating_sub(num_captures);
-            for _ in env.len()..num_captures + num_locally_defined {
-                env.push(Value::local_cell(Value::EMPTY_LIST));
-            }
-            (bc, consts, Rc::new(env))
-        };
-
-        self.enter_coroutine(co.clone());
-        let bits = self.execute_bytecode_coroutine(&bc, &consts, Some(&env_rc));
-
-        // Check for pending yield from yield-from delegation
-        if let Some(yielded_value) = self.take_pending_yield() {
-            self.exit_coroutine();
-            let mut borrowed = co.borrow_mut();
-            borrowed.state = CoroutineState::Suspended;
-            borrowed.yielded_value = Some(yielded_value);
-            // Push yielded value and check for pending yield propagation
-            self.fiber.stack.push(yielded_value);
-            return self.handle_pending_yield_after_call(
-                bytecode,
-                constants,
-                closure_env,
-                *ip,
-                yielded_value,
-            );
-        }
-
-        self.exit_coroutine();
-        self.finish_coroutine_execution(co, bits, bytecode, constants, closure_env, ip)
-    }
-
-    /// Resume a Suspended coroutine using its saved continuation.
-    fn do_subsequent_resume(
-        &mut self,
-        co: &Rc<std::cell::RefCell<crate::value::Coroutine>>,
-        resume_value: Value,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        let continuation = {
-            let mut borrowed = co.borrow_mut();
-            match borrowed.saved_value_continuation.take() {
-                Some(cont) => {
-                    borrowed.state = CoroutineState::Running;
-                    cont
-                }
-                None => {
-                    let cond = Condition::error("Suspended coroutine has no saved continuation");
-                    self.fiber.current_exception = Some(Rc::new(cond));
-                    self.fiber.stack.push(Value::NIL);
-                    return None;
-                }
-            }
-        };
-
-        self.enter_coroutine(co.clone());
-        let bits = self.resume_continuation(continuation, resume_value);
-        self.exit_coroutine();
-
-        self.finish_coroutine_execution(co, bits, bytecode, constants, closure_env, ip)
-    }
-
-    /// Common post-execution logic for coroutine resume.
-    /// Handles SIG_OK (done), SIG_YIELD (suspended), and SIG_ERROR.
-    fn finish_coroutine_execution(
-        &mut self,
-        co: &Rc<std::cell::RefCell<crate::value::Coroutine>>,
-        bits: SignalBits,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        let mut borrowed = co.borrow_mut();
-        match bits {
-            SIG_OK => {
-                let (_, value) = self.fiber.signal.take().unwrap_or((SIG_OK, Value::NIL));
-                if self.fiber.current_exception.is_some() {
-                    let msg = self
-                        .fiber
-                        .current_exception
-                        .as_ref()
-                        .map(|e| e.message.clone())
-                        .unwrap_or_default();
-                    borrowed.state = CoroutineState::Error(msg);
-                    // Exception is already set — let dispatch loop handle it
-                    self.fiber.stack.push(Value::NIL);
-                    None
-                } else {
-                    borrowed.state = CoroutineState::Done;
-                    borrowed.yielded_value = Some(value);
-                    self.fiber.stack.push(value);
-                    None
-                }
-            }
-            SIG_YIELD => {
-                let (_, value) = self.fiber.signal.take().unwrap_or((SIG_YIELD, Value::NIL));
-                let continuation = self.fiber.continuation.take().unwrap();
-                borrowed.state = CoroutineState::Suspended;
-                borrowed.yielded_value = Some(value);
-                borrowed.saved_value_continuation = Some(continuation);
-                drop(borrowed);
-                // Push the yielded value as the result of coroutine-resume
-                self.fiber.stack.push(value);
-                // Check for pending yield propagation (nested coroutines)
-                if let Some(yielded_value) = self.take_pending_yield() {
-                    return self.handle_pending_yield_after_call(
-                        bytecode,
-                        constants,
-                        closure_env,
-                        *ip,
-                        yielded_value,
-                    );
-                }
-                None
-            }
-            _ => {
-                // SIG_ERROR or other
-                let msg = self
-                    .fiber
-                    .current_exception
-                    .as_ref()
-                    .map(|e| e.message.clone())
-                    .unwrap_or_else(|| "unknown error".to_string());
-                borrowed.state = CoroutineState::Error(msg.clone());
-                let cond = Condition::error(msg);
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.stack.push(Value::NIL);
-                None
-            }
-        }
-    }
-
-    /// Handle delegated resume (yield-from delegation).
-    #[allow(clippy::too_many_arguments)]
-    fn do_delegated_resume(
-        &mut self,
-        outer_co: &Rc<std::cell::RefCell<crate::value::Coroutine>>,
-        delegate_val: Value,
-        resume_value: Value,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        if let Some(delegate_co) = delegate_val.as_coroutine() {
-            // Set up the delegate for resume
-            delegate_co.borrow_mut().resume_op = Some(ResumeOp::Resume(resume_value));
-
-            // Recursively resume the delegate
-            let result = self.do_coroutine_resume(
-                delegate_co,
-                resume_value,
-                bytecode,
-                constants,
-                closure_env,
-                ip,
-            );
-
-            // Check delegate state after resume
-            let delegate_state = {
-                let borrowed = delegate_co.borrow();
-                borrowed.state.clone()
-            };
-
-            match delegate_state {
-                CoroutineState::Done => {
-                    // Delegate completed — clear delegation
-                    let delegate_value = {
-                        let borrowed = delegate_co.borrow();
-                        borrowed.yielded_value.unwrap_or(Value::NIL)
-                    };
-                    let mut outer = outer_co.borrow_mut();
-                    outer.delegate = None;
-                    // The outer coroutine should continue after yield-from.
-                    // The value is already on the stack from do_coroutine_resume.
-                    // But we need to update the outer's yielded_value too.
-                    outer.yielded_value = Some(delegate_value);
-                }
-                CoroutineState::Error(ref e) => {
-                    let mut outer = outer_co.borrow_mut();
-                    outer.delegate = None;
-                    outer.state = CoroutineState::Error(e.clone());
-                }
-                _ => {
-                    // Delegate yielded or is in another state — outer stays as-is
-                    // The yielded value is already on the stack
-                    let delegate_value = {
-                        let borrowed = delegate_co.borrow();
-                        borrowed.yielded_value.unwrap_or(Value::NIL)
-                    };
-                    let mut outer = outer_co.borrow_mut();
-                    outer.yielded_value = Some(delegate_value);
-                }
-            }
-
-            result
-        } else {
-            // Delegate is not a coroutine — clear delegation and error
-            let mut outer = outer_co.borrow_mut();
-            outer.delegate = None;
-            let cond = Condition::error("yield-from: delegate is not a coroutine");
-            self.fiber.current_exception = Some(Rc::new(cond));
-            self.fiber.stack.push(Value::NIL);
-            None
-        }
-    }
-
-    /// Handle yield-from: resume sub-coroutine, set up delegation on outer.
-    fn do_yield_from(
-        &mut self,
-        sub_co: &Rc<std::cell::RefCell<crate::value::Coroutine>>,
-        sub_co_value: Value,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        // Get the outer (current) coroutine
-        let outer_co = match self.current_coroutine() {
-            Some(co) => co.clone(),
-            None => {
-                let cond = Condition::error("yield-from: not inside a coroutine");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.stack.push(Value::NIL);
-                return None;
-            }
-        };
-
-        // Resume the sub-coroutine once to get its first value
-        sub_co.borrow_mut().resume_op = Some(ResumeOp::Resume(Value::EMPTY_LIST));
-        // Pop whatever the resume pushes — we'll handle the result ourselves
-        let stack_before = self.fiber.stack.len();
-        let _result = self.do_coroutine_resume(
-            sub_co,
-            Value::EMPTY_LIST,
-            bytecode,
-            constants,
-            closure_env,
-            ip,
-        );
-
-        // Get the value that was pushed by do_coroutine_resume
-        let result_value = if self.fiber.stack.len() > stack_before {
-            self.fiber.stack.pop().unwrap_or(Value::NIL)
-        } else {
-            Value::NIL
-        };
-
-        // Check sub-coroutine state after resume
-        let state_after = {
-            let borrowed = sub_co.borrow();
-            borrowed.state.clone()
-        };
-
-        match state_after {
-            CoroutineState::Done => {
-                // Sub-coroutine completed immediately — return its final value
-                self.fiber.stack.push(result_value);
-                None
-            }
-            CoroutineState::Suspended => {
-                // Sub-coroutine yielded — set up delegation
-                {
-                    let mut borrowed = outer_co.borrow_mut();
-                    borrowed.delegate = Some(sub_co_value);
-                }
-
-                // Trigger a yield from the outer coroutine using pending_yield
-                self.set_pending_yield(result_value);
-
-                // Push the result (will be overridden by pending yield handling)
-                self.fiber.stack.push(result_value);
-                // Check for pending yield propagation
-                if let Some(yielded_value) = self.take_pending_yield() {
-                    return self.handle_pending_yield_after_call(
-                        bytecode,
-                        constants,
-                        closure_env,
-                        *ip,
-                        yielded_value,
-                    );
-                }
-                None
-            }
-            CoroutineState::Error(e) => {
-                let cond = Condition::error(format!("yield-from: sub-coroutine errored: {}", e));
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.stack.push(Value::NIL);
-                None
-            }
-            _ => {
-                // Unexpected state
-                self.fiber.stack.push(result_value);
-                None
-            }
-        }
-    }
-
-    /// Handle coroutine-next: resume and wrap result in (value . done?) pair.
-    fn do_coroutine_next(
-        &mut self,
-        co: &Rc<std::cell::RefCell<crate::value::Coroutine>>,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        // Resume the coroutine
-        co.borrow_mut().resume_op = Some(ResumeOp::Resume(Value::EMPTY_LIST));
-        let stack_before = self.fiber.stack.len();
-        let result =
-            self.do_coroutine_resume(co, Value::EMPTY_LIST, bytecode, constants, closure_env, ip);
-
-        // If the resume caused a yield propagation, pass it through
-        if result.is_some() {
-            return result;
-        }
-
-        // Get the value that was pushed by do_coroutine_resume
-        let result_value = if self.fiber.stack.len() > stack_before {
-            self.fiber.stack.pop().unwrap_or(Value::NIL)
-        } else {
-            Value::NIL
-        };
-
-        // Check if done after resume
-        let is_done = {
-            let borrowed = co.borrow();
-            matches!(
-                borrowed.state,
-                CoroutineState::Done | CoroutineState::Error(_)
-            )
-        };
-
-        // Wrap in (value . done?) pair
-        let pair = crate::value::cons(result_value, Value::bool(is_done));
-        self.fiber.stack.push(pair);
-        None
     }
 
     // ── SIG_RESUME: fiber execution ───────────────────────────────

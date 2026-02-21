@@ -116,7 +116,7 @@ impl VM {
         bits
     }
 
-    /// Execute bytecode returning SignalBits (for coroutine execution).
+    /// Execute bytecode returning SignalBits (for fiber/closure execution).
     /// The result value is stored in `self.fiber.signal`.
     pub fn execute_bytecode_coroutine(
         &mut self,

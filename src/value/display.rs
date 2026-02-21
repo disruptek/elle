@@ -110,11 +110,6 @@ impl fmt::Display for Value {
             return write!(f, "<cell {}>", val);
         }
 
-        // Coroutine
-        if self.is_coroutine() {
-            return write!(f, "<coroutine>");
-        }
-
         // Fiber
         if let Some(fib) = self.as_fiber() {
             let status = fib.borrow().status.as_str();

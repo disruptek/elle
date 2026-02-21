@@ -4,7 +4,7 @@
 //! instructions to their handlers.
 
 use crate::compiler::bytecode::Instruction;
-use crate::value::{Condition, CoroutineState, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
+use crate::value::{Condition, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
 use std::rc::Rc;
 
 use super::core::VM;
@@ -350,67 +350,17 @@ impl VM {
                     return SIG_ERROR;
                 }
             }
-
-            // Check for pending yield from yield-from delegation
-            if let Some(yielded_value) = self.take_pending_yield() {
-                self.fiber.suspended_ip = Some(ip);
-                return self.handle_pending_yield(
-                    bytecode,
-                    constants,
-                    closure_env,
-                    ip,
-                    yielded_value,
-                );
-            }
         }
     }
 
     /// Handle the Return instruction.
     fn handle_return(
         &mut self,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: usize,
+        _bytecode: &[u8],
+        _constants: &[Value],
+        _closure_env: Option<&Rc<Vec<Value>>>,
+        _ip: usize,
     ) -> SignalBits {
-        // Check for pending yield before returning
-        if let Some(yielded_value) = self.take_pending_yield() {
-            let coroutine = match self.current_coroutine() {
-                Some(co) => co.clone(),
-                None => {
-                    let cond = Condition::error("pending yield outside of coroutine");
-                    self.fiber.current_exception = Some(Rc::new(cond));
-                    self.fiber.signal = Some((SIG_ERROR, Value::NIL));
-                    return SIG_ERROR;
-                }
-            };
-
-            let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
-
-            let frame = crate::value::ContinuationFrame {
-                bytecode: Rc::new(bytecode.to_vec()),
-                constants: Rc::new(constants.to_vec()),
-                env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
-                ip,
-                stack: saved_stack,
-                exception_handlers: self.fiber.exception_handlers.clone(),
-                handling_exception: self.fiber.handling_exception,
-            };
-
-            let cont_data = crate::value::ContinuationData::new(frame);
-            let continuation = Value::continuation(cont_data);
-
-            {
-                let mut co = coroutine.borrow_mut();
-                co.state = CoroutineState::Suspended;
-                co.yielded_value = Some(yielded_value);
-            }
-
-            self.fiber.signal = Some((SIG_YIELD, yielded_value));
-            self.fiber.continuation = Some(continuation);
-            return SIG_YIELD;
-        }
-
         let value = control::handle_return(self);
         self.fiber.signal = Some((SIG_OK, value));
         SIG_OK
@@ -449,58 +399,6 @@ impl VM {
 
         let cont_data = crate::value::ContinuationData::new(frame);
         let continuation = Value::continuation(cont_data);
-
-        // If we're in a coroutine (legacy path), update its state
-        if let Some(coroutine) = self.current_coroutine() {
-            let mut co = coroutine.borrow_mut();
-            co.state = CoroutineState::Suspended;
-            co.yielded_value = None;
-        }
-
-        self.fiber.signal = Some((SIG_YIELD, yielded_value));
-        self.fiber.continuation = Some(continuation);
-        SIG_YIELD
-    }
-
-    /// Handle a pending yield from yield-from delegation.
-    fn handle_pending_yield(
-        &mut self,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
-        ip: usize,
-        yielded_value: Value,
-    ) -> SignalBits {
-        let coroutine = match self.current_coroutine() {
-            Some(co) => co.clone(),
-            None => {
-                let cond = Condition::error("pending yield outside of coroutine");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
-                return SIG_ERROR;
-            }
-        };
-
-        let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
-
-        let frame = crate::value::ContinuationFrame {
-            bytecode: Rc::new(bytecode.to_vec()),
-            constants: Rc::new(constants.to_vec()),
-            env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
-            ip,
-            stack: saved_stack,
-            exception_handlers: self.fiber.exception_handlers.clone(),
-            handling_exception: self.fiber.handling_exception,
-        };
-
-        let cont_data = crate::value::ContinuationData::new(frame);
-        let continuation = Value::continuation(cont_data);
-
-        {
-            let mut co = coroutine.borrow_mut();
-            co.state = CoroutineState::Suspended;
-            co.yielded_value = Some(yielded_value);
-        }
 
         self.fiber.signal = Some((SIG_YIELD, yielded_value));
         self.fiber.continuation = Some(continuation);

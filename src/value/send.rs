@@ -131,9 +131,6 @@ impl SendValue {
             // Unsafe: thread handles
             HeapObject::ThreadHandle(_) => Err("Cannot send thread handle".to_string()),
 
-            // Unsafe: coroutines (contain closures with mutable state)
-            HeapObject::Coroutine(_) => Err("Cannot send coroutine".to_string()),
-
             // Unsafe: continuations (contain frame data with closures)
             HeapObject::Continuation(_) => Err("Cannot send continuation".to_string()),
 
