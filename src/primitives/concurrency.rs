@@ -240,7 +240,7 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
         let send_result = match result {
             Ok(val) => {
                 // Check if an exception escaped all handlers
-                if let Some(exc) = &vm.current_exception {
+                if let Some(exc) = &vm.fiber.current_exception {
                     Err(format!("{}", exc))
                 } else {
                     SendValue::from_value(val)

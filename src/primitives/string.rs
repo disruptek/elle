@@ -714,7 +714,7 @@ pub fn prim_symbol_to_string(args: &[Value], vm: &mut VM) -> LResult<Value> {
             "symbol->string: expected 1 argument, got {}",
             args.len()
         ));
-        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         return Ok(Value::NIL);
     }
 
@@ -745,7 +745,7 @@ pub fn prim_symbol_to_string(args: &[Value], vm: &mut VM) -> LResult<Value> {
                 "symbol->string: expected symbol, got {}",
                 args[0].type_name()
             ));
-            vm.current_exception = Some(std::rc::Rc::new(cond));
+            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
             Ok(Value::NIL)
         }
     }

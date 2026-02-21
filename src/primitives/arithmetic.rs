@@ -200,7 +200,7 @@ pub fn prim_odd(args: &[Value]) -> Result<Value, Condition> {
 pub fn prim_div_vm(args: &[Value], vm: &mut VM) -> LResult<Value> {
     if args.is_empty() {
         let cond = Condition::arity_error("/: expected at least 1 argument, got 0");
-        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         return Ok(Value::NIL);
     }
 
@@ -209,7 +209,7 @@ pub fn prim_div_vm(args: &[Value], vm: &mut VM) -> LResult<Value> {
             Ok(val) => return Ok(val),
             Err(msg) => {
                 let cond = Condition::type_error(msg);
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 return Ok(Value::NIL);
             }
         }
@@ -237,7 +237,7 @@ pub fn prim_div_vm(args: &[Value], vm: &mut VM) -> LResult<Value> {
             let cond = crate::value::Condition::division_by_zero("division by zero")
                 .with_field(0, result) // dividend
                 .with_field(1, *arg); // divisor
-            vm.current_exception = Some(std::rc::Rc::new(cond));
+            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
             return Ok(Value::NIL);
         }
 
@@ -245,7 +245,7 @@ pub fn prim_div_vm(args: &[Value], vm: &mut VM) -> LResult<Value> {
             Ok(val) => result = val,
             Err(msg) => {
                 let cond = Condition::type_error(msg);
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 return Ok(Value::NIL);
             }
         }

@@ -24,7 +24,7 @@ pub const TAIL_CALL_SENTINEL: u64 = 0xDEAD_BEEF_DEAD_BEEFu64;
 #[no_mangle]
 pub extern "C" fn elle_jit_has_exception(vm: *mut ()) -> u64 {
     let vm = unsafe { &*(vm as *const crate::vm::VM) };
-    Value::bool(vm.current_exception.is_some()).to_bits()
+    Value::bool(vm.fiber.current_exception.is_some()).to_bits()
 }
 
 // =============================================================================
@@ -212,7 +212,7 @@ pub extern "C" fn elle_jit_call(
         match f(&args) {
             Ok(val) => return val.to_bits(),
             Err(cond) => {
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 return TAG_NIL;
             }
         }
@@ -239,9 +239,9 @@ pub extern "C" fn elle_jit_call(
         // Build environment
         let new_env = build_closure_env_for_jit(closure, &args);
 
-        vm.call_depth += 1;
+        vm.fiber.call_depth += 1;
         let result = vm.execute_bytecode(&closure.bytecode, &closure.constants, Some(&new_env));
-        vm.call_depth -= 1;
+        vm.fiber.call_depth -= 1;
 
         match result {
             Ok(val) => val.to_bits(),
@@ -279,7 +279,7 @@ pub extern "C" fn elle_jit_tail_call(
         match f(&args) {
             Ok(val) => return val.to_bits(),
             Err(cond) => {
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 return TAG_NIL;
             }
         }
@@ -439,9 +439,9 @@ mod tests {
         assert_eq!(val.as_bool(), Some(false));
 
         // Set an exception using the public constructor
-        vm.current_exception = Some(std::rc::Rc::new(crate::value::Condition::division_by_zero(
-            "test",
-        )));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(
+            crate::value::Condition::division_by_zero("test"),
+        ));
 
         // Now should return true
         let result = elle_jit_has_exception(&mut vm as *mut VM as *mut ());
@@ -449,7 +449,7 @@ mod tests {
         assert_eq!(val.as_bool(), Some(true));
 
         // Clear exception
-        vm.current_exception = None;
+        vm.fiber.current_exception = None;
 
         // Should return false again
         let result = elle_jit_has_exception(&mut vm as *mut VM as *mut ());

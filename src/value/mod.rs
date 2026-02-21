@@ -38,7 +38,8 @@ pub use types::{Arity, NativeFn, SymbolId, TableKey, VmAwareFn};
 pub use closure::Closure;
 pub use coroutine::{Coroutine, CoroutineState};
 pub use fiber::{
-    Fiber, FiberStatus, Frame, SignalBits, SIG_DEBUG, SIG_ERROR, SIG_OK, SIG_RESUME, SIG_YIELD,
+    CallFrame, Fiber, FiberStatus, Frame, SignalBits, SIG_DEBUG, SIG_ERROR, SIG_OK, SIG_RESUME,
+    SIG_YIELD,
 };
 
 // Export FFI types

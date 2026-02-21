@@ -40,7 +40,7 @@ pub fn handle_define_local(
     let sym_idx = (high << 8) | low;
 
     // Pop value from stack
-    let value = vm.stack.pop().ok_or("Stack underflow")?;
+    let value = vm.fiber.stack.pop().ok_or("Stack underflow")?;
 
     // Get the symbol ID from constants
     let sym_id = if let Some(id) = constants[sym_idx as usize].as_symbol() {
@@ -55,7 +55,7 @@ pub fn handle_define_local(
 
     // Push the value back on the stack to maintain expression semantics
     // This way (define x 10) returns 10, allowing it to be used in expression contexts
-    vm.stack.push(value);
+    vm.fiber.stack.push(value);
 
     Ok(())
 }
@@ -68,15 +68,15 @@ pub fn handle_define_local(
 /// mutable captured variables, which should auto-unwrap on LoadUpvalue.
 /// User-created cells via `box` use a different code path.
 pub fn handle_make_cell(vm: &mut VM) -> Result<(), String> {
-    let value = vm.stack.pop().ok_or("Stack underflow")?;
+    let value = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     if value.is_cell() {
         // Already a cell (e.g., locally-defined variable from outer lambda) — don't double-wrap
-        vm.stack.push(value);
+        vm.fiber.stack.push(value);
     } else {
         // Create a local cell for compiler-generated cells (mutable captures)
         // LocalCell is auto-unwrapped by LoadUpvalue
         let cell = Value::local_cell(value);
-        vm.stack.push(cell);
+        vm.fiber.stack.push(cell);
     }
     Ok(())
 }
@@ -84,11 +84,11 @@ pub fn handle_make_cell(vm: &mut VM) -> Result<(), String> {
 /// Handle UnwrapCell instruction - extracts value from a cell
 /// Pops cell from stack, unwraps it, pushes the value
 pub fn handle_unwrap_cell(vm: &mut VM) -> Result<(), String> {
-    let cell_val = vm.stack.pop().ok_or("Stack underflow")?;
+    let cell_val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     if cell_val.is_cell() {
         if let Some(cell_ref) = cell_val.as_cell() {
             let value = *cell_ref.borrow();
-            vm.stack.push(value);
+            vm.fiber.stack.push(value);
             Ok(())
         } else {
             Err("Failed to extract cell reference".to_string())
@@ -101,13 +101,13 @@ pub fn handle_unwrap_cell(vm: &mut VM) -> Result<(), String> {
 /// Handle UpdateCell instruction - updates a cell's contents
 /// Pops new_value, then cell from stack, updates cell, pushes new_value
 pub fn handle_update_cell(vm: &mut VM) -> Result<(), String> {
-    let new_value = vm.stack.pop().ok_or("Stack underflow")?;
-    let cell_val = vm.stack.pop().ok_or("Stack underflow")?;
+    let new_value = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    let cell_val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     if cell_val.is_cell() {
         if let Some(cell_ref) = cell_val.as_cell() {
             let mut cell_mut = cell_ref.borrow_mut();
             *cell_mut = new_value;
-            vm.stack.push(new_value);
+            vm.fiber.stack.push(new_value);
             Ok(())
         } else {
             Err("Failed to extract cell reference".to_string())

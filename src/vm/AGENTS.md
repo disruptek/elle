@@ -21,7 +21,7 @@ Does NOT:
 
 | Type | Purpose |
 |------|---------|
-| `VM` | Execution state: stack, globals, call frames |
+| `VM` | Global state + root Fiber. Per-execution state lives on `vm.fiber` |
 | `VmResult` | `Done(Value)` or `Yielded(Value)` |
 | `CallFrame` | Function name, IP, frame base |
 | `ExceptionHandler` | Handler offset, finally offset, stack depth |
@@ -92,12 +92,23 @@ VmResult
 
 | Field | Type | Purpose |
 |-------|-------|---------|
+| `fiber` | `Fiber` | Root fiber: stack, call frames, exception state, coroutine state |
+| `globals` | `Vec<Value>` | Global bindings by SymbolId |
+| `jit_cache` | `HashMap<*const u8, Rc<JitCode>>` | JIT code cache |
+| `scope_stack` | `ScopeStack` | Runtime scope stack |
+
+### Key Fiber fields (on `vm.fiber`)
+
+| Field | Type | Purpose |
+|-------|-------|---------|
 | `stack` | `SmallVec<[Value; 256]>` | Operand stack |
-| `globals` | `HashMap<u32, Value>` | Global bindings by SymbolId |
 | `call_stack` | `Vec<CallFrame>` | For stack traces |
-| `exception_handlers` | `Vec<ExceptionHandler>` | Active handlers |
+| `call_depth` | `usize` | Stack overflow detection |
+| `exception_handlers` | `SmallVec<[ExceptionHandler; 2]>` | Active handlers |
 | `current_exception` | `Option<Rc<Condition>>` | Exception being handled |
+| `handling_exception` | `bool` | In exception handler code |
 | `coroutine_stack` | `Vec<Rc<RefCell<Coroutine>>>` | Active coroutines |
+| `pending_yield` | `Option<Value>` | Pending yield from delegation |
 | `pending_tail_call` | `Option<(bytecode, constants, env)>` | Deferred tail call |
 
 ## Exception hierarchy

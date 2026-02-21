@@ -115,7 +115,7 @@ pub type NativeFn = fn(&[Value]) -> Result<Value, Condition>;
 /// VM-aware native function type.
 ///
 /// Primitives that need to execute bytecode or access VM state.
-/// Set `vm.current_exception` directly for user-facing errors, return `Ok(Value::NIL)`.
+/// Set `vm.fiber.current_exception` directly for user-facing errors, return `Ok(Value::NIL)`.
 /// Return `Err(LError)` only for VM bugs.
 pub type VmAwareFn = fn(&[Value], &mut crate::vm::VM) -> LResult<Value>;
 

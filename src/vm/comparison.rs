@@ -2,16 +2,17 @@ use super::core::VM;
 use crate::value::Value;
 
 pub fn handle_eq(vm: &mut VM) -> Result<(), String> {
-    let b = vm.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.stack.pop().ok_or("Stack underflow")?;
-    vm.stack
+    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    vm.fiber
+        .stack
         .push(if a == b { Value::TRUE } else { Value::FALSE });
     Ok(())
 }
 
 pub fn handle_lt(vm: &mut VM) -> Result<(), String> {
-    let b = vm.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.stack.pop().ok_or("Stack underflow")?;
+    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     let result = match (a.as_int(), b.as_int()) {
         (Some(x), Some(y)) => {
             if x < y {
@@ -34,19 +35,19 @@ pub fn handle_lt(vm: &mut VM) -> Result<(), String> {
                     a.type_name(),
                     b.type_name()
                 ));
-                vm.current_exception = Some(std::rc::Rc::new(cond));
-                vm.stack.push(Value::NIL);
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.stack.push(Value::NIL);
                 return Ok(());
             }
         },
     };
-    vm.stack.push(result);
+    vm.fiber.stack.push(result);
     Ok(())
 }
 
 pub fn handle_gt(vm: &mut VM) -> Result<(), String> {
-    let b = vm.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.stack.pop().ok_or("Stack underflow")?;
+    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     let result = match (a.as_int(), b.as_int()) {
         (Some(x), Some(y)) => {
             if x > y {
@@ -69,19 +70,19 @@ pub fn handle_gt(vm: &mut VM) -> Result<(), String> {
                     a.type_name(),
                     b.type_name()
                 ));
-                vm.current_exception = Some(std::rc::Rc::new(cond));
-                vm.stack.push(Value::NIL);
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.stack.push(Value::NIL);
                 return Ok(());
             }
         },
     };
-    vm.stack.push(result);
+    vm.fiber.stack.push(result);
     Ok(())
 }
 
 pub fn handle_le(vm: &mut VM) -> Result<(), String> {
-    let b = vm.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.stack.pop().ok_or("Stack underflow")?;
+    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     let result = match (a.as_int(), b.as_int()) {
         (Some(x), Some(y)) => {
             if x <= y {
@@ -104,19 +105,19 @@ pub fn handle_le(vm: &mut VM) -> Result<(), String> {
                     a.type_name(),
                     b.type_name()
                 ));
-                vm.current_exception = Some(std::rc::Rc::new(cond));
-                vm.stack.push(Value::NIL);
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.stack.push(Value::NIL);
                 return Ok(());
             }
         },
     };
-    vm.stack.push(result);
+    vm.fiber.stack.push(result);
     Ok(())
 }
 
 pub fn handle_ge(vm: &mut VM) -> Result<(), String> {
-    let b = vm.stack.pop().ok_or("Stack underflow")?;
-    let a = vm.stack.pop().ok_or("Stack underflow")?;
+    let b = vm.fiber.stack.pop().ok_or("Stack underflow")?;
+    let a = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     let result = match (a.as_int(), b.as_int()) {
         (Some(x), Some(y)) => {
             if x >= y {
@@ -139,12 +140,12 @@ pub fn handle_ge(vm: &mut VM) -> Result<(), String> {
                     a.type_name(),
                     b.type_name()
                 ));
-                vm.current_exception = Some(std::rc::Rc::new(cond));
-                vm.stack.push(Value::NIL);
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.stack.push(Value::NIL);
                 return Ok(());
             }
         },
     };
-    vm.stack.push(result);
+    vm.fiber.stack.push(result);
     Ok(())
 }

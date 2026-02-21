@@ -8,7 +8,7 @@ pub fn handle_jump(bytecode: &[u8], ip: &mut usize, vm: &VM) {
 
 pub fn handle_jump_if_false(bytecode: &[u8], ip: &mut usize, vm: &mut VM) -> Result<(), String> {
     let offset = vm.read_i16(bytecode, ip);
-    let val = vm.stack.pop().ok_or("Stack underflow")?;
+    let val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     if !val.is_truthy() {
         *ip = ((*ip as i32) + (offset as i32)) as usize;
     }
@@ -17,7 +17,7 @@ pub fn handle_jump_if_false(bytecode: &[u8], ip: &mut usize, vm: &mut VM) -> Res
 
 pub fn handle_jump_if_true(bytecode: &[u8], ip: &mut usize, vm: &mut VM) -> Result<(), String> {
     let offset = vm.read_i16(bytecode, ip);
-    let val = vm.stack.pop().ok_or("Stack underflow")?;
+    let val = vm.fiber.stack.pop().ok_or("Stack underflow")?;
     if val.is_truthy() {
         *ip = ((*ip as i32) + (offset as i32)) as usize;
     }
@@ -26,6 +26,7 @@ pub fn handle_jump_if_true(bytecode: &[u8], ip: &mut usize, vm: &mut VM) -> Resu
 
 pub fn handle_return(vm: &mut VM) -> Result<Value, String> {
     let value = vm
+        .fiber
         .stack
         .pop()
         .ok_or_else(|| "Stack underflow on return".to_string())?;

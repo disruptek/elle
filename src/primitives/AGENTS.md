@@ -34,7 +34,7 @@ Does NOT:
 
 **VmAwareFn**: `fn(&[Value], &mut VM) -> LResult<Value>`
 - Primitives that need to execute bytecode or access VM state
-- Set `vm.current_exception` directly for user-facing errors, return `Ok(Value::NIL)`
+- Set `vm.fiber.current_exception` directly for user-facing errors, return `Ok(Value::NIL)`
 - Return `Err(LError)` only for VM bugs
 - Examples: `coroutine-resume`, `/`
 

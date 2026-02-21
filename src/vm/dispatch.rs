@@ -38,18 +38,18 @@ impl VM {
                     "Instruction limit exceeded at ip={} (instr={}), stack depth={}, exception={}",
                     ip,
                     instr_byte,
-                    self.stack.len(),
-                    self.current_exception.is_some()
+                    self.fiber.stack.len(),
+                    self.fiber.current_exception.is_some()
                 ));
             }
 
             // Check for pending exception at the START of each iteration
-            if self.current_exception.is_some() && !self.handling_exception {
-                if let Some(handler) = self.exception_handlers.last() {
-                    while self.stack.len() > handler.stack_depth {
-                        self.stack.pop();
+            if self.fiber.current_exception.is_some() && !self.fiber.handling_exception {
+                if let Some(handler) = self.fiber.exception_handlers.last() {
+                    while self.fiber.stack.len() > handler.stack_depth {
+                        self.fiber.stack.pop();
                     }
-                    self.handling_exception = true;
+                    self.fiber.handling_exception = true;
                     ip = handler.handler_offset as usize;
                     continue;
                 } else {
@@ -288,14 +288,14 @@ impl VM {
                     self.handle_push_handler(bytecode, &mut ip);
                 }
                 Instruction::PopHandler => {
-                    self.exception_handlers.pop();
+                    self.fiber.exception_handlers.pop();
                 }
                 Instruction::CreateHandler => {
                     let _handler_fn_idx = self.read_u16(bytecode, &mut ip);
                     let _condition_id = self.read_u16(bytecode, &mut ip);
                 }
                 Instruction::CheckException => {
-                    if self.current_exception.is_none() {
+                    if self.fiber.current_exception.is_none() {
                         return Err("CheckException reached with no exception set".to_string());
                     }
                 }
@@ -306,12 +306,12 @@ impl VM {
                     self.handle_bind_exception(bytecode, &mut ip, constants)?;
                 }
                 Instruction::ClearException => {
-                    self.current_exception = None;
-                    self.handling_exception = false;
+                    self.fiber.current_exception = None;
+                    self.fiber.handling_exception = false;
                 }
                 Instruction::ReraiseException => {
-                    self.exception_handlers.pop();
-                    self.handling_exception = false;
+                    self.fiber.exception_handlers.pop();
+                    self.fiber.handling_exception = false;
                 }
                 Instruction::InvokeRestart => {
                     let _restart_name_id = self.read_u16(bytecode, &mut ip);
@@ -327,12 +327,12 @@ impl VM {
             }
 
             // Exception interrupt mechanism
-            if self.current_exception.is_some() && !self.handling_exception {
-                if let Some(handler) = self.exception_handlers.last() {
-                    while self.stack.len() > handler.stack_depth {
-                        self.stack.pop();
+            if self.fiber.current_exception.is_some() && !self.fiber.handling_exception {
+                if let Some(handler) = self.fiber.exception_handlers.last() {
+                    while self.fiber.stack.len() > handler.stack_depth {
+                        self.fiber.stack.pop();
                     }
-                    self.handling_exception = true;
+                    self.fiber.handling_exception = true;
                     ip = handler.handler_offset as usize;
                 } else {
                     return Ok(VmResult::Done(Value::NIL));
@@ -369,7 +369,7 @@ impl VM {
                 }
             };
 
-            let saved_stack: Vec<Value> = self.stack.drain(..).collect();
+            let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
             let frame = crate::value::ContinuationFrame {
                 bytecode: Rc::new(bytecode.to_vec()),
@@ -377,8 +377,8 @@ impl VM {
                 env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
                 ip,
                 stack: saved_stack,
-                exception_handlers: self.exception_handlers.clone(),
-                handling_exception: self.handling_exception,
+                exception_handlers: self.fiber.exception_handlers.clone(),
+                handling_exception: self.fiber.handling_exception,
             };
 
             let cont_data = crate::value::ContinuationData::new(frame);
@@ -408,14 +408,14 @@ impl VM {
         closure_env: Option<&Rc<Vec<Value>>>,
         ip: usize,
     ) -> Result<VmResult, String> {
-        let yielded_value = self.stack.pop().ok_or("Stack underflow on yield")?;
+        let yielded_value = self.fiber.stack.pop().ok_or("Stack underflow on yield")?;
 
         let coroutine = match self.current_coroutine() {
             Some(co) => co.clone(),
             None => return Err("yield used outside of coroutine".to_string()),
         };
 
-        let saved_stack: Vec<Value> = self.stack.drain(..).collect();
+        let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
         let frame = crate::value::ContinuationFrame {
             bytecode: Rc::new(bytecode.to_vec()),
@@ -423,8 +423,8 @@ impl VM {
             env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
             ip,
             stack: saved_stack,
-            exception_handlers: self.exception_handlers.clone(),
-            handling_exception: self.handling_exception,
+            exception_handlers: self.fiber.exception_handlers.clone(),
+            handling_exception: self.fiber.handling_exception,
         };
 
         let cont_data = crate::value::ContinuationData::new(frame);
@@ -458,7 +458,7 @@ impl VM {
             }
         };
 
-        let saved_stack: Vec<Value> = self.stack.drain(..).collect();
+        let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
         let frame = crate::value::ContinuationFrame {
             bytecode: Rc::new(bytecode.to_vec()),
@@ -466,8 +466,8 @@ impl VM {
             env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
             ip,
             stack: saved_stack,
-            exception_handlers: self.exception_handlers.clone(),
-            handling_exception: self.handling_exception,
+            exception_handlers: self.fiber.exception_handlers.clone(),
+            handling_exception: self.fiber.handling_exception,
         };
 
         let cont_data = crate::value::ContinuationData::new(frame);
@@ -496,10 +496,10 @@ impl VM {
         };
 
         use crate::value::ExceptionHandler;
-        self.exception_handlers.push(ExceptionHandler {
+        self.fiber.exception_handlers.push(ExceptionHandler {
             handler_offset,
             finally_offset,
-            stack_depth: self.stack.len(),
+            stack_depth: self.fiber.stack.len(),
         });
     }
 
@@ -509,13 +509,13 @@ impl VM {
 
         let handler_id = self.read_u16(bytecode, ip);
 
-        let matches = if let Some(exc) = &self.current_exception {
+        let matches = if let Some(exc) = &self.fiber.current_exception {
             is_exception_subclass(exc.exception_id, handler_id as u32)
         } else {
             false
         };
 
-        self.stack.push(Value::bool(matches));
+        self.fiber.stack.push(Value::bool(matches));
     }
 
     /// Handle the BindException instruction.
@@ -527,7 +527,7 @@ impl VM {
     ) -> Result<(), String> {
         let const_idx = self.read_u16(bytecode, ip) as usize;
 
-        if let Some(exc) = &self.current_exception {
+        if let Some(exc) = &self.fiber.current_exception {
             if let Some(const_val) = constants.get(const_idx) {
                 if let Some(sym_id) = const_val.as_symbol() {
                     use crate::value::heap::{alloc, HeapObject};
@@ -549,12 +549,12 @@ impl VM {
 
     /// Handle the LoadException instruction.
     fn handle_load_exception(&mut self) {
-        let exc_value = if let Some(exc) = &self.current_exception {
+        let exc_value = if let Some(exc) = &self.fiber.current_exception {
             use crate::value::heap::{alloc, HeapObject};
             alloc(HeapObject::Condition((**exc).clone()))
         } else {
             Value::NIL
         };
-        self.stack.push(exc_value);
+        self.fiber.stack.push(exc_value);
     }
 }

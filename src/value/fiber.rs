@@ -5,7 +5,9 @@
 //! suspended fibers are stored as heap values.
 
 use crate::value::closure::Closure;
-use crate::value::Value;
+use crate::value::continuation::ExceptionHandler;
+use crate::value::{Condition, Coroutine, Value};
+use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
@@ -57,7 +59,7 @@ impl FiberStatus {
     }
 }
 
-/// A single call frame within a fiber.
+/// A single call frame within a fiber (for execution dispatch).
 #[derive(Debug, Clone)]
 pub struct Frame {
     /// The closure being executed
@@ -68,11 +70,26 @@ pub struct Frame {
     pub base: usize,
 }
 
+/// Call frame for stack traces (name + ip + frame_base).
+/// Separate from Frame because stack traces need human-readable names,
+/// while execution dispatch needs closure references.
+#[derive(Debug, Clone)]
+pub struct CallFrame {
+    pub name: String,
+    pub ip: usize,
+    pub frame_base: usize,
+}
+
 /// The fiber: an independent execution context.
+///
+/// Holds all per-execution state that was previously on the VM struct:
+/// operand stack, call frames, exception handlers, coroutine state.
+/// The VM retains only global/shared state (globals, modules, JIT cache, FFI).
 pub struct Fiber {
-    /// Operand stack (temporaries)
-    pub stack: Vec<Value>,
-    /// Call frame stack
+    /// Operand stack (temporaries). SmallVec avoids heap allocation for
+    /// fibers with fewer than 256 stack entries.
+    pub stack: SmallVec<[Value; 256]>,
+    /// Call frame stack (for fiber execution — closure + ip + base)
     pub frames: Vec<Frame>,
     /// Current status
     pub status: FiberStatus,
@@ -92,13 +109,29 @@ pub struct Fiber {
     /// - On signal: (bits, payload) before suspending
     /// - On normal return: (SIG_OK, return_value) before completing
     pub signal: Option<(SignalBits, Value)>,
+
+    // --- Execution state migrated from VM ---
+    /// Call depth counter (for stack overflow detection)
+    pub call_depth: usize,
+    /// Call stack for stack traces (name + ip + frame_base)
+    pub call_stack: Vec<CallFrame>,
+    /// Stack of active exception handlers
+    pub exception_handlers: SmallVec<[ExceptionHandler; 2]>,
+    /// Current exception being handled
+    pub current_exception: Option<Rc<Condition>>,
+    /// True if we're currently in exception handler code
+    pub handling_exception: bool,
+    /// Stack of active coroutines (temporary, until coroutines are replaced by fibers)
+    pub coroutine_stack: Vec<Rc<RefCell<Coroutine>>>,
+    /// Pending yield value from yield-from delegation
+    pub pending_yield: Option<Value>,
 }
 
 impl Fiber {
     /// Create a new fiber from a closure with the given signal mask.
     pub fn new(closure: Rc<Closure>, mask: SignalBits) -> Self {
         Fiber {
-            stack: Vec::new(),
+            stack: SmallVec::new(),
             frames: Vec::new(),
             status: FiberStatus::New,
             mask,
@@ -107,6 +140,13 @@ impl Fiber {
             closure,
             env: None,
             signal: None,
+            call_depth: 0,
+            call_stack: Vec::new(),
+            exception_handlers: SmallVec::new(),
+            current_exception: None,
+            handling_exception: false,
+            coroutine_stack: Vec::new(),
+            pending_yield: None,
         }
     }
 }

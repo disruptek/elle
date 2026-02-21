@@ -14,7 +14,8 @@ pub mod types;
 pub mod variables;
 
 pub use crate::value::condition::{exception_parent, is_exception_subclass};
-pub use core::{CallFrame, VmResult, VM};
+pub use crate::value::fiber::CallFrame;
+pub use core::{VmResult, VM};
 
 use crate::compiler::bytecode::Bytecode;
 use crate::value::Value;
@@ -26,7 +27,7 @@ impl VM {
 
         let result = self.execute_bytecode(&bytecode.instructions, &bytecode.constants, None)?;
         // Check if an exception escaped all handlers at the top level
-        if let Some(exc) = &self.current_exception {
+        if let Some(exc) = &self.fiber.current_exception {
             // Use the exception's message for the error
             Err(format!("{}", exc))
         } else {
@@ -47,7 +48,7 @@ impl VM {
                     if let Some(loc) = self.current_source_loc.clone() {
                         cond.location = Some(loc);
                     }
-                    self.current_exception = Some(std::rc::Rc::new(cond));
+                    self.fiber.current_exception = Some(std::rc::Rc::new(cond));
                     return false;
                 }
             }
@@ -60,7 +61,7 @@ impl VM {
                     if let Some(loc) = self.current_source_loc.clone() {
                         cond.location = Some(loc);
                     }
-                    self.current_exception = Some(std::rc::Rc::new(cond));
+                    self.fiber.current_exception = Some(std::rc::Rc::new(cond));
                     return false;
                 }
             }
@@ -73,7 +74,7 @@ impl VM {
                     if let Some(loc) = self.current_source_loc.clone() {
                         cond.location = Some(loc);
                     }
-                    self.current_exception = Some(std::rc::Rc::new(cond));
+                    self.fiber.current_exception = Some(std::rc::Rc::new(cond));
                     return false;
                 }
             }

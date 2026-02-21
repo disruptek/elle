@@ -1,8 +1,8 @@
 use crate::error::{LocationMap, StackFrame};
 use crate::ffi::FFISubsystem;
-use crate::value::{Condition, Coroutine, Value};
+use crate::value::fiber::CallFrame;
+use crate::value::{Closure, Coroutine, Fiber, Value};
 use crate::vm::scope::ScopeStack;
-use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -13,7 +13,9 @@ use crate::jit::JitCode;
 // Re-export ExceptionHandler from value::continuation where it's defined
 pub use crate::value::continuation::ExceptionHandler;
 
-type StackVec = SmallVec<[Value; 256]>;
+// Re-export CallFrame from fiber (it now lives there)
+pub use crate::value::fiber::CallFrame as FiberCallFrame;
+
 type TailCallInfo = (Vec<u8>, Vec<Value>, Rc<Vec<Value>>);
 
 /// Result of VM execution - can be normal completion or a yield
@@ -30,64 +32,70 @@ pub enum VmResult {
     },
 }
 
-#[derive(Debug, Clone)]
-pub struct CallFrame {
-    pub name: String,
-    pub ip: usize,
-    pub frame_base: usize, // Stack index where this frame's locals start
+pub struct VM {
+    /// The current fiber holding all per-execution state:
+    /// operand stack, call frames, exception handlers, coroutine state.
+    pub fiber: Fiber,
+    /// Global variable bindings (shared across all fibers)
+    pub globals: Vec<Value>,
+    pub ffi: FFISubsystem,
+    pub modules: HashMap<String, HashMap<u32, Value>>,
+    pub current_module: Option<String>,
+    pub loaded_modules: HashSet<String>,
+    pub module_search_paths: Vec<PathBuf>,
+    pub scope_stack: ScopeStack,
+    pub closure_call_counts: std::collections::HashMap<*const u8, usize>,
+    pub location_map: LocationMap,
+    pub tail_call_env_cache: Vec<Value>,
+    pub pending_tail_call: Option<TailCallInfo>,
+    pub current_source_loc: Option<crate::reader::SourceLoc>,
+    /// JIT code cache: bytecode pointer → compiled native code.
+    pub jit_cache: HashMap<*const u8, Rc<JitCode>>,
 }
 
-pub struct VM {
-    pub stack: StackVec,
-    pub globals: Vec<Value>,
-    pub call_depth: usize,
-    pub call_stack: Vec<CallFrame>,
-    pub ffi: FFISubsystem,
-    pub modules: HashMap<String, HashMap<u32, Value>>, // Module name → exported symbols
-    pub current_module: Option<String>,
-    pub loaded_modules: HashSet<String>, // Track loaded module paths to prevent circular deps
-    pub module_search_paths: Vec<PathBuf>, // Directories to search for modules
-    pub scope_stack: ScopeStack,         // Runtime scope stack for variable management
-    pub exception_handlers: SmallVec<[ExceptionHandler; 2]>, // Stack of active exception handlers
-    pub current_exception: Option<Rc<Condition>>, // Current exception being handled
-    pub handling_exception: bool,        // True if we're currently in exception handler code
-    pub closure_call_counts: std::collections::HashMap<*const u8, usize>, // Track closure call frequencies for JIT
-    pub location_map: LocationMap, // Bytecode instruction index → source location mapping
-    pub tail_call_env_cache: Vec<Value>, // Reusable environment vector for tail calls to avoid repeated allocations
-    pub pending_tail_call: Option<TailCallInfo>, // (bytecode, constants, env) for pending tail call
-    pub coroutine_stack: Vec<Rc<RefCell<Coroutine>>>, // Stack of active coroutines
-    pub current_source_loc: Option<crate::reader::SourceLoc>, // Current top-level form's location
-    pub pending_yield: Option<Value>,    // Pending yield value from yield-from delegation
-    /// JIT code cache: bytecode pointer → compiled native code.
-    /// When a closure becomes hot (called 10+ times) and is pure, we attempt
-    /// JIT compilation and cache the result here. Subsequent calls use the
-    /// native code instead of interpreting bytecode.
-    pub jit_cache: HashMap<*const u8, Rc<JitCode>>,
+/// Create a dummy root closure for the root fiber.
+/// The root fiber doesn't execute a closure directly — it's the
+/// execution context for top-level bytecode. This closure is never
+/// called; it exists only to satisfy Fiber's constructor.
+fn root_closure() -> Rc<Closure> {
+    use crate::effects::Effect;
+    use crate::value::types::Arity;
+    Rc::new(Closure {
+        bytecode: Rc::new(vec![]),
+        arity: Arity::Exact(0),
+        env: Rc::new(vec![]),
+        num_locals: 0,
+        num_captures: 0,
+        constants: Rc::new(vec![]),
+        effect: Effect::pure(),
+        cell_params_mask: 0,
+        symbol_names: Rc::new(HashMap::new()),
+        location_map: Rc::new(LocationMap::new()),
+        jit_code: None,
+        lir_function: None,
+    })
 }
 
 impl VM {
     pub fn new() -> Self {
+        let mut fiber = Fiber::new(root_closure(), 0);
+        // Root fiber starts alive (it's the currently executing context)
+        fiber.status = crate::value::FiberStatus::Alive;
+
         VM {
-            stack: SmallVec::new(),
+            fiber,
             globals: vec![Value::UNDEFINED; 256],
-            call_depth: 0,
-            call_stack: Vec::new(),
             ffi: FFISubsystem::new(),
             modules: HashMap::new(),
             current_module: None,
             loaded_modules: HashSet::new(),
             module_search_paths: vec![PathBuf::from(".")],
             scope_stack: ScopeStack::new(),
-            exception_handlers: SmallVec::new(),
-            current_exception: None,
-            handling_exception: false,
             closure_call_counts: std::collections::HashMap::new(),
             location_map: LocationMap::new(),
             tail_call_env_cache: Vec::with_capacity(256),
             pending_tail_call: None,
-            coroutine_stack: Vec::new(),
             current_source_loc: None,
-            pending_yield: None,
             jit_cache: HashMap::new(),
         }
     }
@@ -185,13 +193,17 @@ impl VM {
     /// Get the frame base for the current call frame
     /// Returns 0 if no call frame (top-level execution)
     pub fn current_frame_base(&self) -> usize {
-        self.call_stack.last().map(|f| f.frame_base).unwrap_or(0)
+        self.fiber
+            .call_stack
+            .last()
+            .map(|f| f.frame_base)
+            .unwrap_or(0)
     }
 
     pub fn push_call_frame(&mut self, name: String, ip: usize) {
-        let frame_base = self.stack.len(); // Current stack top becomes frame base
-        self.call_depth += 1;
-        self.call_stack.push(CallFrame {
+        let frame_base = self.fiber.stack.len();
+        self.fiber.call_depth += 1;
+        self.fiber.call_stack.push(CallFrame {
             name,
             ip,
             frame_base,
@@ -199,8 +211,8 @@ impl VM {
     }
 
     pub fn push_call_frame_with_base(&mut self, name: String, ip: usize, frame_base: usize) {
-        self.call_depth += 1;
-        self.call_stack.push(CallFrame {
+        self.fiber.call_depth += 1;
+        self.fiber.call_stack.push(CallFrame {
             name,
             ip,
             frame_base,
@@ -208,18 +220,18 @@ impl VM {
     }
 
     pub fn pop_call_frame(&mut self) {
-        if self.call_depth > 0 {
-            self.call_depth -= 1;
-            self.call_stack.pop();
+        if self.fiber.call_depth > 0 {
+            self.fiber.call_depth -= 1;
+            self.fiber.call_stack.pop();
         }
     }
 
     pub fn format_stack_trace(&self) -> String {
-        if self.call_stack.is_empty() {
+        if self.fiber.call_stack.is_empty() {
             "No call frames".to_string()
         } else {
             let mut trace = String::new();
-            for (i, frame) in self.call_stack.iter().rev().enumerate() {
+            for (i, frame) in self.fiber.call_stack.iter().rev().enumerate() {
                 trace.push_str(&format!("  #{}: {} (ip={})\n", i, frame.name, frame.ip));
             }
             trace
@@ -234,9 +246,10 @@ impl VM {
 
     /// Capture current call stack as trace frames
     pub fn capture_stack_trace(&self) -> Vec<StackFrame> {
-        self.call_stack
+        self.fiber
+            .call_stack
             .iter()
-            .rev() // Most recent first
+            .rev()
             .map(|frame| {
                 let location = self.location_map.get(&frame.ip).cloned();
                 StackFrame {
@@ -299,33 +312,32 @@ impl VM {
 
     /// Enter a coroutine context (push onto coroutine stack)
     pub fn enter_coroutine(&mut self, co: Rc<RefCell<Coroutine>>) {
-        self.coroutine_stack.push(co);
+        self.fiber.coroutine_stack.push(co);
     }
 
     /// Exit a coroutine context (pop from coroutine stack)
     pub fn exit_coroutine(&mut self) -> Option<Rc<RefCell<Coroutine>>> {
-        self.coroutine_stack.pop()
+        self.fiber.coroutine_stack.pop()
     }
 
     /// Get the currently executing coroutine, if any
     pub fn current_coroutine(&self) -> Option<&Rc<RefCell<Coroutine>>> {
-        self.coroutine_stack.last()
+        self.fiber.coroutine_stack.last()
     }
 
     /// Check if we're currently inside a coroutine
     pub fn in_coroutine(&self) -> bool {
-        !self.coroutine_stack.is_empty()
+        !self.fiber.coroutine_stack.is_empty()
     }
 
     /// Set a pending yield value (used by yield-from delegation)
-    /// The VM will check for this after each instruction and trigger a yield if set.
     pub fn set_pending_yield(&mut self, value: Value) {
-        self.pending_yield = Some(value);
+        self.fiber.pending_yield = Some(value);
     }
 
     /// Take the pending yield value, if any
     pub fn take_pending_yield(&mut self) -> Option<Value> {
-        self.pending_yield.take()
+        self.fiber.pending_yield.take()
     }
 
     /// Resume execution from a saved continuation.
@@ -335,14 +347,6 @@ impl VM {
     /// innermost to outermost, threading the resume value through.
     ///
     /// Frame ordering: `frames\[0\]` = innermost (yielder), `frames\[last\]` = outermost (caller)
-    ///
-    /// # Arguments
-    /// * `continuation` - A Value containing ContinuationData
-    /// * `resume_value` - The value to resume with (becomes the yield expression's result)
-    ///
-    /// # Returns
-    /// * `VmResult::Done(value)` - All frames completed, returning final value
-    /// * `VmResult::Yielded { value, continuation }` - Re-yielded with new continuation
     pub fn resume_continuation(
         &mut self,
         continuation: Value,
@@ -358,7 +362,7 @@ impl VM {
         }
 
         // Save current stack state
-        let saved_stack = std::mem::take(&mut self.stack);
+        let saved_stack = std::mem::take(&mut self.fiber.stack);
 
         // Execute from innermost frame (index 0) outward to outermost (last index)
         let mut current_value = resume_value;
@@ -367,11 +371,11 @@ impl VM {
             let frame = &frames[i];
 
             // Restore this frame's stack
-            self.stack.clear();
-            self.stack.extend(frame.stack.iter().copied());
+            self.fiber.stack.clear();
+            self.fiber.stack.extend(frame.stack.iter().copied());
 
             // Push the value from the inner frame (or resume value for innermost)
-            self.stack.push(current_value);
+            self.fiber.stack.push(current_value);
 
             // Execute with the frame's saved exception handler state
             let result = self.execute_bytecode_from_ip_with_state(
@@ -385,42 +389,33 @@ impl VM {
 
             match result {
                 VmResult::Done(v) => {
-                    // Check if an exception occurred in this frame
-                    // If so, and there are more outer frames, let them handle it
-                    if self.current_exception.is_some() && i + 1 < frames.len() {
-                        // The exception will be handled by the next outer frame's
-                        // exception handlers (which we'll restore when we execute it)
-                        // Pass NIL as the "return value" since we're propagating an exception
+                    if self.fiber.current_exception.is_some() && i + 1 < frames.len() {
                         current_value = Value::NIL;
                     } else {
                         current_value = v;
                     }
-                    // Continue with next outer frame
                 }
                 VmResult::Yielded {
                     value,
                     continuation: new_cont,
                 } => {
-                    // Re-yielded during resume! Need to append remaining outer frames
-                    // to the new continuation
                     if i + 1 < frames.len() {
                         let mut new_cont_data = new_cont
                             .as_continuation()
                             .ok_or("Expected continuation")?
                             .as_ref()
                             .clone();
-                        // Append frames[i+1..] (the remaining outer frames)
                         for f in frames[i + 1..].iter() {
                             new_cont_data.frames.push(f.clone());
                         }
                         let merged_cont = Value::continuation(new_cont_data);
-                        self.stack = saved_stack;
+                        self.fiber.stack = saved_stack;
                         return Ok(VmResult::Yielded {
                             value,
                             continuation: merged_cont,
                         });
                     }
-                    self.stack = saved_stack;
+                    self.fiber.stack = saved_stack;
                     return Ok(VmResult::Yielded {
                         value,
                         continuation: new_cont,
@@ -429,7 +424,7 @@ impl VM {
             }
         }
 
-        self.stack = saved_stack;
+        self.fiber.stack = saved_stack;
         Ok(VmResult::Done(current_value))
     }
 }
@@ -527,7 +522,6 @@ mod coroutine_vm_tests {
         use crate::value::ContinuationData;
 
         let done = VmResult::Done(Value::int(42));
-        // Create a dummy continuation for testing
         let cont_data = ContinuationData { frames: vec![] };
         let yielded = VmResult::Yielded {
             value: Value::int(100),
@@ -559,15 +553,12 @@ mod coroutine_vm_tests {
     fn test_capture_stack_trace() {
         let mut vm = VM::new();
 
-        // Push some call frames
         vm.push_call_frame("function_a".to_string(), 10);
         vm.push_call_frame("function_b".to_string(), 20);
         vm.push_call_frame("function_c".to_string(), 30);
 
-        // Capture the stack trace
         let trace = vm.capture_stack_trace();
 
-        // Should have 3 frames in reverse order (most recent first)
         assert_eq!(trace.len(), 3);
         assert_eq!(trace[0].function_name, Some("function_c".to_string()));
         assert_eq!(trace[1].function_name, Some("function_b".to_string()));
@@ -578,17 +569,13 @@ mod coroutine_vm_tests {
     fn test_wrap_error_with_trace() {
         let mut vm = VM::new();
 
-        // Push some call frames
         vm.push_call_frame("outer".to_string(), 5);
         vm.push_call_frame("inner".to_string(), 15);
 
-        // Wrap an error
         let error_msg = "Something went wrong".to_string();
         let wrapped = vm.wrap_error(error_msg);
 
-        // Should contain the original error message
         assert!(wrapped.contains("Something went wrong"));
-        // Should contain the function names
         assert!(wrapped.contains("inner"));
         assert!(wrapped.contains("outer"));
     }
@@ -597,11 +584,9 @@ mod coroutine_vm_tests {
     fn test_wrap_error_empty_stack() {
         let vm = VM::new();
 
-        // Wrap an error with empty call stack
         let error_msg = "Error with no context".to_string();
         let wrapped = vm.wrap_error(error_msg.clone());
 
-        // Should just return the original error
         assert_eq!(wrapped, error_msg);
     }
 }

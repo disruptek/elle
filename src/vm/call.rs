@@ -29,11 +29,11 @@ impl VM {
         ip: &mut usize,
     ) -> Result<Option<VmResult>, String> {
         let arg_count = self.read_u8(bytecode, ip) as usize;
-        let func = self.stack.pop().ok_or("Stack underflow")?;
+        let func = self.fiber.stack.pop().ok_or("Stack underflow")?;
 
         let mut args = Vec::with_capacity(arg_count);
         for _ in 0..arg_count {
-            args.push(self.stack.pop().ok_or("Stack underflow")?);
+            args.push(self.fiber.stack.pop().ok_or("Stack underflow")?);
         }
         args.reverse();
 
@@ -41,17 +41,17 @@ impl VM {
             let result = match f(args.as_slice()) {
                 Ok(val) => val,
                 Err(cond) => {
-                    self.current_exception = Some(std::rc::Rc::new(cond));
+                    self.fiber.current_exception = Some(std::rc::Rc::new(cond));
                     Value::NIL
                 }
             };
-            self.stack.push(result);
+            self.fiber.stack.push(result);
             return Ok(None);
         }
 
         if let Some(f) = func.as_vm_aware_fn() {
             let result = f(args.as_slice(), self)?;
-            self.stack.push(result);
+            self.fiber.stack.push(result);
 
             // Check for pending yield from yield-from delegation
             if let Some(yielded_value) = self.take_pending_yield() {
@@ -67,15 +67,15 @@ impl VM {
         }
 
         if let Some(closure) = func.as_closure() {
-            self.call_depth += 1;
-            if self.call_depth > 1000 {
+            self.fiber.call_depth += 1;
+            if self.fiber.call_depth > 1000 {
                 return Err("Stack overflow".to_string());
             }
 
             // Validate argument count
             if !self.check_arity(&closure.arity, args.len()) {
-                self.call_depth -= 1;
-                self.stack.push(Value::NIL);
+                self.fiber.call_depth -= 1;
+                self.fiber.stack.push(Value::NIL);
                 return Ok(None);
             }
 
@@ -89,9 +89,9 @@ impl VM {
                 if let Some(jit_code) = self.jit_cache.get(&bytecode_ptr).cloned() {
                     let result = self.call_jit(&jit_code, closure, &args, func);
                     // Check if the JIT function (or a callee) set an exception
-                    if self.current_exception.is_some() {
-                        self.call_depth -= 1;
-                        self.stack.push(Value::NIL);
+                    if self.fiber.current_exception.is_some() {
+                        self.fiber.call_depth -= 1;
+                        self.fiber.stack.push(Value::NIL);
                         return Ok(None); // Let the dispatch loop's interrupt handler deal with it
                     }
                     // Check for pending tail call (JIT function did a TailCall)
@@ -102,19 +102,19 @@ impl VM {
                             // Hand off to interpreter's trampoline which handles further tail calls
                             match self.execute_bytecode(&tail_bc, &tail_consts, Some(&tail_env)) {
                                 Ok(val) => {
-                                    self.call_depth -= 1;
-                                    self.stack.push(val);
+                                    self.fiber.call_depth -= 1;
+                                    self.fiber.stack.push(val);
                                     return Ok(None);
                                 }
                                 Err(e) => {
-                                    self.call_depth -= 1;
+                                    self.fiber.call_depth -= 1;
                                     return Err(e);
                                 }
                             }
                         }
                     }
-                    self.call_depth -= 1;
-                    self.stack.push(result);
+                    self.fiber.call_depth -= 1;
+                    self.fiber.stack.push(result);
                     return Ok(None);
                 }
 
@@ -131,9 +131,9 @@ impl VM {
                                         // Execute via JIT
                                         let result = self.call_jit(&jit_code, closure, &args, func);
                                         // Check if the JIT function (or a callee) set an exception
-                                        if self.current_exception.is_some() {
-                                            self.call_depth -= 1;
-                                            self.stack.push(Value::NIL);
+                                        if self.fiber.current_exception.is_some() {
+                                            self.fiber.call_depth -= 1;
+                                            self.fiber.stack.push(Value::NIL);
                                             return Ok(None); // Let the dispatch loop's interrupt handler deal with it
                                         }
                                         // Check for pending tail call (JIT function did a TailCall)
@@ -148,19 +148,19 @@ impl VM {
                                                     Some(&tail_env),
                                                 ) {
                                                     Ok(val) => {
-                                                        self.call_depth -= 1;
-                                                        self.stack.push(val);
+                                                        self.fiber.call_depth -= 1;
+                                                        self.fiber.stack.push(val);
                                                         return Ok(None);
                                                     }
                                                     Err(e) => {
-                                                        self.call_depth -= 1;
+                                                        self.fiber.call_depth -= 1;
                                                         return Err(e);
                                                     }
                                                 }
                                             }
                                         }
-                                        self.call_depth -= 1;
-                                        self.stack.push(result);
+                                        self.fiber.call_depth -= 1;
+                                        self.fiber.stack.push(result);
                                         return Ok(None);
                                     }
                                     Err(e) => {
@@ -203,18 +203,18 @@ impl VM {
                     Some(&new_env_rc),
                 )?;
 
-                self.call_depth -= 1;
+                self.fiber.call_depth -= 1;
 
                 match result {
                     VmResult::Done(v) => {
-                        self.stack.push(v);
+                        self.fiber.stack.push(v);
                     }
                     VmResult::Yielded {
                         value,
                         continuation,
                     } => {
                         // Capture the caller's frame and append it to the continuation
-                        let caller_stack: Vec<Value> = self.stack.drain(..).collect();
+                        let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
                         let caller_frame = crate::value::ContinuationFrame {
                             bytecode: Rc::new(bytecode.to_vec()),
@@ -222,8 +222,8 @@ impl VM {
                             env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
                             ip: *ip,
                             stack: caller_stack,
-                            exception_handlers: self.exception_handlers.clone(),
-                            handling_exception: self.handling_exception,
+                            exception_handlers: self.fiber.exception_handlers.clone(),
+                            handling_exception: self.fiber.handling_exception,
                         };
 
                         let mut cont_data = continuation
@@ -247,8 +247,8 @@ impl VM {
                     Some(&new_env_rc),
                 )?;
 
-                self.call_depth -= 1;
-                self.stack.push(result);
+                self.fiber.call_depth -= 1;
+                self.fiber.stack.push(result);
             }
             return Ok(None);
         }
@@ -266,11 +266,11 @@ impl VM {
         bytecode: &[u8],
     ) -> Result<Option<VmResult>, String> {
         let arg_count = self.read_u8(bytecode, ip) as usize;
-        let func = self.stack.pop().ok_or("Stack underflow")?;
+        let func = self.fiber.stack.pop().ok_or("Stack underflow")?;
 
         let mut args = Vec::with_capacity(arg_count);
         for _ in 0..arg_count {
-            args.push(self.stack.pop().ok_or("Stack underflow")?);
+            args.push(self.fiber.stack.pop().ok_or("Stack underflow")?);
         }
         args.reverse();
 
@@ -278,7 +278,7 @@ impl VM {
             match f(&args) {
                 Ok(val) => return Ok(Some(VmResult::Done(val))),
                 Err(cond) => {
-                    self.current_exception = Some(std::rc::Rc::new(cond));
+                    self.fiber.current_exception = Some(std::rc::Rc::new(cond));
                     return Ok(Some(VmResult::Done(Value::NIL)));
                 }
             }
@@ -293,9 +293,9 @@ impl VM {
         if let Some(closure) = func.as_closure() {
             // Validate argument count
             if !self.check_arity(&closure.arity, args.len()) {
-                if self.current_exception.is_some()
-                    && !self.handling_exception
-                    && self.exception_handlers.is_empty()
+                if self.fiber.current_exception.is_some()
+                    && !self.fiber.handling_exception
+                    && self.fiber.exception_handlers.is_empty()
                 {
                     return Ok(Some(VmResult::Done(Value::NIL)));
                 }
@@ -438,7 +438,7 @@ impl VM {
             }
         };
 
-        let saved_stack: Vec<Value> = self.stack.drain(..).collect();
+        let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
         let frame = crate::value::ContinuationFrame {
             bytecode: Rc::new(bytecode.to_vec()),
@@ -446,8 +446,8 @@ impl VM {
             env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
             ip,
             stack: saved_stack,
-            exception_handlers: self.exception_handlers.clone(),
-            handling_exception: self.handling_exception,
+            exception_handlers: self.fiber.exception_handlers.clone(),
+            handling_exception: self.fiber.handling_exception,
         };
 
         let cont_data = crate::value::ContinuationData::new(frame);

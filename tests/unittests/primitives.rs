@@ -28,7 +28,7 @@ fn call_primitive(prim: &Value, args: &[Value]) -> Result<Value, LError> {
         let mut vm = VM::new();
         let result = f(args, &mut vm);
         // Check if an exception was set
-        if let Some(exc) = &vm.current_exception {
+        if let Some(exc) = &vm.fiber.current_exception {
             return Err(LError::from(format!(
                 "Unhandled exception: {}",
                 exc.exception_id

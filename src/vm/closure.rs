@@ -16,7 +16,7 @@ pub fn handle_make_closure(
         // Collect captured values from stack
         let mut captured = Vec::with_capacity(num_upvalues);
         for _ in 0..num_upvalues {
-            captured.push(vm.stack.pop().ok_or("Stack underflow")?);
+            captured.push(vm.fiber.stack.pop().ok_or("Stack underflow")?);
         }
         captured.reverse();
 
@@ -36,7 +36,7 @@ pub fn handle_make_closure(
             lir_function: template_closure.lir_function.clone(),
         };
 
-        vm.stack.push(Value::closure(closure));
+        vm.fiber.stack.push(Value::closure(closure));
     } else {
         return Err("MakeClosure expects closure constant".to_string());
     }

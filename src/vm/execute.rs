@@ -20,14 +20,14 @@ impl VM {
         start_ip: usize,
     ) -> Result<VmResult, String> {
         // Each bytecode frame has its own exception handler scope.
-        let saved_handlers = std::mem::take(&mut self.exception_handlers);
-        let saved_handling = self.handling_exception;
-        self.handling_exception = false;
+        let saved_handlers = std::mem::take(&mut self.fiber.exception_handlers);
+        let saved_handling = self.fiber.handling_exception;
+        self.fiber.handling_exception = false;
 
         let result = self.execute_bytecode_inner_impl(bytecode, constants, closure_env, start_ip);
 
-        self.exception_handlers = saved_handlers;
-        self.handling_exception = saved_handling;
+        self.fiber.exception_handlers = saved_handlers;
+        self.fiber.handling_exception = saved_handling;
 
         result
     }
@@ -73,8 +73,8 @@ impl VM {
         handling: bool,
     ) -> Result<VmResult, String> {
         // Save outer state
-        let saved_handlers = std::mem::replace(&mut self.exception_handlers, handlers);
-        let saved_handling = std::mem::replace(&mut self.handling_exception, handling);
+        let saved_handlers = std::mem::replace(&mut self.fiber.exception_handlers, handlers);
+        let saved_handling = std::mem::replace(&mut self.fiber.handling_exception, handling);
 
         // Execute with tail call loop
         let mut current_bytecode = bytecode.to_vec();
@@ -102,8 +102,8 @@ impl VM {
         };
 
         // Restore outer state
-        self.exception_handlers = saved_handlers;
-        self.handling_exception = saved_handling;
+        self.fiber.exception_handlers = saved_handlers;
+        self.fiber.handling_exception = saved_handling;
 
         Ok(result)
     }
@@ -116,7 +116,7 @@ impl VM {
         closure_env: Option<&Rc<Vec<Value>>>,
     ) -> Result<VmResult, String> {
         // Save the caller's stack
-        let saved_stack = std::mem::take(&mut self.stack);
+        let saved_stack = std::mem::take(&mut self.fiber.stack);
 
         let mut current_bytecode = bytecode.to_vec();
         let mut current_constants = constants.to_vec();
@@ -139,7 +139,7 @@ impl VM {
         };
 
         // Restore the caller's stack
-        self.stack = saved_stack;
+        self.fiber.stack = saved_stack;
 
         Ok(result)
     }

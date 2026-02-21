@@ -143,7 +143,7 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
             "coroutine-resume: expected 1-2 arguments, got {}",
             args.len()
         ));
-        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         return Ok(Value::NIL);
     }
 
@@ -191,7 +191,7 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                                 "yield-from: delegate coroutine errored: {}",
                                 e
                             ));
-                            vm.current_exception = Some(std::rc::Rc::new(cond));
+                            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                             return Ok(Value::NIL);
                         }
                         _ => {
@@ -272,10 +272,11 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                 match result {
                     Ok(VmResult::Done(value)) => {
                         // Check if the coroutine body raised an uncaught exception.
-                        // If so, leave it on vm.current_exception for handler-case
+                        // If so, leave it on vm.fiber.current_exception for handler-case
                         // to catch, and transition the coroutine to Error state.
-                        if vm.current_exception.is_some() {
+                        if vm.fiber.current_exception.is_some() {
                             let msg = vm
+                                .fiber
                                 .current_exception
                                 .as_ref()
                                 .map(|e| e.message.clone())
@@ -322,8 +323,9 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                 let mut borrowed = co.borrow_mut();
                 match result {
                     Ok(VmResult::Done(value)) => {
-                        if vm.current_exception.is_some() {
+                        if vm.fiber.current_exception.is_some() {
                             let msg = vm
+                                .fiber
                                 .current_exception
                                 .as_ref()
                                 .map(|e| e.message.clone())
@@ -354,12 +356,12 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
             }
             CoroutineState::Running => {
                 let cond = Condition::error("coroutine-resume: coroutine is already running");
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 Ok(Value::NIL)
             }
             CoroutineState::Done => {
                 let cond = Condition::error("coroutine-resume: cannot resume completed coroutine");
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 Ok(Value::NIL)
             }
             CoroutineState::Error(e) => {
@@ -367,7 +369,7 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
                     "coroutine-resume: cannot resume errored coroutine: {}",
                     e
                 ));
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 Ok(Value::NIL)
             }
         }
@@ -376,7 +378,7 @@ pub fn prim_coroutine_resume(args: &[Value], vm: &mut VM) -> LResult<Value> {
             "coroutine-resume: expected coroutine, got {}",
             args[0].type_name()
         ));
-        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         Ok(Value::NIL)
     }
 }
@@ -400,7 +402,7 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> LResult<Value> {
             "yield-from: expected 1 argument, got {}",
             args.len()
         ));
-        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         return Ok(Value::NIL);
     }
 
@@ -419,12 +421,12 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> LResult<Value> {
             }
             CoroutineState::Error(e) => {
                 let cond = Condition::error(format!("yield-from: sub-coroutine errored: {}", e));
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 Ok(Value::NIL)
             }
             CoroutineState::Running => {
                 let cond = Condition::error("yield-from: sub-coroutine is already running");
-                vm.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                 Ok(Value::NIL)
             }
             CoroutineState::Created | CoroutineState::Suspended => {
@@ -433,7 +435,7 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> LResult<Value> {
                     Some(co) => co.clone(),
                     None => {
                         let cond = Condition::error("yield-from: not inside a coroutine");
-                        vm.current_exception = Some(std::rc::Rc::new(cond));
+                        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                         return Ok(Value::NIL);
                     }
                 };
@@ -472,7 +474,7 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> LResult<Value> {
                         // Sub-coroutine errored during resume
                         let cond =
                             Condition::error(format!("yield-from: sub-coroutine errored: {}", e));
-                        vm.current_exception = Some(std::rc::Rc::new(cond));
+                        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
                         Ok(Value::NIL)
                     }
                     _ => {
@@ -487,7 +489,7 @@ pub fn prim_yield_from(args: &[Value], vm: &mut VM) -> LResult<Value> {
             "yield-from: expected coroutine, got {}",
             args[0].type_name()
         ));
-        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         Ok(Value::NIL)
     }
 }
@@ -528,7 +530,7 @@ pub fn prim_coroutine_next(args: &[Value], vm: &mut VM) -> LResult<Value> {
             "coroutine-next: expected 1 argument, got {}",
             args.len()
         ));
-        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         return Ok(Value::NIL);
     }
 
@@ -554,7 +556,7 @@ pub fn prim_coroutine_next(args: &[Value], vm: &mut VM) -> LResult<Value> {
             "coroutine-next: expected coroutine, got {}",
             args[0].type_name()
         ));
-        vm.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         Ok(Value::NIL)
     }
 }
@@ -658,7 +660,7 @@ mod tests {
         let result = prim_coroutine_resume(&[Value::int(42)], &mut vm);
         // Now returns Ok(NIL) with current_exception set
         assert!(result.is_ok());
-        assert!(vm.current_exception.is_some());
+        assert!(vm.fiber.current_exception.is_some());
     }
 
     #[test]
@@ -677,7 +679,7 @@ mod tests {
         let result = prim_yield_from(&[Value::int(42)], &mut vm);
         // Now returns Ok(NIL) with current_exception set
         assert!(result.is_ok());
-        assert!(vm.current_exception.is_some());
+        assert!(vm.fiber.current_exception.is_some());
     }
 
     #[test]
@@ -694,7 +696,7 @@ mod tests {
         let result = prim_coroutine_next(&[Value::int(42)], &mut vm);
         // Now returns Ok(NIL) with current_exception set
         assert!(result.is_ok());
-        assert!(vm.current_exception.is_some());
+        assert!(vm.fiber.current_exception.is_some());
     }
 
     #[test]
