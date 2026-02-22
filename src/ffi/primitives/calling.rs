@@ -4,7 +4,7 @@ use super::types::parse_ctype;
 use crate::ffi::call::FunctionCall;
 use crate::ffi::types::FunctionSignature;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 use crate::vm::VM;
 
 /// (call-c-function lib-id func-name return-type (arg-type ...) (arg-val ...)) -> result
@@ -83,9 +83,7 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 5 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "call-c-function: expected 5 arguments".to_string(),
-            )),
+            error_val("arity-error", "call-c-function: expected 5 arguments"),
         );
     }
 
@@ -95,9 +93,10 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(
-                    "call-c-function: first argument must be a library handle".to_string(),
-                )),
+                error_val(
+                    "type-error",
+                    "call-c-function: first argument must be a library handle",
+                ),
             );
         }
     };
@@ -108,9 +107,10 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(
-                    "call-c-function: second argument must be a function name string".to_string(),
-                )),
+                error_val(
+                    "type-error",
+                    "call-c-function: second argument must be a function name string",
+                ),
             );
         }
     };
@@ -119,7 +119,7 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
     let return_type = match parse_ctype(&args[2]) {
         Ok(ty) => ty,
         Err(e) => {
-            return (SIG_ERROR, Value::condition(Condition::error(e)));
+            return (SIG_ERROR, error_val("error", e));
         }
     };
 
@@ -132,7 +132,7 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
             Err(e) => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("call-c-function: {}", e))),
+                    error_val("type-error", format!("call-c-function: {}", e)),
                 );
             }
         };
@@ -143,7 +143,7 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
         {
             Ok(types) => types,
             Err(e) => {
-                return (SIG_ERROR, Value::condition(Condition::error(e)));
+                return (SIG_ERROR, error_val("error", e));
             }
         }
     };
@@ -157,7 +157,7 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
             Err(e) => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("call-c-function: {}", e))),
+                    error_val("type-error", format!("call-c-function: {}", e)),
                 );
             }
         }
@@ -167,11 +167,14 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if arg_types.len() != arg_values.len() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "call-c-function: argument count mismatch: expected {}, got {}",
-                arg_types.len(),
-                arg_values.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!(
+                    "call-c-function: argument count mismatch: expected {}, got {}",
+                    arg_types.len(),
+                    arg_values.len()
+                ),
+            ),
         );
     }
 
@@ -182,10 +185,7 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
     let vm_ptr = match super::context::get_vm_context() {
         Some(ptr) => ptr,
         None => {
-            return (
-                SIG_ERROR,
-                Value::condition(Condition::error("FFI not initialized".to_string())),
-            );
+            return (SIG_ERROR, error_val("error", "FFI not initialized"));
         }
     };
 
@@ -194,30 +194,27 @@ pub fn prim_call_c_function_wrapper(args: &[Value]) -> (SignalBits, Value) {
         let lib = match vm.ffi().get_library(lib_id) {
             Some(lib) => lib,
             None => {
-                return (
-                    SIG_ERROR,
-                    Value::condition(Condition::error("Library handle not found".to_string())),
-                );
+                return (SIG_ERROR, error_val("error", "Library handle not found"));
             }
         };
 
         let func_ptr = match lib.get_symbol(func_name) {
             Ok(ptr) => ptr,
             Err(e) => {
-                return (SIG_ERROR, Value::condition(Condition::error(e)));
+                return (SIG_ERROR, error_val("error", e));
             }
         };
 
         let call = match FunctionCall::new(sig, func_ptr) {
             Ok(c) => c,
             Err(e) => {
-                return (SIG_ERROR, Value::condition(Condition::error(e)));
+                return (SIG_ERROR, error_val("error", e));
             }
         };
 
         match call.call(&arg_values) {
             Ok(value) => (SIG_OK, value),
-            Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => (SIG_ERROR, error_val("error", e)),
         }
     }
 }

@@ -1,7 +1,7 @@
 //! List manipulation primitives
 use crate::symbol::SymbolTable;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{list, Condition, SymbolId, Value};
+use crate::value::{error_val, list, SymbolId, Value};
 use std::cell::RefCell;
 
 thread_local! {
@@ -45,10 +45,10 @@ pub fn prim_cons(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "cons: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("cons: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, crate::value::cons(args[0], args[1]))
@@ -59,10 +59,10 @@ pub fn prim_first(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "first: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("first: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     let cons = match args[0].as_cons() {
@@ -70,10 +70,10 @@ pub fn prim_first(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "first: expected cons cell, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("first: expected cons cell, got {}", args[0].type_name()),
+                ),
             )
         }
     };
@@ -85,10 +85,10 @@ pub fn prim_rest(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "rest: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("rest: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     let cons = match args[0].as_cons() {
@@ -96,10 +96,10 @@ pub fn prim_rest(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "rest: expected cons cell, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("rest: expected cons cell, got {}", args[0].type_name()),
+                ),
             )
         }
     };
@@ -116,10 +116,10 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "length: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("length: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -128,12 +128,7 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
     } else if args[0].is_cons() {
         let vec = match args[0].list_to_vec() {
             Ok(v) => v,
-            Err(e) => {
-                return (
-                    SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("length: {}", e))),
-                )
-            }
+            Err(e) => return (SIG_ERROR, error_val("type-error", format!("length: {}", e))),
         };
         (SIG_OK, Value::int(vec.len() as i64))
     } else if let Some(s) = args[0].as_string() {
@@ -144,7 +139,7 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
             None => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error("length: failed to get vector".to_string())),
+                    error_val("error", "length: failed to get vector".to_string()),
                 )
             }
         };
@@ -155,7 +150,7 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
             None => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error("length: failed to get table".to_string())),
+                    error_val("error", "length: failed to get table".to_string()),
                 )
             }
         };
@@ -166,7 +161,7 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
             None => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error("length: failed to get struct".to_string())),
+                    error_val("error", "length: failed to get struct".to_string()),
                 )
             }
         };
@@ -178,10 +173,10 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
         } else {
             (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "length: unable to resolve symbol name for id {:?}",
-                    sid
-                ))),
+                error_val(
+                    "error",
+                    format!("length: unable to resolve symbol name for id {:?}", sid),
+                ),
             )
         }
     } else if let Some(kid) = args[0].as_keyword() {
@@ -191,17 +186,17 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
         } else {
             (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "length: unable to resolve keyword name for id {:?}",
-                    kid
-                ))),
+                error_val(
+                    "error",
+                    format!("length: unable to resolve keyword name for id {:?}", kid),
+                ),
             )
         }
     } else {
-        (SIG_ERROR, Value::condition(Condition::type_error(format!(
+        (SIG_ERROR, error_val("type-error", format!(
             "length: expected collection type (list, string, vector, table, struct, symbol, or keyword), got {}",
             args[0].type_name()
-        ))))
+        )))
     }
 }
 
@@ -210,19 +205,19 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "empty?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("empty?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
     // nil is not a container - error if passed
     if args[0].is_nil() {
-        return (SIG_ERROR, Value::condition(Condition::type_error(
+        return (SIG_ERROR, error_val("type-error",
             "empty?: expected collection type (list, string, vector, table, or struct), got nil"
                 .to_string(),
-        )));
+        ));
     }
 
     let result = if args[0].is_empty_list() {
@@ -237,7 +232,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             None => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error("empty?: failed to get vector".to_string())),
+                    error_val("error", "empty?: failed to get vector".to_string()),
                 )
             }
         };
@@ -248,7 +243,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             None => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error("empty?: failed to get table".to_string())),
+                    error_val("error", "empty?: failed to get table".to_string()),
                 )
             }
         };
@@ -259,7 +254,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             None => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error("empty?: failed to get struct".to_string())),
+                    error_val("error", "empty?: failed to get struct".to_string()),
                 )
             }
         };
@@ -267,10 +262,13 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
+            error_val(
+                "type-error",
+                format!(
                 "empty?: expected collection type (list, string, vector, table, or struct), got {}",
                 args[0].type_name()
-            ))),
+            ),
+            ),
         );
     };
 
@@ -283,12 +281,7 @@ pub fn prim_append(args: &[Value]) -> (SignalBits, Value) {
     for arg in args {
         let vec = match arg.list_to_vec() {
             Ok(v) => v,
-            Err(e) => {
-                return (
-                    SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("append: {}", e))),
-                )
-            }
+            Err(e) => return (SIG_ERROR, error_val("type-error", format!("append: {}", e))),
         };
         result.extend(vec);
     }
@@ -300,10 +293,10 @@ pub fn prim_reverse(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "reverse: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("reverse: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     let mut vec = match args[0].list_to_vec() {
@@ -311,7 +304,7 @@ pub fn prim_reverse(args: &[Value]) -> (SignalBits, Value) {
         Err(e) => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!("reverse: {}", e))),
+                error_val("type-error", format!("reverse: {}", e)),
             )
         }
     };
@@ -324,10 +317,10 @@ pub fn prim_nth(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "nth: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("nth: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -336,32 +329,26 @@ pub fn prim_nth(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "nth: expected integer, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("nth: expected integer, got {}", args[0].type_name()),
+                ),
             )
         }
     };
     let vec = match args[1].list_to_vec() {
         Ok(v) => v,
-        Err(e) => {
-            return (
-                SIG_ERROR,
-                Value::condition(Condition::type_error(format!("nth: {}", e))),
-            )
-        }
+        Err(e) => return (SIG_ERROR, error_val("type-error", format!("nth: {}", e))),
     };
 
     match vec.get(index).cloned() {
         Some(v) => (SIG_OK, v),
         None => (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "nth: index {} out of bounds (length {})",
-                index,
-                vec.len()
-            ))),
+            error_val(
+                "error",
+                format!("nth: index {} out of bounds (length {})", index, vec.len()),
+            ),
         ),
     }
 }
@@ -371,29 +358,22 @@ pub fn prim_last(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "last: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("last: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
     let vec = match args[0].list_to_vec() {
         Ok(v) => v,
-        Err(e) => {
-            return (
-                SIG_ERROR,
-                Value::condition(Condition::type_error(format!("last: {}", e))),
-            )
-        }
+        Err(e) => return (SIG_ERROR, error_val("type-error", format!("last: {}", e))),
     };
     match vec.last().cloned() {
         Some(v) => (SIG_OK, v),
         None => (
             SIG_ERROR,
-            Value::condition(Condition::error(
-                "last: cannot get last of empty list".to_string(),
-            )),
+            error_val("error", "last: cannot get last of empty list".to_string()),
         ),
     }
 }
@@ -403,10 +383,10 @@ pub fn prim_take(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "take: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("take: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -415,21 +395,16 @@ pub fn prim_take(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "take: expected integer, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("take: expected integer, got {}", args[0].type_name()),
+                ),
             )
         }
     };
     let vec = match args[1].list_to_vec() {
         Ok(v) => v,
-        Err(e) => {
-            return (
-                SIG_ERROR,
-                Value::condition(Condition::type_error(format!("take: {}", e))),
-            )
-        }
+        Err(e) => return (SIG_ERROR, error_val("type-error", format!("take: {}", e))),
     };
 
     let taken: Vec<Value> = vec.into_iter().take(count).collect();
@@ -441,10 +416,10 @@ pub fn prim_drop(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "drop: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("drop: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -453,21 +428,16 @@ pub fn prim_drop(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "drop: expected integer, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("drop: expected integer, got {}", args[0].type_name()),
+                ),
             )
         }
     };
     let vec = match args[1].list_to_vec() {
         Ok(v) => v,
-        Err(e) => {
-            return (
-                SIG_ERROR,
-                Value::condition(Condition::type_error(format!("drop: {}", e))),
-            )
-        }
+        Err(e) => return (SIG_ERROR, error_val("type-error", format!("drop: {}", e))),
     };
 
     let dropped: Vec<Value> = vec.into_iter().skip(count).collect();

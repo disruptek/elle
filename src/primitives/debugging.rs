@@ -7,7 +7,7 @@
 
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use crate::value::types::Arity;
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 // ============================================================================
 // Introspection predicates
@@ -18,10 +18,10 @@ pub fn prim_is_closure(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "closure?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("closure?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(args[0].as_closure().is_some()))
@@ -32,10 +32,10 @@ pub fn prim_is_jit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "jit?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("jit?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -50,10 +50,10 @@ pub fn prim_is_pure(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "pure?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("pure?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -68,10 +68,10 @@ pub fn prim_is_coro(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "coro?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("coro?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -86,10 +86,10 @@ pub fn prim_mutates_params(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "mutates-params?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("mutates-params?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -104,10 +104,10 @@ pub fn prim_raises(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "raises?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("raises?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -126,10 +126,10 @@ pub fn prim_arity(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "arity: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("arity: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -149,10 +149,10 @@ pub fn prim_captures(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "captures: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("captures: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -167,10 +167,10 @@ pub fn prim_bytecode_size(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "bytecode-size: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("bytecode-size: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -189,10 +189,10 @@ pub fn prim_disbit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "disbit: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("disbit: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -207,9 +207,10 @@ pub fn prim_disbit(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
+            error_val(
+                "type-error",
                 "disbit: argument must be a closure".to_string(),
-            )),
+            ),
         )
     }
 }
@@ -219,10 +220,10 @@ pub fn prim_disjit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "disjit: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("disjit: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(closure) = args[0].as_closure() {
@@ -244,9 +245,10 @@ pub fn prim_disjit(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
+            error_val(
+                "type-error",
                 "disjit: argument must be a closure".to_string(),
-            )),
+            ),
         )
     }
 }

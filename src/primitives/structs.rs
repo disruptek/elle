@@ -1,10 +1,10 @@
 //! Struct operations primitives (immutable hash maps)
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, TableKey, Value};
+use crate::value::{error_val, TableKey, Value};
 use std::collections::BTreeMap;
 
 /// Convert a Value to a TableKey
-fn value_to_table_key(val: &Value) -> Result<TableKey, Condition> {
+fn value_to_table_key(val: &Value) -> Result<TableKey, Value> {
     if val.is_nil() {
         Ok(TableKey::Nil)
     } else if let Some(b) = val.as_bool() {
@@ -16,10 +16,10 @@ fn value_to_table_key(val: &Value) -> Result<TableKey, Condition> {
     } else if let Some(s) = val.as_string() {
         Ok(TableKey::String(s.to_string()))
     } else {
-        Err(Condition::type_error(format!(
-            "expected table key, got {}",
-            val.type_name()
-        )))
+        Err(error_val(
+            "type-error",
+            format!("expected table key, got {}", val.type_name()),
+        ))
     }
 }
 
@@ -29,9 +29,10 @@ pub fn prim_struct(args: &[Value]) -> (SignalBits, Value) {
     if !args.len().is_multiple_of(2) {
         return (
             SIG_ERROR,
-            Value::condition(Condition::error(
+            error_val(
+                "error",
                 "struct: requires an even number of arguments (key-value pairs)".to_string(),
-            )),
+            ),
         );
     }
 
@@ -42,7 +43,7 @@ pub fn prim_struct(args: &[Value]) -> (SignalBits, Value) {
                 let value = args[i + 1];
                 map.insert(key, value);
             }
-            Err(e) => return (SIG_ERROR, Value::condition(e)),
+            Err(e) => return (SIG_ERROR, e),
         }
     }
 
@@ -55,10 +56,10 @@ pub fn prim_struct_get(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "struct-get: expected 2-3 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("struct-get: expected 2-3 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -67,17 +68,17 @@ pub fn prim_struct_get(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "struct-get: expected struct, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("struct-get: expected struct, got {}", args[0].type_name()),
+                ),
             );
         }
     };
 
     let key = match value_to_table_key(&args[1]) {
         Ok(k) => k,
-        Err(e) => return (SIG_ERROR, Value::condition(e)),
+        Err(e) => return (SIG_ERROR, e),
     };
 
     let default = if args.len() == 3 { args[2] } else { Value::NIL };
@@ -91,10 +92,10 @@ pub fn prim_struct_put(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "struct-put: expected 3 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("struct-put: expected 3 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -103,17 +104,17 @@ pub fn prim_struct_put(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "struct-put: expected struct, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("struct-put: expected struct, got {}", args[0].type_name()),
+                ),
             );
         }
     };
 
     let key = match value_to_table_key(&args[1]) {
         Ok(k) => k,
-        Err(e) => return (SIG_ERROR, Value::condition(e)),
+        Err(e) => return (SIG_ERROR, e),
     };
 
     let value = args[2];
@@ -129,10 +130,10 @@ pub fn prim_struct_del(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "struct-del: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("struct-del: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -141,17 +142,17 @@ pub fn prim_struct_del(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "struct-del: expected struct, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("struct-del: expected struct, got {}", args[0].type_name()),
+                ),
             );
         }
     };
 
     let key = match value_to_table_key(&args[1]) {
         Ok(k) => k,
-        Err(e) => return (SIG_ERROR, Value::condition(e)),
+        Err(e) => return (SIG_ERROR, e),
     };
 
     let mut new_map = s.clone();
@@ -165,10 +166,10 @@ pub fn prim_struct_keys(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "struct-keys: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("struct-keys: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -177,10 +178,10 @@ pub fn prim_struct_keys(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "struct-keys: expected struct, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("struct-keys: expected struct, got {}", args[0].type_name()),
+                ),
             );
         }
     };
@@ -205,10 +206,10 @@ pub fn prim_struct_values(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "struct-values: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("struct-values: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -217,10 +218,13 @@ pub fn prim_struct_values(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "struct-values: expected struct, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!(
+                        "struct-values: expected struct, got {}",
+                        args[0].type_name()
+                    ),
+                ),
             );
         }
     };
@@ -235,10 +239,10 @@ pub fn prim_struct_has(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "struct-has?: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("struct-has?: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -247,17 +251,17 @@ pub fn prim_struct_has(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "struct-has?: expected struct, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("struct-has?: expected struct, got {}", args[0].type_name()),
+                ),
             );
         }
     };
 
     let key = match value_to_table_key(&args[1]) {
         Ok(k) => k,
-        Err(e) => return (SIG_ERROR, Value::condition(e)),
+        Err(e) => return (SIG_ERROR, e),
     };
 
     (SIG_OK, Value::bool(s.contains_key(&key)))
@@ -269,10 +273,10 @@ pub fn prim_struct_length(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "struct-length: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("struct-length: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -281,10 +285,13 @@ pub fn prim_struct_length(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "struct-length: expected struct, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!(
+                        "struct-length: expected struct, got {}",
+                        args[0].type_name()
+                    ),
+                ),
             );
         }
     };

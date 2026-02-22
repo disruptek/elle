@@ -15,7 +15,7 @@
 //! - fiber?: Type predicate
 
 use crate::value::fiber::{Fiber, FiberStatus, SignalBits, SIG_ERROR, SIG_OK, SIG_RESUME};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Return a keyword Value for a FiberStatus by interning via the
 /// thread-local symbol table. Falls back to a string if no symbol
@@ -40,10 +40,10 @@ pub fn prim_fiber_new(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "fiber/new: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("fiber/new: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -52,10 +52,10 @@ pub fn prim_fiber_new(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "fiber/new: expected closure, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("fiber/new: expected closure, got {}", args[0].type_name()),
+                ),
             );
         }
     };
@@ -65,10 +65,13 @@ pub fn prim_fiber_new(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "fiber/new: expected integer mask, got {}",
-                    args[1].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!(
+                        "fiber/new: expected integer mask, got {}",
+                        args[1].type_name()
+                    ),
+                ),
             );
         }
     };
@@ -88,10 +91,10 @@ pub fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() || args.len() > 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "fiber/resume: expected 1-2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("fiber/resume: expected 1-2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -100,10 +103,10 @@ pub fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "fiber/resume: expected fiber, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("fiber/resume: expected fiber, got {}", args[0].type_name()),
+                ),
             );
         }
     };
@@ -120,23 +123,19 @@ pub fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
             FiberStatus::Alive => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error("fiber/resume: fiber is already running")),
+                    error_val("error", "fiber/resume: fiber is already running"),
                 );
             }
             FiberStatus::Dead => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error(
-                        "fiber/resume: cannot resume completed fiber",
-                    )),
+                    error_val("error", "fiber/resume: cannot resume completed fiber"),
                 );
             }
             FiberStatus::Error => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error(
-                        "fiber/resume: cannot resume errored fiber",
-                    )),
+                    error_val("error", "fiber/resume: cannot resume errored fiber"),
                 );
             }
         }
@@ -158,10 +157,10 @@ pub fn prim_fiber_signal(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "fiber/signal: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("fiber/signal: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -170,10 +169,13 @@ pub fn prim_fiber_signal(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "fiber/signal: expected integer bits, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!(
+                        "fiber/signal: expected integer bits, got {}",
+                        args[0].type_name()
+                    ),
+                ),
             );
         }
     };
@@ -191,10 +193,10 @@ pub fn prim_fiber_status(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "fiber/status: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("fiber/status: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -203,10 +205,10 @@ pub fn prim_fiber_status(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "fiber/status: expected fiber, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("fiber/status: expected fiber, got {}", args[0].type_name()),
+                ),
             );
         }
     };
@@ -223,10 +225,10 @@ pub fn prim_fiber_value(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "fiber/value: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("fiber/value: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -235,10 +237,10 @@ pub fn prim_fiber_value(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "fiber/value: expected fiber, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("fiber/value: expected fiber, got {}", args[0].type_name()),
+                ),
             );
         }
     };
@@ -260,10 +262,10 @@ pub fn prim_fiber_bits(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "fiber/bits: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("fiber/bits: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -272,10 +274,10 @@ pub fn prim_fiber_bits(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "fiber/bits: expected fiber, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("fiber/bits: expected fiber, got {}", args[0].type_name()),
+                ),
             );
         }
     };
@@ -296,10 +298,10 @@ pub fn prim_fiber_mask(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "fiber/mask: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("fiber/mask: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -308,10 +310,10 @@ pub fn prim_fiber_mask(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "fiber/mask: expected fiber, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("fiber/mask: expected fiber, got {}", args[0].type_name()),
+                ),
             );
         }
     };
@@ -327,10 +329,10 @@ pub fn prim_is_fiber(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "fiber?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("fiber?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 

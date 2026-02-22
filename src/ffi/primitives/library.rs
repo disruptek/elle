@@ -1,7 +1,7 @@
 //! Library loading and management primitives.
 
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 use crate::vm::VM;
 
 /// (load-library path) -> library-handle
@@ -38,9 +38,7 @@ pub fn prim_load_library_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "load-library: expected 1 argument".to_string(),
-            )),
+            error_val("arity-error", "load-library: expected 1 argument"),
         );
     }
 
@@ -49,9 +47,7 @@ pub fn prim_load_library_wrapper(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(
-                    "load-library: expected string path".to_string(),
-                )),
+                error_val("type-error", "load-library: expected string path"),
             );
         }
     };
@@ -60,10 +56,7 @@ pub fn prim_load_library_wrapper(args: &[Value]) -> (SignalBits, Value) {
     let vm_ptr = match super::context::get_vm_context() {
         Some(ptr) => ptr,
         None => {
-            return (
-                SIG_ERROR,
-                Value::condition(Condition::error("FFI not initialized".to_string())),
-            );
+            return (SIG_ERROR, error_val("error", "FFI not initialized"));
         }
     };
 
@@ -71,7 +64,7 @@ pub fn prim_load_library_wrapper(args: &[Value]) -> (SignalBits, Value) {
         let vm = &mut *vm_ptr;
         match vm.ffi_mut().load_library(path) {
             Ok(lib_id) => (SIG_OK, Value::int(lib_id as i64)),
-            Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => (SIG_ERROR, error_val("error", e)),
         }
     }
 }
@@ -80,10 +73,7 @@ pub fn prim_list_libraries_wrapper(_args: &[Value]) -> (SignalBits, Value) {
     let vm_ptr = match super::context::get_vm_context() {
         Some(ptr) => ptr,
         None => {
-            return (
-                SIG_ERROR,
-                Value::condition(Condition::error("FFI not initialized".to_string())),
-            );
+            return (SIG_ERROR, error_val("error", "FFI not initialized"));
         }
     };
 

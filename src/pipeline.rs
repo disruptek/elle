@@ -40,7 +40,7 @@ fn scan_define_lambda(syntax: &Syntax, symbols: &mut SymbolTable) -> Option<Symb
                         if let SyntaxKind::List(val_items) = &items[2].kind {
                             if let Some(first) = val_items.first() {
                                 if let Some(kw) = first.as_symbol() {
-                                    if kw == "fn" || kw == "lambda" {
+                                    if kw == "fn" {
                                         return Some(symbols.intern(def_name));
                                     }
                                 }

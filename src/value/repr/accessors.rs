@@ -308,17 +308,23 @@ impl Value {
         }
     }
 
-    /// Extract as condition if this is a condition.
+    /// Extract as tuple if this is a tuple.
     #[inline]
-    pub fn as_condition(&self) -> Option<&crate::value::Condition> {
+    pub fn as_tuple(&self) -> Option<&[Value]> {
         use crate::value::heap::{deref, HeapObject};
         if !self.is_heap() {
             return None;
         }
         match unsafe { deref(*self) } {
-            HeapObject::Condition(c) => Some(c),
+            HeapObject::Tuple(elems) => Some(elems),
             _ => None,
         }
+    }
+
+    /// Check if this value is a tuple.
+    #[inline]
+    pub fn is_tuple(&self) -> bool {
+        self.as_tuple().is_some()
     }
 
     /// Extract as thread handle if this is a thread handle.

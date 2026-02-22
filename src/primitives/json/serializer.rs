@@ -98,7 +98,15 @@ pub fn serialize_value(value: &Value) -> Result<String, String> {
             HeapTag::Table => Err("Table should have been handled above".to_string()),
             HeapTag::Struct => Err("Struct should have been handled above".to_string()),
             HeapTag::Closure => Err("Cannot serialize closures to JSON".to_string()),
-            HeapTag::Condition => Err("Cannot serialize conditions to JSON".to_string()),
+            HeapTag::Tuple => {
+                if let Some(elems) = value.as_tuple() {
+                    let items: Result<Vec<String>, String> =
+                        elems.iter().map(serialize_value).collect();
+                    Ok(format!("[{}]", items?.join(",")))
+                } else {
+                    Err("Tuple should have been accessible".to_string())
+                }
+            }
             HeapTag::Cell => Err("Cell should have been handled above".to_string()),
             HeapTag::Float => {
                 // This is a heap-allocated float (for NaN values)
@@ -229,7 +237,22 @@ pub fn serialize_value_pretty(value: &Value, indent_level: usize) -> Result<Stri
             HeapTag::Table => Err("Table should have been handled above".to_string()),
             HeapTag::Struct => Err("Struct should have been handled above".to_string()),
             HeapTag::Closure => Err("Cannot serialize closures to JSON".to_string()),
-            HeapTag::Condition => Err("Cannot serialize conditions to JSON".to_string()),
+            HeapTag::Tuple => {
+                if let Some(elems) = value.as_tuple() {
+                    let items: Result<Vec<String>, String> = elems
+                        .iter()
+                        .map(|v| serialize_value_pretty(v, indent_level + 1))
+                        .collect();
+                    Ok(format!(
+                        "[\n{}{}\n{}]",
+                        next_indent,
+                        items?.join(&format!(",\n{}", next_indent)),
+                        indent
+                    ))
+                } else {
+                    Err("Tuple should have been accessible".to_string())
+                }
+            }
             HeapTag::Cell => Err("Cell should have been handled above".to_string()),
             HeapTag::Float => {
                 // This is a heap-allocated float (for NaN values)

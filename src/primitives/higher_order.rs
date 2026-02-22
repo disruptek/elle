@@ -1,15 +1,16 @@
 //! Higher-order function primitives (map, filter, fold)
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{list, Condition, Value};
+use crate::value::{error_val, list, Value};
 
 /// Apply a function to each element of a list
 pub fn prim_map(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "map: expected 2 arguments, got ".to_string() + &args.len().to_string(),
-            )),
+            error_val(
+                "arity-error",
+                format!("map: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -17,10 +18,7 @@ pub fn prim_map(args: &[Value]) -> (SignalBits, Value) {
         let vec = match args[1].list_to_vec() {
             Ok(v) => v,
             Err(e) => {
-                return (
-                    SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("map: {}", e))),
-                );
+                return (SIG_ERROR, error_val("type-error", format!("map: {}", e)));
             }
         };
 
@@ -36,16 +34,15 @@ pub fn prim_map(args: &[Value]) -> (SignalBits, Value) {
     } else if args[0].is_closure() {
         (
             SIG_ERROR,
-            Value::condition(Condition::error(
-                "map with closures not yet supported (use native functions or ffi_map)".to_string(),
-            )),
+            error_val(
+                "error",
+                "map with closures not yet supported (use native functions or ffi_map)",
+            ),
         )
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
-                "map: first argument must be a function".to_string(),
-            )),
+            error_val("type-error", "map: first argument must be a function"),
         )
     }
 }
@@ -55,9 +52,10 @@ pub fn prim_filter(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "filter: expected 2 arguments, got ".to_string() + &args.len().to_string(),
-            )),
+            error_val(
+                "arity-error",
+                format!("filter: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -65,10 +63,7 @@ pub fn prim_filter(args: &[Value]) -> (SignalBits, Value) {
         let vec = match args[1].list_to_vec() {
             Ok(v) => v,
             Err(e) => {
-                return (
-                    SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("filter: {}", e))),
-                );
+                return (SIG_ERROR, error_val("type-error", format!("filter: {}", e)));
             }
         };
 
@@ -86,17 +81,18 @@ pub fn prim_filter(args: &[Value]) -> (SignalBits, Value) {
     } else if args[0].is_closure() {
         (
             SIG_ERROR,
-            Value::condition(Condition::error(
-                "filter with closures not yet supported (use native functions or ffi_filter)"
-                    .to_string(),
-            )),
+            error_val(
+                "error",
+                "filter with closures not yet supported (use native functions or ffi_filter)",
+            ),
         )
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
-                "filter: first argument must be a predicate function".to_string(),
-            )),
+            error_val(
+                "type-error",
+                "filter: first argument must be a predicate function",
+            ),
         )
     }
 }
@@ -106,9 +102,10 @@ pub fn prim_fold(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "fold: expected 3 arguments, got ".to_string() + &args.len().to_string(),
-            )),
+            error_val(
+                "arity-error",
+                format!("fold: expected 3 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -117,10 +114,7 @@ pub fn prim_fold(args: &[Value]) -> (SignalBits, Value) {
         let vec = match args[2].list_to_vec() {
             Ok(v) => v,
             Err(e) => {
-                return (
-                    SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("fold: {}", e))),
-                );
+                return (SIG_ERROR, error_val("type-error", format!("fold: {}", e)));
             }
         };
 
@@ -135,17 +129,15 @@ pub fn prim_fold(args: &[Value]) -> (SignalBits, Value) {
     } else if args[0].is_closure() {
         (
             SIG_ERROR,
-            Value::condition(Condition::error(
-                "fold with closures not yet supported (use native functions or ffi_fold)"
-                    .to_string(),
-            )),
+            error_val(
+                "error",
+                "fold with closures not yet supported (use native functions or ffi_fold)",
+            ),
         )
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
-                "fold: first argument must be a function".to_string(),
-            )),
+            error_val("type-error", "fold: first argument must be a function"),
         )
     }
 }

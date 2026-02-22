@@ -1,17 +1,17 @@
 //! Type checking primitives
 use crate::ffi::primitives::context::get_symbol_table;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Check if value is nil
 pub fn prim_is_nil(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "nil?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("nil?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(args[0].is_nil()))
@@ -22,10 +22,10 @@ pub fn prim_is_pair(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "pair?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("pair?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(args[0].as_cons().is_some()))
@@ -36,10 +36,10 @@ pub fn prim_is_list(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "list?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("list?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (
@@ -53,10 +53,10 @@ pub fn prim_is_number(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "number?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("number?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(args[0].is_number()))
@@ -67,10 +67,10 @@ pub fn prim_is_symbol(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "symbol?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("symbol?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(args[0].is_symbol()))
@@ -81,10 +81,10 @@ pub fn prim_is_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "string?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("string?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(args[0].as_string().is_some()))
@@ -95,10 +95,10 @@ pub fn prim_is_boolean(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "boolean?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("boolean?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(args[0].is_bool()))
@@ -109,10 +109,10 @@ pub fn prim_is_keyword(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "keyword?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("keyword?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(args[0].is_keyword()))
@@ -124,10 +124,10 @@ pub fn prim_type_of(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "type-of: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("type-of: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 

@@ -240,7 +240,7 @@ impl<'a> Analyzer<'a> {
         let is_lambda_form = if let Some(list) = items[2].as_list() {
             list.first()
                 .and_then(|s| s.as_symbol())
-                .is_some_and(|s| s == "fn" || s == "lambda")
+                .is_some_and(|s| s == "fn")
         } else {
             false
         };

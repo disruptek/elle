@@ -1,6 +1,6 @@
 //! Process-related primitives
 use crate::value::fiber::{SignalBits, SIG_ERROR};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Exit the process with an optional exit code
 ///
@@ -16,29 +16,29 @@ pub fn prim_exit(args: &[Value]) -> (SignalBits, Value) {
             if !(0..=255).contains(&n) {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error(format!(
-                        "exit: code must be between 0 and 255, got {}",
-                        n
-                    ))),
+                    error_val(
+                        "error",
+                        format!("exit: code must be between 0 and 255, got {}", n),
+                    ),
                 );
             }
             n as i32
         } else {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "exit: expected integer, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("exit: expected integer, got {}", args[0].type_name()),
+                ),
             );
         }
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "exit: expected 0-1 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("exit: expected 0-1 arguments, got {}", args.len()),
+            ),
         );
     };
 

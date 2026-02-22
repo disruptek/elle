@@ -1,15 +1,15 @@
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Logical NOT operation
 pub fn prim_not(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "not: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("not: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     (SIG_OK, Value::bool(!args[0].is_truthy()))

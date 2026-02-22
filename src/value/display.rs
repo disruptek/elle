@@ -116,9 +116,16 @@ impl fmt::Display for Value {
             return write!(f, "<fiber:{}>", status);
         }
 
-        // Condition
-        if let Some(_cond) = self.as_condition() {
-            return write!(f, "<condition>");
+        // Tuple
+        if let Some(elems) = self.as_tuple() {
+            write!(f, "[")?;
+            for (i, v) in elems.iter().enumerate() {
+                if i > 0 {
+                    write!(f, " ")?;
+                }
+                write!(f, "{}", v)?;
+            }
+            return write!(f, "]");
         }
 
         // Default for unknown heap types

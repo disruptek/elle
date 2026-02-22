@@ -1,6 +1,6 @@
 use super::core::VM;
 use crate::arithmetic;
-use crate::value::Value;
+use crate::value::{error_val, Value, SIG_ERROR};
 
 pub fn handle_add_int(vm: &mut VM) {
     let b_val = vm
@@ -14,12 +14,17 @@ pub fn handle_add_int(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on AddInt");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "+: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "+: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -38,12 +43,17 @@ pub fn handle_sub_int(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on SubInt");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "-: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "-: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -62,12 +72,17 @@ pub fn handle_mul_int(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on MulInt");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "*: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "*: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -86,23 +101,22 @@ pub fn handle_div_int(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on DivInt");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "/: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "/: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
     if b == 0 {
-        // Create a division-by-zero Condition
-        let cond = crate::value::Condition::division_by_zero("division by zero")
-            .with_field(0, Value::int(a)) // dividend
-            .with_field(1, Value::int(b)); // divisor
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
-        // Push a marker value (nil) to keep stack consistent
-        // The exception interrupt mechanism will handle the exception
+        vm.fiber.signal = Some((SIG_ERROR, error_val("division-by-zero", "division by zero")));
         vm.fiber.stack.push(Value::NIL);
         return;
     }
@@ -125,8 +139,7 @@ pub fn handle_add(vm: &mut VM) {
             vm.fiber.stack.push(result);
         }
         Err(msg) => {
-            let cond = crate::value::Condition::type_error(msg);
-            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+            vm.fiber.signal = Some((SIG_ERROR, error_val("type-error", msg)));
             vm.fiber.stack.push(Value::NIL);
         }
     }
@@ -148,8 +161,7 @@ pub fn handle_sub(vm: &mut VM) {
             vm.fiber.stack.push(result);
         }
         Err(msg) => {
-            let cond = crate::value::Condition::type_error(msg);
-            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+            vm.fiber.signal = Some((SIG_ERROR, error_val("type-error", msg)));
             vm.fiber.stack.push(Value::NIL);
         }
     }
@@ -171,8 +183,7 @@ pub fn handle_mul(vm: &mut VM) {
             vm.fiber.stack.push(result);
         }
         Err(msg) => {
-            let cond = crate::value::Condition::type_error(msg);
-            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+            vm.fiber.signal = Some((SIG_ERROR, error_val("type-error", msg)));
             vm.fiber.stack.push(Value::NIL);
         }
     }
@@ -206,12 +217,7 @@ pub fn handle_div(vm: &mut VM) {
     };
 
     if is_zero {
-        // Create a division-by-zero Condition
-        let cond = crate::value::Condition::division_by_zero("division by zero")
-            .with_field(0, a) // dividend
-            .with_field(1, b); // divisor
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
-        // Push a marker value (nil) to keep stack consistent
+        vm.fiber.signal = Some((SIG_ERROR, error_val("division-by-zero", "division by zero")));
         vm.fiber.stack.push(Value::NIL);
         return;
     }
@@ -221,8 +227,7 @@ pub fn handle_div(vm: &mut VM) {
             vm.fiber.stack.push(result);
         }
         Err(msg) => {
-            let cond = crate::value::Condition::type_error(msg);
-            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+            vm.fiber.signal = Some((SIG_ERROR, error_val("type-error", msg)));
             vm.fiber.stack.push(Value::NIL);
         }
     }
@@ -244,8 +249,7 @@ pub fn handle_rem(vm: &mut VM) {
             vm.fiber.stack.push(result);
         }
         Err(msg) => {
-            let cond = crate::value::Condition::type_error(msg);
-            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+            vm.fiber.signal = Some((SIG_ERROR, error_val("type-error", msg)));
             vm.fiber.stack.push(Value::NIL);
         }
     }
@@ -263,12 +267,17 @@ pub fn handle_bit_and(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on BitAnd");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "bit-and: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "bit-and: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -287,12 +296,17 @@ pub fn handle_bit_or(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on BitOr");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "bit-or: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "bit-or: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -311,12 +325,17 @@ pub fn handle_bit_xor(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on BitXor");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "bit-xor: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "bit-xor: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -330,11 +349,13 @@ pub fn handle_bit_not(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on BitNot");
     let Some(a) = a_val.as_int() else {
-        let cond = crate::value::Condition::type_error(format!(
-            "bit-not: expected integer, got {}",
-            a_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!("bit-not: expected integer, got {}", a_val.type_name()),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -353,12 +374,17 @@ pub fn handle_shl(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on Shl");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "shl: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "shl: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -379,12 +405,17 @@ pub fn handle_shr(vm: &mut VM) {
         .pop()
         .expect("VM bug: Stack underflow on Shr");
     let (Some(a), Some(b)) = (a_val.as_int(), b_val.as_int()) else {
-        let cond = crate::value::Condition::type_error(format!(
-            "shr: expected integers, got {} and {}",
-            a_val.type_name(),
-            b_val.type_name()
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "shr: expected integers, got {} and {}",
+                    a_val.type_name(),
+                    b_val.type_name()
+                ),
+            ),
         ));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
         vm.fiber.stack.push(Value::NIL);
         return;
     };
@@ -479,8 +510,8 @@ mod tests {
         vm.fiber.stack.push(Value::int(12));
         vm.fiber.stack.push(Value::float(10.0));
         handle_bit_and(&mut vm);
-        // Should set exception and push NIL
-        assert!(vm.fiber.current_exception.is_some());
+        // Should set signal and push NIL
+        assert!(vm.fiber.signal.is_some());
         assert_eq!(vm.fiber.stack.pop(), Some(Value::NIL));
     }
 }

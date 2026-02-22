@@ -1,6 +1,6 @@
 //! Cell/Box primitives for mutable storage
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Create a mutable cell containing a value
 ///
@@ -11,10 +11,10 @@ pub fn prim_box(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "box: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("box: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -30,10 +30,10 @@ pub fn prim_unbox(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "unbox: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("unbox: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -43,10 +43,10 @@ pub fn prim_unbox(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "unbox: expected cell, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("unbox: expected cell, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -60,10 +60,10 @@ pub fn prim_box_set(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "box-set!: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("box-set!: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -74,10 +74,10 @@ pub fn prim_box_set(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "box-set!: expected cell, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("box-set!: expected cell, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -91,10 +91,10 @@ pub fn prim_box_p(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "box?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("box?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 

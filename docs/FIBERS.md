@@ -105,11 +105,6 @@ pub struct Fiber {
     // --- Execution state migrated from VM (Step 2) ---
     pub call_depth: usize,
     pub call_stack: Vec<CallFrame>,
-    pub exception_handlers: SmallVec<[ExceptionHandler; 2]>,
-    pub current_exception: Option<Rc<Condition>>,
-    pub handling_exception: bool,
-    pub coroutine_stack: Vec<Rc<RefCell<Coroutine>>>,
-    pub pending_yield: Option<Value>,
     /// FIXME: Remove in Step 8 when fibers replace continuations.
     pub continuation: Option<Value>,
 }
@@ -122,9 +117,9 @@ pub struct Fiber {
 | `stack` | `Fiber.stack` | Operand stack |
 | `call_stack` | `Fiber.frames` | But Frame carries real state now |
 | `call_depth` | `Fiber.frames.len()` | Derived |
-| `exception_handlers` | Removed | Replaced by signal mask on fiber |
-| `current_exception` | `Fiber.signal` | Fiber.signal is canonical; run() returns SignalBits only |
-| `handling_exception` | Removed | Implicit in fiber chain structure |
+| `exception_handlers` | Removed | Errors flow through `fiber.signal` |
+| `current_exception` | Removed | Errors flow through `fiber.signal` as `(SIG_ERROR, condition)` |
+| `handling_exception` | Removed | No intra-fiber exception handling |
 | `coroutine_stack` | `Fiber.child` chain | Parent-child fiber chain |
 | `pending_yield` | Removed | Yield-from becomes fiber delegation |
 

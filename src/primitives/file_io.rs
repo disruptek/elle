@@ -1,16 +1,16 @@
 //! File I/O primitives
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Read entire file as a string
 pub fn prim_slurp(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "slurp: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("slurp: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -18,19 +18,16 @@ pub fn prim_slurp(args: &[Value]) -> (SignalBits, Value) {
             Ok(content) => (SIG_OK, Value::string(content)),
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "slurp: failed to read '{}': {}",
-                    path, e
-                ))),
+                error_val("error", format!("slurp: failed to read '{}': {}", path, e)),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "slurp: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("slurp: expected string, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -40,10 +37,10 @@ pub fn prim_spit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "spit: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("spit: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -52,10 +49,10 @@ pub fn prim_spit(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "spit: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("spit: expected string, got {}", args[0].type_name()),
+            ),
         );
     };
 
@@ -64,10 +61,10 @@ pub fn prim_spit(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "spit: expected string, got {}",
-                args[1].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("spit: expected string, got {}", args[1].type_name()),
+            ),
         );
     };
 
@@ -75,10 +72,7 @@ pub fn prim_spit(args: &[Value]) -> (SignalBits, Value) {
         Ok(_) => (SIG_OK, Value::TRUE),
         Err(e) => (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "spit: failed to write '{}': {}",
-                path, e
-            ))),
+            error_val("error", format!("spit: failed to write '{}': {}", path, e)),
         ),
     }
 }
@@ -88,10 +82,10 @@ pub fn prim_append_file(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "append-file: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("append-file: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -100,10 +94,10 @@ pub fn prim_append_file(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "append-file: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("append-file: expected string, got {}", args[0].type_name()),
+            ),
         );
     };
 
@@ -112,10 +106,10 @@ pub fn prim_append_file(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "append-file: expected string, got {}",
-                args[1].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("append-file: expected string, got {}", args[1].type_name()),
+            ),
         );
     };
 
@@ -127,10 +121,10 @@ pub fn prim_append_file(args: &[Value]) -> (SignalBits, Value) {
         Err(e) => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "append-file: failed to open '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("append-file: failed to open '{}': {}", path, e),
+                ),
             )
         }
     };
@@ -139,10 +133,10 @@ pub fn prim_append_file(args: &[Value]) -> (SignalBits, Value) {
         Ok(_) => (SIG_OK, Value::TRUE),
         Err(e) => (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "append-file: failed to write '{}': {}",
-                path, e
-            ))),
+            error_val(
+                "error",
+                format!("append-file: failed to write '{}': {}", path, e),
+            ),
         ),
     }
 }
@@ -152,10 +146,10 @@ pub fn prim_file_exists(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "file-exists?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("file-exists?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -163,10 +157,10 @@ pub fn prim_file_exists(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "file-exists?: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("file-exists?: expected string, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -176,10 +170,10 @@ pub fn prim_is_directory(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "directory?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("directory?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -190,10 +184,10 @@ pub fn prim_is_directory(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "directory?: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("directory?: expected string, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -203,10 +197,10 @@ pub fn prim_is_file(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "file?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("file?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -217,10 +211,10 @@ pub fn prim_is_file(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "file?: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("file?: expected string, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -230,10 +224,10 @@ pub fn prim_delete_file(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "delete-file: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("delete-file: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -241,19 +235,19 @@ pub fn prim_delete_file(args: &[Value]) -> (SignalBits, Value) {
             Ok(_) => (SIG_OK, Value::TRUE),
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "delete-file: failed to delete '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("delete-file: failed to delete '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "delete-file: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("delete-file: expected string, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -263,10 +257,10 @@ pub fn prim_delete_directory(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "delete-directory: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("delete-directory: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -274,19 +268,22 @@ pub fn prim_delete_directory(args: &[Value]) -> (SignalBits, Value) {
             Ok(_) => (SIG_OK, Value::TRUE),
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "delete-directory: failed to delete '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("delete-directory: failed to delete '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "delete-directory: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "delete-directory: expected string, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -296,10 +293,10 @@ pub fn prim_create_directory(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "create-directory: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("create-directory: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -307,19 +304,22 @@ pub fn prim_create_directory(args: &[Value]) -> (SignalBits, Value) {
             Ok(_) => (SIG_OK, Value::TRUE),
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "create-directory: failed to create '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("create-directory: failed to create '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "create-directory: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "create-directory: expected string, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -329,10 +329,13 @@ pub fn prim_create_directory_all(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "create-directory-all: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!(
+                    "create-directory-all: expected 1 argument, got {}",
+                    args.len()
+                ),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -340,19 +343,22 @@ pub fn prim_create_directory_all(args: &[Value]) -> (SignalBits, Value) {
             Ok(_) => (SIG_OK, Value::TRUE),
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "create-directory-all: failed to create '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("create-directory-all: failed to create '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "create-directory-all: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "create-directory-all: expected string, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -362,10 +368,10 @@ pub fn prim_rename_file(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "rename-file: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("rename-file: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -374,10 +380,10 @@ pub fn prim_rename_file(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "rename-file: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("rename-file: expected string, got {}", args[0].type_name()),
+            ),
         );
     };
 
@@ -386,10 +392,10 @@ pub fn prim_rename_file(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "rename-file: expected string, got {}",
-                args[1].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("rename-file: expected string, got {}", args[1].type_name()),
+            ),
         );
     };
 
@@ -397,10 +403,10 @@ pub fn prim_rename_file(args: &[Value]) -> (SignalBits, Value) {
         Ok(_) => (SIG_OK, Value::TRUE),
         Err(e) => (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "rename-file: failed to rename '{}': {}",
-                old_path, e
-            ))),
+            error_val(
+                "error",
+                format!("rename-file: failed to rename '{}': {}", old_path, e),
+            ),
         ),
     }
 }
@@ -410,10 +416,10 @@ pub fn prim_copy_file(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "copy-file: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("copy-file: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -422,10 +428,10 @@ pub fn prim_copy_file(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "copy-file: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("copy-file: expected string, got {}", args[0].type_name()),
+            ),
         );
     };
 
@@ -434,10 +440,10 @@ pub fn prim_copy_file(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "copy-file: expected string, got {}",
-                args[1].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("copy-file: expected string, got {}", args[1].type_name()),
+            ),
         );
     };
 
@@ -445,10 +451,10 @@ pub fn prim_copy_file(args: &[Value]) -> (SignalBits, Value) {
         Ok(_) => (SIG_OK, Value::TRUE),
         Err(e) => (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "copy-file: failed to copy '{}': {}",
-                src, e
-            ))),
+            error_val(
+                "error",
+                format!("copy-file: failed to copy '{}': {}", src, e),
+            ),
         ),
     }
 }
@@ -458,10 +464,10 @@ pub fn prim_file_size(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "file-size: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("file-size: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -469,19 +475,19 @@ pub fn prim_file_size(args: &[Value]) -> (SignalBits, Value) {
             Ok(metadata) => (SIG_OK, Value::int(metadata.len() as i64)),
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "file-size: failed to get size of '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("file-size: failed to get size of '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "file-size: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("file-size: expected string, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -491,10 +497,10 @@ pub fn prim_list_directory(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "list-directory: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("list-directory: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -511,10 +517,10 @@ pub fn prim_list_directory(args: &[Value]) -> (SignalBits, Value) {
                         Err(e) => {
                             return (
                                 SIG_ERROR,
-                                Value::condition(Condition::error(format!(
-                                    "list-directory: error reading '{}': {}",
-                                    path, e
-                                ))),
+                                error_val(
+                                    "error",
+                                    format!("list-directory: error reading '{}': {}", path, e),
+                                ),
                             );
                         }
                     }
@@ -523,19 +529,22 @@ pub fn prim_list_directory(args: &[Value]) -> (SignalBits, Value) {
             }
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "list-directory: failed to read '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("list-directory: failed to read '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "list-directory: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "list-directory: expected string, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -545,10 +554,10 @@ pub fn prim_absolute_path(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "absolute-path: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("absolute-path: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -559,19 +568,22 @@ pub fn prim_absolute_path(args: &[Value]) -> (SignalBits, Value) {
             ),
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "absolute-path: failed to resolve '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("absolute-path: failed to resolve '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "absolute-path: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "absolute-path: expected string, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -582,10 +594,10 @@ pub fn prim_current_directory(_args: &[Value]) -> (SignalBits, Value) {
         Ok(path) => (SIG_OK, Value::string(path.to_string_lossy().into_owned())),
         Err(e) => (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "current-directory: failed to get current directory: {}",
-                e
-            ))),
+            error_val(
+                "error",
+                format!("current-directory: failed to get current directory: {}", e),
+            ),
         ),
     }
 }
@@ -595,10 +607,10 @@ pub fn prim_change_directory(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "change-directory: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("change-directory: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -606,19 +618,22 @@ pub fn prim_change_directory(args: &[Value]) -> (SignalBits, Value) {
             Ok(_) => (SIG_OK, Value::TRUE),
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "change-directory: failed to change to '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("change-directory: failed to change to '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "change-directory: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "change-directory: expected string, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -628,9 +643,10 @@ pub fn prim_join_path(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "join-path: expected at least 1 argument, got 0".to_string(),
-            )),
+            error_val(
+                "arity-error",
+                "join-path: expected at least 1 argument, got 0",
+            ),
         );
     }
 
@@ -641,10 +657,10 @@ pub fn prim_join_path(args: &[Value]) -> (SignalBits, Value) {
         } else {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "join-path: expected string, got {}",
-                    arg.type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("join-path: expected string, got {}", arg.type_name()),
+                ),
             );
         }
     }
@@ -657,10 +673,10 @@ pub fn prim_file_extension(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "file-extension: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("file-extension: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path_str) = args[0].as_string() {
@@ -672,10 +688,13 @@ pub fn prim_file_extension(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "file-extension: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "file-extension: expected string, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -685,10 +704,10 @@ pub fn prim_file_name(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "file-name: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("file-name: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path_str) = args[0].as_string() {
@@ -700,10 +719,10 @@ pub fn prim_file_name(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "file-name: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("file-name: expected string, got {}", args[0].type_name()),
+            ),
         )
     }
 }
@@ -713,10 +732,10 @@ pub fn prim_parent_directory(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "parent-directory: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("parent-directory: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path_str) = args[0].as_string() {
@@ -728,10 +747,13 @@ pub fn prim_parent_directory(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "parent-directory: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "parent-directory: expected string, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -741,10 +763,10 @@ pub fn prim_read_lines(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "read-lines: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("read-lines: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     if let Some(path) = args[0].as_string() {
@@ -758,19 +780,19 @@ pub fn prim_read_lines(args: &[Value]) -> (SignalBits, Value) {
             }
             Err(e) => (
                 SIG_ERROR,
-                Value::condition(Condition::error(format!(
-                    "read-lines: failed to read '{}': {}",
-                    path, e
-                ))),
+                error_val(
+                    "error",
+                    format!("read-lines: failed to read '{}': {}", path, e),
+                ),
             ),
         }
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "read-lines: expected string, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("read-lines: expected string, got {}", args[0].type_name()),
+            ),
         )
     }
 }

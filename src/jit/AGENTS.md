@@ -59,9 +59,6 @@ Supported instructions:
 
 Unsupported (returns JitError::UnsupportedInstruction):
 - `MakeClosure` — rare in hot loops, deferred
-- Exception handling: PushHandler, PopHandler, Throw, CheckException,
-  MatchException, BindException, LoadException, ClearException, ReraiseException
-  (effect system prevents pure functions from using these)
 - Fiber/yield: LoadResumeValue, Yield
 
 ## Files
@@ -147,9 +144,10 @@ The effect system ensures fibers and JIT coexist safely:
 ## Error Handling in Dispatch
 
 All dispatch helpers (`elle_jit_call`, `elle_jit_tail_call`,
-`elle_jit_load_global`) set `vm.fiber.current_exception` on error and return
-`TAG_NIL`. The JIT checks for pending exceptions after each call via
-`elle_jit_has_exception`. No errors are silently swallowed.
+`elle_jit_load_global`) set `vm.fiber.signal` to `(SIG_ERROR, condition)` on
+error and return `TAG_NIL`. The JIT checks for pending errors after each call
+via `elle_jit_has_exception` (which checks `fiber.signal` for `SIG_ERROR`).
+No errors are silently swallowed.
 
 ## Invariants
 
@@ -174,7 +172,7 @@ All dispatch helpers (`elle_jit_call`, `elle_jit_tail_call`,
    against `self_bits`.
 
 7. **No silent error swallowing.** Every error path in dispatch helpers sets
-   `vm.fiber.current_exception` before returning `TAG_NIL`.
+   `vm.fiber.signal` to `(SIG_ERROR, condition)` before returning `TAG_NIL`.
 
 ## Future Phases
 

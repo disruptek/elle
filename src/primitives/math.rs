@@ -1,15 +1,15 @@
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 use std::f64::consts::{E, PI};
 
 pub fn prim_sqrt(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "sqrt: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("sqrt: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -19,10 +19,10 @@ pub fn prim_sqrt(args: &[Value]) -> (SignalBits, Value) {
             Some(f) => (SIG_OK, Value::float(f.sqrt())),
             None => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "sqrt: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("sqrt: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }
@@ -32,10 +32,10 @@ pub fn prim_sin(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "sin: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("sin: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -45,10 +45,10 @@ pub fn prim_sin(args: &[Value]) -> (SignalBits, Value) {
             Some(f) => (SIG_OK, Value::float(f.sin())),
             None => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "sin: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("sin: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }
@@ -58,10 +58,10 @@ pub fn prim_cos(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "cos: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("cos: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -71,10 +71,10 @@ pub fn prim_cos(args: &[Value]) -> (SignalBits, Value) {
             Some(f) => (SIG_OK, Value::float(f.cos())),
             None => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "cos: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("cos: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }
@@ -84,10 +84,10 @@ pub fn prim_tan(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "tan: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("tan: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -97,10 +97,10 @@ pub fn prim_tan(args: &[Value]) -> (SignalBits, Value) {
             Some(f) => (SIG_OK, Value::float(f.tan())),
             None => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "tan: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("tan: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }
@@ -110,10 +110,10 @@ pub fn prim_log(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() || args.len() > 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "log: expected 1-2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("log: expected 1-2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -124,10 +124,10 @@ pub fn prim_log(args: &[Value]) -> (SignalBits, Value) {
             None => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::type_error(format!(
-                        "log: expected number, got {}",
-                        args[0].type_name()
-                    ))),
+                    error_val(
+                        "type-error",
+                        format!("log: expected number, got {}", args[0].type_name()),
+                    ),
                 )
             }
         },
@@ -145,10 +145,10 @@ pub fn prim_log(args: &[Value]) -> (SignalBits, Value) {
                 None => {
                     return (
                         SIG_ERROR,
-                        Value::condition(Condition::type_error(format!(
-                            "log: expected number, got {}",
-                            args[1].type_name()
-                        ))),
+                        error_val(
+                            "type-error",
+                            format!("log: expected number, got {}", args[1].type_name()),
+                        ),
                     )
                 }
             },
@@ -161,10 +161,10 @@ pub fn prim_exp(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "exp: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("exp: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -174,10 +174,10 @@ pub fn prim_exp(args: &[Value]) -> (SignalBits, Value) {
             Some(f) => (SIG_OK, Value::float(f.exp())),
             None => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "exp: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("exp: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }
@@ -187,10 +187,10 @@ pub fn prim_pow(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "pow: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("pow: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -206,10 +206,10 @@ pub fn prim_pow(args: &[Value]) -> (SignalBits, Value) {
             (Some(a), Some(b)) => (SIG_OK, Value::float(a.powf(b))),
             _ => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "pow: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("pow: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }
@@ -219,10 +219,10 @@ pub fn prim_floor(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "floor: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("floor: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -232,10 +232,10 @@ pub fn prim_floor(args: &[Value]) -> (SignalBits, Value) {
             Some(f) => (SIG_OK, Value::int(f.floor() as i64)),
             None => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "floor: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("floor: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }
@@ -245,10 +245,10 @@ pub fn prim_ceil(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "ceil: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("ceil: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -258,10 +258,10 @@ pub fn prim_ceil(args: &[Value]) -> (SignalBits, Value) {
             Some(f) => (SIG_OK, Value::int(f.ceil() as i64)),
             None => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "ceil: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("ceil: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }
@@ -271,10 +271,10 @@ pub fn prim_round(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "round: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("round: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -284,10 +284,10 @@ pub fn prim_round(args: &[Value]) -> (SignalBits, Value) {
             Some(f) => (SIG_OK, Value::int(f.round() as i64)),
             None => (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "round: expected number, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("round: expected number, got {}", args[0].type_name()),
+                ),
             ),
         },
     }

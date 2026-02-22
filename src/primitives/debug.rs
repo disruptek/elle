@@ -1,5 +1,5 @@
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{list, Condition, Value};
+use crate::value::{error_val, list, Value};
 
 /// Prints a value with debug information
 /// (debug-print value)
@@ -7,10 +7,10 @@ pub fn prim_debug_print(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "debug-print: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("debug-print: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -24,10 +24,10 @@ pub fn prim_trace(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "trace: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("trace: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -46,9 +46,10 @@ pub fn prim_trace(args: &[Value]) -> (SignalBits, Value) {
                 } else {
                     (
                         SIG_ERROR,
-                        Value::condition(Condition::type_error(
+                        error_val(
+                            "type-error",
                             "trace: first argument must be a string or symbol".to_string(),
-                        )),
+                        ),
                     )
                 }
             }
@@ -59,9 +60,10 @@ pub fn prim_trace(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
+            error_val(
+                "type-error",
                 "trace: first argument must be a string or symbol".to_string(),
-            )),
+            ),
         )
     }
 }
@@ -72,10 +74,10 @@ pub fn prim_profile(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "profile: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("profile: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -86,9 +88,10 @@ pub fn prim_profile(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
+            error_val(
+                "type-error",
                 "profile: argument must be a function".to_string(),
-            )),
+            ),
         )
     }
 }

@@ -5,8 +5,7 @@
 //! suspended fibers are stored as heap values.
 
 use crate::value::closure::Closure;
-use crate::value::continuation::ExceptionHandler;
-use crate::value::{Condition, Value};
+use crate::value::Value;
 use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -16,16 +15,13 @@ use std::rc::{Rc, Weak};
 ///
 /// When a fiber suspends (via `fiber/signal`), the VM saves the bytecode,
 /// constants, environment, and instruction pointer so execution can resume
-/// from exactly where it left off. The fiber's stack and exception handlers
-/// are already on the Fiber struct and don't need separate saving.
+/// from exactly where it left off.
 #[derive(Debug, Clone)]
 pub struct SavedContext {
     pub bytecode: Vec<u8>,
     pub constants: Vec<Value>,
     pub env: Option<Rc<Vec<Value>>>,
     pub ip: usize,
-    pub exception_handlers: SmallVec<[ExceptionHandler; 2]>,
-    pub handling_exception: bool,
 }
 
 /// Signal type bits. The first 16 are compiler-reserved.
@@ -139,19 +135,10 @@ pub struct Fiber {
     pub call_depth: usize,
     /// Call stack for stack traces (name + ip + frame_base)
     pub call_stack: Vec<CallFrame>,
-    /// Stack of active exception handlers
-    pub exception_handlers: SmallVec<[ExceptionHandler; 2]>,
-    /// Current exception being handled
-    pub current_exception: Option<Rc<Condition>>,
-    /// True if we're currently in exception handler code
-    pub handling_exception: bool,
     /// Storage for the continuation value on yield.
     /// Used by the yield instruction to capture the call chain so
     /// yield-through-nested-calls can resume from the exact point.
     pub continuation: Option<Value>,
-    /// When true, the VM wraps the resume result in a (value . done?) pair.
-    /// Set by coroutine-next, cleared by the VM after wrapping.
-    pub wrap_next: bool,
 }
 
 impl Fiber {
@@ -171,11 +158,7 @@ impl Fiber {
             suspended_ip: None,
             call_depth: 0,
             call_stack: Vec::new(),
-            exception_handlers: SmallVec::new(),
-            current_exception: None,
-            handling_exception: false,
             continuation: None,
-            wrap_next: false,
         }
     }
 }

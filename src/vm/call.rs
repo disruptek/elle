@@ -7,10 +7,16 @@
 //! - Tail call optimization
 //! - JIT compilation and dispatch (when jit feature is enabled)
 
+use crate::value::error_val;
 use crate::value::fiber::{FiberStatus, SavedContext};
-use crate::value::{Condition, Fiber, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_RESUME, SIG_YIELD};
+use crate::value::{Fiber, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_RESUME, SIG_YIELD};
 use std::cell::RefCell;
 use std::rc::Rc;
+
+/// Helper: set an error signal on the fiber.
+fn set_error(fiber: &mut Fiber, kind: &str, msg: impl Into<String>) {
+    fiber.signal = Some((SIG_ERROR, error_val(kind, msg)));
+}
 
 use super::core::VM;
 
@@ -58,9 +64,7 @@ impl VM {
         if let Some(closure) = func.as_closure() {
             self.fiber.call_depth += 1;
             if self.fiber.call_depth > 1000 {
-                let cond = Condition::error("Stack overflow");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                set_error(&mut self.fiber, "error", "Stack overflow");
                 return Some(SIG_ERROR);
             }
 
@@ -80,18 +84,17 @@ impl VM {
                 // Check if we already have JIT code for this closure
                 if let Some(jit_code) = self.jit_cache.get(&bytecode_ptr).cloned() {
                     let result = self.call_jit(&jit_code, closure, &args, func);
-                    // Check if the JIT function (or a callee) set an exception
-                    if self.fiber.current_exception.is_some() {
+                    // Check if the JIT function (or a callee) set an error
+                    if matches!(self.fiber.signal, Some((SIG_ERROR, _))) {
                         self.fiber.call_depth -= 1;
                         self.fiber.stack.push(Value::NIL);
-                        return None; // Let the dispatch loop's interrupt handler deal with it
+                        return None; // Let the dispatch loop's error check deal with it
                     }
                     // Check for pending tail call (JIT function did a TailCall)
                     if result.to_bits() == TAIL_CALL_SENTINEL {
                         if let Some((tail_bc, tail_consts, tail_env)) =
                             self.pending_tail_call.take()
                         {
-                            // Hand off to interpreter's trampoline which handles further tail calls
                             match self.execute_bytecode(&tail_bc, &tail_consts, Some(&tail_env)) {
                                 Ok(val) => {
                                     self.fiber.call_depth -= 1;
@@ -99,10 +102,8 @@ impl VM {
                                     return None;
                                 }
                                 Err(e) => {
-                                    // execute_bytecode returned Err — convert to exception
                                     self.fiber.call_depth -= 1;
-                                    let cond = Condition::error(e);
-                                    self.fiber.current_exception = Some(Rc::new(cond));
+                                    set_error(&mut self.fiber, "error", e);
                                     self.fiber.stack.push(Value::NIL);
                                     return None;
                                 }
@@ -122,22 +123,17 @@ impl VM {
                                 match compiler.compile(lir_func) {
                                     Ok(jit_code) => {
                                         let jit_code = Rc::new(jit_code);
-                                        // Cache the JIT code
                                         self.jit_cache.insert(bytecode_ptr, jit_code.clone());
-                                        // Execute via JIT
                                         let result = self.call_jit(&jit_code, closure, &args, func);
-                                        // Check if the JIT function (or a callee) set an exception
-                                        if self.fiber.current_exception.is_some() {
+                                        if matches!(self.fiber.signal, Some((SIG_ERROR, _))) {
                                             self.fiber.call_depth -= 1;
                                             self.fiber.stack.push(Value::NIL);
-                                            return None; // Let the dispatch loop's interrupt handler deal with it
+                                            return None;
                                         }
-                                        // Check for pending tail call (JIT function did a TailCall)
                                         if result.to_bits() == TAIL_CALL_SENTINEL {
                                             if let Some((tail_bc, tail_consts, tail_env)) =
                                                 self.pending_tail_call.take()
                                             {
-                                                // Hand off to interpreter's trampoline
                                                 match self.execute_bytecode(
                                                     &tail_bc,
                                                     &tail_consts,
@@ -150,9 +146,7 @@ impl VM {
                                                     }
                                                     Err(e) => {
                                                         self.fiber.call_depth -= 1;
-                                                        let cond = Condition::error(e);
-                                                        self.fiber.current_exception =
-                                                            Some(Rc::new(cond));
+                                                        set_error(&mut self.fiber, "error", e);
                                                         self.fiber.stack.push(Value::NIL);
                                                         return None;
                                                     }
@@ -231,8 +225,6 @@ impl VM {
                             env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
                             ip: *ip,
                             stack: caller_stack,
-                            exception_handlers: self.fiber.exception_handlers.clone(),
-                            handling_exception: self.fiber.handling_exception,
                         };
 
                         let mut cont_data = continuation
@@ -256,9 +248,12 @@ impl VM {
             return None;
         }
 
-        // Cannot call this value — set exception
-        let cond = Condition::type_error(format!("Cannot call {:?}", func));
-        self.fiber.current_exception = Some(Rc::new(cond));
+        // Cannot call this value
+        set_error(
+            &mut self.fiber,
+            "type-error",
+            format!("Cannot call {:?}", func),
+        );
         self.fiber.stack.push(Value::NIL);
         None
     }
@@ -301,15 +296,8 @@ impl VM {
         if let Some(closure) = func.as_closure() {
             // Validate argument count
             if !self.check_arity(&closure.arity, args.len()) {
-                if self.fiber.current_exception.is_some()
-                    && !self.fiber.handling_exception
-                    && self.fiber.exception_handlers.is_empty()
-                {
-                    self.fiber.signal = Some((SIG_OK, Value::NIL));
-                    return Some(SIG_OK);
-                }
-                self.fiber.signal = Some((SIG_OK, Value::NIL));
-                return Some(SIG_OK);
+                // check_arity sets fiber.signal to (SIG_ERROR, ...)
+                return Some(SIG_ERROR);
             }
 
             // Build proper environment using cached vector
@@ -356,11 +344,13 @@ impl VM {
             return Some(SIG_OK);
         }
 
-        // Cannot call this value — set exception
-        let cond = Condition::type_error(format!("Cannot call {:?}", func));
-        self.fiber.current_exception = Some(Rc::new(cond));
-        self.fiber.signal = Some((SIG_OK, Value::NIL));
-        Some(SIG_OK)
+        // Cannot call this value
+        set_error(
+            &mut self.fiber,
+            "type-error",
+            format!("Cannot call {:?}", func),
+        );
+        Some(SIG_ERROR)
     }
 
     /// Call a JIT-compiled function.
@@ -458,18 +448,11 @@ impl VM {
                 None
             }
             SIG_ERROR => {
-                // value is a heap-allocated Condition
-                if let Some(cond) = value.as_condition() {
-                    self.fiber.current_exception = Some(Rc::new(cond.clone()));
-                } else {
-                    // Primitive returned SIG_ERROR with non-Condition value —
-                    // wrap in a generic error
-                    let msg = format!("{}", value);
-                    let cond = Condition::error(msg);
-                    self.fiber.current_exception = Some(Rc::new(cond));
-                }
+                // Store the error in fiber.signal. The dispatch loop will
+                // see it and return SIG_ERROR.
+                self.fiber.signal = Some((SIG_ERROR, value));
                 self.fiber.stack.push(Value::NIL);
-                None // let the dispatch loop's interrupt handler deal with it
+                None
             }
             SIG_RESUME => {
                 // Primitive returned SIG_RESUME — dispatch to fiber handler
@@ -493,19 +476,8 @@ impl VM {
                 SIG_OK
             }
             SIG_ERROR => {
-                if let Some(cond) = value.as_condition() {
-                    self.fiber.current_exception = Some(Rc::new(cond.clone()));
-                } else {
-                    let msg = format!("{}", value);
-                    let cond = Condition::error(msg);
-                    self.fiber.current_exception = Some(Rc::new(cond));
-                }
-                // Return SIG_OK so the dispatch loop continues to the next
-                // iteration, where the interrupt handler can dispatch to any
-                // active exception handler (handler-case). Returning SIG_ERROR
-                // here would bypass exception handlers.
-                self.fiber.signal = Some((SIG_OK, Value::NIL));
-                SIG_OK
+                self.fiber.signal = Some((SIG_ERROR, value));
+                SIG_ERROR
             }
             SIG_RESUME => {
                 // Primitive in tail position — dispatch to fiber handler
@@ -540,18 +512,11 @@ impl VM {
         let fiber_rc = match fiber_value.as_fiber() {
             Some(f) => f.clone(),
             None => {
-                let cond = Condition::error("SIG_RESUME with non-fiber value");
-                self.fiber.current_exception = Some(Rc::new(cond));
+                set_error(&mut self.fiber, "error", "SIG_RESUME with non-fiber value");
                 self.fiber.stack.push(Value::NIL);
                 return None;
             }
         };
-
-        // Check if coroutine-next requested pair wrapping
-        let wrap_next = fiber_rc.borrow().wrap_next;
-        if wrap_next {
-            fiber_rc.borrow_mut().wrap_next = false;
-        }
 
         let (result_bits, result_value) = self.do_fiber_resume(&fiber_rc);
 
@@ -559,36 +524,19 @@ impl VM {
         let mask = fiber_rc.borrow().mask;
 
         if result_bits == SIG_OK {
-            // Child completed normally — push return value
-            if wrap_next {
-                let pair = crate::value::cons(result_value, Value::bool(true));
-                self.fiber.stack.push(pair);
-            } else {
-                self.fiber.stack.push(result_value);
-            }
+            self.fiber.stack.push(result_value);
             None
         } else if mask & result_bits != 0 {
             // Signal is caught by the mask — parent handles it.
-            if wrap_next {
-                let pair = crate::value::cons(result_value, Value::bool(false));
-                self.fiber.stack.push(pair);
-            } else {
-                self.fiber.stack.push(result_value);
-            }
+            self.fiber.stack.push(result_value);
             None
         } else {
             // Signal is NOT caught — propagate to parent.
+            self.fiber.signal = Some((result_bits, result_value));
             if result_bits == SIG_ERROR {
-                // Copy the child's exception to the parent so the parent's
-                // exception handling machinery can process it.
-                let child_exception = fiber_rc.borrow().current_exception.clone();
-                if let Some(exc) = child_exception {
-                    self.fiber.current_exception = Some(exc);
-                }
                 self.fiber.stack.push(Value::NIL);
-                None // Let the dispatch loop's interrupt handler deal with it
+                None // dispatch loop will see the error signal
             } else {
-                self.fiber.signal = Some((result_bits, result_value));
                 Some(result_bits)
             }
         }
@@ -599,47 +547,24 @@ impl VM {
         let fiber_rc = match fiber_value.as_fiber() {
             Some(f) => f.clone(),
             None => {
-                let cond = Condition::error("SIG_RESUME with non-fiber value");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_OK, Value::NIL));
-                return SIG_OK;
+                set_error(&mut self.fiber, "error", "SIG_RESUME with non-fiber value");
+                return SIG_ERROR;
             }
         };
-
-        let wrap_next = fiber_rc.borrow().wrap_next;
-        if wrap_next {
-            fiber_rc.borrow_mut().wrap_next = false;
-        }
 
         let (result_bits, result_value) = self.do_fiber_resume(&fiber_rc);
 
         let mask = fiber_rc.borrow().mask;
 
         if result_bits == SIG_OK {
-            let value = if wrap_next {
-                crate::value::cons(result_value, Value::bool(true))
-            } else {
-                result_value
-            };
-            self.fiber.signal = Some((SIG_OK, value));
+            self.fiber.signal = Some((SIG_OK, result_value));
             SIG_OK
         } else if mask & result_bits != 0 {
-            let value = if wrap_next {
-                crate::value::cons(result_value, Value::bool(false))
-            } else {
-                result_value
-            };
-            self.fiber.signal = Some((SIG_OK, value));
+            // Signal is caught by the mask — parent handles it.
+            self.fiber.signal = Some((SIG_OK, result_value));
             SIG_OK
-        } else if result_bits == SIG_ERROR {
-            // Copy the child's exception to the parent
-            let child_exception = fiber_rc.borrow().current_exception.clone();
-            if let Some(exc) = child_exception {
-                self.fiber.current_exception = Some(exc);
-            }
-            self.fiber.signal = Some((SIG_ERROR, Value::NIL));
-            SIG_ERROR
         } else {
+            // Signal not caught — propagate
             self.fiber.signal = Some((result_bits, result_value));
             result_bits
         }
@@ -685,22 +610,11 @@ impl VM {
         self.fiber.status = FiberStatus::Alive;
 
         // 4. Execute the child
-        let mut bits = if is_first_resume {
+        let bits = if is_first_resume {
             self.do_fiber_first_resume()
         } else {
             self.do_fiber_subsequent_resume(resume_value)
         };
-
-        // If execution returned SIG_OK but an unhandled exception remains,
-        // treat it as SIG_ERROR. This happens when a primitive in tail position
-        // errors: handle_primitive_signal_tail sets current_exception and returns
-        // SIG_OK (so the dispatch loop's interrupt handler can catch it), but
-        // the TailCall handler exits the dispatch loop before the interrupt
-        // handler runs.
-        if bits == SIG_OK && self.fiber.current_exception.is_some() {
-            bits = SIG_ERROR;
-            self.fiber.signal = Some((SIG_ERROR, Value::NIL));
-        }
 
         // 5. Update child status based on result
         match bits {
@@ -761,8 +675,6 @@ impl VM {
                 constants: closure.constants.to_vec(),
                 env: Some(env_rc),
                 ip,
-                exception_handlers: self.fiber.exception_handlers.clone(),
-                handling_exception: self.fiber.handling_exception,
             });
         }
 
@@ -783,9 +695,11 @@ impl VM {
         let ctx = match self.fiber.saved_context.take() {
             Some(ctx) => ctx,
             None => {
-                let cond = Condition::error("fiber/resume: suspended fiber has no saved context");
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
+                set_error(
+                    &mut self.fiber,
+                    "error",
+                    "fiber/resume: suspended fiber has no saved context",
+                );
                 return SIG_ERROR;
             }
         };
@@ -794,15 +708,9 @@ impl VM {
         // This is the return value of the fiber/signal call that suspended it.
         self.fiber.stack.push(resume_value);
 
-        // Resume from saved IP with saved exception handler state
-        let bits = self.execute_bytecode_from_ip_with_state(
-            &ctx.bytecode,
-            &ctx.constants,
-            ctx.env.as_ref(),
-            ctx.ip,
-            ctx.exception_handlers,
-            ctx.handling_exception,
-        );
+        // Resume from saved IP
+        let bits =
+            self.execute_bytecode_from_ip(&ctx.bytecode, &ctx.constants, ctx.env.as_ref(), ctx.ip);
 
         // If signaled again, save context for next resume
         if bits != SIG_OK {
@@ -812,8 +720,6 @@ impl VM {
                 constants: ctx.constants,
                 env: ctx.env,
                 ip,
-                exception_handlers: self.fiber.exception_handlers.clone(),
-                handling_exception: self.fiber.handling_exception,
             });
         }
 

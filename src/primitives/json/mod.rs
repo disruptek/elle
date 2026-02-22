@@ -10,16 +10,14 @@ pub use parser::JsonParser;
 pub use serializer::{escape_json_string, serialize_value, serialize_value_pretty};
 
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Parse a JSON string into Elle values
 pub fn prim_json_parse(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "json-parse: expected 1 argument".to_string(),
-            )),
+            error_val("arity-error", "json-parse: expected 1 argument".to_string()),
         );
     }
 
@@ -28,16 +26,17 @@ pub fn prim_json_parse(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
+            error_val(
+                "type-error",
                 "json-parse: expected string argument".to_string(),
-            )),
+            ),
         );
     };
 
     let mut parser = JsonParser::new(json_str);
     match parser.parse() {
         Ok(v) => (SIG_OK, v),
-        Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+        Err(e) => (SIG_ERROR, error_val("error", e)),
     }
 }
 
@@ -46,15 +45,16 @@ pub fn prim_json_serialize(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
+            error_val(
+                "arity-error",
                 "json-serialize: expected 1 argument".to_string(),
-            )),
+            ),
         );
     }
 
     let json_str = match serialize_value(&args[0]) {
         Ok(s) => s,
-        Err(e) => return (SIG_ERROR, Value::condition(Condition::error(e))),
+        Err(e) => return (SIG_ERROR, error_val("error", e)),
     };
     (SIG_OK, Value::string(json_str))
 }
@@ -64,15 +64,16 @@ pub fn prim_json_serialize_pretty(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
+            error_val(
+                "arity-error",
                 "json-serialize-pretty: expected 1 argument".to_string(),
-            )),
+            ),
         );
     }
 
     let json_str = match serialize_value_pretty(&args[0], 0) {
         Ok(s) => s,
-        Err(e) => return (SIG_ERROR, Value::condition(Condition::error(e))),
+        Err(e) => return (SIG_ERROR, error_val("error", e)),
     };
     (SIG_OK, Value::string(json_str))
 }

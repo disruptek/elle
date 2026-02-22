@@ -1,6 +1,5 @@
 use super::core::VM;
-use crate::value::{Condition, Value};
-use std::rc::Rc;
+use crate::value::{error_val, Value, SIG_ERROR};
 
 pub fn handle_load_global(vm: &mut VM, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
     let idx = vm.read_u16(bytecode, ip) as usize;
@@ -23,13 +22,9 @@ pub fn handle_load_global(vm: &mut VM, bytecode: &[u8], ip: &mut usize, constant
             // Cells created by the box primitive should remain as cells
             vm.fiber.stack.push(*val);
         } else {
-            // Signal undefined-variable exception (ID 5)
+            // Signal undefined-variable exception
             let msg = format!("undefined variable: symbol #{}", sym_id);
-            let mut cond = Condition::undefined_variable(msg).with_field(0, Value::symbol(sym_id)); // Store the symbol
-            if let Some(loc) = vm.current_source_loc.clone() {
-                cond.location = Some(loc);
-            }
-            vm.fiber.current_exception = Some(Rc::new(cond));
+            vm.fiber.signal = Some((SIG_ERROR, error_val("undefined-variable", msg)));
             vm.fiber.stack.push(Value::NIL); // Push placeholder
         }
     } else {

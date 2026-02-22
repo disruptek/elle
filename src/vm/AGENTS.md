@@ -9,8 +9,7 @@ Execute bytecode instructions. Manage:
 - Global bindings
 - Call frames and stack traces
 - Closure environments
-- Exception handlers
-- Fiber state
+- Fiber state and signals
 
 Does NOT:
 - Compile code (that's `compiler/`, `hir/`, `lir/`)
@@ -24,7 +23,6 @@ Does NOT:
 | `VM` | Global state + root Fiber. Per-execution state lives on `vm.fiber` |
 | `SignalBits` | Internal return type: `SIG_OK`, `SIG_ERROR`, `SIG_YIELD`, `SIG_DEBUG`, `SIG_RESUME`, `SIG_FFI` |
 | `CallFrame` | Function name, IP, frame base |
-| `ExceptionHandler` | Handler offset, finally offset, stack depth |
 
 ## Data flow
 
@@ -53,22 +51,24 @@ Result<Value, String>  ← translation boundary
 
 Internal VM methods return `SignalBits` instead of `Result<VmResult, String>`:
 - `SIG_OK` (0): Normal completion. Value in `fiber.signal`.
-- `SIG_ERROR` (1): Exception. Exception in `fiber.current_exception`.
+- `SIG_ERROR` (1): Error. Error tuple in `fiber.signal` as `[:keyword "message"]`.
 - `SIG_YIELD` (2): Fiber yield. Value in `fiber.signal`, continuation in `fiber.continuation`.
 - `SIG_RESUME` (8): VM-internal. Fiber primitive requests VM-side execution.
 
 The public `execute_bytecode` method is the translation boundary — it converts
-`SignalBits` to `Result<Value, String>` for external callers.
+`SignalBits` to `Result<Value, String>` for external callers. On `SIG_ERROR`,
+it extracts the condition from `fiber.signal` and formats the error message.
 
 Instruction handlers no longer return `Result<(), String>`. VM bugs panic
-immediately. User errors set `fiber.current_exception` and return normally.
+immediately. User errors set `fiber.signal` to `(SIG_ERROR, Value::condition(...))`
+and push `Value::NIL` to keep the stack consistent.
 
 ## Primitive dispatch (NativeFn)
 
 All primitives are `NativeFn`: `fn(&[Value]) -> (SignalBits, Value)`. The VM
 dispatches the return signal in `handle_primitive_signal()` (`call.rs`):
 - `SIG_OK` → push value to stack
-- `SIG_ERROR` → extract `Condition` from value, set `fiber.current_exception`
+- `SIG_ERROR` → store `(SIG_ERROR, value)` in `fiber.signal`, push NIL
 - `SIG_YIELD` → store in `fiber.signal`, return yield
 - `SIG_RESUME` → dispatch to fiber handler
 
@@ -100,22 +100,18 @@ for resumption after signals. The dispatch loop saves the IP into
 4. **Tail calls don't grow call_depth.** `TailCall` stores pending call info
    and returns; the outer loop executes it. Stack overflow = tail call bug.
 
-5. **Exception handlers are a stack.** `PushHandler` adds, `PopHandler` removes.
-   On exception, unwind to handler's stack_depth and jump to handler_offset.
+5. **Yield uses first-class continuations.** On yield, a `ContinuationFrame`
+   captures bytecode, constants, env, IP, and stack. When yield propagates
+   through Call instructions, each caller's frame is appended to form a chain.
+   `resume_continuation` replays frames from innermost to outermost.
 
-6. **Yield uses first-class continuations.** On yield, a `ContinuationFrame`
-   captures bytecode, constants, env, IP, stack, and exception handler state.
-   When yield propagates through Call instructions, each caller's frame is
-   appended to form a chain. `resume_continuation` replays frames from
-   innermost to outermost, restoring handler state for each frame.
-
-7. **VM bugs panic, user errors set exceptions.** Instruction handlers return
-   `()` (not `Result`). VM bugs (stack underflow, bad bytecode) panic
+6. **VM bugs panic, user errors set `fiber.signal`.** Instruction handlers
+   return `()` (not `Result`). VM bugs (stack underflow, bad bytecode) panic
    immediately. User errors (type mismatch, division by zero) set
-   `fiber.current_exception`, push `Value::NIL` to keep the stack consistent,
-   and return normally. The interrupt mechanism at the bottom of the
-   instruction loop handles the exception. See `handle_div_int` and
-   `handle_load_global` for the canonical pattern.
+   `fiber.signal` to `(SIG_ERROR, Value::condition(...))`, push `Value::NIL`
+   to keep the stack consistent, and return normally. The dispatch loop checks
+   `fiber.signal` for `SIG_ERROR` after each instruction and returns
+   immediately. See `set_error()` in `call.rs` for the helper.
 
 ## Key VM fields
 
@@ -133,48 +129,25 @@ for resumption after signals. The dispatch loop saves the IP into
 | `stack` | `SmallVec<[Value; 256]>` | Operand stack |
 | `call_stack` | `Vec<CallFrame>` | For stack traces |
 | `call_depth` | `usize` | Stack overflow detection |
-| `exception_handlers` | `SmallVec<[ExceptionHandler; 2]>` | Active handlers |
-| `current_exception` | `Option<Rc<Condition>>` | Exception being handled |
-| `handling_exception` | `bool` | In exception handler code |
-| `signal` | `Option<(SignalBits, Value)>` | Signal value from execution |
+| `signal` | `Option<(SignalBits, Value)>` | Signal from execution (errors, yields) |
 | `continuation` | `Option<Value>` | Continuation on yield (for yield-through-calls) |
-
-## Exception hierarchy
-
-```
-condition (1)
-├── error (2)
-│   ├── type-error (3)
-│   ├── division-by-zero (4)
-│   ├── undefined-variable (5)
-│   └── arity-error (6)
-└── warning (7)
-    └── style-warning (8)
-```
-
-Hierarchy data and `is_exception_subclass(child, parent)` live in
-`value/condition.rs` — the single source of truth. Re-exported from `vm/mod.rs`.
+| `signal_mask` | `SignalBits` | Which signals this fiber catches |
 
 ## Continuation mechanism
 
 When a fiber yields (via the yield instruction):
 
 1. **Yield instruction** captures innermost frame: bytecode, constants, env,
-   IP (after yield), stack, exception_handlers, handling_exception
+   IP (after yield), stack
 2. **Call handler** (if yield propagates through a call) appends caller's
    frame to the continuation chain
 3. **Frame ordering**: innermost (yielder) first, outermost (caller) last
-4. **Resume** iterates frames forward, calling `execute_bytecode_from_ip_with_state`
-   for each, which restores exception handler state before execution
+4. **Resume** iterates frames forward, calling `execute_bytecode_from_ip`
+   for each
 
 Key methods:
-- `execute_bytecode_from_ip_with_state`: Executes with pre-set handler state
-- `resume_continuation`: Replays frame chain, handles re-yields and exceptions
-
-Exception handling across resume:
-- Exception check at START of instruction loop catches exceptions from inner frames
-- Each frame's handlers are restored before execution
-- Exceptions propagate to outer frames if no local handler
+- `execute_bytecode_from_ip`: Executes from a given IP
+- `resume_continuation`: Replays frame chain, handles re-yields and errors
 
 ## Files
 
@@ -182,7 +155,7 @@ Exception handling across resume:
 |------|-------|---------|
 | `mod.rs` | ~350 | VM struct, VmResult, public interface |
 | `dispatch.rs` | ~556 | Main execution loop, instruction dispatch |
-| `call.rs` | ~880 | Call, TailCall, Return, exception handling, SIG_RESUME fiber handler |
+| `call.rs` | ~880 | Call, TailCall, Return, error handling, SIG_RESUME fiber handler |
 | `execute.rs` | ~160 | Helper functions for instruction execution |
 | `core.rs` | ~460 | `resume_continuation`, continuation replay |
 | `stack.rs` | ~100 | Stack operations: LoadConst, Pop, Dup |

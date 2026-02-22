@@ -180,11 +180,11 @@ impl Value {
         alloc(HeapObject::NativeFn(f))
     }
 
-    /// Create a condition value (for signal-based error returns).
+    /// Create an immutable tuple value.
     #[inline]
-    pub fn condition(c: crate::value::Condition) -> Self {
+    pub fn tuple(elements: Vec<Value>) -> Self {
         use crate::value::heap::{alloc, HeapObject};
-        alloc(HeapObject::Condition(c))
+        alloc(HeapObject::Tuple(elements))
     }
 
     /// Create a continuation value.

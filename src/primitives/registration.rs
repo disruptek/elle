@@ -13,9 +13,8 @@ use super::cell::{prim_box, prim_box_p, prim_box_set, prim_unbox};
 use super::comparison::{prim_eq, prim_ge, prim_gt, prim_le, prim_lt};
 use super::concurrency::{prim_current_thread_id, prim_join, prim_sleep, prim_spawn};
 use super::coroutines::{
-    prim_coroutine_done, prim_coroutine_next, prim_coroutine_resume, prim_coroutine_status,
-    prim_coroutine_to_iterator, prim_coroutine_value, prim_is_coroutine, prim_make_coroutine,
-    prim_yield_from,
+    prim_coroutine_done, prim_coroutine_resume, prim_coroutine_status, prim_coroutine_to_iterator,
+    prim_coroutine_value, prim_is_coroutine, prim_make_coroutine, prim_yield_from,
 };
 use super::debug::{prim_debug_print, prim_memory_usage, prim_profile, prim_trace};
 use super::debugging::{
@@ -23,7 +22,7 @@ use super::debugging::{
     prim_is_coro, prim_is_jit, prim_is_pure, prim_mutates_params, prim_raises,
 };
 use super::display::{prim_display, prim_newline, prim_print};
-use super::exception::{prim_exception, prim_exception_data, prim_exception_message, prim_throw};
+
 use super::fibers::{
     prim_fiber_bits, prim_fiber_mask, prim_fiber_new, prim_fiber_resume, prim_fiber_signal,
     prim_fiber_status, prim_fiber_value, prim_is_fiber,
@@ -35,9 +34,7 @@ use super::file_io::{
     prim_file_size, prim_is_directory, prim_is_file, prim_join_path, prim_list_directory,
     prim_parent_directory, prim_read_lines, prim_rename_file, prim_slurp, prim_spit,
 };
-use super::introspection::{
-    prim_condition_backtrace, prim_condition_field, prim_condition_matches_type, prim_exception_id,
-};
+
 use super::json::{prim_json_parse, prim_json_serialize, prim_json_serialize_pretty};
 use super::list::{
     prim_append, prim_cons, prim_drop, prim_empty, prim_first, prim_last, prim_length, prim_list,
@@ -53,7 +50,7 @@ use super::meta::prim_gensym;
 use super::module_loading::{prim_add_module_path, prim_import_file};
 use super::package::{prim_package_info, prim_package_version};
 use super::process::prim_exit;
-use super::signaling::{prim_error, prim_signal, prim_warn};
+
 use super::string::{
     prim_any_to_string, prim_char_at, prim_keyword_to_string, prim_number_to_string,
     prim_string_append, prim_string_contains, prim_string_downcase, prim_string_ends_with,
@@ -734,100 +731,6 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         Effect::raises(),
     );
 
-    // Exception handling (old string-based) - can raise
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "throw",
-        prim_throw,
-        Effect::raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "exception",
-        prim_exception,
-        Effect::raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "exception-message",
-        prim_exception_message,
-        Effect::raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "exception-data",
-        prim_exception_data,
-        Effect::raises(),
-    );
-
-    // Condition system (new CL-style) - can raise
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "signal",
-        prim_signal,
-        Effect::raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "warn",
-        prim_warn,
-        Effect::raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "error",
-        prim_error,
-        Effect::raises(),
-    );
-
-    // Exception introspection (Phase 8) - can raise
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "exception-id",
-        prim_exception_id,
-        Effect::raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "condition-field",
-        prim_condition_field,
-        Effect::raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "condition-matches-type",
-        prim_condition_matches_type,
-        Effect::raises(),
-    );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "condition-backtrace",
-        prim_condition_backtrace,
-        Effect::raises(),
-    );
-
     // Quoting and meta-programming - pure
     register_fn(
         vm,
@@ -1360,15 +1263,6 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         prim_coroutine_to_iterator,
         Effect::raises(),
     );
-    register_fn(
-        vm,
-        symbols,
-        &mut effects,
-        "coroutine-next",
-        prim_coroutine_next,
-        Effect::yields_raises(),
-    );
-
     // Fiber primitives
     register_fn(
         vm,

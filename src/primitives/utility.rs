@@ -1,16 +1,16 @@
 //! Utility primitives (mod, remainder, even?, odd?)
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Modulo operation (result has same sign as divisor)
 pub fn prim_mod(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "mod: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("mod: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -19,7 +19,7 @@ pub fn prim_mod(args: &[Value]) -> (SignalBits, Value) {
             if b == 0 {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::division_by_zero("mod: division by zero")),
+                    error_val("division-by-zero", "mod: division by zero"),
                 );
             }
             // Lisp mod: result has same sign as divisor
@@ -34,10 +34,10 @@ pub fn prim_mod(args: &[Value]) -> (SignalBits, Value) {
         }
         _ => (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "mod: expected integer, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("mod: expected integer, got {}", args[0].type_name()),
+            ),
         ),
     }
 }
@@ -47,10 +47,10 @@ pub fn prim_remainder(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "remainder: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("remainder: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -59,7 +59,7 @@ pub fn prim_remainder(args: &[Value]) -> (SignalBits, Value) {
             if b == 0 {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::division_by_zero("remainder: division by zero")),
+                    error_val("division-by-zero", "remainder: division by zero"),
                 );
             }
             let rem = a % b;
@@ -72,10 +72,10 @@ pub fn prim_remainder(args: &[Value]) -> (SignalBits, Value) {
         }
         _ => (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "remainder: expected integer, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("remainder: expected integer, got {}", args[0].type_name()),
+            ),
         ),
     }
 }
@@ -85,10 +85,10 @@ pub fn prim_even(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "even?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("even?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -96,10 +96,10 @@ pub fn prim_even(args: &[Value]) -> (SignalBits, Value) {
         Some(n) => (SIG_OK, Value::bool(n % 2 == 0)),
         _ => (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "even?: expected integer, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("even?: expected integer, got {}", args[0].type_name()),
+            ),
         ),
     }
 }
@@ -109,10 +109,10 @@ pub fn prim_odd(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "odd?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("odd?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -120,10 +120,10 @@ pub fn prim_odd(args: &[Value]) -> (SignalBits, Value) {
         Some(n) => (SIG_OK, Value::bool(n % 2 != 0)),
         _ => (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "odd?: expected integer, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("odd?: expected integer, got {}", args[0].type_name()),
+            ),
         ),
     }
 }

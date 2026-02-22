@@ -1,7 +1,7 @@
 use crate::primitives::registration::register_primitives;
 use crate::symbol::SymbolTable;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 use crate::vm::VM;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -53,6 +53,9 @@ fn is_value_sendable(value: &Value) -> bool {
         }
         HeapObject::Struct(s) => s.iter().all(|(_, v)| is_value_sendable(v)),
 
+        // Tuples are safe if their contents are
+        HeapObject::Tuple(elems) => elems.iter().all(is_value_sendable),
+
         // Cons cells are safe if their contents are
         HeapObject::Cons(cons) => is_value_sendable(&cons.first) && is_value_sendable(&cons.rest),
 
@@ -68,9 +71,6 @@ fn is_value_sendable(value: &Value) -> bool {
 
         // Unsafe: FFI handles
         HeapObject::LibHandle(_) | HeapObject::CHandle(_, _) => false,
-
-        // Unsafe: conditions (may contain non-sendable data)
-        HeapObject::Condition(_) => false,
 
         // Unsafe: thread handles
         HeapObject::ThreadHandle(_) => false,
@@ -228,17 +228,9 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> Result<Value, String> 
 
         let result = vm.execute_bytecode(&bytecode_rc, &constants_rc, Some(&env_rc));
 
-        // Convert result to SendValue to preserve heap objects across thread boundary
-        // Also check for exceptions that were set but not returned as errors
         let send_result = match result {
             Ok(val) => {
-                // Check if an exception escaped all handlers
-                if let Some(exc) = &vm.fiber.current_exception {
-                    Err(format!("{}", exc))
-                } else {
-                    SendValue::from_value(val)
-                        .map_err(|e| format!("Failed to serialize result: {}", e))
-                }
+                SendValue::from_value(val).map_err(|e| format!("Failed to serialize result: {}", e))
             }
             Err(e) => Err(e.to_string()),
         };
@@ -273,31 +265,33 @@ pub fn prim_spawn(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "spawn: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("spawn: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
     if let Some(closure) = args[0].as_closure() {
         match spawn_closure_impl(closure) {
             Ok(val) => (SIG_OK, val),
-            Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => (SIG_ERROR, error_val("error", e)),
         }
     } else if args[0].as_native_fn().is_some() {
         (
             SIG_ERROR,
-            Value::condition(Condition::error(
+            error_val(
+                "error",
                 "spawn: native functions cannot be spawned. Use closures instead.".to_string(),
-            )),
+            ),
         )
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
+            error_val(
+                "type-error",
                 "spawn: argument must be a closure".to_string(),
-            )),
+            ),
         )
     }
 }
@@ -311,10 +305,10 @@ pub fn prim_join(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "join: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("join: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -330,7 +324,7 @@ pub fn prim_join(args: &[Value]) -> (SignalBits, Value) {
                     // Result is ready - convert from SendValue back to Value
                     return match result {
                         Ok(send_val) => (SIG_OK, send_val.clone().into_value()),
-                        Err(e) => (SIG_ERROR, Value::condition(Condition::error(e.clone()))),
+                        Err(e) => (SIG_ERROR, error_val("error", e.clone())),
                     };
                 }
             }
@@ -339,9 +333,7 @@ pub fn prim_join(args: &[Value]) -> (SignalBits, Value) {
             if attempts >= MAX_ATTEMPTS {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error(
-                        "join: thread did not complete in time".to_string(),
-                    )),
+                    error_val("error", "join: thread did not complete in time".to_string()),
                 );
             }
 
@@ -351,9 +343,10 @@ pub fn prim_join(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
+            error_val(
+                "type-error",
                 "join: argument must be a thread handle".to_string(),
-            )),
+            ),
         )
     }
 }
@@ -364,10 +357,10 @@ pub fn prim_sleep(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "sleep: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("sleep: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -375,9 +368,7 @@ pub fn prim_sleep(args: &[Value]) -> (SignalBits, Value) {
         if n < 0 {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::error(
-                    "sleep: duration must be non-negative".to_string(),
-                )),
+                error_val("error", "sleep: duration must be non-negative".to_string()),
             );
         }
         std::thread::sleep(std::time::Duration::from_secs(n as u64));
@@ -386,9 +377,7 @@ pub fn prim_sleep(args: &[Value]) -> (SignalBits, Value) {
         if f < 0.0 {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::error(
-                    "sleep: duration must be non-negative".to_string(),
-                )),
+                error_val("error", "sleep: duration must be non-negative".to_string()),
             );
         }
         std::thread::sleep(std::time::Duration::from_secs_f64(f));
@@ -396,9 +385,7 @@ pub fn prim_sleep(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
-                "sleep: argument must be a number".to_string(),
-            )),
+            error_val("type-error", "sleep: argument must be a number".to_string()),
         )
     }
 }

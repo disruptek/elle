@@ -4,7 +4,7 @@ use super::types::parse_ctype;
 use crate::ffi::memory::{get_memory_stats, register_allocation, MemoryOwner};
 use crate::ffi::safety::{get_last_error, NullPointerChecker, TypeChecker};
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 use crate::vm::VM;
 
 /// (register-allocation ptr type-name size owner) -> alloc-id
@@ -145,16 +145,14 @@ pub fn prim_type_check_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "type-check: expected 2 arguments".to_string(),
-            )),
+            error_val("arity-error", "type-check: expected 2 arguments"),
         );
     }
 
     let value = &args[0];
     let expected = match parse_ctype(&args[1]) {
         Ok(ct) => ct,
-        Err(e) => return (SIG_ERROR, Value::condition(Condition::error(e))),
+        Err(e) => return (SIG_ERROR, error_val("error", e)),
     };
 
     match TypeChecker::check_type(value, &expected) {
@@ -167,9 +165,7 @@ pub fn prim_null_pointer_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "null-pointer?: expected at least 1 argument".to_string(),
-            )),
+            error_val("arity-error", "null-pointer?: expected at least 1 argument"),
         );
     }
 
@@ -188,9 +184,10 @@ pub fn prim_with_ffi_safety_checks_wrapper(args: &[Value]) -> (SignalBits, Value
     if args.is_empty() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
+            error_val(
+                "arity-error",
                 "with-ffi-safety-checks: expected at least 1 argument".to_string(),
-            )),
+            ),
         );
     }
     (SIG_OK, args[0])

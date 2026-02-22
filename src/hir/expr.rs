@@ -141,19 +141,6 @@ pub enum HirKind {
         arms: Vec<(HirPattern, Option<Hir>, Hir)>, // pattern, guard, body
     },
 
-    // === Exception Handling ===
-    Throw(Box<Hir>),
-
-    HandlerCase {
-        body: Box<Hir>,
-        handlers: Vec<(u32, BindingId, Box<Hir>)>,
-    },
-
-    HandlerBind {
-        handlers: Vec<(u32, Box<Hir>)>,
-        body: Box<Hir>,
-    },
-
     // === Short-circuit Boolean ===
     And(Vec<Hir>),
     Or(Vec<Hir>),

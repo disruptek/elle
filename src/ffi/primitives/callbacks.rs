@@ -3,7 +3,7 @@
 use super::types::parse_ctype;
 use crate::ffi::callback::{create_callback, register_callback, unregister_callback};
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 use crate::vm::VM;
 use std::rc::Rc;
 
@@ -71,9 +71,7 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "make-c-callback: expected 3 arguments".to_string(),
-            )),
+            error_val("arity-error", "make-c-callback: expected 3 arguments"),
         );
     }
 
@@ -88,7 +86,7 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> (SignalBits, Value) {
             Err(e) => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("make-c-callback: {}", e))),
+                    error_val("type-error", format!("make-c-callback: {}", e)),
                 );
             }
         };
@@ -99,7 +97,7 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> (SignalBits, Value) {
         {
             Ok(types) => types,
             Err(e) => {
-                return (SIG_ERROR, Value::condition(Condition::error(e)));
+                return (SIG_ERROR, error_val("error", e));
             }
         }
     };
@@ -108,7 +106,7 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> (SignalBits, Value) {
     let return_type = match parse_ctype(&args[2]) {
         Ok(ty) => ty,
         Err(e) => {
-            return (SIG_ERROR, Value::condition(Condition::error(e)));
+            return (SIG_ERROR, error_val("error", e));
         }
     };
 
@@ -120,10 +118,13 @@ pub fn prim_make_c_callback_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if !register_callback(cb_id, closure_rc) {
         return (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "make-c-callback: failed to register callback with ID {}",
-                cb_id
-            ))),
+            error_val(
+                "error",
+                format!(
+                    "make-c-callback: failed to register callback with ID {}",
+                    cb_id
+                ),
+            ),
         );
     }
 
@@ -138,9 +139,7 @@ pub fn prim_free_callback_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "free-callback: expected 1 argument".to_string(),
-            )),
+            error_val("arity-error", "free-callback: expected 1 argument"),
         );
     }
 
@@ -149,9 +148,10 @@ pub fn prim_free_callback_wrapper(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(
-                    "free-callback: callback-id must be an integer".to_string(),
-                )),
+                error_val(
+                    "type-error",
+                    "free-callback: callback-id must be an integer",
+                ),
             );
         }
     };
@@ -162,10 +162,10 @@ pub fn prim_free_callback_wrapper(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "free-callback: callback with ID {} not found",
-                cb_id
-            ))),
+            error_val(
+                "error",
+                format!("free-callback: callback with ID {} not found", cb_id),
+            ),
         )
     }
 }

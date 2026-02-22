@@ -32,7 +32,7 @@ Does NOT:
 All primitives use a single unified type. No primitive has VM access.
 Return values:
 - `(SIG_OK, value)` — success, push value onto stack
-- `(SIG_ERROR, Value::condition(cond))` — error, set `fiber.current_exception`
+- `(SIG_ERROR, error_val(kind, msg))` — error, stored in `fiber.signal`
 - `(SIG_RESUME, fiber_value)` — fiber resume, VM handles fiber swap
 
 All SIG_RESUME primitives (including coroutine wrappers) return
@@ -50,7 +50,7 @@ stores them in `fiber.signal` and suspends the fiber.
 ```rust
 // In arithmetic.rs
 pub fn prim_add(args: &[Value]) -> (SignalBits, Value) {
-    // Implementation — return (SIG_ERROR, Value::condition(...)) for errors
+    // Implementation — return (SIG_ERROR, error_val("type-error", "msg")) for errors
 }
 
 pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
@@ -67,11 +67,11 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 
 ## Invariants
 
-1. **Primitives validate arguments.** Return `(SIG_ERROR, Value::condition(...))`
+1. **Primitives validate arguments.** Return `(SIG_ERROR, error_val(kind, msg))`
    for arity or type errors. Never panic.
 
 2. **All primitives return `(SignalBits, Value)`.** No exceptions. Errors are
-   signaled via SIG_ERROR with a Condition value.
+   signaled via SIG_ERROR with an error tuple `[:keyword "message"]`.
 
 3. **No primitive has VM access.** Operations that need the VM (fiber
    execution) return SIG_RESUME and let the VM dispatch loop handle it.
@@ -99,11 +99,9 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 | `type_check.rs` | `nil?`, `pair?`, `number?`, `string?`, etc. |
 | `higher_order.rs` | `map`, `filter`, `fold`, `apply` |
 | `concurrency.rs` | `spawn`, `join`, `channel`, `send`, `receive` |
-| `coroutines.rs` | `make-coroutine`, `coroutine-resume`, `coroutine-done?`, `coroutine-next` (fiber wrappers) |
+| `coroutines.rs` | `make-coroutine`, `coroutine-resume`, `coroutine-done?` (fiber wrappers) |
 | `fibers.rs` | `fiber/new`, `fiber/resume`, `fiber/signal`, `fiber/status`, `fiber/value`, `fiber/bits`, `fiber/mask`, `fiber?` |
-| `exception.rs` | `throw`, `try`, exception utilities |
 | `macros.rs` | `defmacro` (compile-time; `macro?` and `expand-macro` are now Expander operations) |
-| `introspection.rs` | `type-of`, `procedure?`, `arity` |
 | `debug.rs` | `debug-print`, `trace` |
 
 ## Files

@@ -1,6 +1,6 @@
 //! Vector operations primitives
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Create a vector from arguments
 pub fn prim_vector(args: &[Value]) -> (SignalBits, Value) {
@@ -12,10 +12,10 @@ pub fn prim_vector_length(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "vector-length: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("vector-length: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -25,10 +25,13 @@ pub fn prim_vector_length(args: &[Value]) -> (SignalBits, Value) {
     } else {
         (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "vector-length: expected vector, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!(
+                    "vector-length: expected vector, got {}",
+                    args[0].type_name()
+                ),
+            ),
         )
     }
 }
@@ -38,10 +41,10 @@ pub fn prim_vector_ref(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "vector-ref: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("vector-ref: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -50,10 +53,10 @@ pub fn prim_vector_ref(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "vector-ref: expected vector, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("vector-ref: expected vector, got {}", args[0].type_name()),
+                ),
             )
         }
     };
@@ -62,10 +65,10 @@ pub fn prim_vector_ref(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "vector-ref: expected integer, got {}",
-                    args[1].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("vector-ref: expected integer, got {}", args[1].type_name()),
+                ),
             )
         }
     };
@@ -75,11 +78,14 @@ pub fn prim_vector_ref(args: &[Value]) -> (SignalBits, Value) {
         Some(v) => (SIG_OK, v),
         None => (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "vector-ref: index {} out of bounds (length {})",
-                index,
-                borrowed.len()
-            ))),
+            error_val(
+                "error",
+                format!(
+                    "vector-ref: index {} out of bounds (length {})",
+                    index,
+                    borrowed.len()
+                ),
+            ),
         ),
     }
 }
@@ -89,10 +95,10 @@ pub fn prim_vector_set(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "vector-set!: expected 3 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("vector-set!: expected 3 arguments, got {}", args.len()),
+            ),
         );
     }
 
@@ -101,10 +107,10 @@ pub fn prim_vector_set(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "vector-set!: expected vector, got {}",
-                    args[0].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("vector-set!: expected vector, got {}", args[0].type_name()),
+                ),
             )
         }
     };
@@ -113,10 +119,10 @@ pub fn prim_vector_set(args: &[Value]) -> (SignalBits, Value) {
         None => {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "vector-set!: expected integer, got {}",
-                    args[1].type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("vector-set!: expected integer, got {}", args[1].type_name()),
+                ),
             )
         }
     };
@@ -126,11 +132,14 @@ pub fn prim_vector_set(args: &[Value]) -> (SignalBits, Value) {
     if index >= vec.len() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::error(format!(
-                "vector-set!: index {} out of bounds (length {})",
-                index,
-                vec.len()
-            ))),
+            error_val(
+                "error",
+                format!(
+                    "vector-set!: index {} out of bounds (length {})",
+                    index,
+                    vec.len()
+                ),
+            ),
         );
     }
 

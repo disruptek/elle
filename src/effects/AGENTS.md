@@ -47,11 +47,11 @@ Each predicate asks a specific question. No vague "is_pure".
 
 The analyzer performs interprocedural effect tracking:
 
-1. **effect_env**: Maps `BindingId` → `Effect` for locally-defined lambdas
+1. **effect_env**: Maps `BindingId` → `Effect` for locally-defined functions
 2. **primitive_effects**: Maps `SymbolId` → `Effect` for primitive functions
 
 When analyzing a call:
-- Direct lambda calls: use the lambda body's effect
+- Direct fn calls: use the fn body's effect
 - Variable calls: look up in `effect_env` (local) or `primitive_effects` (global)
 - Polymorphic effects: resolve by examining the argument's effect via
   `propagated_params()` iterator over the `propagates` bitmask

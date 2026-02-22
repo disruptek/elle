@@ -9,7 +9,7 @@
 //! but cannot perform full macro expansion since that happens during compilation.
 
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Check if a value is a macro
 ///
@@ -27,10 +27,10 @@ pub fn prim_is_macro(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "macro?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("macro?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -54,10 +54,10 @@ pub fn prim_expand_macro(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "expand-macro: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("expand-macro: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 

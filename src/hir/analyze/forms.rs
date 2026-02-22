@@ -85,7 +85,7 @@ impl<'a> Analyzer<'a> {
                         "let" => return self.analyze_let(items, span),
                         "let*" => return self.analyze_let_star(items, span),
                         "letrec" => return self.analyze_letrec(items, span),
-                        "fn" | "lambda" => return self.analyze_lambda(items, span),
+                        "fn" => return self.analyze_lambda(items, span),
                         "begin" => return self.analyze_begin(&items[1..], span),
                         "block" => return self.analyze_block(&items[1..], span),
                         "define" => return self.analyze_define(items, span),
@@ -102,11 +102,8 @@ impl<'a> Analyzer<'a> {
                             return Ok(Hir::pure(HirKind::Quote(value), span));
                         }
                         "yield" => return self.analyze_yield(items, span),
-                        "throw" => return self.analyze_throw(items, span),
                         "match" => return self.analyze_match(items, span),
                         "cond" => return self.analyze_cond(items, span),
-                        "handler-case" => return self.analyze_handler_case(items, span),
-                        "handler-bind" => return self.analyze_handler_bind(items, span),
                         "module" => return self.analyze_module(items, span),
                         "import" => return self.analyze_import(items, span),
                         _ => {}

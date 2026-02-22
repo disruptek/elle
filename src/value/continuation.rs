@@ -5,29 +5,13 @@
 //! from innermost to outermost.
 
 use crate::value::Value;
-use smallvec::SmallVec;
 use std::rc::Rc;
-
-/// An active exception handler in a frame.
-///
-/// When a yield occurs, the exception handlers active in that frame must be
-/// saved so they can be restored on resume. This struct captures the handler
-/// state needed to properly route exceptions after resumption.
-#[derive(Debug, Clone)]
-pub struct ExceptionHandler {
-    /// Bytecode offset to jump to when handling an exception
-    pub handler_offset: u16,
-    /// Optional bytecode offset for finally block (relative, -1 means none)
-    pub finally_offset: Option<i16>,
-    /// Stack depth when handler was pushed (for unwinding)
-    pub stack_depth: usize,
-}
 
 /// A single saved execution frame.
 ///
 /// When a coroutine yields, each frame in the call chain is captured
 /// with its bytecode, constants, environment, instruction pointer,
-/// operand stack state, and exception handler state.
+/// and operand stack state.
 #[derive(Debug, Clone)]
 pub struct ContinuationFrame {
     /// The bytecode for this frame
@@ -40,10 +24,6 @@ pub struct ContinuationFrame {
     pub ip: usize,
     /// The operand stack state for this frame
     pub stack: Vec<Value>,
-    /// Exception handlers active in this frame when it was captured
-    pub exception_handlers: SmallVec<[ExceptionHandler; 2]>,
-    /// Whether this frame was in the middle of handling an exception
-    pub handling_exception: bool,
 }
 
 /// A captured continuation - the full chain of pending computation.
@@ -104,34 +84,10 @@ mod tests {
             env: Rc::new(vec![]),
             ip: 10,
             stack: vec![Value::int(1), Value::int(2)],
-            exception_handlers: SmallVec::new(),
-            handling_exception: false,
         };
 
         assert_eq!(frame.ip, 10);
         assert_eq!(frame.stack.len(), 2);
-    }
-
-    #[test]
-    fn test_continuation_frame_with_handlers() {
-        let handler = ExceptionHandler {
-            handler_offset: 100,
-            finally_offset: Some(50),
-            stack_depth: 3,
-        };
-        let frame = ContinuationFrame {
-            bytecode: Rc::new(vec![1, 2, 3]),
-            constants: Rc::new(vec![]),
-            env: Rc::new(vec![]),
-            ip: 10,
-            stack: vec![],
-            exception_handlers: smallvec::smallvec![handler],
-            handling_exception: true,
-        };
-
-        assert_eq!(frame.exception_handlers.len(), 1);
-        assert_eq!(frame.exception_handlers[0].handler_offset, 100);
-        assert!(frame.handling_exception);
     }
 
     #[test]
@@ -142,8 +98,6 @@ mod tests {
             env: Rc::new(vec![]),
             ip: 5,
             stack: vec![],
-            exception_handlers: SmallVec::new(),
-            handling_exception: false,
         };
 
         let mut cont = ContinuationData::new(inner_frame);
@@ -155,8 +109,6 @@ mod tests {
             env: Rc::new(vec![]),
             ip: 10,
             stack: vec![],
-            exception_handlers: SmallVec::new(),
-            handling_exception: false,
         };
 
         cont.append_frame(outer_frame);

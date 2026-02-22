@@ -5,7 +5,7 @@
 
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use crate::value::repr::TAG_NIL;
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 // =============================================================================
 // Primitive Signal Handling (for JIT dispatch)
@@ -20,12 +20,7 @@ fn jit_handle_primitive_signal(vm: &mut crate::vm::VM, bits: SignalBits, value: 
     match bits {
         SIG_OK => value.to_bits(),
         SIG_ERROR => {
-            if let Some(cond) = value.as_condition() {
-                vm.fiber.current_exception = Some(std::rc::Rc::new(cond.clone()));
-            } else {
-                let cond = Condition::error(format!("{}", value));
-                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
-            }
+            vm.fiber.signal = Some((SIG_ERROR, value));
             TAG_NIL
         }
         _ => {
@@ -54,12 +49,12 @@ pub const TAIL_CALL_SENTINEL: u64 = 0xDEAD_BEEF_DEAD_BEEFu64;
 // Exception Checking
 // =============================================================================
 
-/// Check if an exception is pending on the VM
-/// Returns TRUE bits if exception is set, FALSE bits otherwise
+/// Check if an error signal is pending on the VM.
+/// Returns TRUE bits if error is set, FALSE bits otherwise.
 #[no_mangle]
 pub extern "C" fn elle_jit_has_exception(vm: *mut ()) -> u64 {
     let vm = unsafe { &*(vm as *const crate::vm::VM) };
-    Value::bool(vm.fiber.current_exception.is_some()).to_bits()
+    Value::bool(matches!(vm.fiber.signal, Some((SIG_ERROR, _)))).to_bits()
 }
 
 // =============================================================================
@@ -201,8 +196,10 @@ pub extern "C" fn elle_jit_load_global(sym_id: u64, vm: *mut ()) -> u64 {
     match vm.globals.get(sym as usize).filter(|v| !v.is_undefined()) {
         Some(val) => val.to_bits(),
         None => {
-            let cond = Condition::error(format!("Undefined global: {}", sym));
-            vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+            vm.fiber.signal = Some((
+                SIG_ERROR,
+                error_val("error", format!("Undefined global: {}", sym)),
+            ));
             TAG_NIL
         }
     }
@@ -266,14 +263,15 @@ pub extern "C" fn elle_jit_call(
         match result {
             Ok(val) => val.to_bits(),
             Err(e) => {
-                let cond = Condition::error(e);
-                vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+                vm.fiber.signal = Some((SIG_ERROR, error_val("error", e)));
                 TAG_NIL
             }
         }
     } else {
-        let cond = Condition::type_error(format!("Cannot call {:?}", func));
-        vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val("type-error", format!("Cannot call {:?}", func)),
+        ));
         TAG_NIL
     }
 }
@@ -321,8 +319,10 @@ pub extern "C" fn elle_jit_tail_call(
         return TAIL_CALL_SENTINEL;
     }
 
-    let cond = Condition::type_error(format!("Cannot call {:?}", func));
-    vm.fiber.current_exception = Some(std::rc::Rc::new(cond));
+    vm.fiber.signal = Some((
+        SIG_ERROR,
+        error_val("type-error", format!("Cannot call {:?}", func)),
+    ));
     TAG_NIL
 }
 
@@ -445,9 +445,10 @@ mod tests {
         let val = unsafe { Value::from_bits(result) };
         assert_eq!(val.as_bool(), Some(false));
 
-        // Set an exception using the public constructor
-        vm.fiber.current_exception = Some(std::rc::Rc::new(
-            crate::value::Condition::division_by_zero("test"),
+        // Set an error signal
+        vm.fiber.signal = Some((
+            crate::value::SIG_ERROR,
+            crate::value::error_val("division-by-zero", "test"),
         ));
 
         // Now should return true
@@ -455,8 +456,8 @@ mod tests {
         let val = unsafe { Value::from_bits(result) };
         assert_eq!(val.as_bool(), Some(true));
 
-        // Clear exception
-        vm.fiber.current_exception = None;
+        // Clear signal
+        vm.fiber.signal = None;
 
         // Should return false again
         let result = elle_jit_has_exception(&mut vm as *mut VM as *mut ());

@@ -4,7 +4,7 @@
 //! instructions to their handlers.
 
 use crate::compiler::bytecode::Instruction;
-use crate::value::{Condition, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
+use crate::value::{error_val, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
 use std::rc::Rc;
 
 use super::core::VM;
@@ -37,32 +37,24 @@ impl VM {
                 } else {
                     255
                 };
-                let cond = Condition::error(format!(
-                    "Instruction limit exceeded at ip={} (instr={}), stack depth={}, exception={}",
-                    ip,
-                    instr_byte,
-                    self.fiber.stack.len(),
-                    self.fiber.current_exception.is_some()
+                self.fiber.signal = Some((
+                    SIG_ERROR,
+                    error_val(
+                        "error",
+                        format!(
+                            "Instruction limit exceeded at ip={} (instr={}), stack depth={}",
+                            ip,
+                            instr_byte,
+                            self.fiber.stack.len(),
+                        ),
+                    ),
                 ));
-                self.fiber.current_exception = Some(Rc::new(cond));
-                self.fiber.signal = Some((SIG_ERROR, Value::NIL));
                 return SIG_ERROR;
             }
 
-            // Check for pending exception at the START of each iteration
-            if self.fiber.current_exception.is_some() && !self.fiber.handling_exception {
-                if let Some(handler) = self.fiber.exception_handlers.last() {
-                    while self.fiber.stack.len() > handler.stack_depth {
-                        self.fiber.stack.pop();
-                    }
-                    self.fiber.handling_exception = true;
-                    ip = handler.handler_offset as usize;
-                    continue;
-                } else {
-                    // Exception escaped all handlers
-                    self.fiber.signal = Some((SIG_ERROR, Value::NIL));
-                    return SIG_ERROR;
-                }
+            // If an error signal is pending, propagate immediately.
+            if matches!(self.fiber.signal, Some((SIG_ERROR, _))) {
+                return SIG_ERROR;
             }
 
             if ip >= bytecode.len() {
@@ -292,43 +284,6 @@ impl VM {
                     scope::handle_update_cell(self);
                 }
 
-                // Exception handling
-                Instruction::PushHandler => {
-                    self.handle_push_handler(bytecode, &mut ip);
-                }
-                Instruction::PopHandler => {
-                    self.fiber.exception_handlers.pop();
-                }
-                Instruction::CreateHandler => {
-                    let _handler_fn_idx = self.read_u16(bytecode, &mut ip);
-                    let _condition_id = self.read_u16(bytecode, &mut ip);
-                }
-                Instruction::CheckException => {
-                    if self.fiber.current_exception.is_none() {
-                        panic!("VM bug: CheckException reached with no exception set");
-                    }
-                }
-                Instruction::MatchException => {
-                    self.handle_match_exception(bytecode, &mut ip);
-                }
-                Instruction::BindException => {
-                    self.handle_bind_exception(bytecode, &mut ip, constants);
-                }
-                Instruction::ClearException => {
-                    self.fiber.current_exception = None;
-                    self.fiber.handling_exception = false;
-                }
-                Instruction::ReraiseException => {
-                    self.fiber.exception_handlers.pop();
-                    self.fiber.handling_exception = false;
-                }
-                Instruction::InvokeRestart => {
-                    let _restart_name_id = self.read_u16(bytecode, &mut ip);
-                }
-                Instruction::LoadException => {
-                    self.handle_load_exception();
-                }
-
                 // Yield — capture continuation and suspend
                 Instruction::Yield => {
                     self.fiber.suspended_ip = Some(ip);
@@ -336,19 +291,9 @@ impl VM {
                 }
             }
 
-            // Exception interrupt mechanism
-            if self.fiber.current_exception.is_some() && !self.fiber.handling_exception {
-                if let Some(handler) = self.fiber.exception_handlers.last() {
-                    while self.fiber.stack.len() > handler.stack_depth {
-                        self.fiber.stack.pop();
-                    }
-                    self.fiber.handling_exception = true;
-                    ip = handler.handler_offset as usize;
-                } else {
-                    // Exception escaped all handlers
-                    self.fiber.signal = Some((SIG_ERROR, Value::NIL));
-                    return SIG_ERROR;
-                }
+            // If an error signal was set by the instruction, propagate.
+            if matches!(self.fiber.signal, Some((SIG_ERROR, _))) {
+                return SIG_ERROR;
             }
         }
     }
@@ -368,15 +313,14 @@ impl VM {
 
     /// Handle the Yield instruction.
     ///
-    /// Captures a continuation frame (bytecode, constants, env, IP, stack,
-    /// exception handlers) so that resume can continue from this exact point.
-    /// This is what makes yield-through-nested-calls work: each call level
+    /// Captures a continuation frame (bytecode, constants, env, IP, stack)
+    /// so that resume can continue from this exact point. Each call level
     /// appends its frame to the continuation chain.
     fn handle_yield(
         &mut self,
         bytecode: &[u8],
         constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
+        closure_env: Option<&std::rc::Rc<Vec<Value>>>,
         ip: usize,
     ) -> SignalBits {
         let yielded_value = self
@@ -388,13 +332,13 @@ impl VM {
         let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
         let frame = crate::value::ContinuationFrame {
-            bytecode: Rc::new(bytecode.to_vec()),
-            constants: Rc::new(constants.to_vec()),
-            env: closure_env.cloned().unwrap_or_else(|| Rc::new(vec![])),
+            bytecode: std::rc::Rc::new(bytecode.to_vec()),
+            constants: std::rc::Rc::new(constants.to_vec()),
+            env: closure_env
+                .cloned()
+                .unwrap_or_else(|| std::rc::Rc::new(vec![])),
             ip,
             stack: saved_stack,
-            exception_handlers: self.fiber.exception_handlers.clone(),
-            handling_exception: self.fiber.handling_exception,
         };
 
         let cont_data = crate::value::ContinuationData::new(frame);
@@ -403,70 +347,5 @@ impl VM {
         self.fiber.signal = Some((SIG_YIELD, yielded_value));
         self.fiber.continuation = Some(continuation);
         SIG_YIELD
-    }
-
-    /// Handle the PushHandler instruction.
-    fn handle_push_handler(&mut self, bytecode: &[u8], ip: &mut usize) {
-        let handler_offset = self.read_u16(bytecode, ip);
-        let finally_offset_val = self.read_i16(bytecode, ip);
-        let finally_offset = if finally_offset_val == -1 {
-            None
-        } else {
-            Some(finally_offset_val)
-        };
-
-        use crate::value::ExceptionHandler;
-        self.fiber.exception_handlers.push(ExceptionHandler {
-            handler_offset,
-            finally_offset,
-            stack_depth: self.fiber.stack.len(),
-        });
-    }
-
-    /// Handle the MatchException instruction.
-    fn handle_match_exception(&mut self, bytecode: &[u8], ip: &mut usize) {
-        use super::is_exception_subclass;
-
-        let handler_id = self.read_u16(bytecode, ip);
-
-        let matches = if let Some(exc) = &self.fiber.current_exception {
-            is_exception_subclass(exc.exception_id, handler_id as u32)
-        } else {
-            false
-        };
-
-        self.fiber.stack.push(Value::bool(matches));
-    }
-
-    /// Handle the BindException instruction.
-    fn handle_bind_exception(&mut self, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
-        let const_idx = self.read_u16(bytecode, ip) as usize;
-
-        if let Some(exc) = &self.fiber.current_exception {
-            let const_val = constants
-                .get(const_idx)
-                .expect("VM bug: BindException: constant index out of bounds");
-            let sym_id = const_val
-                .as_symbol()
-                .expect("VM bug: BindException: Expected symbol in constants");
-            use crate::value::heap::{alloc, HeapObject};
-            let exc_value = alloc(HeapObject::Condition((**exc).clone()));
-            let idx = sym_id as usize;
-            if idx >= self.globals.len() {
-                self.globals.resize(idx + 1, Value::UNDEFINED);
-            }
-            self.globals[idx] = exc_value;
-        }
-    }
-
-    /// Handle the LoadException instruction.
-    fn handle_load_exception(&mut self) {
-        let exc_value = if let Some(exc) = &self.fiber.current_exception {
-            use crate::value::heap::{alloc, HeapObject};
-            alloc(HeapObject::Condition((**exc).clone()))
-        } else {
-            Value::NIL
-        };
-        self.fiber.stack.push(exc_value);
     }
 }

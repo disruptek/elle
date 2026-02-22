@@ -4,7 +4,7 @@ use crate::ffi::bindings::generate_elle_bindings;
 use crate::ffi::header::HeaderParser;
 use crate::ffi::types::{CType, EnumId, EnumLayout};
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 use crate::vm::VM;
 
 /// (load-header-with-lib header-path lib-path) -> library-handle
@@ -89,9 +89,7 @@ pub fn prim_load_header_with_lib_wrapper(args: &[Value]) -> (SignalBits, Value) 
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "load-header-with-lib: expected 2 arguments".to_string(),
-            )),
+            error_val("arity-error", "load-header-with-lib: expected 2 arguments"),
         );
     }
 
@@ -100,9 +98,10 @@ pub fn prim_load_header_with_lib_wrapper(args: &[Value]) -> (SignalBits, Value) 
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
-                "load-header-with-lib: header-path must be a string".to_string(),
-            )),
+            error_val(
+                "type-error",
+                "load-header-with-lib: header-path must be a string",
+            ),
         );
     };
 
@@ -111,9 +110,10 @@ pub fn prim_load_header_with_lib_wrapper(args: &[Value]) -> (SignalBits, Value) 
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
-                "load-header-with-lib: lib-path must be a string".to_string(),
-            )),
+            error_val(
+                "type-error",
+                "load-header-with-lib: lib-path must be a string",
+            ),
         );
     };
 
@@ -122,7 +122,7 @@ pub fn prim_load_header_with_lib_wrapper(args: &[Value]) -> (SignalBits, Value) 
     let parsed = match parser.parse(header_path) {
         Ok(p) => p,
         Err(e) => {
-            return (SIG_ERROR, Value::condition(Condition::error(e.to_string())));
+            return (SIG_ERROR, error_val("error", e.to_string()));
         }
     };
 
@@ -137,9 +137,7 @@ pub fn prim_define_enum_wrapper(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "define-enum: expected 2 arguments".to_string(),
-            )),
+            error_val("arity-error", "define-enum: expected 2 arguments"),
         );
     }
 
@@ -148,9 +146,7 @@ pub fn prim_define_enum_wrapper(args: &[Value]) -> (SignalBits, Value) {
     } else {
         return (
             SIG_ERROR,
-            Value::condition(Condition::type_error(
-                "define-enum: enum name must be a string".to_string(),
-            )),
+            error_val("type-error", "define-enum: enum name must be a string"),
         );
     };
 
@@ -164,7 +160,7 @@ pub fn prim_define_enum_wrapper(args: &[Value]) -> (SignalBits, Value) {
             Err(e) => {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::type_error(format!("define-enum: {}", e))),
+                    error_val("type-error", format!("define-enum: {}", e)),
                 );
             }
         };
@@ -175,17 +171,18 @@ pub fn prim_define_enum_wrapper(args: &[Value]) -> (SignalBits, Value) {
                 // For now, we'll need to handle this differently
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::error(
-                        "define-enum: variant parsing not yet implemented for new Value API"
-                            .to_string(),
-                    )),
+                    error_val(
+                        "error",
+                        "define-enum: variant parsing not yet implemented for new Value API",
+                    ),
                 );
             } else {
                 return (
                     SIG_ERROR,
-                    Value::condition(Condition::type_error(
-                        "define-enum: each variant must be a cons cell".to_string(),
-                    )),
+                    error_val(
+                        "type-error",
+                        "define-enum: each variant must be a cons cell",
+                    ),
                 );
             }
         }

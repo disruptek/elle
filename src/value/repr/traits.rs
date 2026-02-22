@@ -42,8 +42,8 @@ impl PartialEq for Value {
                 // Closure comparison (compare by reference)
                 (HeapObject::Closure(c1), HeapObject::Closure(c2)) => std::rc::Rc::ptr_eq(c1, c2),
 
-                // Condition comparison
-                (HeapObject::Condition(cond1), HeapObject::Condition(cond2)) => cond1 == cond2,
+                // Tuple comparison (compare contents element-wise)
+                (HeapObject::Tuple(t1), HeapObject::Tuple(t2)) => t1 == t2,
 
                 // Cell comparison (compare contents)
                 (HeapObject::Cell(c1, _), HeapObject::Cell(c2, _)) => *c1.borrow() == *c2.borrow(),

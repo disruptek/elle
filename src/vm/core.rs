@@ -9,9 +9,6 @@ use std::rc::Rc;
 
 use crate::jit::JitCode;
 
-// Re-export ExceptionHandler from value::continuation where it's defined
-pub use crate::value::continuation::ExceptionHandler;
-
 // Re-export CallFrame from fiber (it now lives there)
 pub use crate::value::fiber::CallFrame as FiberCallFrame;
 
@@ -332,24 +329,17 @@ impl VM {
             // Push the value from the inner frame (or resume value for innermost)
             self.fiber.stack.push(current_value);
 
-            // Execute with the frame's saved exception handler state
-            let bits = self.execute_bytecode_from_ip_with_state(
+            let bits = self.execute_bytecode_from_ip(
                 &frame.bytecode,
                 &frame.constants,
                 Some(&frame.env),
                 frame.ip,
-                frame.exception_handlers.clone(),
-                frame.handling_exception,
             );
 
             match bits {
                 SIG_OK => {
                     let (_, v) = self.fiber.signal.take().unwrap();
-                    if self.fiber.current_exception.is_some() && i + 1 < frames.len() {
-                        current_value = Value::NIL;
-                    } else {
-                        current_value = v;
-                    }
+                    current_value = v;
                 }
                 SIG_YIELD => {
                     let (_, value) = self.fiber.signal.take().unwrap();

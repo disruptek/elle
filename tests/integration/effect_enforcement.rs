@@ -27,7 +27,7 @@ fn setup() -> SymbolTable {
 
 #[test]
 fn test_effect_direct_yield() {
-    // (lambda () (yield 1)) should have Pure effect on the lambda creation
+    // (fn () (yield 1)) should have Pure effect on the lambda creation
     // but the body should have Yields effect
     let mut symbols = setup();
     let result = analyze_new("(fn () (yield 1))", &mut symbols).unwrap();
@@ -65,7 +65,7 @@ fn test_effect_yield_in_if() {
 
 #[test]
 fn test_effect_call_propagation() {
-    // (define gen (lambda () (yield 1)))
+    // (define gen (fn () (yield 1)))
     // (gen) should have Yields effect
     let mut symbols = setup();
     let result = analyze_new("(begin (define gen (fn () (yield 1))) (gen))", &mut symbols).unwrap();
@@ -78,8 +78,8 @@ fn test_effect_call_propagation() {
 
 #[test]
 fn test_effect_nested_propagation() {
-    // (define gen (lambda () (yield 1)))
-    // (define wrapper (lambda () (gen)))
+    // (define gen (fn () (yield 1)))
+    // (define wrapper (fn () (gen)))
     // (wrapper) should be Yields
     let mut symbols = setup();
     let result = analyze_new(
@@ -96,7 +96,7 @@ fn test_effect_nested_propagation() {
 
 #[test]
 fn test_effect_pure_call() {
-    // (define f (lambda (x) (+ x 1)))
+    // (define f (fn (x) (+ x 1)))
     // (f 42) should be Pure
     let mut symbols = setup();
     let result = analyze_new("(begin (define f (fn (x) (+ x 1))) (f 42))", &mut symbols).unwrap();
@@ -109,7 +109,7 @@ fn test_effect_pure_call() {
 
 #[test]
 fn test_effect_let_bound_lambda() {
-    // (let ((gen (lambda () (yield 1)))) (gen)) should have Yields effect
+    // (let ((gen (fn () (yield 1)))) (gen)) should have Yields effect
     let mut symbols = setup();
     let result = analyze_new("(let ((gen (fn () (yield 1)))) (gen))", &mut symbols).unwrap();
     assert_eq!(
@@ -121,7 +121,7 @@ fn test_effect_let_bound_lambda() {
 
 #[test]
 fn test_effect_letrec_bound_lambda() {
-    // (letrec ((gen (lambda () (yield 1)))) (gen)) should have Yields effect
+    // (letrec ((gen (fn () (yield 1)))) (gen)) should have Yields effect
     let mut symbols = setup();
     let result = analyze_new("(letrec ((gen (fn () (yield 1)))) (gen) 42)", &mut symbols).unwrap();
     assert_eq!(
@@ -228,8 +228,8 @@ fn test_effect_polymorphic_with_yielding_arg_unknown_global() {
 
 #[test]
 fn test_effect_set_invalidation() {
-    // (define f (lambda () 42))
-    // (set! f (lambda () (yield 1)))
+    // (define f (fn () 42))
+    // (set! f (fn () (yield 1)))
     // After set!, effect tracking for f is invalidated
     // Calling f should be Yields (sound: we can't prove it's pure)
     let mut symbols = setup();
@@ -253,7 +253,7 @@ fn test_effect_set_invalidation() {
 
 #[test]
 fn test_effect_direct_lambda_call_yields() {
-    // ((lambda () (yield 1))) should have Yields effect
+    // ((fn () (yield 1))) should have Yields effect
     let mut symbols = setup();
     let result = analyze_new("((fn () (yield 1)))", &mut symbols).unwrap();
     assert_eq!(
@@ -265,7 +265,7 @@ fn test_effect_direct_lambda_call_yields() {
 
 #[test]
 fn test_effect_direct_lambda_call_pure() {
-    // ((lambda () 42)) should be Pure
+    // ((fn () 42)) should be Pure
     let mut symbols = setup();
     let result = analyze_new("((fn () 42))", &mut symbols).unwrap();
     assert_eq!(

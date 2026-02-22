@@ -48,7 +48,7 @@ mod jit_tests {
         // Function with captured variables
         let code = r#"(begin
             (define (make-adder n)
-              (lambda (x) (+ x n)))
+              (fn (x) (+ x n)))
             (define add5 (make-adder 5))
             (define (loop n acc)
               (if (= n 0) acc (loop (- n 1) (add5 acc))))
@@ -277,11 +277,13 @@ mod jit_tests {
                 ; Call f enough times to make it hot, then call with 0
                 (f 1) (f 2) (f 3) (f 4) (f 5)
                 (f 6) (f 7) (f 8) (f 9) (f 10)
-                (handler-case (f 0) (division-by-zero e -1)))"#,
+                (let ((fib (fiber/new (fn () (f 0)) 1)))
+                  (fiber/resume fib)
+                  (if (= (fiber/bits fib) 1) -1 0)))"#,
         );
         assert!(result.is_ok());
         let val = result.unwrap();
-        // Should get -1 from the handler, not garbage from continuing after exception
+        // Should get -1 from the error handler, not garbage from continuing after exception
         assert_eq!(val.as_int(), Some(-1));
     }
 
@@ -302,11 +304,13 @@ mod jit_tests {
                 (f 1) (f 2) (f 5) (f 10) (f 1)
                 (f 2) (f 5) (f 10) (f 1) (f 2)
                 ; Now trigger exception
-                (handler-case (f 0) (division-by-zero e -42)))"#,
+                (let ((fib (fiber/new (fn () (f 0)) 1)))
+                  (fiber/resume fib)
+                  (if (= (fiber/bits fib) 1) -42 0)))"#,
         );
         assert!(result.is_ok());
         let val = result.unwrap();
-        // Should be -42 from the handler, not 1001 (which would happen if NIL + 1000 worked)
+        // Should be -42 from the error handler, not 1001 (which would happen if NIL + 1000 worked)
         assert_eq!(val.as_int(), Some(-42));
     }
 
@@ -322,7 +326,9 @@ mod jit_tests {
                 (outer 1) (outer 2) (outer 4) (outer 5) (outer 10)
                 (outer 1) (outer 2) (outer 4) (outer 5) (outer 10)
                 ; Trigger exception deep in the call chain
-                (handler-case (outer 0) (division-by-zero e -999)))"#,
+                (let ((fib (fiber/new (fn () (outer 0)) 1)))
+                  (fiber/resume fib)
+                  (if (= (fiber/bits fib) 1) -999 0)))"#,
         );
         assert!(result.is_ok());
         let val = result.unwrap();

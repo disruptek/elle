@@ -21,7 +21,7 @@ Runtime value representation using NaN-boxing.
 | `closure.rs` | `Closure` struct with bytecode, env, and `location_map` |
 | `fiber.rs` | `Fiber`, `Frame`, `FiberStatus`, `SignalBits` for fiber execution contexts |
 | `continuation.rs` | `ContinuationData`, `ContinuationFrame` for first-class continuations |
-| `condition.rs` | `Condition` for the condition/restart system |
+| `error.rs` | `error_val()` and `format_error()` helpers for error tuples |
 | `ffi.rs` | `LibHandle`, `CHandle` for C interop |
 | `heap.rs` | `HeapObject` enum, `Cons`, `ThreadHandle` |
 | `send.rs` | `SendValue` wrapper for thread-safe transfer |
@@ -84,7 +84,7 @@ Create values via methods: `Value::int(42)`, `Value::cons(a, b)`,
 | `closure.rs` | ~70 | Closure struct |
 | `fiber.rs` | ~370 | Fiber, Frame, FiberStatus, SignalBits |
 | `continuation.rs` | ~200 | ContinuationData, ContinuationFrame |
-| `condition.rs` | ~50 | Condition type |
+| `error.rs` | ~50 | error_val() and format_error() helpers |
 | `ffi.rs` | ~50 | LibHandle, CHandle |
 | `heap.rs` | ~300 | HeapObject, Cons, ThreadHandle |
 | `send.rs` | ~150 | SendValue for thread transfer |

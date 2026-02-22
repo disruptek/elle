@@ -1,6 +1,6 @@
 use crate::arithmetic;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
-use crate::value::{Condition, Value};
+use crate::value::{error_val, Value};
 
 /// Variadic addition: (+ 1 2 3) -> 6, (+) -> 0
 pub fn prim_add(args: &[Value]) -> (SignalBits, Value) {
@@ -9,10 +9,10 @@ pub fn prim_add(args: &[Value]) -> (SignalBits, Value) {
         if !arg.is_number() {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "+: expected number, got {}",
-                    arg.type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("+: expected number, got {}", arg.type_name()),
+                ),
             );
         }
     }
@@ -25,7 +25,7 @@ pub fn prim_add(args: &[Value]) -> (SignalBits, Value) {
     for arg in &args[1..] {
         match arithmetic::add_values(&result, arg) {
             Ok(val) => result = val,
-            Err(e) => return (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => return (SIG_ERROR, error_val("error", e)),
         }
     }
     (SIG_OK, result)
@@ -36,16 +36,14 @@ pub fn prim_sub(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "-: expected at least 1 argument, got 0".to_string(),
-            )),
+            error_val("arity-error", "-: expected at least 1 argument, got 0"),
         );
     }
 
     if args.len() == 1 {
         return match arithmetic::negate_value(&args[0]) {
             Ok(val) => (SIG_OK, val),
-            Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => (SIG_ERROR, error_val("error", e)),
         };
     }
 
@@ -53,7 +51,7 @@ pub fn prim_sub(args: &[Value]) -> (SignalBits, Value) {
     for arg in &args[1..] {
         match arithmetic::sub_values(&result, arg) {
             Ok(val) => result = val,
-            Err(e) => return (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => return (SIG_ERROR, error_val("error", e)),
         }
     }
     (SIG_OK, result)
@@ -66,10 +64,10 @@ pub fn prim_mul(args: &[Value]) -> (SignalBits, Value) {
         if !arg.is_number() {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "*: expected number, got {}",
-                    arg.type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("*: expected number, got {}", arg.type_name()),
+                ),
             );
         }
     }
@@ -82,7 +80,7 @@ pub fn prim_mul(args: &[Value]) -> (SignalBits, Value) {
     for arg in &args[1..] {
         match arithmetic::mul_values(&result, arg) {
             Ok(val) => result = val,
-            Err(e) => return (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => return (SIG_ERROR, error_val("error", e)),
         }
     }
     (SIG_OK, result)
@@ -93,16 +91,14 @@ pub fn prim_div(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "/: expected at least 1 argument, got 0".to_string(),
-            )),
+            error_val("arity-error", "/: expected at least 1 argument, got 0"),
         );
     }
 
     if args.len() == 1 {
         return match arithmetic::reciprocal_value(&args[0]) {
             Ok(val) => (SIG_OK, val),
-            Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => (SIG_ERROR, error_val("error", e)),
         };
     }
 
@@ -110,7 +106,7 @@ pub fn prim_div(args: &[Value]) -> (SignalBits, Value) {
     for arg in &args[1..] {
         match arithmetic::div_values(&result, arg) {
             Ok(val) => result = val,
-            Err(e) => return (SIG_ERROR, Value::condition(Condition::error(e))),
+            Err(e) => return (SIG_ERROR, error_val("error", e)),
         }
     }
     (SIG_OK, result)
@@ -122,15 +118,15 @@ pub fn prim_mod(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "mod: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("mod: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
     match arithmetic::mod_values(&args[0], &args[1]) {
         Ok(val) => (SIG_OK, val),
-        Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+        Err(e) => (SIG_ERROR, error_val("error", e)),
     }
 }
 
@@ -140,15 +136,15 @@ pub fn prim_rem(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "rem: expected 2 arguments, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("rem: expected 2 arguments, got {}", args.len()),
+            ),
         );
     }
     match arithmetic::remainder_values(&args[0], &args[1]) {
         Ok(val) => (SIG_OK, val),
-        Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+        Err(e) => (SIG_ERROR, error_val("error", e)),
     }
 }
 
@@ -156,15 +152,15 @@ pub fn prim_abs(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "abs: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("abs: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
     match arithmetic::abs_value(&args[0]) {
         Ok(val) => (SIG_OK, val),
-        Err(e) => (SIG_ERROR, Value::condition(Condition::error(e))),
+        Err(e) => (SIG_ERROR, error_val("error", e)),
     }
 }
 
@@ -172,9 +168,7 @@ pub fn prim_min(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "min: expected at least 1 argument, got 0".to_string(),
-            )),
+            error_val("arity-error", "min: expected at least 1 argument, got 0"),
         );
     }
 
@@ -184,10 +178,10 @@ pub fn prim_min(args: &[Value]) -> (SignalBits, Value) {
         if !arg.is_number() {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "min: expected number, got {}",
-                    arg.type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("min: expected number, got {}", arg.type_name()),
+                ),
             );
         }
         min = arithmetic::min_values(&min, arg);
@@ -199,9 +193,7 @@ pub fn prim_max(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(
-                "max: expected at least 1 argument, got 0".to_string(),
-            )),
+            error_val("arity-error", "max: expected at least 1 argument, got 0"),
         );
     }
 
@@ -211,10 +203,10 @@ pub fn prim_max(args: &[Value]) -> (SignalBits, Value) {
         if !arg.is_number() {
             return (
                 SIG_ERROR,
-                Value::condition(Condition::type_error(format!(
-                    "max: expected number, got {}",
-                    arg.type_name()
-                ))),
+                error_val(
+                    "type-error",
+                    format!("max: expected number, got {}", arg.type_name()),
+                ),
             );
         }
         max = arithmetic::max_values(&max, arg);
@@ -226,10 +218,10 @@ pub fn prim_even(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "even?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("even?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -237,10 +229,10 @@ pub fn prim_even(args: &[Value]) -> (SignalBits, Value) {
         Some(n) => (SIG_OK, Value::bool(n % 2 == 0)),
         _ => (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "even?: expected integer, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("even?: expected integer, got {}", args[0].type_name()),
+            ),
         ),
     }
 }
@@ -249,10 +241,10 @@ pub fn prim_odd(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
-            Value::condition(Condition::arity_error(format!(
-                "odd?: expected 1 argument, got {}",
-                args.len()
-            ))),
+            error_val(
+                "arity-error",
+                format!("odd?: expected 1 argument, got {}", args.len()),
+            ),
         );
     }
 
@@ -260,27 +252,26 @@ pub fn prim_odd(args: &[Value]) -> (SignalBits, Value) {
         Some(n) => (SIG_OK, Value::bool(n % 2 != 0)),
         _ => (
             SIG_ERROR,
-            Value::condition(Condition::type_error(format!(
-                "odd?: expected integer, got {}",
-                args[0].type_name()
-            ))),
+            error_val(
+                "type-error",
+                format!("odd?: expected integer, got {}", args[0].type_name()),
+            ),
         ),
     }
 }
 
 pub fn prim_div_vm(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() {
-        let cond = Condition::arity_error("/: expected at least 1 argument, got 0");
-        return (SIG_ERROR, Value::condition(cond));
+        return (
+            SIG_ERROR,
+            error_val("arity-error", "/: expected at least 1 argument, got 0"),
+        );
     }
 
     if args.len() == 1 {
         return match arithmetic::reciprocal_value(&args[0]) {
             Ok(val) => (SIG_OK, val),
-            Err(msg) => {
-                let cond = Condition::type_error(msg);
-                (SIG_ERROR, Value::condition(cond))
-            }
+            Err(msg) => (SIG_ERROR, error_val("type-error", msg)),
         };
     }
 
@@ -302,18 +293,14 @@ pub fn prim_div_vm(args: &[Value]) -> (SignalBits, Value) {
         };
 
         if is_zero {
-            // Create a division-by-zero Condition
-            let cond = crate::value::Condition::division_by_zero("division by zero")
-                .with_field(0, result) // dividend
-                .with_field(1, *arg); // divisor
-            return (SIG_ERROR, Value::condition(cond));
+            // Create a division-by-zero error
+            return (SIG_ERROR, error_val("division-by-zero", "division by zero"));
         }
 
         match arithmetic::div_values(&result, arg) {
             Ok(val) => result = val,
             Err(msg) => {
-                let cond = Condition::type_error(msg);
-                return (SIG_ERROR, Value::condition(cond));
+                return (SIG_ERROR, error_val("type-error", msg));
             }
         }
     }
