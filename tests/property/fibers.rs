@@ -330,3 +330,186 @@ proptest! {
             inner_val + outer_val, n, val);
     }
 }
+
+// ============================================================================
+// Property 7: Multi-frame yield chain (T1)
+//
+// Yield propagates through nested function calls within a fiber. When a
+// helper function yields, the fiber suspends with the full call chain saved.
+// Resuming replays the chain and returns the resume value to the yield site.
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+
+    #[test]
+    fn multi_frame_yield_chain(
+        base in -50i64..50,
+        resume_val in -50i64..50,
+    ) {
+        // helper yields (base * 2), caller adds 1 to the result of helper.
+        // On resume, the yield expression evaluates to resume_val, so
+        // helper returns resume_val, caller returns resume_val + 1.
+        let code = format!(
+            r#"(begin
+                 (define helper (fn (x) (yield (* x 2))))
+                 (define caller (fn (x) (+ (helper x) 1)))
+                 (define co (make-coroutine (fn () (caller {}))))
+                 (list (coroutine-resume co) (coroutine-resume co {})))"#,
+            base, resume_val
+        );
+        let result = eval(&code);
+        prop_assert!(result.is_ok(), "Multi-frame yield failed: {:?}", result);
+
+        let list = result.unwrap();
+        let items = list.list_to_vec();
+        prop_assert!(items.is_ok(), "Expected list, got {:?}", list);
+        let items = items.unwrap();
+        prop_assert_eq!(items.len(), 2, "Expected 2-element list, got {:?}", items);
+
+        // First resume: yields base * 2
+        prop_assert_eq!(items[0].as_int(), Some(base * 2),
+            "First yield should be {} * 2 = {}", base, base * 2);
+        // Second resume: helper returns resume_val, caller returns resume_val + 1
+        prop_assert_eq!(items[1].as_int(), Some(resume_val + 1),
+            "Final return should be {} + 1 = {}", resume_val, resume_val + 1);
+    }
+}
+
+// ============================================================================
+// Property 8: Re-yield during resume_suspended (T2)
+//
+// A fiber yields, is resumed, then yields again from a different call depth.
+// This exercises the resume_suspended path where a re-yield occurs, requiring
+// the remaining outer frames to be merged into the new suspended state.
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+
+    #[test]
+    fn re_yield_at_different_depth(
+        val1 in -50i64..50,
+        val2 in -50i64..50,
+        resume1 in -50i64..50,
+    ) {
+        // First yield is inside helper (2 frames: gen -> helper).
+        // After resume, helper returns, then gen yields val2 directly (1 frame).
+        // Final resume returns val2's resume value (which is NIL by default).
+        let code = format!(
+            r#"(begin
+                 (define helper (fn (x) (yield x)))
+                 (define gen (fn ()
+                   (helper {})
+                   (yield {})
+                   42))
+                 (define co (make-coroutine gen))
+                 (list
+                   (coroutine-resume co)
+                   (coroutine-resume co {})
+                   (coroutine-resume co)
+                   (keyword->string (coroutine-status co))))"#,
+            val1, val2, resume1
+        );
+        let result = eval(&code);
+        prop_assert!(result.is_ok(), "Re-yield failed: {:?}", result);
+
+        let list = result.unwrap();
+        let mut items = Vec::new();
+        let mut current = list;
+        while let Some(cons) = current.as_cons() {
+            items.push(cons.first);
+            current = cons.rest;
+        }
+        prop_assert_eq!(items.len(), 4, "Expected 4-element list, got {:?}", items);
+
+        // First resume: yields val1 (from helper)
+        prop_assert_eq!(items[0].as_int(), Some(val1),
+            "First yield should be {}", val1);
+        // Second resume with resume1: helper returns resume1, gen yields val2
+        prop_assert_eq!(items[1].as_int(), Some(val2),
+            "Second yield should be {}", val2);
+        // Third resume: gen returns 42
+        prop_assert_eq!(items[2].as_int(), Some(42),
+            "Final return should be 42");
+        // Status should be "done"
+        prop_assert_eq!(items[3], Value::string("done"),
+            "Status should be done");
+    }
+}
+
+// ============================================================================
+// Property 9: Error during multi-frame resume_suspended (T3)
+//
+// A fiber yields from inside a nested call, then on resume an error occurs.
+// The error should propagate correctly through the suspended frame chain.
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(20))]
+
+    #[test]
+    fn error_during_multi_frame_resume(val in -50i64..50) {
+        // helper yields val, then on resume divides by zero.
+        // The error should propagate to the root.
+        let code = format!(
+            r#"(begin
+                 (define helper (fn (x)
+                   (yield x)
+                   (/ 1 0)))
+                 (define gen (fn () (+ (helper {}) 1)))
+                 (define co (make-coroutine gen))
+                 (coroutine-resume co)
+                 (coroutine-resume co))"#,
+            val
+        );
+        let result = eval(&code);
+        // First resume yields val (ok), second resume triggers division by zero
+        prop_assert!(result.is_err(),
+            "Error during multi-frame resume should propagate, got: {:?}", result);
+        let err = result.unwrap_err();
+        prop_assert!(err.contains("zero") || err.contains("division"),
+            "Error should mention division by zero, got: {}", err);
+    }
+}
+
+// ============================================================================
+// Property 10: 3-level nested fiber resume A→B→C (T6)
+//
+// Three fibers deep: A resumes B which resumes C. C yields a value that
+// propagates back through B to A. Tests the full parent/child chain wiring
+// and value threading across multiple fiber boundaries.
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(20))]
+
+    #[test]
+    fn three_level_nested_fiber_resume(
+        c_val in -50i64..50,
+        b_add in -50i64..50,
+        a_add in -50i64..50,
+    ) {
+        // C yields c_val. B catches it (mask=2), adds b_add. A gets B's result, adds a_add.
+        let code = format!(
+            r#"(let ((c (fiber/new (fn () (fiber/signal 2 {})) 2)))
+                 (let ((b (fiber/new
+                            (fn ()
+                              (+ (fiber/resume c) {}))
+                            0)))
+                   (let ((a (fiber/new
+                              (fn ()
+                                (+ (fiber/resume b) {}))
+                              0)))
+                     (fiber/resume a))))"#,
+            c_val, b_add, a_add
+        );
+        let result = eval(&code);
+        prop_assert!(result.is_ok(), "3-level nested resume failed: {:?}", result);
+        let val = result.unwrap();
+        let expected = c_val + b_add + a_add;
+        prop_assert_eq!(val.as_int(), Some(expected),
+            "Expected {} + {} + {} = {}, got {:?}",
+            c_val, b_add, a_add, expected, val);
+    }
+}

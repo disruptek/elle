@@ -240,3 +240,228 @@ fn test_fiber_error_propagates_without_mask() {
     // Error is NOT caught (mask=0), so it propagates to the root
     assert!(result.is_err());
 }
+
+// ── fiber/propagate preserving child chain (T4) ─────────────────
+
+#[test]
+fn test_fiber_propagate_preserves_child_chain() {
+    // After fiber/propagate, the propagating fiber's child should be
+    // set to the fiber being propagated from.
+    let result = eval(
+        r#"
+        (let ((inner (fiber/new (fn () (fiber/signal 1 "err")) 1)))
+          (let ((outer (fiber/new
+                         (fn ()
+                           (fiber/resume inner)
+                           (fiber/propagate inner))
+                         1)))
+            (fiber/resume outer)
+            (fiber? (fiber/child outer))))
+        "#,
+    );
+    // After propagate, outer.child should be inner (preserved for trace chain)
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+    assert_eq!(
+        result.unwrap(),
+        Value::bool(true),
+        "fiber/child should return the inner fiber after propagate"
+    );
+}
+
+#[test]
+fn test_fiber_propagate_child_identity() {
+    // fiber/child after propagate should return the same fiber object
+    // (identity preserved via cached value)
+    let result = eval(
+        r#"
+        (let ((inner (fiber/new (fn () (fiber/signal 2 99)) 2)))
+          (let ((outer (fiber/new
+                         (fn ()
+                           (fiber/resume inner)
+                           (fiber/propagate inner))
+                         2)))
+            (fiber/resume outer)
+            (eq? inner (fiber/child outer))))
+        "#,
+    );
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+    assert_eq!(
+        result.unwrap(),
+        Value::bool(true),
+        "fiber/child should return the exact same fiber object (identity)"
+    );
+}
+
+// ── fiber/resume and fiber/cancel in tail position (T5) ─────────
+
+#[test]
+fn test_fiber_resume_in_tail_position() {
+    // fiber/resume as the last expression in a fiber body (tail position)
+    let result = eval(
+        r#"
+        (let ((inner (fiber/new (fn () 42) 0)))
+          (let ((outer (fiber/new (fn () (fiber/resume inner)) 0)))
+            (fiber/resume outer)))
+        "#,
+    );
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+    assert_eq!(result.unwrap(), Value::int(42));
+}
+
+#[test]
+fn test_fiber_resume_yield_in_tail_position() {
+    // fiber/resume in tail position where inner fiber yields
+    let result = eval(
+        r#"
+        (let ((inner (fiber/new (fn () (fiber/signal 2 10) 20) 2)))
+          (let ((outer (fiber/new (fn () (fiber/resume inner)) 0)))
+            (fiber/resume outer)))
+        "#,
+    );
+    // inner yields 10, caught by mask=2, outer returns 10
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+    assert_eq!(result.unwrap(), Value::int(10));
+}
+
+#[test]
+fn test_fiber_cancel_in_tail_position() {
+    // fiber/cancel as the last expression in a fiber body (tail position)
+    let result = eval(
+        r#"
+        (let ((target (fiber/new (fn () 42) 1)))
+          (let ((canceller (fiber/new
+                             (fn () (fiber/cancel target "cancelled"))
+                             0)))
+            (fiber/resume canceller)))
+        "#,
+    );
+    // target is cancelled, mask=1 catches the error, canceller returns the error value
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+}
+
+#[test]
+fn test_fiber_cancel_suspended_in_tail_position() {
+    // Cancel a suspended fiber from tail position
+    let result = eval(
+        r#"
+        (let ((target (fiber/new (fn () (fiber/signal 2 0) 99) 3)))
+          (fiber/resume target)
+          (let ((canceller (fiber/new
+                             (fn () (fiber/cancel target "stop"))
+                             0)))
+            (list
+              (fiber/resume canceller)
+              (keyword->string (fiber/status target)))))
+        "#,
+    );
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+    let list = result.unwrap();
+    let items = list.list_to_vec();
+    assert!(items.is_ok(), "Expected list, got {:?}", list);
+    let items = items.unwrap();
+    assert_eq!(items.len(), 2);
+    // After cancel, target should be in :error status
+    assert_eq!(
+        items[1],
+        Value::string("error"),
+        "Cancelled fiber should be in error status"
+    );
+}
+
+// ── 3-level nested fiber resume (T6) ────────────────────────────
+
+#[test]
+fn test_three_level_nested_fiber_resume() {
+    // A resumes B which resumes C. C yields, B catches and adds, A gets result.
+    let result = eval(
+        r#"
+        (let ((c (fiber/new (fn () (fiber/signal 2 10)) 2)))
+          (let ((b (fiber/new
+                     (fn ()
+                       (+ (fiber/resume c) 5))
+                     0)))
+            (let ((a (fiber/new
+                       (fn ()
+                         (+ (fiber/resume b) 1))
+                       0)))
+              (fiber/resume a))))
+        "#,
+    );
+    // C yields 10, B catches (mask=2), B returns 10+5=15, A returns 15+1=16
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+    assert_eq!(result.unwrap(), Value::int(16));
+}
+
+#[test]
+fn test_three_level_nested_fiber_error_propagation() {
+    // A resumes B which resumes C. C errors, B doesn't catch (mask=0),
+    // error propagates to A which catches (mask=1).
+    let result = eval(
+        r#"
+        (let ((c (fiber/new (fn () (fiber/signal 1 "deep error")) 0)))
+          (let ((b (fiber/new
+                     (fn () (fiber/resume c))
+                     0)))
+            (let ((a (fiber/new
+                       (fn () (fiber/resume b))
+                       1)))
+              (fiber/resume a))))
+        "#,
+    );
+    // C errors, B doesn't catch (mask=0), propagates to A which catches (mask=1)
+    assert!(
+        result.is_ok(),
+        "Expected ok (caught by A), got: {:?}",
+        result
+    );
+}
+
+// ── fiber/parent and fiber/child identity ────────────────────────
+
+#[test]
+fn test_fiber_parent_identity() {
+    // fiber/parent called twice on the same fiber should return eq? values
+    let result = eval(
+        r#"
+        (let ((f (fiber/new (fn () 42) 0)))
+          (let ((outer (fiber/new
+                         (fn ()
+                           (fiber/resume f)
+                           42)
+                         0)))
+            (fiber/resume outer)
+            (eq? (fiber/parent f) (fiber/parent f))))
+        "#,
+    );
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+    assert_eq!(
+        result.unwrap(),
+        Value::bool(true),
+        "fiber/parent should return identical values"
+    );
+}
+
+#[test]
+fn test_fiber_child_identity() {
+    // fiber/child called twice on the same fiber should return eq? values
+    let result = eval(
+        r#"
+        (let ((inner (fiber/new (fn () (fiber/signal 1 "err")) 0)))
+          (let ((outer (fiber/new
+                         (fn ()
+                           (fiber/resume inner)
+                           42)
+                         1)))
+            (fiber/resume outer)
+            (eq? (fiber/child outer) (fiber/child outer))))
+        "#,
+    );
+    // inner errors, not caught by inner's mask=0, propagates to outer.
+    // outer catches (mask=1). child chain preserved on propagation.
+    assert!(result.is_ok(), "Expected ok, got: {:?}", result);
+    assert_eq!(
+        result.unwrap(),
+        Value::bool(true),
+        "fiber/child should return identical values"
+    );
+}
