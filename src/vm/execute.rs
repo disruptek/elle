@@ -52,7 +52,7 @@ impl VM {
     /// tail calls in a loop.
     ///
     /// Returns `(SignalBits, ip)` — the signal and the IP at exit.
-    pub fn execute_bytecode_coroutine(
+    pub fn execute_bytecode_saving_stack(
         &mut self,
         bytecode: &Rc<Vec<u8>>,
         constants: &Rc<Vec<Value>>,

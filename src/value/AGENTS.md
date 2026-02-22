@@ -36,6 +36,21 @@ Runtime value representation using NaN-boxing.
 | `Fiber` | `fiber.rs` | Independent execution context with stack, frames, signal mask |
 | `FiberHandle` | `fiber.rs` | `Rc<RefCell<Option<Fiber>>>` — take/put semantics for VM fiber swap |
 | `WeakFiberHandle` | `fiber.rs` | Weak reference for parent back-pointers (avoids Rc cycles) |
+
+### Fiber fields for parent/child chain
+
+Fibers maintain cached NaN-boxed `Value`s alongside their handle references
+so that `fiber/parent` and `fiber/child` return identity-preserving values
+(i.e., `(eq? (fiber/parent f) (fiber/parent f))` is `#t`):
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `parent` | `Option<WeakFiberHandle>` | Weak back-pointer to parent fiber |
+| `parent_value` | `Option<Value>` | Cached NaN-boxed Value for parent |
+| `child` | `Option<FiberHandle>` | Strong pointer to child fiber |
+| `child_value` | `Option<Value>` | Cached NaN-boxed Value for child |
+
+These are set during the swap protocol in `vm/fiber.rs::with_child_fiber`.
 | `SuspendedFrame` | `fiber.rs` | Bytecode/constants/env/IP/stack for resuming a suspended fiber |
 | `Frame` | `fiber.rs` | Single call frame (closure + ip + base) |
 | `FiberStatus` | `fiber.rs` | Fiber lifecycle: New, Alive, Suspended, Dead, Error |

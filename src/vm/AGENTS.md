@@ -75,7 +75,7 @@ and `&Rc<Vec<Value>>`. Individual instruction handlers dereference to slices
 creating `SuspendedFrame`s or `TailCallInfo`.
 
 - `execute_bytecode` wraps raw slices in `Rc` once at the public boundary
-- `execute_bytecode_from_ip` / `execute_bytecode_coroutine` take `&Rc`
+- `execute_bytecode_from_ip` / `execute_bytecode_saving_stack` take `&Rc`
 - `TailCallInfo` is `(Rc<Vec<u8>>, Rc<Vec<Value>>, Rc<Vec<Value>>)` — tail
   calls clone the Rc (cheap), not the Vec (expensive)
 - `closure_env` parameter is `&Rc<Vec<Value>>` (non-optional; empty Rc for no env)
@@ -83,7 +83,7 @@ creating `SuspendedFrame`s or `TailCallInfo`.
 ## Primitive dispatch (NativeFn)
 
 All primitives are `NativeFn`: `fn(&[Value]) -> (SignalBits, Value)`. The VM
-dispatches the return signal in `handle_primitive_signal()` (`call.rs`):
+dispatches the return signal in `handle_primitive_signal()` (`signal.rs`):
 - `SIG_OK` → push value to stack
 - `SIG_ERROR` → store `(SIG_ERROR, value)` in `fiber.signal`, push NIL
 - `SIG_YIELD` → store in `fiber.signal`, return yield
@@ -133,13 +133,15 @@ On resume, the VM wires up the parent/child chain (Janet semantics):
    `fiber.signal` to `(SIG_ERROR, error_val(kind, msg))`, push `Value::NIL`
    to keep the stack consistent, and return normally. The dispatch loop checks
    `fiber.signal` for `SIG_ERROR` after each instruction and returns
-   immediately. See `set_error()` in `call.rs` for the helper.
+   immediately. See `set_error()` in `call.rs` and `fiber.rs` for the helper.
 
 ## Key VM fields
 
 | Field | Type | Purpose |
 |-------|-------|---------|
 | `fiber` | `Fiber` | Root fiber: stack, call frames, signal state |
+| `current_fiber_handle` | `Option<FiberHandle>` | Handle for current fiber (`None` for root) |
+| `current_fiber_value` | `Option<Value>` | Cached NaN-boxed Value for current fiber (`None` for root) |
 | `globals` | `Vec<Value>` | Global bindings by SymbolId |
 | `jit_cache` | `HashMap<*const u8, Rc<JitCode>>` | JIT code cache |
 | `scope_stack` | `ScopeStack` | Runtime scope stack |
@@ -155,6 +157,10 @@ On resume, the VM wires up the parent/child chain (Janet semantics):
 | `signal` | `Option<(SignalBits, Value)>` | Signal from execution (errors, yields) |
 | `suspended` | `Option<Vec<SuspendedFrame>>` | Suspended execution frames (for yield/signal resumption) |
 | `signal_mask` | `SignalBits` | Which signals this fiber catches |
+| `parent` | `Option<WeakFiberHandle>` | Weak back-pointer to parent fiber |
+| `parent_value` | `Option<Value>` | Cached NaN-boxed Value for parent (identity-preserving) |
+| `child` | `Option<FiberHandle>` | Strong pointer to child fiber |
+| `child_value` | `Option<Value>` | Cached NaN-boxed Value for child (identity-preserving) |
 
 ## Suspension mechanism
 
@@ -174,8 +180,9 @@ When a fiber suspends (via yield instruction or `fiber/signal`):
 
 Key methods:
 - `execute_bytecode_from_ip`: Executes from a given IP with Rc bytecode/constants
-- `execute_bytecode_coroutine`: Outer loop handling tail calls, takes `&Rc`
+- `execute_bytecode_saving_stack`: Saves/restores caller's stack, handles tail calls
 - `resume_suspended`: Replays `Vec<SuspendedFrame>`, handles re-yields and errors
+- `with_child_fiber`: Shared swap protocol for fiber resume/cancel
 
 ## Files
 
@@ -183,9 +190,11 @@ Key methods:
 |------|-------|---------|
 | `mod.rs` | ~100 | VM struct, VmResult, public interface |
 | `dispatch.rs` | ~334 | Main execution loop, instruction dispatch, returns `(SignalBits, usize)` |
-| `call.rs` | ~854 | Call, TailCall, Return, error handling, SIG_RESUME fiber handler |
-| `execute.rs` | ~94 | `execute_bytecode_from_ip`, `execute_bytecode_coroutine` |
-| `core.rs` | ~448 | VM struct, `resume_suspended`, stack trace helpers |
+| `call.rs` | ~417 | Call, TailCall, JIT dispatch, environment building |
+| `signal.rs` | ~93 | Primitive signal dispatch (`handle_primitive_signal`) |
+| `fiber.rs` | ~388 | Fiber resume/propagate/cancel, shared swap protocol |
+| `execute.rs` | ~94 | `execute_bytecode_from_ip`, `execute_bytecode_saving_stack` |
+| `core.rs` | ~453 | VM struct, `resume_suspended`, stack trace helpers |
 | `stack.rs` | ~100 | Stack operations: LoadConst, Pop, Dup |
 | `variables.rs` | ~150 | LoadGlobal, StoreGlobal, LoadUpvalue, etc. |
 | `control.rs` | ~100 | Jump, JumpIfFalse, Return |
