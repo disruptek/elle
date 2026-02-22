@@ -222,7 +222,7 @@ pub fn prim_coroutine_resume(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let resume_value = args.get(1).copied().unwrap_or(Value::EMPTY_LIST);
+    let resume_value = args.get(1).copied().unwrap_or(Value::NIL);
 
     // Validate status and store resume value
     let status_err = handle.with_mut(|fiber| match fiber.status {

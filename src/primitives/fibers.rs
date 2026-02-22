@@ -457,11 +457,10 @@ pub fn prim_fiber_propagate(args: &[Value]) -> (SignalBits, Value) {
 
 /// (fiber/cancel fiber value) → value
 ///
-/// Inject an error into a suspended fiber. Walks the child chain to the
-/// deepest fiber and injects the error there.
+/// Inject an error into a suspended fiber. The error is injected directly
+/// into the target fiber (does not walk the child chain).
 ///
-/// Returns SIG_CANCEL — the VM handles execution of the cancelled fiber's
-/// error handlers.
+/// Returns SIG_CANCEL — the VM handles the cancellation.
 pub fn prim_fiber_cancel(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (

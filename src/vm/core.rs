@@ -115,7 +115,7 @@ impl VM {
 
     /// Set the current source location for error reporting
     pub fn set_current_source_loc(&mut self, loc: Option<crate::reader::SourceLoc>) {
-        self.current_source_loc = loc.clone();
+        self.current_source_loc = loc;
     }
 
     /// Get the current source location
