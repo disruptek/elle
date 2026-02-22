@@ -9,7 +9,6 @@ use std::ffi::c_void;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use crate::value::continuation::ContinuationData;
 use crate::value::ffi::ThreadHandle;
 use crate::value::fiber::FiberHandle;
 use crate::value::Value;
@@ -49,7 +48,6 @@ pub enum HeapTag {
     LibHandle = 12,
     CHandle = 13,
     ThreadHandle = 14,
-    Continuation = 15,
     Fiber = 16,
 }
 
@@ -100,9 +98,6 @@ pub enum HeapObject {
     /// Thread handle for concurrent execution
     ThreadHandle(ThreadHandleData),
 
-    /// First-class continuation for yield across call boundaries
-    Continuation(Rc<ContinuationData>),
-
     /// Fiber: independent execution context with its own stack and frames
     Fiber(FiberHandle),
 }
@@ -140,7 +135,6 @@ impl HeapObject {
             HeapObject::LibHandle(_) => HeapTag::LibHandle,
             HeapObject::CHandle(_, _) => HeapTag::CHandle,
             HeapObject::ThreadHandle(_) => HeapTag::ThreadHandle,
-            HeapObject::Continuation(_) => HeapTag::Continuation,
             HeapObject::Fiber(_) => HeapTag::Fiber,
         }
     }
@@ -161,7 +155,6 @@ impl HeapObject {
             HeapObject::LibHandle(_) => "library-handle",
             HeapObject::CHandle(_, _) => "c-handle",
             HeapObject::ThreadHandle(_) => "thread-handle",
-            HeapObject::Continuation(_) => "continuation",
             HeapObject::Fiber(_) => "fiber",
         }
     }
@@ -198,7 +191,6 @@ impl std::fmt::Debug for HeapObject {
             HeapObject::LibHandle(id) => write!(f, "<lib-handle:{}>", id),
             HeapObject::CHandle(_, id) => write!(f, "<c-handle:{}>", id),
             HeapObject::ThreadHandle(_) => write!(f, "<thread-handle>"),
-            HeapObject::Continuation(c) => write!(f, "<continuation:{} frames>", c.frames.len()),
             HeapObject::Fiber(handle) => match handle.try_with(|fib| fib.status.as_str()) {
                 Some(status) => write!(f, "<fiber:{}>", status),
                 None => write!(f, "<fiber:taken>"),

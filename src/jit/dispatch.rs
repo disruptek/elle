@@ -309,12 +309,8 @@ pub extern "C" fn elle_jit_tail_call(
         // Build environment (same as handle_tail_call)
         let new_env = build_closure_env_for_jit(closure, &args);
 
-        // Set pending tail call
-        vm.pending_tail_call = Some((
-            (*closure.bytecode).clone(),
-            (*closure.constants).clone(),
-            new_env,
-        ));
+        // Set pending tail call (Rc clones, not data copies)
+        vm.pending_tail_call = Some((closure.bytecode.clone(), closure.constants.clone(), new_env));
 
         return TAIL_CALL_SENTINEL;
     }

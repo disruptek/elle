@@ -19,8 +19,7 @@ Runtime value representation using NaN-boxing.
 | `repr/tests.rs` | NaN-boxing tests |
 | `types.rs` | `Arity`, `SymbolId`, `NativeFn`, `TableKey` |
 | `closure.rs` | `Closure` struct with bytecode, env, and `location_map` |
-| `fiber.rs` | `Fiber`, `FiberHandle`, `WeakFiberHandle`, `Frame`, `FiberStatus`, `SignalBits` |
-| `continuation.rs` | `ContinuationData`, `ContinuationFrame` for first-class continuations |
+| `fiber.rs` | `Fiber`, `FiberHandle`, `WeakFiberHandle`, `SuspendedFrame`, `Frame`, `FiberStatus`, `SignalBits` |
 | `error.rs` | `error_val()` and `format_error()` helpers for error tuples |
 | `ffi.rs` | `LibHandle`, `CHandle` for C interop |
 | `heap.rs` | `HeapObject` enum, `Cons`, `ThreadHandle` |
@@ -37,9 +36,9 @@ Runtime value representation using NaN-boxing.
 | `Fiber` | `fiber.rs` | Independent execution context with stack, frames, signal mask |
 | `FiberHandle` | `fiber.rs` | `Rc<RefCell<Option<Fiber>>>` — take/put semantics for VM fiber swap |
 | `WeakFiberHandle` | `fiber.rs` | Weak reference for parent back-pointers (avoids Rc cycles) |
+| `SuspendedFrame` | `fiber.rs` | Bytecode/constants/env/IP/stack for resuming a suspended fiber |
 | `Frame` | `fiber.rs` | Single call frame (closure + ip + base) |
 | `FiberStatus` | `fiber.rs` | Fiber lifecycle: New, Alive, Suspended, Dead, Error |
-| `SavedContext` | `fiber.rs` | Bytecode/constants/env/IP for resuming a suspended fiber |
 | `SignalBits` | `fiber.rs` | u32 bitmask: SIG_OK(0), SIG_ERROR(1), SIG_YIELD(2), SIG_DEBUG(4), SIG_RESUME(8), SIG_FFI(16), SIG_PROPAGATE(32), SIG_CANCEL(64) |
 | `Arity` | `types.rs` | Function arity (Exact, AtLeast, Range) |
 | `SymbolId` | `types.rs` | Interned symbol identifier |
@@ -62,6 +61,11 @@ Runtime value representation using NaN-boxing.
 5. **Thread transfer uses `SendValue`.** `SendValue` wraps values for safe
    transfer between threads, cloning `Rc` contents as needed.
 
+6. **`SuspendedFrame` replaces both `SavedContext` and `ContinuationFrame`.**
+   A single type captures everything needed to resume: bytecode (`Rc<Vec<u8>>`),
+   constants (`Rc<Vec<Value>>`), env (`Rc<Vec<Value>>`), IP, and operand stack.
+   Signal suspension has an empty stack; yield suspension captures the stack.
+
 ## Value encoding
 
 NaN-boxing uses the NaN space of IEEE 754 doubles:
@@ -76,7 +80,7 @@ Create values via methods: `Value::int(42)`, `Value::cons(a, b)`,
 
 | File | Lines | Content |
 |------|-------|---------|
-| `mod.rs` | ~50 | Re-exports |
+| `mod.rs` | ~40 | Re-exports |
 | `repr/mod.rs` | ~280 | NaN-boxed Value type, tag encoding |
 | `repr/constructors.rs` | ~250 | Value construction methods |
 | `repr/accessors.rs` | ~420 | Value field access and type checking |
@@ -84,8 +88,7 @@ Create values via methods: `Value::int(42)`, `Value::cons(a, b)`,
 | `repr/tests.rs` | ~100 | NaN-boxing tests |
 | `types.rs` | ~150 | Arity, SymbolId, NativeFn, etc. |
 | `closure.rs` | ~70 | Closure struct |
-| `fiber.rs` | ~370 | Fiber, Frame, FiberStatus, SignalBits |
-| `continuation.rs` | ~200 | ContinuationData, ContinuationFrame |
+| `fiber.rs` | ~515 | Fiber, FiberHandle, WeakFiberHandle, SuspendedFrame, Frame, SignalBits |
 | `error.rs` | ~50 | error_val() and format_error() helpers |
 | `ffi.rs` | ~50 | LibHandle, CHandle |
 | `heap.rs` | ~300 | HeapObject, Cons, ThreadHandle |

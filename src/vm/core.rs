@@ -1,7 +1,9 @@
 use crate::error::{LocationMap, StackFrame};
 use crate::ffi::FFISubsystem;
 use crate::value::fiber::CallFrame;
-use crate::value::{Closure, Fiber, FiberHandle, SignalBits, Value, SIG_OK, SIG_YIELD};
+use crate::value::{
+    Closure, Fiber, FiberHandle, SignalBits, SuspendedFrame, Value, SIG_OK, SIG_YIELD,
+};
 use crate::vm::scope::ScopeStack;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -12,7 +14,7 @@ use crate::jit::JitCode;
 // Re-export CallFrame from fiber (it now lives there)
 pub use crate::value::fiber::CallFrame as FiberCallFrame;
 
-type TailCallInfo = (Vec<u8>, Vec<Value>, Rc<Vec<Value>>);
+type TailCallInfo = (Rc<Vec<u8>>, Rc<Vec<Value>>, Rc<Vec<Value>>);
 
 pub struct VM {
     /// The current fiber holding all per-execution state:
@@ -298,22 +300,20 @@ impl VM {
         &mut self.ffi
     }
 
-    /// Resume execution from a saved continuation.
+    /// Resume execution from suspended frames.
     ///
-    /// A continuation captures the full chain of frames from a yield point
-    /// up to the coroutine boundary. This method replays the chain from
-    /// innermost to outermost, threading the resume value through.
-    ///
-    /// Frame ordering: `frames\[0\]` = innermost (yielder), `frames\[last\]` = outermost (caller)
+    /// Replays the frame chain from innermost (index 0) to outermost
+    /// (last index), threading the resume value through. For single-frame
+    /// suspension (signal-based), this is equivalent to a simple resume.
+    /// For multi-frame suspension (yield-through-calls), this replays the
+    /// full call chain.
     ///
     /// Returns SignalBits. The result value is stored in `self.fiber.signal`.
-    /// For yields, the continuation is stored in `self.fiber.continuation`.
-    pub fn resume_continuation(&mut self, continuation: Value, resume_value: Value) -> SignalBits {
-        let cont_data = continuation
-            .as_continuation()
-            .expect("VM bug: Expected continuation value in resume_continuation");
-
-        let frames = &cont_data.frames;
+    pub fn resume_suspended(
+        &mut self,
+        frames: Vec<SuspendedFrame>,
+        resume_value: Value,
+    ) -> SignalBits {
         if frames.is_empty() {
             self.fiber.signal = Some((SIG_OK, resume_value));
             return SIG_OK;
@@ -322,23 +322,22 @@ impl VM {
         // Save current stack state
         let saved_stack = std::mem::take(&mut self.fiber.stack);
 
-        // Execute from innermost frame (index 0) outward to outermost (last index)
         let mut current_value = resume_value;
 
         for i in 0..frames.len() {
             let frame = &frames[i];
 
-            // Restore this frame's stack
+            // Restore this frame's stack (empty for signal suspension)
             self.fiber.stack.clear();
             self.fiber.stack.extend(frame.stack.iter().copied());
 
             // Push the value from the inner frame (or resume value for innermost)
             self.fiber.stack.push(current_value);
 
-            let bits = self.execute_bytecode_from_ip(
+            let (bits, ip) = self.execute_bytecode_from_ip(
                 &frame.bytecode,
                 &frame.constants,
-                Some(&frame.env),
+                &frame.env,
                 frame.ip,
             );
 
@@ -347,32 +346,29 @@ impl VM {
                     let (_, v) = self.fiber.signal.take().unwrap();
                     current_value = v;
                 }
-                SIG_YIELD => {
-                    let (_, value) = self.fiber.signal.take().unwrap();
-                    let new_cont = self.fiber.continuation.take().unwrap();
-
-                    if i + 1 < frames.len() {
-                        let mut new_cont_data = new_cont
-                            .as_continuation()
-                            .expect("VM bug: Expected continuation in resume_continuation yield")
-                            .as_ref()
-                            .clone();
-                        for f in frames[i + 1..].iter() {
-                            new_cont_data.frames.push(f.clone());
-                        }
-                        let merged_cont = Value::continuation(new_cont_data);
-                        self.fiber.stack = saved_stack;
-                        self.fiber.signal = Some((SIG_YIELD, value));
-                        self.fiber.continuation = Some(merged_cont);
-                        return SIG_YIELD;
-                    }
-                    self.fiber.stack = saved_stack;
-                    self.fiber.signal = Some((SIG_YIELD, value));
-                    self.fiber.continuation = Some(new_cont);
-                    return SIG_YIELD;
-                }
                 _ => {
-                    // Error or other signal — propagate
+                    // Non-OK signal (yield, error, user-defined).
+                    // Save context for potential future resume if not already
+                    // set (yield instruction sets it; fiber/signal does not).
+                    if self.fiber.suspended.is_none() {
+                        self.fiber.suspended = Some(vec![SuspendedFrame {
+                            bytecode: frame.bytecode.clone(),
+                            constants: frame.constants.clone(),
+                            env: frame.env.clone(),
+                            ip,
+                            stack: vec![],
+                        }]);
+                    }
+
+                    // For yield signals, merge remaining outer frames
+                    if bits == SIG_YIELD && i + 1 < frames.len() {
+                        if let Some(ref mut new_frames) = self.fiber.suspended {
+                            for f in frames[i + 1..].iter() {
+                                new_frames.push(f.clone());
+                            }
+                        }
+                    }
+
                     self.fiber.stack = saved_stack;
                     return bits;
                 }

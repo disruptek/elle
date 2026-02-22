@@ -18,6 +18,7 @@ pub use core::VM;
 
 use crate::compiler::bytecode::Bytecode;
 use crate::value::{error_val, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
+use std::rc::Rc;
 
 impl VM {
     pub fn execute(&mut self, bytecode: &Bytecode) -> Result<Value, String> {
@@ -52,28 +53,31 @@ impl VM {
     /// Execute raw bytecode with optional closure environment.
     ///
     /// Translation boundary: internally uses SignalBits, externally
-    /// returns `Result<Value, String>`.
+    /// returns `Result<Value, String>`. Wraps slices in `Rc` once at
+    /// the boundary.
     pub fn execute_bytecode(
         &mut self,
         bytecode: &[u8],
         constants: &[Value],
-        closure_env: Option<&std::rc::Rc<Vec<Value>>>,
+        closure_env: Option<&Rc<Vec<Value>>>,
     ) -> Result<Value, String> {
-        let mut current_bytecode = bytecode.to_vec();
-        let mut current_constants = constants.to_vec();
-        let mut current_env = closure_env.cloned();
+        let empty_env = Rc::new(vec![]);
+        let mut current_bytecode = Rc::new(bytecode.to_vec());
+        let mut current_constants = Rc::new(constants.to_vec());
+        let mut current_env = closure_env.cloned().unwrap_or(empty_env);
 
         loop {
-            let bits = self.execute_bytecode_inner(
+            let (bits, _ip) = self.execute_bytecode_inner_impl(
                 &current_bytecode,
                 &current_constants,
-                current_env.as_ref(),
+                &current_env,
+                0,
             );
 
             if let Some((tail_bytecode, tail_constants, tail_env)) = self.pending_tail_call.take() {
                 current_bytecode = tail_bytecode;
                 current_constants = tail_constants;
-                current_env = Some(tail_env);
+                current_env = tail_env;
             } else {
                 return match bits {
                     SIG_OK => {

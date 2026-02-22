@@ -88,10 +88,10 @@ pub struct Fiber {
     /// Signal mask: which of this fiber's signals are caught by its parent.
     /// Set at creation time by the parent. Immutable after creation.
     pub mask: SignalBits,
-    /// Parent fiber (Weak to avoid Rc cycles)
-    pub parent: Option<Weak<RefCell<Fiber>>>,
-    /// Most recently resumed child (for stack traces, not ownership)
-    pub child: Option<Rc<RefCell<Fiber>>>,
+    /// Parent fiber (weak to avoid Rc cycles)
+    pub parent: Option<WeakFiberHandle>,
+    /// Most recently resumed child (for stack traces and resumption routing)
+    pub child: Option<FiberHandle>,
     /// The closure this fiber was created from
     pub closure: Rc<Closure>,
     /// Dynamic bindings (fiber-scoped state)
@@ -101,12 +101,14 @@ pub struct Fiber {
     /// - On signal: (bits, payload) before suspending
     /// - On normal return: (SIG_OK, return_value) before completing
     pub signal: Option<(SignalBits, Value)>,
+    /// Suspended execution frames. Set when the fiber suspends; consumed
+    /// when it resumes. Signal suspension: single frame, empty stack.
+    /// Yield suspension: chain of frames from yielder to coroutine boundary.
+    pub suspended: Option<Vec<SuspendedFrame>>,
 
-    // --- Execution state migrated from VM (Step 2) ---
+    // --- Execution state migrated from VM ---
     pub call_depth: usize,
     pub call_stack: Vec<CallFrame>,
-    /// FIXME: Remove in Step 8 when fibers replace continuations.
-    pub continuation: Option<Value>,
 }
 ```
 
@@ -813,19 +815,22 @@ Update JIT calling convention and remove purity restriction.
 
 **Estimated effort:** 4-6 hours
 
-### Step 8: Cleanup (all phases)
+### Step 8: Cleanup (all phases) — DONE
 
-Remove deprecated types and code paths.
+Removed deprecated types and code paths:
 
-**Files to remove/gut:**
-- `src/value/coroutine.rs` — replaced by fiber.rs
-- `src/value/continuation.rs` — continuation capture is now fiber suspension
-- Old exception handling instructions from bytecode.rs
-- Old exception handler types
+- **`src/value/continuation.rs` deleted** — `ContinuationData`, `ContinuationFrame` removed
+- **`HeapObject::Continuation` removed** from heap.rs and all match sites
+- **`Value::continuation()`/`is_continuation()`/`as_continuation()` removed**
+- **`Fiber.saved_context` + `Fiber.continuation` + `Fiber.suspended_ip` replaced**
+  with single `Fiber.suspended: Option<Vec<SuspendedFrame>>`
+- **`SuspendedFrame`** unifies `SavedContext` and `ContinuationFrame`
+- **`Rc<Vec<u8>>`/`Rc<Vec<Value>>` threaded through dispatch loop** — no more
+  bytecode/constants copying on yield or tail call
+- **`resume_continuation` replaced by `resume_suspended`** — works with
+  `Vec<SuspendedFrame>` directly (not heap-allocated `Value`)
 
-**Tests:** All tests pass. No deprecated code remains.
-
-**Estimated effort:** 2-3 hours
+All 1740 tests pass. Clippy clean, fmt clean, rustdoc clean, elle-doc generates.
 
 
 ## Invariants

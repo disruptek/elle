@@ -4,7 +4,7 @@
 //! instructions to their handlers.
 
 use crate::compiler::bytecode::Instruction;
-use crate::value::{error_val, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
+use crate::value::{error_val, SignalBits, SuspendedFrame, Value, SIG_ERROR, SIG_OK, SIG_YIELD};
 use std::rc::Rc;
 
 use super::core::VM;
@@ -14,29 +14,31 @@ use super::{
 
 impl VM {
     /// Inner execution loop that handles all instructions.
-    /// This is the implementation; the public wrapper handles handler isolation.
     ///
-    /// Returns SignalBits. The result value is stored in `self.fiber.signal`.
-    /// For yields, the continuation is stored in `self.fiber.continuation`.
+    /// Takes `Rc` references to bytecode and constants so that yield and
+    /// call handlers can capture them cheaply (Rc clone, not data copy).
+    /// Derefs to slices for individual instruction handlers.
+    ///
+    /// Returns `(SignalBits, ip)` — the signal and the IP at exit.
     pub(super) fn execute_bytecode_inner_impl(
         &mut self,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&Rc<Vec<Value>>>,
+        bytecode: &Rc<Vec<u8>>,
+        constants: &Rc<Vec<Value>>,
+        closure_env: &Rc<Vec<Value>>,
         start_ip: usize,
-    ) -> SignalBits {
+    ) -> (SignalBits, usize) {
         let mut ip = start_ip;
         let mut instruction_count = 0;
         const MAX_INSTRUCTIONS: usize = 100000;
 
+        // Deref to slices for instruction handlers
+        let bc: &[u8] = bytecode;
+        let consts: &[Value] = constants;
+
         loop {
             instruction_count += 1;
             if instruction_count > MAX_INSTRUCTIONS {
-                let instr_byte = if ip < bytecode.len() {
-                    bytecode[ip]
-                } else {
-                    255
-                };
+                let instr_byte = if ip < bc.len() { bc[ip] } else { 255 };
                 self.fiber.signal = Some((
                     SIG_ERROR,
                     error_val(
@@ -49,19 +51,19 @@ impl VM {
                         ),
                     ),
                 ));
-                return SIG_ERROR;
+                return (SIG_ERROR, ip);
             }
 
             // If an error signal is pending, propagate immediately.
             if matches!(self.fiber.signal, Some((SIG_ERROR, _))) {
-                return SIG_ERROR;
+                return (SIG_ERROR, ip);
             }
 
-            if ip >= bytecode.len() {
+            if ip >= bc.len() {
                 panic!("VM bug: Unexpected end of bytecode");
             }
 
-            let instr_byte = bytecode[ip];
+            let instr_byte = bc[ip];
             ip += 1;
 
             let instr: Instruction = unsafe { std::mem::transmute(instr_byte) };
@@ -69,10 +71,10 @@ impl VM {
             match instr {
                 // Stack operations
                 Instruction::LoadConst => {
-                    stack::handle_load_const(self, bytecode, &mut ip, constants);
+                    stack::handle_load_const(self, bc, &mut ip, consts);
                 }
                 Instruction::LoadLocal => {
-                    stack::handle_load_local(self, bytecode, &mut ip);
+                    stack::handle_load_local(self, bc, &mut ip);
                 }
                 Instruction::Pop => {
                     stack::handle_pop(self);
@@ -81,61 +83,61 @@ impl VM {
                     stack::handle_dup(self);
                 }
                 Instruction::DupN => {
-                    stack::handle_dup_n(self, bytecode, &mut ip);
+                    stack::handle_dup_n(self, bc, &mut ip);
                 }
 
                 // Variable access
                 Instruction::LoadGlobal => {
-                    variables::handle_load_global(self, bytecode, &mut ip, constants);
+                    variables::handle_load_global(self, bc, &mut ip, consts);
                 }
                 Instruction::StoreGlobal => {
-                    variables::handle_store_global(self, bytecode, &mut ip, constants);
+                    variables::handle_store_global(self, bc, &mut ip, consts);
                 }
                 Instruction::StoreLocal => {
-                    variables::handle_store_local(self, bytecode, &mut ip);
+                    variables::handle_store_local(self, bc, &mut ip);
                 }
                 Instruction::LoadUpvalue => {
-                    variables::handle_load_upvalue(self, bytecode, &mut ip, closure_env);
+                    variables::handle_load_upvalue(self, bc, &mut ip, Some(closure_env));
                 }
                 Instruction::LoadUpvalueRaw => {
-                    variables::handle_load_upvalue_raw(self, bytecode, &mut ip, closure_env);
+                    variables::handle_load_upvalue_raw(self, bc, &mut ip, Some(closure_env));
                 }
                 Instruction::StoreUpvalue => {
-                    variables::handle_store_upvalue(self, bytecode, &mut ip, closure_env);
+                    variables::handle_store_upvalue(self, bc, &mut ip, Some(closure_env));
                 }
 
                 // Control flow
                 Instruction::Jump => {
-                    control::handle_jump(bytecode, &mut ip, self);
+                    control::handle_jump(bc, &mut ip, self);
                 }
                 Instruction::JumpIfFalse => {
-                    control::handle_jump_if_false(bytecode, &mut ip, self);
+                    control::handle_jump_if_false(bc, &mut ip, self);
                 }
                 Instruction::JumpIfTrue => {
-                    control::handle_jump_if_true(bytecode, &mut ip, self);
+                    control::handle_jump_if_true(bc, &mut ip, self);
                 }
                 Instruction::Return => {
-                    return self.handle_return(bytecode, constants, closure_env, ip);
+                    let value = control::handle_return(self);
+                    self.fiber.signal = Some((SIG_OK, value));
+                    return (SIG_OK, ip);
                 }
 
                 // Call instructions
                 Instruction::Call => {
                     if let Some(bits) = self.handle_call(bytecode, constants, closure_env, &mut ip)
                     {
-                        self.fiber.suspended_ip = Some(ip);
-                        return bits;
+                        return (bits, ip);
                     }
                 }
                 Instruction::TailCall => {
-                    if let Some(bits) = self.handle_tail_call(&mut ip, bytecode) {
-                        self.fiber.suspended_ip = Some(ip);
-                        return bits;
+                    if let Some(bits) = self.handle_tail_call(&mut ip, bc) {
+                        return (bits, ip);
                     }
                 }
 
                 // Closures
                 Instruction::MakeClosure => {
-                    closure::handle_make_closure(self, bytecode, &mut ip, constants);
+                    closure::handle_make_closure(self, bc, &mut ip, consts);
                 }
 
                 // Data structures
@@ -149,7 +151,7 @@ impl VM {
                     data::handle_cdr(self);
                 }
                 Instruction::MakeVector => {
-                    data::handle_make_vector(self, bytecode, &mut ip);
+                    data::handle_make_vector(self, bc, &mut ip);
                 }
                 Instruction::VectorRef => {
                     data::handle_vector_ref(self);
@@ -262,7 +264,7 @@ impl VM {
 
                 // Scope management
                 Instruction::PushScope => {
-                    let scope_type_byte = bytecode[ip];
+                    let scope_type_byte = bc[ip];
                     ip += 1;
                     scope::handle_push_scope(self, scope_type_byte);
                 }
@@ -270,7 +272,7 @@ impl VM {
                     scope::handle_pop_scope(self);
                 }
                 Instruction::DefineLocal => {
-                    scope::handle_define_local(self, bytecode, &mut ip, constants);
+                    scope::handle_define_local(self, bc, &mut ip, consts);
                 }
 
                 // Cell operations
@@ -284,45 +286,31 @@ impl VM {
                     scope::handle_update_cell(self);
                 }
 
-                // Yield — capture continuation and suspend
+                // Yield — capture suspended frame and suspend
                 Instruction::Yield => {
-                    self.fiber.suspended_ip = Some(ip);
                     return self.handle_yield(bytecode, constants, closure_env, ip);
                 }
             }
 
             // If an error signal was set by the instruction, propagate.
             if matches!(self.fiber.signal, Some((SIG_ERROR, _))) {
-                return SIG_ERROR;
+                return (SIG_ERROR, ip);
             }
         }
     }
 
-    /// Handle the Return instruction.
-    fn handle_return(
-        &mut self,
-        _bytecode: &[u8],
-        _constants: &[Value],
-        _closure_env: Option<&Rc<Vec<Value>>>,
-        _ip: usize,
-    ) -> SignalBits {
-        let value = control::handle_return(self);
-        self.fiber.signal = Some((SIG_OK, value));
-        SIG_OK
-    }
-
     /// Handle the Yield instruction.
     ///
-    /// Captures a continuation frame (bytecode, constants, env, IP, stack)
+    /// Captures a SuspendedFrame (bytecode, constants, env, IP, stack)
     /// so that resume can continue from this exact point. Each call level
-    /// appends its frame to the continuation chain.
+    /// appends its frame to the suspended chain.
     fn handle_yield(
         &mut self,
-        bytecode: &[u8],
-        constants: &[Value],
-        closure_env: Option<&std::rc::Rc<Vec<Value>>>,
+        bytecode: &Rc<Vec<u8>>,
+        constants: &Rc<Vec<Value>>,
+        closure_env: &Rc<Vec<Value>>,
         ip: usize,
-    ) -> SignalBits {
+    ) -> (SignalBits, usize) {
         let yielded_value = self
             .fiber
             .stack
@@ -331,21 +319,16 @@ impl VM {
 
         let saved_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
 
-        let frame = crate::value::ContinuationFrame {
-            bytecode: std::rc::Rc::new(bytecode.to_vec()),
-            constants: std::rc::Rc::new(constants.to_vec()),
-            env: closure_env
-                .cloned()
-                .unwrap_or_else(|| std::rc::Rc::new(vec![])),
+        let frame = SuspendedFrame {
+            bytecode: bytecode.clone(),
+            constants: constants.clone(),
+            env: closure_env.clone(),
             ip,
             stack: saved_stack,
         };
 
-        let cont_data = crate::value::ContinuationData::new(frame);
-        let continuation = Value::continuation(cont_data);
-
         self.fiber.signal = Some((SIG_YIELD, yielded_value));
-        self.fiber.continuation = Some(continuation);
-        SIG_YIELD
+        self.fiber.suspended = Some(vec![frame]);
+        (SIG_YIELD, ip)
     }
 }

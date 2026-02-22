@@ -187,14 +187,6 @@ impl Value {
         alloc(HeapObject::Tuple(elements))
     }
 
-    /// Create a continuation value.
-    #[inline]
-    pub fn continuation(c: crate::value::continuation::ContinuationData) -> Self {
-        use crate::value::heap::{alloc, HeapObject};
-        use std::rc::Rc;
-        alloc(HeapObject::Continuation(Rc::new(c)))
-    }
-
     /// Create a fiber value.
     #[inline]
     pub fn fiber(f: crate::value::fiber::Fiber) -> Self {

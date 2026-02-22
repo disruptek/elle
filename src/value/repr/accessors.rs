@@ -145,13 +145,6 @@ impl Value {
         self.heap_tag() == Some(HeapTag::Cell)
     }
 
-    /// Check if this is a continuation.
-    #[inline]
-    pub fn is_continuation(&self) -> bool {
-        use crate::value::heap::HeapTag;
-        self.heap_tag() == Some(HeapTag::Continuation)
-    }
-
     /// Check if this is a fiber.
     #[inline]
     pub fn is_fiber(&self) -> bool {
@@ -336,21 +329,6 @@ impl Value {
         }
         match unsafe { deref(*self) } {
             HeapObject::ThreadHandle(h) => Some(h),
-            _ => None,
-        }
-    }
-
-    /// Extract as continuation if this is a continuation.
-    #[inline]
-    pub fn as_continuation(
-        &self,
-    ) -> Option<&std::rc::Rc<crate::value::continuation::ContinuationData>> {
-        use crate::value::heap::{deref, HeapObject};
-        if !self.is_heap() {
-            return None;
-        }
-        match unsafe { deref(*self) } {
-            HeapObject::Continuation(c) => Some(c),
             _ => None,
         }
     }

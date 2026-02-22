@@ -138,9 +138,6 @@ impl SendValue {
             // Unsafe: thread handles
             HeapObject::ThreadHandle(_) => Err("Cannot send thread handle".to_string()),
 
-            // Unsafe: continuations (contain frame data with closures)
-            HeapObject::Continuation(_) => Err("Cannot send continuation".to_string()),
-
             // Unsafe: fibers (contain execution state with closures)
             HeapObject::Fiber(_) => Err("Cannot send fiber".to_string()),
         }

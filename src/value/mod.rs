@@ -4,7 +4,6 @@
 //! a technique that encodes multiple types into a single 64-bit IEEE 754 double.
 
 pub mod closure;
-pub mod continuation;
 pub mod display;
 pub mod error;
 pub mod ffi;
@@ -27,16 +26,13 @@ pub use error::{error_val, format_error};
 // Export SendValue for thread-safe value transmission
 pub use send::SendValue;
 
-// Export continuation types
-pub use continuation::{ContinuationData, ContinuationFrame};
-
 // Export core types
 pub use types::{Arity, NativeFn, SymbolId, TableKey};
 
 // Export closure and fiber types
 pub use closure::Closure;
 pub use fiber::{
-    CallFrame, Fiber, FiberHandle, FiberStatus, Frame, SavedContext, SignalBits, WeakFiberHandle,
+    CallFrame, Fiber, FiberHandle, FiberStatus, Frame, SignalBits, SuspendedFrame, WeakFiberHandle,
     SIG_CANCEL, SIG_DEBUG, SIG_ERROR, SIG_OK, SIG_PROPAGATE, SIG_RESUME, SIG_YIELD,
 };
 

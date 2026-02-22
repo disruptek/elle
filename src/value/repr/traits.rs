@@ -69,11 +69,6 @@ impl PartialEq for Value {
                     std::ptr::eq(self_obj as *const _, other_obj as *const _)
                 }
 
-                // Continuation comparison (compare by reference)
-                (HeapObject::Continuation(_), HeapObject::Continuation(_)) => {
-                    std::ptr::eq(self_obj as *const _, other_obj as *const _)
-                }
-
                 // Fiber comparison (compare by reference)
                 (HeapObject::Fiber(_), HeapObject::Fiber(_)) => {
                     std::ptr::eq(self_obj as *const _, other_obj as *const _)

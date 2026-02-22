@@ -111,17 +111,28 @@ impl std::fmt::Debug for WeakFiberHandle {
     }
 }
 
-/// Saved execution context for a suspended fiber.
+/// A suspended execution point.
 ///
-/// When a fiber suspends (via `fiber/signal`), the VM saves the bytecode,
-/// constants, environment, and instruction pointer so execution can resume
-/// from exactly where it left off.
+/// Captures everything needed to resume bytecode execution: the bytecode,
+/// constants pool, closure environment, instruction pointer, and operand
+/// stack state. Used for both signal-based suspension (`fiber/signal`) and
+/// yield-based suspension (`yield` instruction).
+///
+/// For signal suspension, `stack` is empty (the fiber's own stack is
+/// preserved). For yield suspension, `stack` captures the operand stack
+/// at the point of yield.
 #[derive(Debug, Clone)]
-pub struct SavedContext {
-    pub bytecode: Vec<u8>,
-    pub constants: Vec<Value>,
-    pub env: Option<Rc<Vec<Value>>>,
+pub struct SuspendedFrame {
+    /// Bytecode to resume executing
+    pub bytecode: Rc<Vec<u8>>,
+    /// Constants pool for this frame
+    pub constants: Rc<Vec<Value>>,
+    /// Closure environment
+    pub env: Rc<Vec<Value>>,
+    /// Instruction pointer to resume at
     pub ip: usize,
+    /// Operand stack state (empty for signal suspension)
+    pub stack: Vec<Value>,
 }
 
 /// Signal type bits. The first 16 are compiler-reserved.
@@ -227,22 +238,22 @@ pub struct Fiber {
     /// - On signal: (bits, payload) before suspending
     /// - On normal return: (SIG_OK, return_value) before completing
     pub signal: Option<(SignalBits, Value)>,
-    /// Saved execution context for resuming a suspended fiber.
-    /// Set when the fiber suspends; consumed when it resumes.
-    pub saved_context: Option<SavedContext>,
-    /// IP at the point the dispatch loop exited due to a signal.
-    /// Set by the dispatch loop; consumed by fiber resume.
-    pub suspended_ip: Option<usize>,
+    /// Suspended execution frames. Set when the fiber suspends; consumed
+    /// when it resumes.
+    ///
+    /// - Signal suspension (`fiber/signal`): single frame, empty stack
+    /// - Yield suspension (`yield`): chain of frames from yielder to
+    ///   coroutine boundary, each with its operand stack captured
+    ///
+    /// On resume, frames are replayed from innermost (index 0) to
+    /// outermost (last index).
+    pub suspended: Option<Vec<SuspendedFrame>>,
 
     // --- Execution state migrated from VM ---
     /// Call depth counter (for stack overflow detection)
     pub call_depth: usize,
     /// Call stack for stack traces (name + ip + frame_base)
     pub call_stack: Vec<CallFrame>,
-    /// Storage for the continuation value on yield.
-    /// Used by the yield instruction to capture the call chain so
-    /// yield-through-nested-calls can resume from the exact point.
-    pub continuation: Option<Value>,
 }
 
 impl Fiber {
@@ -258,11 +269,9 @@ impl Fiber {
             closure,
             env: None,
             signal: None,
-            saved_context: None,
-            suspended_ip: None,
+            suspended: None,
             call_depth: 0,
             call_stack: Vec::new(),
-            continuation: None,
         }
     }
 }
