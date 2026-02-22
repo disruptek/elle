@@ -2,7 +2,7 @@ pub mod arithmetic;
 pub mod cell;
 pub mod comparison;
 pub mod concurrency;
-pub mod coroutines;
+pub mod coro;
 pub mod debug;
 pub mod debugging;
 pub mod display;

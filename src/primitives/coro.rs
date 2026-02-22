@@ -13,7 +13,7 @@
 //! - coro?: Check if value is a fiber
 //! - coro/>iterator: Identity (fibers are iterable)
 //! - yield-from: Stub (not yet supported)
-
+//
 use crate::value::fiber::{
     Fiber, FiberStatus, SignalBits, SIG_ERROR, SIG_OK, SIG_RESUME, SIG_YIELD,
 };

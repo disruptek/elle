@@ -12,7 +12,7 @@ use super::arithmetic::{
 use super::cell::{prim_box, prim_box_p, prim_box_set, prim_unbox};
 use super::comparison::{prim_eq, prim_ge, prim_gt, prim_le, prim_lt};
 use super::concurrency::{prim_current_thread_id, prim_join, prim_sleep, prim_spawn};
-use super::coroutines::{
+use super::coro::{
     prim_coroutine_done, prim_coroutine_resume, prim_coroutine_status, prim_coroutine_to_iterator,
     prim_coroutine_value, prim_is_coroutine, prim_make_coroutine, prim_yield_from,
 };
@@ -904,7 +904,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         symbols,
         &mut effects,
         "coro?",
-        prim_is_coro,
+        prim_is_coroutine,
         Effect::none(),
     );
     register_fn(
@@ -1202,6 +1202,14 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         vm,
         symbols,
         &mut effects,
+        "coro/new",
+        prim_make_coroutine,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
         "make-coroutine",
         prim_make_coroutine,
         Effect::raises(),
@@ -1210,7 +1218,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         vm,
         symbols,
         &mut effects,
-        "coroutine-status",
+        "coro/status",
         prim_coroutine_status,
         Effect::none(),
     );
@@ -1218,7 +1226,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         vm,
         symbols,
         &mut effects,
-        "coroutine-done?",
+        "coro/done?",
         prim_coroutine_done,
         Effect::none(),
     );
@@ -1226,7 +1234,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         vm,
         symbols,
         &mut effects,
-        "coroutine-value",
+        "coro/value",
         prim_coroutine_value,
         Effect::raises(),
     );
@@ -1234,9 +1242,9 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         vm,
         symbols,
         &mut effects,
-        "coroutine?",
-        prim_is_coroutine,
-        Effect::none(),
+        "coro/new",
+        prim_make_coroutine,
+        Effect::raises(),
     );
 
     // Coroutine primitives - return SIG_RESUME for VM to handle
@@ -1244,7 +1252,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         vm,
         symbols,
         &mut effects,
-        "coroutine-resume",
+        "coro/resume",
         prim_coroutine_resume,
         Effect::yields_raises(),
     );
@@ -1260,7 +1268,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         vm,
         symbols,
         &mut effects,
-        "coroutine->iterator",
+        "coro/>iterator",
         prim_coroutine_to_iterator,
         Effect::raises(),
     );
