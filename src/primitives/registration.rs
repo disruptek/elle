@@ -12,14 +12,14 @@ use super::arithmetic::{
 use super::cell::{prim_box, prim_box_p, prim_box_set, prim_unbox};
 use super::comparison::{prim_eq, prim_ge, prim_gt, prim_le, prim_lt};
 use super::concurrency::{prim_current_thread_id, prim_join, prim_sleep, prim_spawn};
-use super::coro::{
+use super::coroutines::{
     prim_coroutine_done, prim_coroutine_resume, prim_coroutine_status, prim_coroutine_to_iterator,
     prim_coroutine_value, prim_is_coroutine, prim_make_coroutine, prim_yield_from,
 };
 use super::debug::{prim_debug_print, prim_memory_usage, prim_profile, prim_trace};
 use super::debugging::{
     prim_arity, prim_bytecode_size, prim_captures, prim_disbit, prim_disjit, prim_is_closure,
-    prim_is_coro, prim_is_jit, prim_is_pure, prim_mutates_params, prim_raises,
+    prim_is_jit, prim_is_pure, prim_mutates_params, prim_raises,
 };
 use super::display::{prim_display, prim_newline, prim_print};
 
