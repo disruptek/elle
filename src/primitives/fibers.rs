@@ -353,14 +353,7 @@ pub fn prim_fiber_parent(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let parent_val = handle.with(|fiber| {
-        fiber
-            .parent
-            .as_ref()
-            .and_then(|weak| weak.upgrade())
-            .map(Value::fiber_from_handle)
-            .unwrap_or(Value::NIL)
-    });
+    let parent_val = handle.with(|fiber| fiber.parent_value.unwrap_or(Value::NIL));
     (SIG_OK, parent_val)
 }
 
@@ -391,13 +384,7 @@ pub fn prim_fiber_child(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let child_val = handle.with(|fiber| {
-        fiber
-            .child
-            .as_ref()
-            .map(|ch| Value::fiber_from_handle(ch.clone()))
-            .unwrap_or(Value::NIL)
-    });
+    let child_val = handle.with(|fiber| fiber.child_value.unwrap_or(Value::NIL));
     (SIG_OK, child_val)
 }
 

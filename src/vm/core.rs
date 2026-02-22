@@ -25,6 +25,10 @@ pub struct VM {
     /// directly on the VM, not behind a handle). Used to wire up
     /// `child.parent` back-pointers during fiber resume.
     pub current_fiber_handle: Option<FiberHandle>,
+    /// Cached NaN-boxed Value for the current fiber. `None` for the root
+    /// fiber. Used to set `child.parent_value` during resume chain wiring,
+    /// so `fiber/parent` can return the original Value without re-allocating.
+    pub current_fiber_value: Option<Value>,
     /// Global variable bindings (shared across all fibers)
     pub globals: Vec<Value>,
     pub ffi: FFISubsystem,
@@ -74,6 +78,7 @@ impl VM {
         VM {
             fiber,
             current_fiber_handle: None, // root fiber has no handle
+            current_fiber_value: None,  // root fiber has no Value
             globals: vec![Value::UNDEFINED; 256],
             ffi: FFISubsystem::new(),
             modules: HashMap::new(),
