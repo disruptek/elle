@@ -355,15 +355,15 @@ impl Value {
         }
     }
 
-    /// Extract as fiber if this is a fiber.
+    /// Extract as fiber handle if this is a fiber.
     #[inline]
-    pub fn as_fiber(&self) -> Option<&std::rc::Rc<std::cell::RefCell<crate::value::fiber::Fiber>>> {
+    pub fn as_fiber(&self) -> Option<&crate::value::fiber::FiberHandle> {
         use crate::value::heap::{deref, HeapObject};
         if !self.is_heap() {
             return None;
         }
         match unsafe { deref(*self) } {
-            HeapObject::Fiber(f) => Some(f),
+            HeapObject::Fiber(handle) => Some(handle),
             _ => None,
         }
     }

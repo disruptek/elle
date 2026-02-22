@@ -62,3 +62,6 @@ mod effect_unsoundness {
 mod jit {
     include!("jit.rs");
 }
+mod fibers {
+    include!("fibers.rs");
+}

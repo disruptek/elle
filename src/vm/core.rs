@@ -1,7 +1,7 @@
 use crate::error::{LocationMap, StackFrame};
 use crate::ffi::FFISubsystem;
 use crate::value::fiber::CallFrame;
-use crate::value::{Closure, Fiber, SignalBits, Value, SIG_OK, SIG_YIELD};
+use crate::value::{Closure, Fiber, FiberHandle, SignalBits, Value, SIG_OK, SIG_YIELD};
 use crate::vm::scope::ScopeStack;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -18,6 +18,11 @@ pub struct VM {
     /// The current fiber holding all per-execution state:
     /// operand stack, call frames, exception handlers, coroutine state.
     pub fiber: Fiber,
+    /// Handle to the current fiber's FiberHandle, if it came from a
+    /// `fiber/new` allocation. `None` for the root fiber (which lives
+    /// directly on the VM, not behind a handle). Used to wire up
+    /// `child.parent` back-pointers during fiber resume.
+    pub current_fiber_handle: Option<FiberHandle>,
     /// Global variable bindings (shared across all fibers)
     pub globals: Vec<Value>,
     pub ffi: FFISubsystem,
@@ -66,6 +71,7 @@ impl VM {
 
         VM {
             fiber,
+            current_fiber_handle: None, // root fiber has no handle
             globals: vec![Value::UNDEFINED; 256],
             ffi: FFISubsystem::new(),
             modules: HashMap::new(),

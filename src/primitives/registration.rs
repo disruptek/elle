@@ -24,7 +24,8 @@ use super::debugging::{
 use super::display::{prim_display, prim_newline, prim_print};
 
 use super::fibers::{
-    prim_fiber_bits, prim_fiber_mask, prim_fiber_new, prim_fiber_resume, prim_fiber_signal,
+    prim_fiber_bits, prim_fiber_cancel, prim_fiber_child, prim_fiber_mask, prim_fiber_new,
+    prim_fiber_parent, prim_fiber_propagate, prim_fiber_resume, prim_fiber_signal,
     prim_fiber_status, prim_fiber_value, prim_is_fiber,
 };
 use super::file_io::{
@@ -1327,6 +1328,38 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> HashMap<Sy
         "fiber?",
         prim_is_fiber,
         Effect::none(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/parent",
+        prim_fiber_parent,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/child",
+        prim_fiber_child,
+        Effect::raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/propagate",
+        prim_fiber_propagate,
+        Effect::yields_raises(),
+    );
+    register_fn(
+        vm,
+        symbols,
+        &mut effects,
+        "fiber/cancel",
+        prim_fiber_cancel,
+        Effect::raises(),
     );
 
     effects

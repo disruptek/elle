@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::value::continuation::ContinuationData;
 use crate::value::ffi::ThreadHandle;
-use crate::value::fiber::Fiber;
+use crate::value::fiber::FiberHandle;
 use crate::value::Value;
 
 // Re-export types for convenience
@@ -104,7 +104,7 @@ pub enum HeapObject {
     Continuation(Rc<ContinuationData>),
 
     /// Fiber: independent execution context with its own stack and frames
-    Fiber(Rc<RefCell<Fiber>>),
+    Fiber(FiberHandle),
 }
 
 /// Data for thread handles.
@@ -199,13 +199,10 @@ impl std::fmt::Debug for HeapObject {
             HeapObject::CHandle(_, id) => write!(f, "<c-handle:{}>", id),
             HeapObject::ThreadHandle(_) => write!(f, "<thread-handle>"),
             HeapObject::Continuation(c) => write!(f, "<continuation:{} frames>", c.frames.len()),
-            HeapObject::Fiber(fib) => {
-                if let Ok(f_ref) = fib.try_borrow() {
-                    write!(f, "<fiber:{}>", f_ref.status.as_str())
-                } else {
-                    write!(f, "<fiber:borrowed>")
-                }
-            }
+            HeapObject::Fiber(handle) => match handle.try_with(|fib| fib.status.as_str()) {
+                Some(status) => write!(f, "<fiber:{}>", status),
+                None => write!(f, "<fiber:taken>"),
+            },
         }
     }
 }

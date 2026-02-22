@@ -54,13 +54,15 @@ Internal VM methods return `SignalBits` instead of `Result<VmResult, String>`:
 - `SIG_ERROR` (1): Error. Error tuple in `fiber.signal` as `[:keyword "message"]`.
 - `SIG_YIELD` (2): Fiber yield. Value in `fiber.signal`, continuation in `fiber.continuation`.
 - `SIG_RESUME` (8): VM-internal. Fiber primitive requests VM-side execution.
+- `SIG_PROPAGATE` (32): VM-internal. `fiber/propagate` re-raises caught signal.
+- `SIG_CANCEL` (64): VM-internal. `fiber/cancel` injects error into fiber.
 
 The public `execute_bytecode` method is the translation boundary — it converts
 `SignalBits` to `Result<Value, String>` for external callers. On `SIG_ERROR`,
 it extracts the condition from `fiber.signal` and formats the error message.
 
 Instruction handlers no longer return `Result<(), String>`. VM bugs panic
-immediately. User errors set `fiber.signal` to `(SIG_ERROR, Value::condition(...))`
+immediately. User errors set `fiber.signal` to `(SIG_ERROR, error_val(kind, msg))`
 and push `Value::NIL` to keep the stack consistent.
 
 ## Primitive dispatch (NativeFn)
@@ -71,13 +73,20 @@ dispatches the return signal in `handle_primitive_signal()` (`call.rs`):
 - `SIG_ERROR` → store `(SIG_ERROR, value)` in `fiber.signal`, push NIL
 - `SIG_YIELD` → store in `fiber.signal`, return yield
 - `SIG_RESUME` → dispatch to fiber handler
+- `SIG_PROPAGATE` → re-raise child fiber's signal, preserve child chain
+- `SIG_CANCEL` → inject error into target fiber
 
 All SIG_RESUME primitives (including coroutine wrappers) return
-`(SIG_RESUME, fiber_value)`. The VM
-swaps the child fiber into `vm.fiber` via `std::mem::swap`, executes the child,
-then swaps back. The child's `saved_context` stores bytecode/constants/env/IP
-for resumption after signals. The dispatch loop saves the IP into
-`fiber.suspended_ip` before returning on signal paths.
+`(SIG_RESUME, fiber_value)`. The VM uses `FiberHandle::take()`/`put()` to swap
+the child fiber into `vm.fiber`, executes the child, then swaps back. No dummy
+fiber allocation needed. The child's `saved_context` stores
+bytecode/constants/env/IP for resumption after signals. The dispatch loop saves
+the IP into `fiber.suspended_ip` before returning on signal paths.
+
+On resume, the VM wires up the parent/child chain (Janet semantics):
+- `parent.child = child_handle` before executing child
+- On signal caught (SIG_OK or mask match): clear `parent.child = None`
+- On signal NOT caught (propagates): leave `parent.child` set (trace chain)
 
 ## Dependents
 

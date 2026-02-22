@@ -11,6 +11,106 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
+// ---------------------------------------------------------------------------
+// FiberHandle / WeakFiberHandle
+// ---------------------------------------------------------------------------
+
+/// A handle to a fiber that supports take/put semantics.
+///
+/// Wraps `Rc<RefCell<Option<Fiber>>>`. The `Option` makes "fiber is currently
+/// executing on the VM" representable as `None` — no dummy fiber needed.
+///
+/// - `take()` extracts the fiber (sets slot to None)
+/// - `put()` returns the fiber (sets slot to Some)
+/// - `with()`/`with_mut()` borrow in-place for read/write
+/// - `try_with()` returns None if the fiber is taken or already borrowed
+#[derive(Clone)]
+pub struct FiberHandle(Rc<RefCell<Option<Fiber>>>);
+
+impl FiberHandle {
+    /// Create a new handle wrapping a fiber.
+    pub fn new(fiber: Fiber) -> Self {
+        FiberHandle(Rc::new(RefCell::new(Some(fiber))))
+    }
+
+    /// Take the fiber out of the handle. Panics if already taken.
+    pub fn take(&self) -> Fiber {
+        self.0
+            .borrow_mut()
+            .take()
+            .expect("FiberHandle::take: fiber already taken (currently executing on VM)")
+    }
+
+    /// Put a fiber back into the handle. Panics if slot is occupied.
+    pub fn put(&self, fiber: Fiber) {
+        let mut slot = self.0.borrow_mut();
+        assert!(
+            slot.is_none(),
+            "FiberHandle::put: slot already occupied (fiber not taken)"
+        );
+        *slot = Some(fiber);
+    }
+
+    /// Borrow the fiber immutably. Panics if taken.
+    pub fn with<R>(&self, f: impl FnOnce(&Fiber) -> R) -> R {
+        let borrow = self.0.borrow();
+        let fiber = borrow
+            .as_ref()
+            .expect("FiberHandle::with: fiber is taken (currently executing on VM)");
+        f(fiber)
+    }
+
+    /// Borrow the fiber mutably. Panics if taken.
+    pub fn with_mut<R>(&self, f: impl FnOnce(&mut Fiber) -> R) -> R {
+        let mut borrow = self.0.borrow_mut();
+        let fiber = borrow
+            .as_mut()
+            .expect("FiberHandle::with_mut: fiber is taken (currently executing on VM)");
+        f(fiber)
+    }
+
+    /// Try to borrow the fiber immutably. Returns None if taken or already
+    /// mutably borrowed (used by Debug/Display where panicking is wrong).
+    pub fn try_with<R>(&self, f: impl FnOnce(&Fiber) -> R) -> Option<R> {
+        let borrow = self.0.try_borrow().ok()?;
+        let fiber = borrow.as_ref()?;
+        Some(f(fiber))
+    }
+
+    /// Create a weak reference to this handle.
+    pub fn downgrade(&self) -> WeakFiberHandle {
+        WeakFiberHandle(Rc::downgrade(&self.0))
+    }
+}
+
+impl std::fmt::Debug for FiberHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.try_with(|fib| fib.status.as_str().to_string()) {
+            Some(status) => write!(f, "<fiber-handle:{}>", status),
+            None => write!(f, "<fiber-handle:taken>"),
+        }
+    }
+}
+
+/// A weak reference to a FiberHandle, used for parent back-pointers
+/// to avoid Rc cycles.
+#[derive(Clone)]
+pub struct WeakFiberHandle(Weak<RefCell<Option<Fiber>>>);
+
+impl WeakFiberHandle {
+    /// Attempt to upgrade to a strong FiberHandle. Returns None if the
+    /// fiber has been dropped.
+    pub fn upgrade(&self) -> Option<FiberHandle> {
+        self.0.upgrade().map(FiberHandle)
+    }
+}
+
+impl std::fmt::Debug for WeakFiberHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<weak-fiber-handle>")
+    }
+}
+
 /// Saved execution context for a suspended fiber.
 ///
 /// When a fiber suspends (via `fiber/signal`), the VM saves the bytecode,
@@ -33,13 +133,17 @@ pub const SIG_YIELD: SignalBits = 1 << 1; // cooperative suspension
 pub const SIG_DEBUG: SignalBits = 1 << 2; // breakpoint / trace
 pub const SIG_RESUME: SignalBits = 1 << 3; // fiber resumption (VM-internal)
 pub const SIG_FFI: SignalBits = 1 << 4; // calls foreign code
+pub const SIG_PROPAGATE: SignalBits = 1 << 5; // re-raise caught signal (VM-internal)
+pub const SIG_CANCEL: SignalBits = 1 << 6; // inject error into fiber (VM-internal)
 
 // Signal bit partitioning:
 //
 //   Bits 0-2:   User-facing signals (error, yield, debug)
-//   Bit  3:     VM operation (resume) — not visible to user code
+//   Bit  3:     Resume - run a suspended fiber (VM-internal)
 //   Bit  4:     FFI — calls foreign code
-//   Bits 5-15:  Reserved for future use
+//   Bit  5:     Propagate — re-raise caught signal (VM-internal)
+//   Bit  6:     Cancel — inject error into fiber (VM-internal)
+//   Bits 7-15:  Reserved for future use
 //   Bits 16-31: User-defined signal types
 //
 // The VM dispatch loop checks all bits. User code only sees
@@ -110,10 +214,10 @@ pub struct Fiber {
     /// Signal mask: which of this fiber's signals are caught by its parent.
     /// Set at creation time by the parent. Immutable after creation.
     pub mask: SignalBits,
-    /// Parent fiber (Weak to avoid Rc cycles)
-    pub parent: Option<Weak<RefCell<Fiber>>>,
-    /// Most recently resumed child (for stack traces, not ownership)
-    pub child: Option<Rc<RefCell<Fiber>>>,
+    /// Parent fiber (weak to avoid Rc cycles)
+    pub parent: Option<WeakFiberHandle>,
+    /// Most recently resumed child (for stack traces and resumption routing)
+    pub child: Option<FiberHandle>,
     /// The closure this fiber was created from
     pub closure: Rc<Closure>,
     /// Dynamic bindings (fiber-scoped state)
@@ -276,27 +380,72 @@ mod tests {
 
     #[test]
     fn test_fiber_parent_child() {
-        let parent = Rc::new(RefCell::new(Fiber::new(test_closure(), 0)));
-        let child = Rc::new(RefCell::new(Fiber::new(test_closure(), SIG_ERROR)));
+        let parent_handle = FiberHandle::new(Fiber::new(test_closure(), 0));
+        let child_handle = FiberHandle::new(Fiber::new(test_closure(), SIG_ERROR));
 
-        child.borrow_mut().parent = Some(Rc::downgrade(&parent));
-        parent.borrow_mut().child = Some(child.clone());
+        // Wire up parent/child
+        child_handle.with_mut(|child| {
+            child.parent = Some(parent_handle.downgrade());
+        });
+        parent_handle.with_mut(|parent| {
+            parent.child = Some(child_handle.clone());
+        });
 
         // Parent can reach child
-        assert!(parent.borrow().child.is_some());
+        parent_handle.with(|parent| {
+            assert!(parent.child.is_some());
+        });
 
         // Child can reach parent (via upgrade)
-        {
-            let child_ref = child.borrow();
-            let parent_ref = child_ref.parent.as_ref().unwrap().upgrade();
+        child_handle.with(|child| {
+            let parent_ref = child.parent.as_ref().unwrap().upgrade();
             assert!(parent_ref.is_some());
-        }
+        });
 
         // Drop parent — child's weak ref becomes invalid
-        drop(parent);
-        let child_ref = child.borrow();
-        let parent_ref = child_ref.parent.as_ref().unwrap().upgrade();
-        assert!(parent_ref.is_none());
+        drop(parent_handle);
+        child_handle.with(|child| {
+            let parent_ref = child.parent.as_ref().unwrap().upgrade();
+            assert!(parent_ref.is_none());
+        });
+    }
+
+    #[test]
+    fn test_fiber_handle_take_put() {
+        let handle = FiberHandle::new(Fiber::new(test_closure(), SIG_ERROR));
+
+        // Can read via with()
+        handle.with(|f| assert_eq!(f.status, FiberStatus::New));
+
+        // Take the fiber out
+        let mut fiber = handle.take();
+        assert_eq!(fiber.status, FiberStatus::New);
+
+        // try_with returns None when taken
+        assert!(handle.try_with(|f| f.status).is_none());
+
+        // Modify and put back
+        fiber.status = FiberStatus::Alive;
+        handle.put(fiber);
+
+        // Can read again
+        handle.with(|f| assert_eq!(f.status, FiberStatus::Alive));
+    }
+
+    #[test]
+    #[should_panic(expected = "fiber already taken")]
+    fn test_fiber_handle_double_take_panics() {
+        let handle = FiberHandle::new(Fiber::new(test_closure(), 0));
+        let _f1 = handle.take();
+        let _f2 = handle.take(); // should panic
+    }
+
+    #[test]
+    #[should_panic(expected = "slot already occupied")]
+    fn test_fiber_handle_double_put_panics() {
+        let handle = FiberHandle::new(Fiber::new(test_closure(), 0));
+        let fiber = Fiber::new(test_closure(), 0);
+        handle.put(fiber); // should panic — slot already occupied
     }
 
     #[test]

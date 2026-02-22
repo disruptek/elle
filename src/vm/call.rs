@@ -9,8 +9,9 @@
 
 use crate::value::error_val;
 use crate::value::fiber::{FiberStatus, SavedContext};
-use crate::value::{Fiber, SignalBits, Value, SIG_ERROR, SIG_OK, SIG_RESUME, SIG_YIELD};
-use std::cell::RefCell;
+use crate::value::{
+    Fiber, SignalBits, Value, SIG_CANCEL, SIG_ERROR, SIG_OK, SIG_PROPAGATE, SIG_RESUME, SIG_YIELD,
+};
 use std::rc::Rc;
 
 /// Helper: set an error signal on the fiber.
@@ -458,6 +459,14 @@ impl VM {
                 // Primitive returned SIG_RESUME — dispatch to fiber handler
                 self.handle_fiber_resume_signal(value, bytecode, constants, closure_env, ip)
             }
+            SIG_PROPAGATE => {
+                // fiber/propagate: re-raise the child fiber's signal
+                self.handle_fiber_propagate_signal(value)
+            }
+            SIG_CANCEL => {
+                // fiber/cancel: inject error into suspended fiber
+                self.handle_fiber_cancel_signal(value, bytecode, constants, closure_env, ip)
+            }
             _ => {
                 // Any other signal (SIG_YIELD, user-defined)
                 self.fiber.signal = Some((bits, value));
@@ -482,6 +491,14 @@ impl VM {
             SIG_RESUME => {
                 // Primitive in tail position — dispatch to fiber handler
                 self.handle_fiber_resume_signal_tail(value)
+            }
+            SIG_PROPAGATE => {
+                // fiber/propagate in tail position
+                self.handle_fiber_propagate_signal_tail(value)
+            }
+            SIG_CANCEL => {
+                // fiber/cancel in tail position
+                self.handle_fiber_cancel_signal_tail(value)
             }
             _ => {
                 self.fiber.signal = Some((bits, value));
@@ -509,8 +526,8 @@ impl VM {
         _closure_env: Option<&Rc<Vec<Value>>>,
         _ip: &mut usize,
     ) -> Option<SignalBits> {
-        let fiber_rc = match fiber_value.as_fiber() {
-            Some(f) => f.clone(),
+        let handle = match fiber_value.as_fiber() {
+            Some(h) => h.clone(),
             None => {
                 set_error(&mut self.fiber, "error", "SIG_RESUME with non-fiber value");
                 self.fiber.stack.push(Value::NIL);
@@ -518,20 +535,24 @@ impl VM {
             }
         };
 
-        let (result_bits, result_value) = self.do_fiber_resume(&fiber_rc);
+        let (result_bits, result_value) = self.do_fiber_resume(&handle);
 
         // Check the child's signal against its mask
-        let mask = fiber_rc.borrow().mask;
+        let mask = handle.with(|fiber| fiber.mask);
 
         if result_bits == SIG_OK {
+            // Child completed normally — clear child chain
+            self.fiber.child = None;
             self.fiber.stack.push(result_value);
             None
         } else if mask & result_bits != 0 {
-            // Signal is caught by the mask — parent handles it.
+            // Signal is caught by the mask — parent handles it, clear child chain
+            self.fiber.child = None;
             self.fiber.stack.push(result_value);
             None
         } else {
             // Signal is NOT caught — propagate to parent.
+            // Leave parent.child set (preserves trace chain for stack traces).
             self.fiber.signal = Some((result_bits, result_value));
             if result_bits == SIG_ERROR {
                 self.fiber.stack.push(Value::NIL);
@@ -544,27 +565,30 @@ impl VM {
 
     /// Handle SIG_RESUME from a fiber primitive (TailCall position).
     fn handle_fiber_resume_signal_tail(&mut self, fiber_value: Value) -> SignalBits {
-        let fiber_rc = match fiber_value.as_fiber() {
-            Some(f) => f.clone(),
+        let handle = match fiber_value.as_fiber() {
+            Some(h) => h.clone(),
             None => {
                 set_error(&mut self.fiber, "error", "SIG_RESUME with non-fiber value");
                 return SIG_ERROR;
             }
         };
 
-        let (result_bits, result_value) = self.do_fiber_resume(&fiber_rc);
+        let (result_bits, result_value) = self.do_fiber_resume(&handle);
 
-        let mask = fiber_rc.borrow().mask;
+        let mask = handle.with(|fiber| fiber.mask);
 
         if result_bits == SIG_OK {
+            // Child completed normally — clear child chain
+            self.fiber.child = None;
             self.fiber.signal = Some((SIG_OK, result_value));
             SIG_OK
         } else if mask & result_bits != 0 {
-            // Signal is caught by the mask — parent handles it.
+            // Signal is caught by the mask — parent handles it, clear child chain
+            self.fiber.child = None;
             self.fiber.signal = Some((SIG_OK, result_value));
             SIG_OK
         } else {
-            // Signal not caught — propagate
+            // Signal not caught — propagate (leave child chain for traces)
             self.fiber.signal = Some((result_bits, result_value));
             result_bits
         }
@@ -572,51 +596,42 @@ impl VM {
 
     /// Execute a fiber resume: swap fibers, run, swap back.
     ///
+    /// Uses FiberHandle's take/put semantics — no dummy fiber allocation.
     /// Returns (signal_bits, signal_value) from the child fiber's execution.
-    fn do_fiber_resume(&mut self, fiber_rc: &Rc<RefCell<Fiber>>) -> (SignalBits, Value) {
-        // Take the resume value that prim_fiber_resume stored
-        let resume_value = {
-            let mut child = fiber_rc.borrow_mut();
-            child.signal.take().map(|(_, v)| v).unwrap_or(Value::NIL)
-        };
+    fn do_fiber_resume(&mut self, child_handle: &crate::value::FiberHandle) -> (SignalBits, Value) {
+        // Extract resume value and status before taking the fiber
+        let (resume_value, is_first_resume) = child_handle.with_mut(|child| {
+            let rv = child.signal.take().map(|(_, v)| v).unwrap_or(Value::NIL);
+            let first = child.status == FiberStatus::New;
+            (rv, first)
+        });
 
-        let is_first_resume = fiber_rc.borrow().status == FiberStatus::New;
+        // 1. Take child fiber out of its handle (sets slot to None)
+        let mut child_fiber = child_handle.take();
 
-        // 1. Take child fiber out of its Rc<RefCell>
-        let dummy = Fiber::new(
-            Rc::new(crate::value::Closure {
-                bytecode: Rc::new(vec![]),
-                arity: crate::value::Arity::Exact(0),
-                env: Rc::new(vec![]),
-                num_locals: 0,
-                num_captures: 0,
-                constants: Rc::new(vec![]),
-                effect: crate::effects::Effect::none(),
-                cell_params_mask: 0,
-                symbol_names: Rc::new(std::collections::HashMap::new()),
-                location_map: Rc::new(crate::error::LocationMap::new()),
-                jit_code: None,
-                lir_function: None,
-            }),
-            0,
-        );
-        let mut child_fiber = std::mem::replace(&mut *fiber_rc.borrow_mut(), dummy);
+        // 2. Wire up parent/child chain (Janet semantics)
+        //    - parent.child = child_handle (for downward traversal / stack traces)
+        //    - child.parent = parent_handle (for upward traversal / fiber/parent)
+        self.fiber.child = Some(child_handle.clone());
+        child_fiber.parent = self.current_fiber_handle.as_ref().map(|h| h.downgrade());
 
-        // 2. Swap parent out, child in
+        // 3. Swap parent out, child in; track the child's handle
+        let parent_handle = self.current_fiber_handle.take();
+        self.current_fiber_handle = Some(child_handle.clone());
         std::mem::swap(&mut self.fiber, &mut child_fiber);
         // Now: self.fiber = child, child_fiber = parent
 
-        // 3. Set child status to Alive
+        // 4. Set child status to Alive
         self.fiber.status = FiberStatus::Alive;
 
-        // 4. Execute the child
+        // 5. Execute the child
         let bits = if is_first_resume {
             self.do_fiber_first_resume()
         } else {
             self.do_fiber_subsequent_resume(resume_value)
         };
 
-        // 5. Update child status based on result
+        // 6. Update child status based on result
         match bits {
             SIG_OK => {
                 self.fiber.status = FiberStatus::Dead;
@@ -630,7 +645,7 @@ impl VM {
             }
         }
 
-        // 6. Extract the result before swapping back
+        // 7. Extract the result before swapping back
         let result_value = self
             .fiber
             .signal
@@ -639,12 +654,13 @@ impl VM {
             .unwrap_or(Value::NIL);
         let result_bits = self.fiber.signal.as_ref().map(|(b, _)| *b).unwrap_or(bits);
 
-        // 7. Swap back: parent in, child out
+        // 8. Swap back: parent in, child out; restore parent's handle
         std::mem::swap(&mut self.fiber, &mut child_fiber);
         // Now: self.fiber = parent, child_fiber = child
+        self.current_fiber_handle = parent_handle;
 
-        // 8. Put child fiber back into its Rc<RefCell>
-        *fiber_rc.borrow_mut() = child_fiber;
+        // 9. Put child fiber back into its handle
+        child_handle.put(child_fiber);
 
         (result_bits, result_value)
     }
@@ -724,5 +740,210 @@ impl VM {
         }
 
         bits
+    }
+
+    // ── SIG_PROPAGATE: re-raise caught signal ─────────────────────
+
+    /// Handle SIG_PROPAGATE from fiber/propagate (Call position).
+    ///
+    /// Extracts the child fiber's signal and propagates it as if the
+    /// current fiber had signaled. Sets parent.child to preserve the
+    /// trace chain for stack traces.
+    fn handle_fiber_propagate_signal(&mut self, fiber_value: Value) -> Option<SignalBits> {
+        let handle = match fiber_value.as_fiber() {
+            Some(h) => h.clone(),
+            None => {
+                set_error(
+                    &mut self.fiber,
+                    "error",
+                    "SIG_PROPAGATE with non-fiber value",
+                );
+                self.fiber.stack.push(Value::NIL);
+                return None;
+            }
+        };
+
+        // Extract the child's signal
+        let (child_bits, child_value) = handle
+            .with(|fiber| fiber.signal)
+            .unwrap_or((SIG_ERROR, error_val("error", "fiber/propagate: no signal")));
+
+        // Set parent.child to preserve trace chain
+        self.fiber.child = Some(handle);
+
+        // Propagate the signal as our own
+        self.fiber.signal = Some((child_bits, child_value));
+
+        if child_bits == SIG_ERROR {
+            self.fiber.stack.push(Value::NIL);
+            None // dispatch loop will see the error signal
+        } else {
+            Some(child_bits)
+        }
+    }
+
+    /// Handle SIG_PROPAGATE from fiber/propagate (TailCall position).
+    fn handle_fiber_propagate_signal_tail(&mut self, fiber_value: Value) -> SignalBits {
+        let handle = match fiber_value.as_fiber() {
+            Some(h) => h.clone(),
+            None => {
+                set_error(
+                    &mut self.fiber,
+                    "error",
+                    "SIG_PROPAGATE with non-fiber value",
+                );
+                return SIG_ERROR;
+            }
+        };
+
+        let (child_bits, child_value) = handle
+            .with(|fiber| fiber.signal)
+            .unwrap_or((SIG_ERROR, error_val("error", "fiber/propagate: no signal")));
+
+        self.fiber.child = Some(handle);
+        self.fiber.signal = Some((child_bits, child_value));
+        child_bits
+    }
+
+    // ── SIG_CANCEL: inject error into fiber ───────────────────────
+
+    /// Handle SIG_CANCEL from fiber/cancel (Call position).
+    ///
+    /// Resumes the target fiber with the error injected as a signal.
+    /// The fiber's error handlers get a chance to run (the dispatch loop
+    /// sees the error signal and unwinds). This is Janet's "cancel":
+    /// resume a fiber with an error signal instead of a normal value.
+    fn handle_fiber_cancel_signal(
+        &mut self,
+        fiber_value: Value,
+        _bytecode: &[u8],
+        _constants: &[Value],
+        _closure_env: Option<&Rc<Vec<Value>>>,
+        _ip: &mut usize,
+    ) -> Option<SignalBits> {
+        let handle = match fiber_value.as_fiber() {
+            Some(h) => h.clone(),
+            None => {
+                set_error(&mut self.fiber, "error", "SIG_CANCEL with non-fiber value");
+                self.fiber.stack.push(Value::NIL);
+                return None;
+            }
+        };
+
+        // do_fiber_cancel resumes the fiber with the error injected.
+        let (result_bits, result_value) = self.do_fiber_cancel(&handle);
+
+        let mask = handle.with(|fiber| fiber.mask);
+        let caught = result_bits == SIG_OK || (mask & result_bits != 0);
+
+        if caught {
+            self.fiber.child = None;
+            self.fiber.stack.push(result_value);
+            None
+        } else {
+            self.fiber.signal = Some((result_bits, result_value));
+            if result_bits == SIG_ERROR {
+                self.fiber.stack.push(Value::NIL);
+                None
+            } else {
+                Some(result_bits)
+            }
+        }
+    }
+
+    /// Handle SIG_CANCEL from fiber/cancel (TailCall position).
+    fn handle_fiber_cancel_signal_tail(&mut self, fiber_value: Value) -> SignalBits {
+        let handle = match fiber_value.as_fiber() {
+            Some(h) => h.clone(),
+            None => {
+                set_error(&mut self.fiber, "error", "SIG_CANCEL with non-fiber value");
+                return SIG_ERROR;
+            }
+        };
+
+        let (result_bits, result_value) = self.do_fiber_cancel(&handle);
+
+        let mask = handle.with(|fiber| fiber.mask);
+        let caught = result_bits == SIG_OK || (mask & result_bits != 0);
+
+        if caught {
+            self.fiber.child = None;
+            self.fiber.signal = Some((SIG_OK, result_value));
+            SIG_OK
+        } else {
+            self.fiber.signal = Some((result_bits, result_value));
+            result_bits
+        }
+    }
+
+    /// Execute a fiber cancel: inject error, resume, let error handlers run.
+    ///
+    /// Like `do_fiber_resume` but instead of pushing the resume value onto
+    /// the child's stack, sets `fiber.signal = (SIG_ERROR, error_value)` so
+    /// the dispatch loop sees the error and unwinds through error handlers.
+    fn do_fiber_cancel(&mut self, child_handle: &crate::value::FiberHandle) -> (SignalBits, Value) {
+        // The error value was stored on the fiber by prim_fiber_cancel
+        let error_value = child_handle
+            .with(|fiber| fiber.signal.as_ref().map(|(_, v)| *v))
+            .unwrap_or(Value::NIL);
+
+        // 1. Take child fiber out of its handle
+        let mut child_fiber = child_handle.take();
+
+        // 2. Wire up parent/child chain
+        self.fiber.child = Some(child_handle.clone());
+        child_fiber.parent = self.current_fiber_handle.as_ref().map(|h| h.downgrade());
+
+        // 3. Swap parent out, child in
+        let parent_handle = self.current_fiber_handle.take();
+        self.current_fiber_handle = Some(child_handle.clone());
+        std::mem::swap(&mut self.fiber, &mut child_fiber);
+
+        // 4. Inject the error signal — the dispatch loop will see this
+        //    and unwind through error handlers
+        self.fiber.status = FiberStatus::Alive;
+        self.fiber.signal = Some((SIG_ERROR, error_value));
+
+        // 5. Resume the fiber so error handlers can run.
+        //    For a Suspended fiber with a saved context, we resume from
+        //    the saved IP. The dispatch loop will immediately see the
+        //    error signal and return SIG_ERROR.
+        let bits = if self.fiber.saved_context.is_some() {
+            // Resume from saved context — the error signal is already set,
+            // so the dispatch loop will see it on the first instruction check
+            let ctx = self.fiber.saved_context.take().unwrap();
+            self.execute_bytecode_from_ip(&ctx.bytecode, &ctx.constants, ctx.env.as_ref(), ctx.ip)
+        } else if self.fiber.continuation.is_some() {
+            let continuation = self.fiber.continuation.take().unwrap();
+            self.resume_continuation(continuation, Value::NIL)
+        } else {
+            // New fiber that was never started — just mark as errored
+            SIG_ERROR
+        };
+
+        // 6. Update child status
+        match bits {
+            SIG_OK => self.fiber.status = FiberStatus::Dead,
+            SIG_ERROR => self.fiber.status = FiberStatus::Error,
+            _ => self.fiber.status = FiberStatus::Suspended,
+        }
+
+        // 7. Extract result
+        let result_value = self
+            .fiber
+            .signal
+            .as_ref()
+            .map(|(_, v)| *v)
+            .unwrap_or(Value::NIL);
+        let result_bits = self.fiber.signal.as_ref().map(|(b, _)| *b).unwrap_or(bits);
+
+        // 8. Swap back
+        std::mem::swap(&mut self.fiber, &mut child_fiber);
+        self.current_fiber_handle = parent_handle;
+
+        // 9. Put child back
+        child_handle.put(child_fiber);
+
+        (result_bits, result_value)
     }
 }

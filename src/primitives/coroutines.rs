@@ -66,8 +66,8 @@ pub fn prim_coroutine_status(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -82,7 +82,7 @@ pub fn prim_coroutine_status(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let status = fiber_rc.borrow().status;
+    let status = handle.with(|fiber| fiber.status);
     let name = match status {
         FiberStatus::New => "created",
         FiberStatus::Alive => "running",
@@ -114,8 +114,8 @@ pub fn prim_coroutine_done(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -130,7 +130,7 @@ pub fn prim_coroutine_done(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let status = fiber_rc.borrow().status;
+    let status = handle.with(|fiber| fiber.status);
     (
         SIG_OK,
         Value::bool(matches!(status, FiberStatus::Dead | FiberStatus::Error)),
@@ -151,8 +151,8 @@ pub fn prim_coroutine_value(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -167,8 +167,7 @@ pub fn prim_coroutine_value(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let fiber = fiber_rc.borrow();
-    let value = fiber.signal.as_ref().map(|(_, v)| *v).unwrap_or(Value::NIL);
+    let value = handle.with(|fiber| fiber.signal.as_ref().map(|(_, v)| *v).unwrap_or(Value::NIL));
     (SIG_OK, value)
 }
 
@@ -207,8 +206,8 @@ pub fn prim_coroutine_resume(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -225,37 +224,29 @@ pub fn prim_coroutine_resume(args: &[Value]) -> (SignalBits, Value) {
 
     let resume_value = args.get(1).copied().unwrap_or(Value::EMPTY_LIST);
 
-    // Validate status
-    {
-        let fiber = fiber_rc.borrow();
-        match fiber.status {
-            FiberStatus::New | FiberStatus::Suspended => {}
-            FiberStatus::Alive => {
-                return (
-                    SIG_ERROR,
-                    error_val("error", "coroutine-resume: coroutine is already running"),
-                );
-            }
-            FiberStatus::Dead => {
-                return (
-                    SIG_ERROR,
-                    error_val(
-                        "error",
-                        "coroutine-resume: cannot resume completed coroutine",
-                    ),
-                );
-            }
-            FiberStatus::Error => {
-                return (
-                    SIG_ERROR,
-                    error_val("error", "coroutine-resume: cannot resume errored coroutine"),
-                );
-            }
+    // Validate status and store resume value
+    let status_err = handle.with_mut(|fiber| match fiber.status {
+        FiberStatus::New | FiberStatus::Suspended => {
+            fiber.signal = Some((SIG_OK, resume_value));
+            None
         }
-    }
+        FiberStatus::Alive => Some(error_val(
+            "error",
+            "coroutine-resume: coroutine is already running",
+        )),
+        FiberStatus::Dead => Some(error_val(
+            "error",
+            "coroutine-resume: cannot resume completed coroutine",
+        )),
+        FiberStatus::Error => Some(error_val(
+            "error",
+            "coroutine-resume: cannot resume errored coroutine",
+        )),
+    });
 
-    // Store resume value on fiber for the VM
-    fiber_rc.borrow_mut().signal = Some((SIG_OK, resume_value));
+    if let Some(err) = status_err {
+        return (SIG_ERROR, err);
+    }
 
     (SIG_RESUME, args[0])
 }
@@ -348,10 +339,11 @@ mod tests {
             result_val.is_fiber(),
             "make-coroutine should create a fiber"
         );
-        let fiber_rc = result_val.as_fiber().unwrap();
-        let fiber = fiber_rc.borrow();
-        assert_eq!(fiber.status, FiberStatus::New);
-        assert_eq!(fiber.mask, SIG_YIELD);
+        let handle = result_val.as_fiber().unwrap();
+        handle.with(|fiber| {
+            assert_eq!(fiber.status, FiberStatus::New);
+            assert_eq!(fiber.mask, SIG_YIELD);
+        });
     }
 
     #[test]
@@ -373,7 +365,9 @@ mod tests {
     fn test_coroutine_done_true_when_dead() {
         let closure = make_test_closure();
         let (_, co) = prim_make_coroutine(&[closure]);
-        co.as_fiber().unwrap().borrow_mut().status = FiberStatus::Dead;
+        co.as_fiber()
+            .unwrap()
+            .with_mut(|f| f.status = FiberStatus::Dead);
         let (sig, done) = prim_coroutine_done(&[co]);
         assert_eq!(sig, SIG_OK);
         assert_eq!(done, Value::bool(true));
@@ -417,7 +411,9 @@ mod tests {
     fn test_coroutine_resume_dead_returns_error() {
         let closure = make_test_closure();
         let (_, co) = prim_make_coroutine(&[closure]);
-        co.as_fiber().unwrap().borrow_mut().status = FiberStatus::Dead;
+        co.as_fiber()
+            .unwrap()
+            .with_mut(|f| f.status = FiberStatus::Dead);
         let (sig, _) = prim_coroutine_resume(&[co]);
         assert_eq!(sig, SIG_ERROR);
     }

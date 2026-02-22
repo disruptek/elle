@@ -111,9 +111,11 @@ impl fmt::Display for Value {
         }
 
         // Fiber
-        if let Some(fib) = self.as_fiber() {
-            let status = fib.borrow().status.as_str();
-            return write!(f, "<fiber:{}>", status);
+        if let Some(handle) = self.as_fiber() {
+            return match handle.try_with(|fib| fib.status.as_str()) {
+                Some(status) => write!(f, "<fiber:{}>", status),
+                None => write!(f, "<fiber:taken>"),
+            };
         }
 
         // Tuple

@@ -12,9 +12,15 @@
 //! - fiber/value: Get signal payload from last signal
 //! - fiber/bits: Get signal bits from last signal
 //! - fiber/mask: Get the fiber's signal mask
+//! - fiber/parent: Get parent fiber or nil
+//! - fiber/child: Get most recently resumed child fiber or nil
+//! - fiber/propagate: Re-raise caught signal preserving child chain
+//! - fiber/cancel: Inject error into suspended fiber
 //! - fiber?: Type predicate
 
-use crate::value::fiber::{Fiber, FiberStatus, SignalBits, SIG_ERROR, SIG_OK, SIG_RESUME};
+use crate::value::fiber::{
+    Fiber, FiberStatus, SignalBits, SIG_CANCEL, SIG_ERROR, SIG_OK, SIG_PROPAGATE, SIG_RESUME,
+};
 use crate::value::{error_val, Value};
 
 /// Return a keyword Value for a FiberStatus by interning via the
@@ -98,8 +104,8 @@ pub fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -113,36 +119,26 @@ pub fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
 
     let resume_value = args.get(1).copied().unwrap_or(Value::NIL);
 
-    // Validate fiber status
-    {
-        let fiber = fiber_rc.borrow();
-        match fiber.status {
-            FiberStatus::New | FiberStatus::Suspended => {
-                // Valid for resume
-            }
-            FiberStatus::Alive => {
-                return (
-                    SIG_ERROR,
-                    error_val("error", "fiber/resume: fiber is already running"),
-                );
-            }
-            FiberStatus::Dead => {
-                return (
-                    SIG_ERROR,
-                    error_val("error", "fiber/resume: cannot resume completed fiber"),
-                );
-            }
-            FiberStatus::Error => {
-                return (
-                    SIG_ERROR,
-                    error_val("error", "fiber/resume: cannot resume errored fiber"),
-                );
-            }
+    // Validate fiber status and store resume value
+    let status_err = handle.with_mut(|fiber| match fiber.status {
+        FiberStatus::New | FiberStatus::Suspended => {
+            fiber.signal = Some((SIG_OK, resume_value));
+            None
         }
-    }
+        FiberStatus::Alive => Some(error_val("error", "fiber/resume: fiber is already running")),
+        FiberStatus::Dead => Some(error_val(
+            "error",
+            "fiber/resume: cannot resume completed fiber",
+        )),
+        FiberStatus::Error => Some(error_val(
+            "error",
+            "fiber/resume: cannot resume errored fiber",
+        )),
+    });
 
-    // Store the resume value on the fiber for the VM to use
-    fiber_rc.borrow_mut().signal = Some((SIG_OK, resume_value));
+    if let Some(err) = status_err {
+        return (SIG_ERROR, err);
+    }
 
     // Return SIG_RESUME — VM will handle the fiber swap
     (SIG_RESUME, args[0])
@@ -200,8 +196,8 @@ pub fn prim_fiber_status(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -213,7 +209,7 @@ pub fn prim_fiber_status(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let status = fiber_rc.borrow().status;
+    let status = handle.with(|fiber| fiber.status);
     (SIG_OK, status_keyword(status))
 }
 
@@ -232,8 +228,8 @@ pub fn prim_fiber_value(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -245,12 +241,7 @@ pub fn prim_fiber_value(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let value = fiber_rc
-        .borrow()
-        .signal
-        .as_ref()
-        .map(|(_, v)| *v)
-        .unwrap_or(Value::NIL);
+    let value = handle.with(|fiber| fiber.signal.as_ref().map(|(_, v)| *v).unwrap_or(Value::NIL));
     (SIG_OK, value)
 }
 
@@ -269,8 +260,8 @@ pub fn prim_fiber_bits(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -282,12 +273,7 @@ pub fn prim_fiber_bits(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let bits = fiber_rc
-        .borrow()
-        .signal
-        .as_ref()
-        .map(|(b, _)| *b)
-        .unwrap_or(0);
+    let bits = handle.with(|fiber| fiber.signal.as_ref().map(|(b, _)| *b).unwrap_or(0));
     (SIG_OK, Value::int(bits as i64))
 }
 
@@ -305,8 +291,8 @@ pub fn prim_fiber_mask(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let fiber_rc = match args[0].as_fiber() {
-        Some(f) => f.clone(),
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
         None => {
             return (
                 SIG_ERROR,
@@ -318,7 +304,7 @@ pub fn prim_fiber_mask(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let mask = fiber_rc.borrow().mask;
+    let mask = handle.with(|fiber| fiber.mask);
     (SIG_OK, Value::int(mask as i64))
 }
 
@@ -337,6 +323,200 @@ pub fn prim_is_fiber(args: &[Value]) -> (SignalBits, Value) {
     }
 
     (SIG_OK, Value::bool(args[0].is_fiber()))
+}
+
+/// (fiber/parent fiber) → fiber | nil
+///
+/// Returns the parent fiber, or nil if the fiber has no parent
+/// (or the parent has been dropped).
+pub fn prim_fiber_parent(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("fiber/parent: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!("fiber/parent: expected fiber, got {}", args[0].type_name()),
+                ),
+            );
+        }
+    };
+
+    let parent_val = handle.with(|fiber| {
+        fiber
+            .parent
+            .as_ref()
+            .and_then(|weak| weak.upgrade())
+            .map(Value::fiber_from_handle)
+            .unwrap_or(Value::NIL)
+    });
+    (SIG_OK, parent_val)
+}
+
+/// (fiber/child fiber) → fiber | nil
+///
+/// Returns the most recently resumed child fiber, or nil if none.
+pub fn prim_fiber_child(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("fiber/child: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!("fiber/child: expected fiber, got {}", args[0].type_name()),
+                ),
+            );
+        }
+    };
+
+    let child_val = handle.with(|fiber| {
+        fiber
+            .child
+            .as_ref()
+            .map(|ch| Value::fiber_from_handle(ch.clone()))
+            .unwrap_or(Value::NIL)
+    });
+    (SIG_OK, child_val)
+}
+
+/// (fiber/propagate fiber) → suspends
+///
+/// Re-raise a caught signal from a child fiber, preserving the child chain
+/// for stack traces. The fiber must be in :error or :suspended status.
+///
+/// Returns SIG_PROPAGATE — the VM sets parent.child = fiber and propagates
+/// the fiber's signal upward.
+pub fn prim_fiber_propagate(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("fiber/propagate: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "fiber/propagate: expected fiber, got {}",
+                        args[0].type_name()
+                    ),
+                ),
+            );
+        }
+    };
+
+    // Validate: fiber must be in error or suspended state with a signal
+    let has_signal = handle.with(|fiber| {
+        matches!(fiber.status, FiberStatus::Error | FiberStatus::Suspended)
+            && fiber.signal.is_some()
+    });
+
+    if !has_signal {
+        return (
+            SIG_ERROR,
+            error_val(
+                "error",
+                "fiber/propagate: fiber must be errored or suspended with a signal",
+            ),
+        );
+    }
+
+    // Return SIG_PROPAGATE — VM will extract the child's signal and propagate
+    (SIG_PROPAGATE, args[0])
+}
+
+/// (fiber/cancel fiber value) → value
+///
+/// Inject an error into a suspended fiber. Walks the child chain to the
+/// deepest fiber and injects the error there.
+///
+/// Returns SIG_CANCEL — the VM handles execution of the cancelled fiber's
+/// error handlers.
+pub fn prim_fiber_cancel(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 2 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("fiber/cancel: expected 2 arguments, got {}", args.len()),
+            ),
+        );
+    }
+
+    let handle = match args[0].as_fiber() {
+        Some(h) => h,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!("fiber/cancel: expected fiber, got {}", args[0].type_name()),
+                ),
+            );
+        }
+    };
+
+    // Validate: fiber must be in a cancellable state
+    let status = handle.with(|fiber| fiber.status);
+    match status {
+        FiberStatus::New | FiberStatus::Suspended => {
+            // Valid for cancel — store the error value on the fiber
+            handle.with_mut(|fiber| {
+                fiber.signal = Some((SIG_ERROR, args[1]));
+            });
+        }
+        FiberStatus::Alive => {
+            return (
+                SIG_ERROR,
+                error_val("error", "fiber/cancel: cannot cancel a running fiber"),
+            );
+        }
+        FiberStatus::Dead => {
+            return (
+                SIG_ERROR,
+                error_val("error", "fiber/cancel: cannot cancel a completed fiber"),
+            );
+        }
+        FiberStatus::Error => {
+            return (
+                SIG_ERROR,
+                error_val("error", "fiber/cancel: fiber already errored"),
+            );
+        }
+    }
+
+    // Return SIG_CANCEL — VM will handle execution
+    (SIG_CANCEL, args[0])
 }
 
 #[cfg(test)]
@@ -382,10 +562,11 @@ mod tests {
         assert_eq!(sig, SIG_OK);
         assert!(fiber_val.is_fiber());
 
-        let fiber_rc = fiber_val.as_fiber().unwrap();
-        let fiber = fiber_rc.borrow();
-        assert_eq!(fiber.status, FiberStatus::New);
-        assert_eq!(fiber.mask, FIBER_SIG_ERROR | SIG_YIELD);
+        let handle = fiber_val.as_fiber().unwrap();
+        handle.with(|fiber| {
+            assert_eq!(fiber.status, FiberStatus::New);
+            assert_eq!(fiber.mask, FIBER_SIG_ERROR | SIG_YIELD);
+        });
     }
 
     #[test]
@@ -414,7 +595,10 @@ mod tests {
         let closure = make_test_closure();
         let (_, fiber_val) = prim_fiber_new(&[closure, Value::int(0)]);
         // Manually set to Dead
-        fiber_val.as_fiber().unwrap().borrow_mut().status = FiberStatus::Dead;
+        fiber_val
+            .as_fiber()
+            .unwrap()
+            .with_mut(|f| f.status = FiberStatus::Dead);
         let (sig, _) = prim_fiber_resume(&[fiber_val]);
         assert_eq!(sig, SIG_ERROR);
     }
@@ -423,7 +607,10 @@ mod tests {
     fn test_fiber_resume_alive_fiber() {
         let closure = make_test_closure();
         let (_, fiber_val) = prim_fiber_new(&[closure, Value::int(0)]);
-        fiber_val.as_fiber().unwrap().borrow_mut().status = FiberStatus::Alive;
+        fiber_val
+            .as_fiber()
+            .unwrap()
+            .with_mut(|f| f.status = FiberStatus::Alive);
         let (sig, _) = prim_fiber_resume(&[fiber_val]);
         assert_eq!(sig, SIG_ERROR);
     }
@@ -435,9 +622,9 @@ mod tests {
         let (sig, _) = prim_fiber_resume(&[fiber_val, Value::int(99)]);
         assert_eq!(sig, SIG_RESUME);
         // Check that the resume value was stored
-        let fiber_rc = fiber_val.as_fiber().unwrap();
-        let fiber = fiber_rc.borrow();
-        assert_eq!(fiber.signal, Some((SIG_OK, Value::int(99))));
+        fiber_val.as_fiber().unwrap().with(|fiber| {
+            assert_eq!(fiber.signal, Some((SIG_OK, Value::int(99))));
+        });
     }
 
     #[test]
@@ -490,7 +677,10 @@ mod tests {
                 FiberStatus::Dead,
                 FiberStatus::Error,
             ] {
-                fiber_val.as_fiber().unwrap().borrow_mut().status = status;
+                fiber_val
+                    .as_fiber()
+                    .unwrap()
+                    .with_mut(|f| f.status = status);
                 let (sig, val) = prim_fiber_status(&[fiber_val]);
                 assert_eq!(sig, SIG_OK);
                 assert!(
@@ -514,7 +704,10 @@ mod tests {
         assert_eq!(val, Value::NIL);
 
         // Set a signal
-        fiber_val.as_fiber().unwrap().borrow_mut().signal = Some((SIG_YIELD, Value::int(42)));
+        fiber_val
+            .as_fiber()
+            .unwrap()
+            .with_mut(|f| f.signal = Some((SIG_YIELD, Value::int(42))));
         let (sig, val) = prim_fiber_value(&[fiber_val]);
         assert_eq!(sig, SIG_OK);
         assert_eq!(val, Value::int(42));
@@ -531,7 +724,10 @@ mod tests {
         assert_eq!(val, Value::int(0));
 
         // Set a signal
-        fiber_val.as_fiber().unwrap().borrow_mut().signal = Some((SIG_YIELD, Value::int(42)));
+        fiber_val
+            .as_fiber()
+            .unwrap()
+            .with_mut(|f| f.signal = Some((SIG_YIELD, Value::int(42))));
         let (sig, val) = prim_fiber_bits(&[fiber_val]);
         assert_eq!(sig, SIG_OK);
         assert_eq!(val, Value::int(SIG_YIELD as i64));
