@@ -2,7 +2,7 @@
 
 Reference: docs/MACROS.md
 
-Four PRs, each independently shippable.
+Three PRs, each independently shippable.
 
 ---
 
@@ -34,150 +34,273 @@ Four PRs, each independently shippable.
 
 ---
 
-## PR 2: Tier 1 — Compile-Time Gensym
+## PR 2: VM-Based Macro Expansion
 
 ### Design
 
-The `(let ((tmp (gensym))) ...)` pattern requires evaluating `let` at
-expansion time, which the Expander can't do. Instead, we add
-`with-gensyms` — a special form recognized by `handle_defmacro` that
-declares names to be auto-gensymed at each expansion:
+All macros are procedural. Macro bodies are normal Elle code that runs
+in the VM during expansion. The body receives its arguments as quoted
+data and returns a value that becomes code. No separate template
+substitution path — quasiquote in macro bodies produces `(list ...)`
+calls that the VM evaluates.
 
 ```lisp
-(defmacro swap (a b)
-  (with-gensyms (tmp)
-    `(let ((,tmp ,a)) (set! ,a ,b) (set! ,b ,tmp))))
+;; Simple template macro — works unchanged
+(defmacro when (test body)
+  `(if ,test ,body nil))
+
+;; Procedural macro with gensym — now possible
+(defmacro try (body handler)
+  (let ((f (gensym "f"))
+        (e (gensym "e")))
+    `(let ((,f (fiber/new (fn () ,body) 1)))
+       (fiber/resume ,f nil)
+       (if (= (fiber/status ,f) :error)
+         (let ((,e (fiber/value ,f)))
+           (,handler ,e))
+         (fiber/value ,f)))))
+
+;; Conditional expansion — now possible
+(defmacro assert (test . args)
+  (if (empty? args)
+    `(if (not ,test) (error "assertion failed"))
+    `(if (not ,test) (error ,(first args)))))
 ```
 
-Gensym names are treated as additional macro parameters that are
-automatically filled with fresh symbols at each expansion. The existing
-substitution machinery handles them with zero changes.
+The Expander gets access to `&mut SymbolTable` and `&mut VM` via a
+context parameter. At macro call time:
 
-Tier 3's procedural evaluator will make `with-gensyms` unnecessary
-(macros can use `let` + `gensym` directly). Existing `with-gensyms`
-macros will be migrated at that point — no backward-compatibility
-machinery.
+1. Convert each argument `Syntax` → `Value` via `to_value()`
+2. Build a `Syntax` let-expression binding params to quoted arg values
+3. Compile and execute via a new `eval_syntax()` pipeline entry point
+4. Convert result `Value` → `Syntax` via `from_value()`
+5. Add intro scope, continue expanding
 
-### Step 1: Add gensym to the Expander
+The `eval_syntax()` function enters the pipeline at the Syntax stage
+(skipping the Reader), reusing the same Expander for nested macro calls.
+
+### Step 1: Add `eval_syntax` to the pipeline
+
+**src/pipeline.rs** — new function:
+
+```rust
+/// Compile and execute a Syntax tree directly.
+/// Used by the macro expander to run macro bodies in the VM.
+pub fn eval_syntax(
+    syntax: Syntax,
+    expander: &mut Expander,
+    symbols: &mut SymbolTable,
+    vm: &mut VM,
+) -> Result<Value, String> {
+    let expanded = expander.expand(syntax, symbols, vm)?;
+
+    let primitive_effects = get_primitive_effects(symbols);
+    let mut analyzer = Analyzer::new_with_primitive_effects(symbols, primitive_effects);
+    let mut analysis = analyzer.analyze(&expanded)?;
+    mark_tail_calls(&mut analysis.hir);
+
+    let intrinsics = lir::intrinsics::build_intrinsics(symbols);
+    let mut lowerer = Lowerer::new()
+        .with_bindings(analysis.bindings)
+        .with_intrinsics(intrinsics);
+    let lir_func = lowerer.lower(&analysis.hir)?;
+
+    let symbol_snapshot = symbols.all_names();
+    let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
+    let bytecode = emitter.emit(&lir_func);
+
+    vm.execute(&bytecode).map_err(|e| e.to_string())
+}
+```
+
+Update `compile_new`, `compile_all_new`, `eval_new`, `analyze_new`,
+`analyze_all_new` to pass `&mut SymbolTable` and `&mut VM` through to
+`expander.expand()`. For analysis-only functions (`analyze_new`,
+`analyze_all_new`), the VM is needed only if macros are procedural —
+these functions will need a VM parameter too.
+
+### Step 2: Thread context through the Expander
 
 **src/syntax/expand/mod.rs**
-- Add `gensym_counter: u32` field to `Expander`
-- Initialize to 0 in `new()`
-- Add method: `fn gensym(&mut self, prefix: &str) -> String` returning
-  `format!("__G{}{}", prefix, id)` with incrementing counter
 
-### Step 2: Add `with-gensyms` to MacroDef
+Change `expand()` signature:
+
+```rust
+pub fn expand(
+    &mut self,
+    syntax: Syntax,
+    symbols: &mut SymbolTable,
+    vm: &mut VM,
+) -> Result<Syntax, String>
+```
+
+All internal methods (`expand_list`, `expand_vector`, `handle_defmacro`,
+`expand_macro_call`, etc.) get the same parameters threaded through.
+
+### Step 3: Rewrite `expand_macro_call` to use the VM
+
+**src/syntax/expand/macro_expand.rs**
+
+Replace template substitution with VM evaluation:
+
+```rust
+pub(super) fn expand_macro_call(
+    &mut self,
+    macro_def: &MacroDef,
+    args: &[Syntax],
+    call_site: &Syntax,
+    symbols: &mut SymbolTable,
+    vm: &mut VM,
+) -> Result<Syntax, String> {
+    // 1. Check arity
+    if args.len() != macro_def.params.len() {
+        return Err(format!(...));
+    }
+
+    // 2. Build let-expression: (let ((p1 '<a1>) (p2 '<a2>)) body)
+    let span = call_site.span.clone();
+    let bindings: Vec<Syntax> = macro_def.params.iter().zip(args)
+        .map(|(param, arg)| {
+            let quoted_arg = Syntax::new(
+                SyntaxKind::Quote(Box::new(arg.to_value_syntax(symbols))),
+                span.clone(),
+            );
+            Syntax::new(
+                SyntaxKind::List(vec![
+                    Syntax::new(SyntaxKind::Symbol(param.clone()), span.clone()),
+                    quoted_arg,
+                ]),
+                span.clone(),
+            )
+        })
+        .collect();
+
+    let let_expr = Syntax::new(
+        SyntaxKind::List(vec![
+            Syntax::new(SyntaxKind::Symbol("let".to_string()), span.clone()),
+            Syntax::new(SyntaxKind::List(bindings), span.clone()),
+            macro_def.template.clone(),
+        ]),
+        span.clone(),
+    );
+
+    // 3. Compile and execute in the VM
+    let result_value = pipeline::eval_syntax(
+        let_expr, self, symbols, vm
+    )?;
+
+    // 4. Convert result back to Syntax
+    let result_syntax = Syntax::from_value(
+        &result_value, symbols, span.clone()
+    )?;
+
+    // 5. Add intro scope for hygiene
+    let intro_scope = self.fresh_scope();
+    let hygienized = self.add_scope_recursive(result_syntax, intro_scope);
+
+    // 6. Continue expanding
+    self.expand(hygienized, symbols, vm)
+}
+```
+
+Note on quoting: arguments are passed as quoted values so the macro
+body receives data, not code. `to_value_syntax` converts a `Syntax`
+tree to a `Syntax` that, when evaluated, produces the corresponding
+`Value`. For simple cases this is just `Quote(arg)`. For cases where
+the arg contains unresolvable symbols, we may need `Syntax::to_value()`
+followed by a literal value embedding. The exact mechanism needs
+prototyping — see open questions.
+
+### Step 4: Delete template substitution machinery
+
+**src/syntax/expand/macro_expand.rs**
+
+Remove:
+- `substitute()` — replaced by VM evaluation
+- `substitute_quasiquote()` — replaced by VM evaluation
+- `eval_quasiquote_to_syntax()` — replaced by VM evaluation
+
+The quasiquote-to-code path (`quasiquote.rs`) stays — it's used for
+non-macro quasiquotes (runtime list construction).
+
+### Step 5: Add variadic macro parameters
 
 **src/syntax/expand/mod.rs**
 
+Extend `MacroDef`:
 ```rust
 pub struct MacroDef {
     pub name: String,
     pub params: Vec<String>,
-    pub gensyms: Vec<String>,  // NEW
+    pub rest_param: Option<String>,
     pub template: Syntax,
     pub definition_scope: ScopeId,
 }
 ```
 
-In `handle_defmacro`: when body is `(with-gensyms (names...) template)`,
-extract gensym names and store the inner template. Otherwise `gensyms`
-is empty (backward compatible).
+In `handle_defmacro`: detect dotted-pair syntax `(a b . rest)` in the
+parameter list. At call time, bind excess arguments as a quoted list.
 
-### Step 3: Generate gensyms during expansion
+### Step 6: REPL Expander persistence
 
-**src/syntax/expand/macro_expand.rs** — in `expand_macro_call`:
+**src/pipeline.rs** — change `compile_new` and `eval_new` to accept an
+optional `&mut Expander`. When provided, use it instead of creating a
+fresh one. The REPL holds a persistent Expander so macros defined in one
+input are available in the next.
 
-After arity check, before substitution:
-```rust
-let mut gensym_args: Vec<Syntax> = Vec::new();
-for prefix in &macro_def.gensyms {
-    let name = self.gensym(prefix);
-    gensym_args.push(Syntax::new(SyntaxKind::Symbol(name), call_site.span.clone()));
-}
+`compile_all_new` already shares an Expander across forms — just thread
+the context through.
 
-let mut all_params = macro_def.params.clone();
-all_params.extend(macro_def.gensyms.iter().cloned());
-let mut all_args: Vec<Syntax> = args.to_vec();
-all_args.extend(gensym_args);
-
-let substituted = self.substitute(&macro_def.template, &all_params, &all_args);
-```
-
-### Step 4: Handle standalone `(gensym)` in expand()
-
-**src/syntax/expand/mod.rs** — in `expand()`, add `gensym` to the
-precedence chain (after `expand-macro`, before `define` shorthand).
-Produces a fresh symbol at expansion time. Limited utility until Tier 3
-but harmless and useful for testing.
-
-### Step 5: REPL Expander persistence
-
-**src/pipeline.rs** — change `compile_new` to accept an optional
-`&mut Expander` parameter. When provided, use it instead of creating a
-fresh one. The REPL (`main.rs`, `run_repl`) holds a persistent `Expander`
-and passes it to `compile_new` for each input. `eval_new` delegates to
-`compile_new`, so it gets the same treatment. File execution via
-`compile_all_new` already shares an Expander across forms — no change
-needed there.
-
-### Step 6: Tests
+### Step 7: Tests
 
 **src/syntax/expand/tests.rs**:
-- `test_gensym_unique`: two calls produce different names
-- `test_gensym_with_prefix`: prefix appears in name
-- `test_defmacro_with_gensyms`: `with-gensyms` stores and expands correctly
-- `test_gensyms_fresh_per_expansion`: two expansions produce different gensyms
+- `test_vm_macro_simple_template`: `(defmacro when ...)` works via VM
+- `test_vm_macro_with_gensym`: macro body calls `(gensym)` successfully
+- `test_vm_macro_with_if`: conditional expansion works
+- `test_vm_macro_with_let`: let-bindings in macro body work
 
-**tests/integration/pipeline_point.rs**:
-- `test_macro_swap_with_gensym`: swap doesn't capture caller's `tmp`
-- Counterfactual: remove `with-gensyms`, verify capture occurs
+**tests/integration/macros.rs** (new file):
+- `test_try_catch_macro`: try/catch expands and executes correctly
+- `test_swap_with_gensym`: swap doesn't capture caller's variables
+- `test_macro_error_reporting`: bad macro body produces clear error
+- `test_variadic_macro`: rest params work
+- `test_existing_macros`: all existing macro tests still pass
 
-### Step 7: Update docs
+Counterfactual: break gensym, verify capture occurs in swap
 
-- `src/syntax/AGENTS.md` — document `with-gensyms`
-- `docs/MACROS.md` — update Tier 1 with actual syntax
-- `docs/DEBUGGING.md` — remove "blocked" note from bench macro
+### Step 8: Implement key macros
+
+**lib/macros.lisp** (loaded by stdlib):
+- `try`/`catch` — fiber-based exception handling (see docs/EXCEPT.md)
+- `defer` — cleanup on scope exit (see docs/JANET.md)
+- `with` — resource management (see docs/JANET.md)
+- `bench` — timing macro (see docs/DEBUGGING.md)
+
+### Step 9: Update docs
+
+- `docs/MACROS.md` — rewrite to reflect VM-based expansion
+- `docs/EXCEPT.md` — update try/catch as implemented
+- `docs/DEBUGGING.md` — update bench as implemented
+- `src/syntax/AGENTS.md` — document new expansion model
+- `src/syntax/expand/AGENTS.md` — if exists, update
 
 ---
 
-## PR 3: Tier 2 — Sets-of-Scopes Hygiene
+## PR 3: Sets-of-Scopes Hygiene
 
-### Step 1: Fix scope stamping in the Expander
+### Design
 
-**src/syntax/expand/macro_expand.rs**
+With VM-based expansion, gensym provides manual hygiene. This PR adds
+automatic hygiene via scope-aware binding resolution. Macro-introduced
+bindings can't capture call-site names and vice versa.
 
-Scope the template BEFORE substitution, not after. Arguments from the
-call site replace scoped template nodes with their own unscoped versions:
+### Step 1: Fix scope stamping
 
-```rust
-pub(super) fn expand_macro_call(...) -> Result<Syntax, String> {
-    // ... arity check, gensym generation ...
-
-    let intro_scope = self.fresh_scope();
-
-    // Scope template BEFORE substitution
-    let scoped_template = self.add_scope_recursive(macro_def.template.clone(), intro_scope);
-
-    // Substitute — call-site args replace scoped nodes, keeping their own scopes
-    let substituted = self.substitute(&scoped_template, &all_params, &all_args);
-
-    // Quasiquote evaluation
-    let resolved = match &substituted.kind {
-        SyntaxKind::Quasiquote(inner) => self.eval_quasiquote_to_syntax(inner)?,
-        _ => substituted,
-    };
-
-    // No post-substitution scope stamping — already done
-    self.expand(resolved)
-}
-```
-
-**Why this works**: `substitute_quasiquote` wraps substituted args in
-`Unquote(...)` with `template.scopes.clone()` (which now includes intro
-scope), but `eval_quasiquote_to_syntax` discards the Unquote wrapper and
-returns the inner arg with its original scopes. Template-originated
-symbols (like `let`, `set!`, `tmp`) keep the intro scope.
+The intro scope must be added to the macro result *after* VM evaluation
+converts the Value back to Syntax. Step 5 of `expand_macro_call` above
+already does this via `add_scope_recursive`. Call-site arguments (which
+were quoted data during evaluation) get reconstructed from Values without
+the intro scope — they keep their original (empty) scopes.
 
 ### Step 2: Thread scope sets into the Analyzer
 
@@ -223,186 +346,107 @@ fn is_subset(subset: &[ScopeId], superset: &[ScopeId]) -> bool {
 }
 ```
 
-**Backward compatibility**: empty scopes `[]` is a subset of everything,
-so pre-expansion code (empty scopes) works identically to before.
+**Pre-expansion code**: empty scopes `[]` is a subset of everything,
+so code that hasn't been through macro expansion works identically.
 
-Change `lookup_in_current_scope()`:
-```rust
-fn lookup_in_current_scope(&self, name: &str, ref_scopes: &[ScopeId]) -> Option<BindingId>
-```
-Find the best scope-compatible match in the current scope only.
-
-Change `is_binding_in_current_scope()`: no change needed — searches by
-`BindingId`, not by name.
-
-### Step 3: Update parent_captures lookup path
-
-**src/hir/analyze/mod.rs** — lines 293-332
-
-The parent_captures path currently matches by `SymbolId`. For Tier 2,
-it needs scope-aware matching. Change to compare both name AND scope
-sets. The `BindingInfo` struct may need a `scopes: Vec<ScopeId>` field,
-or the scope set can be stored alongside the capture info.
-
-### Step 4: Pass scope sets through ALL bind/lookup call sites
-
-Complete list of call sites (verified against codebase):
+### Step 3: Pass scope sets through ALL bind/lookup call sites
 
 **`bind()` call sites** — all need `scopes` parameter added:
 
-| File | Function | Line | Source of scopes |
-|------|----------|------|-----------------|
-| `forms.rs` | `analyze_begin` (two-pass) | 163 | Need to extract from define's name syntax node. Change `is_define_form` to return `(&str, &[ScopeId])` |
-| `forms.rs` | `analyze_for` (keyword `each`) | 259 | `items[1].scopes` (loop variable) |
-| `binding.rs` | `analyze_let` | 41 | `pair[0].scopes` |
-| `binding.rs` | `analyze_let_star` | 106 | `pair[0].scopes` |
-| `binding.rs` | `analyze_letrec` | 164 | `pair[0].scopes` |
-| `binding.rs` | `analyze_define` (local) | 256 | `items[1].scopes` |
-| `binding.rs` | `analyze_define` (global) | 288 | `&[]` (globals resolve by symbol name at runtime, scopes irrelevant) |
-| `binding.rs` | `analyze_lambda` | 391 | `param.scopes` |
-| `special.rs` | `analyze_pattern` | 79 | `syntax.scopes` (pattern variable) |
+| File | Function | Source of scopes |
+|------|----------|-----------------|
+| `forms.rs` | `analyze_begin` (two-pass) | define's name syntax node |
+| `forms.rs` | `analyze_for` | `items[1].scopes` (loop variable) |
+| `binding.rs` | `analyze_let` | `pair[0].scopes` |
+| `binding.rs` | `analyze_let_star` | `pair[0].scopes` |
+| `binding.rs` | `analyze_letrec` | `pair[0].scopes` |
+| `binding.rs` | `analyze_define` (local) | `items[1].scopes` |
+| `binding.rs` | `analyze_define` (global) | `&[]` (globals are runtime) |
+| `binding.rs` | `analyze_lambda` | `param.scopes` |
+| `special.rs` | `analyze_pattern` | `syntax.scopes` |
 
 **`lookup()` call sites** — all need `ref_scopes` parameter added:
 
-| File | Function | Line | Source of scopes |
-|------|----------|------|-----------------|
-| `forms.rs` | `analyze_expr` (Symbol) | 24 | `syntax.scopes` |
-| `binding.rs` | `analyze_define` | 251 | `items[1].scopes` (via `lookup_in_current_scope`) |
-| `binding.rs` | `analyze_set` | 330 | `items[1].scopes` |
+| File | Function | Source of scopes |
+|------|----------|-----------------|
+| `forms.rs` | `analyze_expr` (Symbol) | `syntax.scopes` |
+| `binding.rs` | `analyze_define` | `items[1].scopes` |
+| `binding.rs` | `analyze_set` | `items[1].scopes` |
 
-### Step 5: Set `definition_scope` correctly
+### Step 4: Tests
 
-**src/syntax/expand/mod.rs** — in `handle_defmacro`:
-- Track a `current_expansion_scope: ScopeId` on the Expander (default 0)
-- Set `definition_scope` to the current expansion scope
-- During expansion, add `definition_scope` to free variables in the
-  template (variables that are NOT parameters and NOT gensyms). This
-  makes them resolve in the macro's definition environment.
-
-Note: full referential transparency is complex. For the initial Tier 2
-implementation, defer this to a follow-up. The scope-stamping fix alone
-provides the critical "no accidental capture" property. Referential
-transparency can be added incrementally.
-
-### Step 6: Tests
-
-**New test file**: `tests/integration/hygiene.rs`
+**tests/integration/hygiene.rs** (new file):
 
 Core hygiene tests:
 - `test_macro_no_capture`: macro `tmp` doesn't shadow caller's `tmp`
 - `test_macro_no_leak`: caller can't see macro's internal bindings
 - `test_nested_macro_hygiene`: nested expansions with overlapping names
-- `test_backward_compat_no_macros`: non-macro code works identically
-- `test_backward_compat_existing_macros`: existing macros still work
+- `test_non_macro_code`: non-macro code works identically
 
-Capture interaction tests (highest risk area):
+Capture interaction tests:
 - `test_macro_closure_captures_callsite`: macro-generated closure captures
   a call-site variable correctly
-- `test_macro_closure_across_boundary`: macro code inside a closure that
-  captures across a function boundary
 - `test_set_through_macro`: `set!` on call-site variable works in macro
 - `test_nested_closure_macro`: nested macro expansions generating closures
 
-LSP/linter smoke tests:
-- `test_analyze_all_with_macros`: `analyze_all_new` produces correct
-  bindings for macro-expanded code
-- Verify `elle-lint` and `elle-lsp` still build and pass their tests
+Counterfactual: remove scope stamping, verify capture occurs
 
-Counterfactual: revert scope-before-substitution, verify capture occurs
-
-### Step 7: Update docs
+### Step 5: Update docs
 
 - `src/hir/AGENTS.md` — document scope-aware lookup
-- `src/syntax/AGENTS.md` — fix hygiene section (now accurate)
-- `docs/MACROS.md` — update Tier 2 as implemented
+- `src/syntax/AGENTS.md` — update hygiene section
+- `docs/MACROS.md` — update hygiene section as implemented
 
 ---
 
-## PR 4: Tier 3 — Procedural Macros
+## Open Questions
 
-### Step 1: Create SyntaxEvaluator
+1. **Argument quoting mechanism.** How exactly do we pass Syntax
+   arguments to the VM as data? The plan says `Quote(arg)`, but if `arg`
+   contains symbols that aren't bound in the macro body's scope, the
+   Analyzer will reject them. We may need to convert `Syntax` → `Value`
+   via `to_value()` and embed the Value as a constant, bypassing
+   analysis of the argument content. This needs prototyping.
 
-**src/syntax/expand/eval.rs** (new file, ~300 lines)
+2. **Circular dependency.** `expand_macro_call` calls `eval_syntax`
+   which calls `expander.expand()`. This is mutual recursion between the
+   Expander and the pipeline. The borrow checker should allow it since
+   `eval_syntax` is a free function taking `&mut Expander`, and
+   `expand_macro_call` passes `self`. But this needs verification.
 
-Tree-walking interpreter over `Syntax`. Environment is
-`HashMap<String, Syntax>`. Takes `&mut Expander` for `gensym()` access.
+3. **Performance.** Every macro call compiles and executes bytecode.
+   For hot macros (e.g., `when` used hundreds of times), this could be
+   slow. Mitigation: cache compiled bytecode per MacroDef. The body
+   doesn't change between calls — only the argument bindings do. We
+   could pre-compile the body at `defmacro` time and replay it with
+   different globals for each call.
 
-Supports: literals, symbols (env lookup), `if`, `let`, `begin`, `fn`
-(closures), application, `quote`, `quasiquote`/`unquote`, `gensym`,
-`cons`/`car`/`cdr`/`list`/`append`, `empty?`/`first`/`rest`,
-`symbol?`/`list?`/`string?`, `=`, `error`.
+4. **Analysis-only paths.** `analyze_new` and `analyze_all_new` are used
+   by the LSP and linter. They currently don't need a VM. With
+   procedural macros, they do — macro bodies must be evaluated to
+   produce the expanded code that gets analyzed. This means the LSP
+   needs to create a VM at startup.
 
-Returns `Result<Syntax, String>` with source location from the macro
-definition for error messages.
-
-### Step 2: Change expand_macro_call to use the evaluator
-
-**src/syntax/expand/macro_expand.rs**
-
-Replace template substitution with evaluation:
-```rust
-let mut env = HashMap::new();
-for (param, arg) in macro_def.params.iter().zip(args) {
-    env.insert(param.clone(), arg.clone());
-}
-let result = self.eval_syntax(&macro_def.template, &mut env)?;
-```
-
-Backward compatibility: quasiquote bodies evaluate identically to the
-old substitution path — unquote looks up names in the environment.
-
-### Step 3: Migrate `with-gensyms` macros
-
-With the evaluator, macros can use `(let ((tmp (gensym "tmp"))) ...)`
-directly. Migrate existing `with-gensyms` macros to use `let` + `gensym`.
-Remove `MacroDef.gensyms` field. Per AGENTS.md: no backward-compatibility
-machinery.
-
-### Step 4: Add variadic macro parameters
-
-Extend `MacroDef` with `rest_param: Option<String>`. Detect dotted-pair
-syntax in parameter list. Bind excess arguments as a Syntax list.
-
-### Step 5: Tests
-
-- Procedural macro with `if`, recursion, list processing
-- Gensym in procedural body
-- Error handling (bad macro body → clear error with location)
-- Variadic macros
-- Backward compat: existing template macros still work
-
-### Step 6: Implement key macros
-
-**lib/macros.lisp** (loaded by stdlib):
-- `try`/`catch` — fiber-based exception handling (see docs/EXCEPT.md)
-- `defer` — cleanup on scope exit
-- `bench` — timing macro (see docs/DEBUGGING.md)
-
-### Step 7: Update docs
-
-- `docs/MACROS.md` — update Tier 3 as implemented
-- `docs/EXCEPT.md` — update try/catch as implemented
-- `docs/DEBUGGING.md` — update bench as implemented
-- `src/syntax/AGENTS.md` — document SyntaxEvaluator
-
----
+5. **Error provenance.** When a macro body errors (type mismatch, unbound
+   variable), the error should point to the macro definition, not the
+   call site. The `eval_syntax` path produces errors with spans from the
+   macro body's Syntax nodes, which is correct. But the wrapping
+   let-expression has synthetic spans — errors in argument binding might
+   be confusing.
 
 ## Risk Assessment
 
-**Highest risk: PR 3 (Tier 2) `lookup()` rewrite.** This is the most
-complex function in the Analyzer (~110 lines of capture tracking, function
+**Highest risk: PR 2 argument quoting (open question 1).** The mechanism
+for passing Syntax arguments as data to the VM is the least understood
+part. If `Quote(arg)` doesn't work because the Analyzer rejects unbound
+symbols inside quotes, we need an alternative (constant embedding,
+special syntax form, or a pre-analysis pass that marks quoted regions).
+
+**Second risk: PR 3 `lookup()` rewrite.** This is the most complex
+function in the Analyzer (~110 lines of capture tracking, function
 boundary detection, transitive capture resolution). The scope-aware
-matching adds a new dimension. Write capture-interaction tests FIRST.
+matching adds a new dimension.
 
-**Second risk: PR 3 scope stamping in quasiquote path.** Three interacting
-functions (`substitute`, `substitute_quasiquote`, `eval_quasiquote_to_syntax`)
-with scopes flowing through all three. The `template.scopes.clone()` calls
-in wrapper node construction could carry intro scopes to wrong places.
-Test `UnquoteSplicing` specifically.
-
-**Lower risk: PR 2 (Tier 1).** Additive change, no existing behavior
-modified. The `with-gensyms` mechanism is clean (gensyms as auto-filled
-parameters).
-
-**Lowest risk: PR 1 (cleanup).** Removing unused code. Full test suite
-catches any accidental dependency.
+**Lower risk: PR 2 pipeline threading.** Mechanical change — adding
+`symbols` and `vm` parameters to many functions. Tedious but
+straightforward. The compiler catches missing parameters.
