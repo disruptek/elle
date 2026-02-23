@@ -1,4 +1,18 @@
 //! Macro call expansion via VM evaluation
+//!
+//! The macro body is compiled and executed in the real VM. Arguments are
+//! quoted and bound via `let`. The result Value is converted back to Syntax
+//! via `from_value()`.
+//!
+//! Known limitations:
+//! - `from_value()` creates Syntax with empty scope sets, so scope marks
+//!   from the original arguments are lost through the Value round-trip.
+//!   PR 3 (sets-of-scopes hygiene) must address this.
+//! - Macros cannot return improper lists (e.g. `(cons 1 2)`). The
+//!   `from_value()` conversion requires proper lists.
+//! - `gensym` currently returns a string, not a symbol. Using gensym
+//!   results in quasiquote templates produces string literals, not
+//!   symbol bindings. See #306.
 
 use super::{Expander, MacroDef, SyntaxKind, MAX_MACRO_EXPANSION_DEPTH};
 use crate::symbol::SymbolTable;

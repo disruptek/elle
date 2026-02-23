@@ -590,3 +590,81 @@ fn test_keyword_not_qualified() {
     // Keywords are stored without the leading colon in SyntaxKind::Keyword
     assert!(matches!(result.kind, SyntaxKind::Keyword(ref s) if s == "foo"));
 }
+
+/// Macro body uses `if` to conditionally generate different code.
+/// This requires VM evaluation — template substitution can't do this.
+#[test]
+fn test_macro_with_conditional_body() {
+    let mut expander = Expander::new();
+    let (mut symbols, mut vm) = setup();
+    let span = Span::new(0, 50, 1, 1);
+
+    // (defmacro maybe-negate (x negate?)
+    //   (if negate? `(- ,x) x))
+    let defmacro_syntax = Syntax::new(
+        SyntaxKind::List(vec![
+            Syntax::new(SyntaxKind::Symbol("defmacro".to_string()), span.clone()),
+            Syntax::new(SyntaxKind::Symbol("maybe-negate".to_string()), span.clone()),
+            Syntax::new(
+                SyntaxKind::List(vec![
+                    Syntax::new(SyntaxKind::Symbol("x".to_string()), span.clone()),
+                    Syntax::new(SyntaxKind::Symbol("negate?".to_string()), span.clone()),
+                ]),
+                span.clone(),
+            ),
+            // Body: (if negate? `(- ,x) x)
+            Syntax::new(
+                SyntaxKind::List(vec![
+                    Syntax::new(SyntaxKind::Symbol("if".to_string()), span.clone()),
+                    Syntax::new(SyntaxKind::Symbol("negate?".to_string()), span.clone()),
+                    Syntax::new(
+                        SyntaxKind::Quasiquote(Box::new(Syntax::new(
+                            SyntaxKind::List(vec![
+                                Syntax::new(SyntaxKind::Symbol("-".to_string()), span.clone()),
+                                Syntax::new(
+                                    SyntaxKind::Unquote(Box::new(Syntax::new(
+                                        SyntaxKind::Symbol("x".to_string()),
+                                        span.clone(),
+                                    ))),
+                                    span.clone(),
+                                ),
+                            ]),
+                            span.clone(),
+                        ))),
+                        span.clone(),
+                    ),
+                    Syntax::new(SyntaxKind::Symbol("x".to_string()), span.clone()),
+                ]),
+                span.clone(),
+            ),
+        ]),
+        span.clone(),
+    );
+    expander
+        .expand(defmacro_syntax, &mut symbols, &mut vm)
+        .unwrap();
+
+    // (maybe-negate 42 #t) should expand to (- 42) because negate? is #t
+    let call_true = Syntax::new(
+        SyntaxKind::List(vec![
+            Syntax::new(SyntaxKind::Symbol("maybe-negate".to_string()), span.clone()),
+            Syntax::new(SyntaxKind::Int(42), span.clone()),
+            Syntax::new(SyntaxKind::Bool(true), span.clone()),
+        ]),
+        span.clone(),
+    );
+    let result = expander.expand(call_true, &mut symbols, &mut vm).unwrap();
+    assert_eq!(result.to_string(), "(- 42)");
+
+    // (maybe-negate 42 #f) should expand to just 42 because negate? is #f
+    let call_false = Syntax::new(
+        SyntaxKind::List(vec![
+            Syntax::new(SyntaxKind::Symbol("maybe-negate".to_string()), span.clone()),
+            Syntax::new(SyntaxKind::Int(42), span.clone()),
+            Syntax::new(SyntaxKind::Bool(false), span.clone()),
+        ]),
+        span.clone(),
+    );
+    let result = expander.expand(call_false, &mut symbols, &mut vm).unwrap();
+    assert_eq!(result.to_string(), "42");
+}
