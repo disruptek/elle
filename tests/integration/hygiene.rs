@@ -258,3 +258,132 @@ fn test_gensym_produces_unique_bindings() {
     "#;
     assert_eq!(eval(code).unwrap(), Value::int(3));
 }
+
+// ============================================================================
+// SECTION 7: datum->syntax — hygiene escape hatch
+// ============================================================================
+
+#[test]
+fn test_anaphoric_if() {
+    // datum->syntax creates an `it` binding visible at the call site.
+    // This is the canonical anaphoric macro use case.
+    let code = r#"
+        (defmacro aif (test then else)
+          `(let ((,(datum->syntax test 'it) ,test))
+             (if ,(datum->syntax test 'it) ,then ,else)))
+
+        (aif 42 it 0)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(42));
+}
+
+#[test]
+fn test_anaphoric_if_false_branch() {
+    // When the test is falsy, the else branch is taken.
+    let code = r#"
+        (defmacro aif (test then else)
+          `(let ((,(datum->syntax test 'it) ,test))
+             (if ,(datum->syntax test 'it) ,then ,else)))
+
+        (aif #f 42 0)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(0));
+}
+
+#[test]
+fn test_anaphoric_if_with_expression() {
+    // datum->syntax works when the test is a compound expression.
+    let code = r#"
+        (defmacro aif (test then else)
+          `(let ((,(datum->syntax test 'it) ,test))
+             (if ,(datum->syntax test 'it) ,then ,else)))
+
+        (aif (+ 1 2) (+ it 10) 0)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(13));
+}
+
+#[test]
+fn test_anaphoric_if_no_capture_of_outer_it() {
+    // An outer `it` binding should not be affected by the macro's `it`.
+    let code = r#"
+        (defmacro aif (test then else)
+          `(let ((,(datum->syntax test 'it) ,test))
+             (if ,(datum->syntax test 'it) ,then ,else)))
+
+        (let ((it 999))
+          (aif 42 it 0))
+    "#;
+    // The `it` in the then-branch refers to the macro-introduced `it` (42),
+    // not the outer `it` (999), because the macro's let binding is closer.
+    assert_eq!(eval(code).unwrap(), Value::int(42));
+}
+
+#[test]
+fn test_datum_to_syntax_with_symbol() {
+    // datum->syntax with a symbol datum creates a binding visible at call site.
+    let code = r#"
+        (defmacro bind-as-x (val body)
+          `(let ((,(datum->syntax val 'x) ,val)) ,body))
+
+        (bind-as-x 100 (+ x 1))
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(101));
+}
+
+#[test]
+fn test_datum_to_syntax_with_syntax_context() {
+    // When the context IS a syntax object (symbol argument), datum->syntax
+    // copies its scopes. The scope_exempt flag prevents the intro scope from
+    // being added, so the binding resolves correctly.
+    let code = r#"
+        (defmacro bind-it (name val body)
+          `(let ((,(datum->syntax name 'it) ,val)) ,body))
+
+        (bind-it x 42 (+ it 1))
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(43));
+}
+
+#[test]
+fn test_datum_to_syntax_with_compound_datum() {
+    // datum->syntax with a list datum — set_scopes_recursive must recurse
+    // into the list structure, not just set scopes on the outer node.
+    let code = r#"
+        (defmacro inject-list (ctx)
+          `(let ((,(datum->syntax ctx 'result) (list 1 2 3))) result))
+
+        (inject-list x)
+    "#;
+    let result = eval(code).unwrap();
+    let items = result.list_to_vec().unwrap();
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0], Value::int(1));
+}
+
+// ============================================================================
+// SECTION 8: syntax->datum — scope stripping
+// ============================================================================
+
+#[test]
+fn test_syntax_to_datum_strips_scopes() {
+    // syntax->datum on a syntax object returns the plain value.
+    // Inside a macro, the argument is a syntax object; stripping it
+    // gives the underlying symbol/value.
+    let code = r#"
+        (defmacro get-datum (x)
+          (syntax->datum x))
+
+        (get-datum 42)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(42));
+}
+
+#[test]
+fn test_syntax_to_datum_non_syntax_passthrough() {
+    // syntax->datum on a non-syntax value returns it unchanged.
+    let code = r#"
+        (syntax->datum 42)
+    "#;
+    assert_eq!(eval(code).unwrap(), Value::int(42));
+}

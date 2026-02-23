@@ -57,8 +57,12 @@ Analyzer (hir)
 
 ## Invariants
 
-1. **Scopes are additive.** `add_scope()` never removes. Two identifiers
-   match only if their scope sets are compatible.
+1. **Scopes are additive, with one exception.** `add_scope()` never
+   removes. `add_scope_recursive()` skips nodes with `scope_exempt: true`
+   (set by `datum->syntax` to prevent intro scope stamping on nodes that
+   should resolve at the call site). `scope_exempt` only affects
+   `add_scope_recursive`, not `add_scope`. Two identifiers match only if
+   their scope sets are compatible.
 
 2. **Quote forms are not expanded.** `'x` remains `Quote(Symbol("x"))`.
    The analyzer handles quote specially.
@@ -111,11 +115,26 @@ keyword) are wrapped via `Quote` to preserve runtime semantics (e.g.,
 `#f` stays falsy). Symbols and compound forms are wrapped via
 `SyntaxLiteral(Value::syntax(arg))` to preserve scope sets.
 
+### Hygiene escape hatch: `datum->syntax`
+
+`(datum->syntax context datum)` creates a syntax object with the
+context's scope set and `scope_exempt: true`. This prevents
+`add_scope_recursive` from adding the intro scope, so the datum
+resolves at the call site. Used for anaphoric macros:
+
+```lisp
+(defmacro aif (test then else)
+  `(let ((,(datum->syntax test 'it) ,test))
+     (if ,(datum->syntax test 'it) ,then ,else)))
+```
+
+`(syntax->datum stx)` strips scope information, returning the plain value.
+
 ## Files
 
 | File | Lines | Content |
 |------|-------|---------|
-| `mod.rs` | 454 | `Syntax`, `SyntaxKind`, `ScopeId` |
+| `mod.rs` | ~520 | `Syntax`, `SyntaxKind`, `ScopeId`, `set_scopes_recursive` |
 | `span.rs` | ~50 | `Span` type |
 | `expand/mod.rs` | ~280 | `Expander` struct, context, entry point |
 | `expand/macro_expand.rs` | ~80 | VM-based macro expansion via `eval_syntax` |

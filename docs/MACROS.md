@@ -245,7 +245,7 @@ Features that are now possible with VM-based macros:
 | `generate` | `docs/JANET.md` | Ready to implement |
 | `bench` | `docs/DEBUGGING.md` | Ready to implement |
 | `swap` | — | Ready (automatic hygiene via PR 3) |
-| Anaphoric macros | — | Needs hygiene escape mechanism |
+| Anaphoric macros | — | Implemented via `datum->syntax` |
 | `assert` (variadic) | — | Needs variadic macro params |
 | `match` (as macro) | — | Ready to implement |
 
@@ -261,7 +261,7 @@ Features that are now possible with VM-based macros:
 | `src/syntax/expand/introspection.rs` | `macro?` and `expand-macro` |
 | `src/syntax/expand/qualified.rs` | `module:name` resolution |
 | `src/syntax/expand/tests.rs` | Expansion tests |
-| `src/syntax/mod.rs` | `Syntax`, `SyntaxKind`, `ScopeId` |
+| `src/syntax/mod.rs` | `Syntax`, `SyntaxKind`, `ScopeId`, `set_scopes_recursive` |
 | `src/syntax/convert.rs` | `Syntax` ↔ `Value` conversion |
 | `src/hir/analyze/mod.rs` | `Analyzer`, `Scope`, `lookup()`, `bind()` |
 | `src/pipeline.rs` | Compilation entry points, `eval_syntax` |
@@ -281,6 +281,42 @@ These were open during design; now answered by the implementation:
 3. **Effect system interaction.** Effect inference happens after
    expansion, so macros that expand to effectful code get correct
    effect annotations. No changes needed.
+
+
+## Hygiene Escape Hatch: `datum->syntax`
+
+`(datum->syntax context datum)` creates a syntax object from `datum`
+with the lexical context of `context`. The result is marked
+`scope_exempt` so the expansion pipeline's intro scope stamping does
+not override the context's scopes. This enables anaphoric macros —
+macros that intentionally introduce bindings visible at the call site.
+
+```lisp
+(defmacro aif (test then else)
+  `(let ((,(datum->syntax test 'it) ,test))
+     (if ,(datum->syntax test 'it) ,then ,else)))
+
+(aif (+ 1 2) (+ it 10) 0)  ;; → 13
+```
+
+If `context` is a syntax object, its scope set and span are copied.
+If `context` is a plain value (atom arguments are passed as plain
+values via hybrid wrapping), empty scopes and a synthetic span are
+used — normal lexical scoping still applies.
+
+`(syntax->datum stx)` strips scope information from a syntax object,
+returning the plain value. If the argument is not a syntax object, it
+is returned unchanged.
+
+### Implementation
+
+Both are runtime primitives in `src/primitives/meta.rs`. They access
+the symbol table via the thread-local `get_symbol_table()` pattern.
+
+The `scope_exempt: bool` field on `Syntax` is the mechanism that
+prevents intro scope stamping. `add_scope_recursive` checks this flag
+and skips exempt nodes. `set_scopes_recursive` (called by
+`datum->syntax`) sets both the scopes and the exempt flag recursively.
 
 
 ## Open Questions

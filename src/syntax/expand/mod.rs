@@ -216,6 +216,11 @@ impl Expander {
     }
 
     fn add_scope_recursive(&self, mut syntax: Syntax, scope: ScopeId) -> Syntax {
+        // datum->syntax nodes keep their exact scopes — don't add intro scope
+        if syntax.scope_exempt {
+            return syntax;
+        }
+
         // Add scope to this node
         syntax.add_scope(scope);
 
