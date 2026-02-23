@@ -52,17 +52,10 @@ list operations, recursion — everything.
 
 ### Known limitations
 
-**No hygiene.** The Expander stamps scope marks onto expansion results,
-but the Analyzer ignores them. Binding resolution is pure string matching.
-A macro that introduces a binding named `tmp` will shadow the caller's
-`tmp`. See PR 3 plan below.
-
-**`gensym` returns a string, not a symbol.** Using gensym in quasiquote
-templates produces string literals where symbols are needed. See #306.
-
-**`from_value` strips scope sets.** The Value round-trip during macro
-expansion loses scope marks from the original arguments. PR 3 must
-address this.
+**`gensym` is rarely needed.** With automatic hygiene (PR 3), most
+macros don't need `gensym`. It's still available for cases where you
+need a unique name that's not related to hygiene (e.g., generating
+unique global names).
 
 **Macros cannot return improper lists.** `from_value()` requires proper
 lists. A macro body that returns `(cons 1 2)` will error.
@@ -123,13 +116,26 @@ checked first.
 ### The scope set mechanism
 
 Every `Syntax` node carries `scopes: Vec<ScopeId>`. The Expander creates
-a fresh scope per expansion and stamps it onto the result. The intent is
+a fresh scope per expansion and stamps it onto the result. This implements
 Racket's "sets of scopes" model: two identifiers match only if their
 scope sets are compatible.
 
-**The problem:** The Analyzer's `lookup()` method walks a `Vec<Scope>`
-stack and matches by string name. It never examines `Syntax.scopes`. The
-scope marks are dead data.
+The Analyzer's `bind()` stores scope sets alongside bindings, and
+`lookup()` uses subset matching: a binding is visible to a reference if
+the binding's scope set is a subset of the reference's scope set. When
+multiple bindings match, the one with the largest scope set wins.
+
+### Syntax objects in the Value system
+
+`Value::syntax(Syntax)` preserves scope sets through the Value round-trip
+during macro expansion. Without this, nested macros lose call-site scopes
+when arguments pass through `to_value()` → VM execution → `from_value()`.
+
+Macro arguments use hybrid wrapping: atoms (nil, bool, int, float, string,
+keyword) are wrapped via `Quote` to preserve runtime semantics. Symbols
+and compound forms are wrapped via `SyntaxLiteral(Value::syntax(arg))` to
+preserve scope sets. This avoids the problem where wrapping `#f` in a
+syntax object makes it truthy (syntax objects are heap-allocated).
 
 ### Cross-form macro visibility
 
@@ -179,21 +185,22 @@ subset of the reference's scope set. This is what Elle's `Syntax.scopes`
 was designed for — the infrastructure exists, the wiring doesn't.
 
 
-## Remaining Work
+## Implemented: Sets-of-Scopes Hygiene (PR 3)
 
-### PR 3: Sets-of-scopes hygiene
+Binding resolution respects scope marks. Macro-introduced bindings can't
+capture call-site names and vice versa. Automatic — no `gensym` needed
+for the common case.
 
-**Goal:** Binding resolution respects scope marks. Macro-introduced
-bindings can't capture call-site names and vice versa. Automatic —
-no `gensym` needed for the common case.
+**What changed:**
 
-**What changes:**
-
-- The Analyzer's `Scope` struct stores scope sets alongside binding names
-- `lookup()` uses scope-set subset matching instead of string matching
+- `Scope.bindings` stores `HashMap<String, Vec<ScopedBinding>>` — multiple
+  bindings per name with different scope sets
 - `bind()` records the binding's scope set from the `Syntax` node
-- The intro scope stamped by `expand_macro_call` (already done in PR 2)
-  now has teeth — the Analyzer uses it
+- `lookup()` uses scope-set subset matching with largest-scope-set-wins
+  tiebreaker
+- `Value::syntax(Syntax)` preserves scope sets through the Value round-trip
+- `SyntaxKind::SyntaxLiteral(Value)` injects syntax objects into the pipeline
+- `from_value()` unwraps syntax objects, preserving scopes
 
 **How it works:**
 
@@ -232,13 +239,13 @@ Features that are now possible with VM-based macros:
 | Feature | Defined in | Status |
 |---------|-----------|--------|
 | `try`/`catch` | `docs/EXCEPT.md` | Ready to implement |
-| `defer` | `docs/JANET.md` | Ready (needs gensym fix #306) |
-| `with` | `docs/JANET.md` | Ready (needs gensym fix #306) |
-| `protect` | `docs/JANET.md` | Ready (needs gensym fix #306) |
+| `defer` | `docs/JANET.md` | Ready to implement |
+| `with` | `docs/JANET.md` | Ready to implement |
+| `protect` | `docs/JANET.md` | Ready to implement |
 | `generate` | `docs/JANET.md` | Ready to implement |
 | `bench` | `docs/DEBUGGING.md` | Ready to implement |
-| `swap` | — | Needs gensym fix #306 or PR 3 (automatic hygiene) |
-| Anaphoric macros | — | Needs PR 3 (hygiene escape) |
+| `swap` | — | Ready (automatic hygiene via PR 3) |
+| Anaphoric macros | — | Needs hygiene escape mechanism |
 | `assert` (variadic) | — | Needs variadic macro params |
 | `match` (as macro) | — | Ready to implement |
 
@@ -286,12 +293,6 @@ These were open during design; now answered by the implementation:
 2. **Interaction between `set!` and scope-aware lookup.** `set!` goes
    through the Analyzer's `lookup()`. With scope-aware resolution, a
    macro that uses `set!` on a call-site variable must have the right
-   scope set for the reference to resolve. This should work naturally
-   (call-site arguments keep their original scopes) but needs careful
-   testing, especially for mutable captures across closure boundaries.
-
-3. **Scope representation in the Analyzer.** The current
-   `HashMap<String, BindingId>` is fast for string lookup. Scope-aware
-   lookup needs to find all bindings with a given name and then pick the
-   best match. A `HashMap<String, Vec<(Vec<ScopeId>, BindingId)>>` would
-   work. Profile before optimizing.
+   scope set for the reference to resolve. This works naturally because
+   call-site arguments keep their original scopes via syntax objects.
+   The `swap` macro's `set!` on call-site variables is tested and works.

@@ -246,6 +246,9 @@ impl Expander {
             SyntaxKind::UnquoteSplicing(inner) => {
                 SyntaxKind::UnquoteSplicing(Box::new(self.add_scope_recursive(*inner, scope)))
             }
+            // Don't recurse into syntax literals — the inner Value::syntax
+            // already carries its correct scopes from the original context.
+            SyntaxKind::SyntaxLiteral(_) => syntax.kind,
             other => other,
         };
 

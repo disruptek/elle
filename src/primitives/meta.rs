@@ -1,11 +1,20 @@
 //! Meta-programming primitives (gensym)
-use crate::value::fiber::{SignalBits, SIG_OK};
-use crate::value::Value;
+use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
+use crate::value::{error_val, Value};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static GENSYM_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-/// Generate a unique symbol
+/// Generate a unique symbol.
+///
+/// Returns a symbol value (not a string). The symbol is interned in the
+/// current symbol table so it can be used in quasiquote templates:
+///
+/// ```lisp
+/// (defmacro with-temp (body)
+///   (let ((tmp (gensym "tmp")))
+///     `(let ((,tmp 42)) ,body)))
+/// ```
 pub fn prim_gensym(args: &[Value]) -> (SignalBits, Value) {
     let prefix = if args.is_empty() {
         "G".to_string()
@@ -19,5 +28,18 @@ pub fn prim_gensym(args: &[Value]) -> (SignalBits, Value) {
 
     let counter = GENSYM_COUNTER.fetch_add(1, Ordering::SeqCst);
     let sym_name = format!("{}{}", prefix, counter);
-    (SIG_OK, Value::string(sym_name))
+
+    // Intern the symbol name so we return a proper symbol value.
+    // This requires the symbol table to be set via set_symbol_table().
+    unsafe {
+        if let Some(symbols_ptr) = crate::ffi::primitives::context::get_symbol_table() {
+            let id = (*symbols_ptr).intern(&sym_name);
+            (SIG_OK, Value::symbol(id.0))
+        } else {
+            (
+                SIG_ERROR,
+                error_val("error", "gensym: symbol table not available"),
+            )
+        }
+    }
 }

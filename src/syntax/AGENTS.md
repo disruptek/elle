@@ -86,8 +86,8 @@ Analyzer (hir)
 ## Hygiene
 
 Each macro expansion creates a fresh `ScopeId`. Identifiers introduced by
-the macro carry this scope. Identifiers from the call site don't. This
-prevents accidental capture:
+the macro carry this scope. Identifiers from the call site don't. The
+Analyzer uses scope-set subset matching to prevent accidental capture:
 
 ```lisp
 (defmacro swap (a b)
@@ -97,6 +97,19 @@ prevents accidental capture:
   (swap x y)
   tmp)  ; Still 10, not affected by macro's tmp
 ```
+
+### Syntax objects in the Value system
+
+`SyntaxKind::SyntaxLiteral(Value)` is an internal-only variant used by
+`expand_macro_call_inner` to inject `Value::syntax(arg)` into the
+compilation pipeline. This preserves scope sets through the Value
+round-trip during macro expansion. The Analyzer handles it by producing
+`HirKind::Quote(value)`.
+
+**Hybrid argument wrapping:** Atoms (nil, bool, int, float, string,
+keyword) are wrapped via `Quote` to preserve runtime semantics (e.g.,
+`#f` stays falsy). Symbols and compound forms are wrapped via
+`SyntaxLiteral(Value::syntax(arg))` to preserve scope sets.
 
 ## Files
 

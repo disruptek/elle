@@ -99,6 +99,12 @@ pub enum SyntaxKind {
     Quasiquote(Box<Syntax>),
     Unquote(Box<Syntax>),
     UnquoteSplicing(Box<Syntax>),
+
+    /// Internal: pre-computed Value literal for macro argument passing.
+    /// Never produced by the reader. The analyzer handles this by producing
+    /// HirKind::Quote(value). Only created by `expand_macro_call_inner` to
+    /// inject `Value::syntax(arg)` into the compilation pipeline.
+    SyntaxLiteral(crate::value::Value),
 }
 
 #[cfg(test)]
