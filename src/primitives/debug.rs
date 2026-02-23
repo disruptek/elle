@@ -19,7 +19,7 @@ pub fn prim_debug_print(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Traces execution with a label
-/// (trace label value) — prints [TRACE] label: value to stderr, returns value
+/// `(trace label value)` — prints `[TRACE] label: value` to stderr, returns value
 ///
 /// Label can be a string or symbol. Symbols are resolved to their
 /// name via the thread-local symbol table (same access pattern as
