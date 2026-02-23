@@ -2,7 +2,7 @@
 
 Reference: docs/MACROS.md
 
-Three PRs, each independently shippable.
+Two remaining PRs (PR 1 completed), each independently shippable.
 
 ---
 
@@ -76,10 +76,10 @@ entirely.
     `(if (not ,test) (error ,(first args)))))
 ```
 
-The Expander gets access to `&mut SymbolTable` and `&mut VM` via a
-context parameter. At macro call time:
+The Expander gets access to `&mut SymbolTable` and `&mut VM` via
+parameters. At macro call time:
 
-1. Convert each argument `Syntax` → `Value` via `to_value()`
+1. Quote each argument: `Quote(Box::new(arg.clone()))`
 2. Build a `Syntax` let-expression binding params to quoted arg values
 3. Compile and execute via a new `eval_syntax()` pipeline entry point
 4. Convert result `Value` → `Syntax` via `from_value()`
@@ -88,13 +88,39 @@ context parameter. At macro call time:
 The `eval_syntax()` function enters the pipeline at the Syntax stage
 (skipping the Reader), reusing the same Expander for nested macro calls.
 
-### Step 1: Add `eval_syntax` to the pipeline
+**Argument quoting**: `Quote(Box::new(arg.clone()))` works because the
+Analyzer already handles `quote` by converting to a Value via
+`to_value()` at `forms.rs:62-64` and `forms.rs:97-102`. Symbols inside
+quoted arguments are interned, not resolved — no "unbound variable"
+errors. This was verified by reading the Analyzer code.
+
+**Semantic shift**: This change means macro bodies are **executed**, not
+textually substituted. A macro like `(defmacro double (x) (* x 2))`
+currently substitutes `x` textually, producing `(* 21 2)`. Under VM
+evaluation, the body executes with `x` bound to the quoted value `21`,
+producing the Value `42`, which becomes `Syntax::Int(42)`. The final
+result is the same for literal arguments, but **breaks for expression
+arguments**: `(double (+ 1 2))` would try to multiply a list by 2.
+
+Macros that compute with their arguments must use quasiquote:
+`(defmacro double (x) \`(* ,x 2))`. This produces code-as-data.
+All macros in `examples/meta-programming.lisp` (~13 macros) need
+rewriting. Integration tests using quasiquote (`my-when`, `add-one`)
+work unchanged.
+
+**VM state**: Macro bodies share the compilation VM's global state.
+A macro body that calls `(define x 42)` creates a persistent global.
+This is the same trade-off Janet makes. Isolation via fibers is a
+possible future improvement but not needed for correctness.
+
+### Step 1: Signature change + eval_syntax (atomic)
+
+These must be done together — `eval_syntax` calls the new `expand()`
+signature, and `expand()` calls `eval_syntax` for macro bodies.
 
 **src/pipeline.rs** — new function:
 
 ```rust
-/// Compile and execute a Syntax tree directly.
-/// Used by the macro expander to run macro bodies in the VM.
 pub fn eval_syntax(
     syntax: Syntax,
     expander: &mut Expander,
@@ -102,37 +128,23 @@ pub fn eval_syntax(
     vm: &mut VM,
 ) -> Result<Value, String> {
     let expanded = expander.expand(syntax, symbols, vm)?;
-
-    let primitive_effects = get_primitive_effects(symbols);
-    let mut analyzer = Analyzer::new_with_primitive_effects(symbols, primitive_effects);
-    let mut analysis = analyzer.analyze(&expanded)?;
-    mark_tail_calls(&mut analysis.hir);
-
-    let intrinsics = lir::intrinsics::build_intrinsics(symbols);
-    let mut lowerer = Lowerer::new()
-        .with_bindings(analysis.bindings)
-        .with_intrinsics(intrinsics);
-    let lir_func = lowerer.lower(&analysis.hir)?;
-
-    let symbol_snapshot = symbols.all_names();
-    let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
-    let bytecode = emitter.emit(&lir_func);
-
+    // ... analyze, lower, emit, execute (same as compile_new)
     vm.execute(&bytecode).map_err(|e| e.to_string())
 }
 ```
 
-Update `compile_new`, `compile_all_new`, `eval_new`, `analyze_new`,
-`analyze_all_new` to pass `&mut SymbolTable` and `&mut VM` through to
-`expander.expand()`. For analysis-only functions (`analyze_new`,
-`analyze_all_new`), the VM is needed only if macros are procedural —
-these functions will need a VM parameter too.
+**src/pipeline.rs** — change existing functions:
 
-### Step 2: Thread context through the Expander
+- `compile_new`: creates its own internal VM for macro expansion.
+  Public signature stays `compile_new(source, symbols)`. The internal
+  VM is throwaway — macro side effects don't persist.
+- `compile_all_new`: same — internal VM.
+- `eval_new`: already takes `&mut VM`. Pass it through to `expand()`.
+- `analyze_new`: add `&mut VM` parameter. The LSP (`CompilerState`)
+  and linter (`lint_str`) already have VMs — just thread them through.
+- `analyze_all_new`: add `&mut VM` parameter. Same.
 
-**src/syntax/expand/mod.rs**
-
-Change `expand()` signature:
+**src/syntax/expand/mod.rs** — change `expand()` signature:
 
 ```rust
 pub fn expand(
@@ -143,82 +155,41 @@ pub fn expand(
 ) -> Result<Syntax, String>
 ```
 
-All internal methods (`expand_list`, `expand_vector`, `handle_defmacro`,
-`expand_macro_call`, etc.) get the same parameters threaded through.
+Thread `symbols` and `vm` through ALL internal methods:
+- `expand_list`, `expand_vector`
+- `handle_defmacro`
+- `expand_macro_call`
+- `handle_thread_first`, `handle_thread_last`
+- `handle_macro_predicate`, `handle_expand_macro`
+- `quasiquote_to_code`, `quasiquote_list_to_code`
+- `resolve_qualified_symbol` (doesn't need them, but called from
+  `expand` which has them in scope)
 
-### Step 3: Rewrite `expand_macro_call` to use the VM
+**Callers that need updating** (complete list):
 
-**src/syntax/expand/macro_expand.rs**
+| File | Call sites |
+|------|-----------|
+| `src/pipeline.rs` | 4 (`compile_new`, `compile_all_new`, `eval_new`, `analyze_new`, `analyze_all_new`) |
+| `src/syntax/expand/tests.rs` | ~23 |
+| `src/syntax/mod.rs` (tests) | ~7 |
+| `src/hir/tailcall.rs` (test helper) | 1 |
+| `tests/unittests/lir_debug.rs` | 1 |
+| `tests/unittests/hir_debug.rs` | 1 |
+| `src/lib.rs` | re-exports (signature change cascades) |
+| `elle-lsp/src/compiler_state.rs` | calls `analyze_all_new` |
+| `elle-lint/src/lib.rs` | calls `analyze_all_new` |
 
-Replace template substitution with VM evaluation:
+Tests calling `analyze_new`/`compile_new` indirectly:
+| `src/hir/lint.rs` tests | ~4 |
+| `src/hir/symbols.rs` tests | ~6 |
+| `src/pipeline.rs` tests | ~30 |
 
-```rust
-pub(super) fn expand_macro_call(
-    &mut self,
-    macro_def: &MacroDef,
-    args: &[Syntax],
-    call_site: &Syntax,
-    symbols: &mut SymbolTable,
-    vm: &mut VM,
-) -> Result<Syntax, String> {
-    // 1. Check arity
-    if args.len() != macro_def.params.len() {
-        return Err(format!(...));
-    }
-
-    // 2. Build let-expression: (let ((p1 '<a1>) (p2 '<a2>)) body)
-    let span = call_site.span.clone();
-    let bindings: Vec<Syntax> = macro_def.params.iter().zip(args)
-        .map(|(param, arg)| {
-            let quoted_arg = Syntax::new(
-                SyntaxKind::Quote(Box::new(arg.to_value_syntax(symbols))),
-                span.clone(),
-            );
-            Syntax::new(
-                SyntaxKind::List(vec![
-                    Syntax::new(SyntaxKind::Symbol(param.clone()), span.clone()),
-                    quoted_arg,
-                ]),
-                span.clone(),
-            )
-        })
-        .collect();
-
-    let let_expr = Syntax::new(
-        SyntaxKind::List(vec![
-            Syntax::new(SyntaxKind::Symbol("let".to_string()), span.clone()),
-            Syntax::new(SyntaxKind::List(bindings), span.clone()),
-            macro_def.template.clone(),
-        ]),
-        span.clone(),
-    );
-
-    // 3. Compile and execute in the VM
-    let result_value = pipeline::eval_syntax(
-        let_expr, self, symbols, vm
-    )?;
-
-    // 4. Convert result back to Syntax
-    let result_syntax = Syntax::from_value(
-        &result_value, symbols, span.clone()
-    )?;
-
-    // 5. Add intro scope for hygiene
-    let intro_scope = self.fresh_scope();
-    let hygienized = self.add_scope_recursive(result_syntax, intro_scope);
-
-    // 6. Continue expanding
-    self.expand(hygienized, symbols, vm)
-}
-```
-
-Note on quoting: arguments are passed as quoted values so the macro
-body receives data, not code. `to_value_syntax` converts a `Syntax`
-tree to a `Syntax` that, when evaluated, produces the corresponding
-`Value`. For simple cases this is just `Quote(arg)`. For cases where
-the arg contains unresolvable symbols, we may need `Syntax::to_value()`
-followed by a literal value embedding. The exact mechanism needs
-prototyping — see open questions.
+**Borrow checker**: Passing `self`, `symbols`, and `vm` from
+`expand_macro_call(&mut self, ..., symbols: &mut SymbolTable, vm: &mut VM)`
+to `eval_syntax(syntax, self, symbols, vm)` works because they are three
+distinct mutable references to three distinct objects. The existing
+`.cloned()` on `self.macros.get(name)` at `mod.rs:131` releases the
+borrow on `self.macros` before calling `expand_macro_call`.
 
 ### Step 3b: Add macro expansion recursion guard
 
@@ -254,7 +225,67 @@ Janet uses the same limit (200) for the same reason — macros can expand
 to other macros, and without a guard, recursive macros cause a stack
 overflow. See `docs/JANET-COMPILER.md`, "Macros", step 3.
 
-### Step 4: Delete template substitution machinery
+### Step 2: Rewrite `expand_macro_call` to use the VM
+
+**src/syntax/expand/macro_expand.rs**
+
+Replace template substitution with VM evaluation:
+
+```rust
+pub(super) fn expand_macro_call(
+    &mut self,
+    macro_def: &MacroDef,
+    args: &[Syntax],
+    call_site: &Syntax,
+    symbols: &mut SymbolTable,
+    vm: &mut VM,
+) -> Result<Syntax, String> {
+    // 1. Check arity
+    // 2. Increment recursion guard
+
+    // 3. Build let-expression: (let ((p1 'a1) (p2 'a2)) body)
+    let span = call_site.span.clone();
+    let bindings: Vec<Syntax> = macro_def.params.iter().zip(args)
+        .map(|(param, arg)| {
+            let quoted_arg = Syntax::new(
+                SyntaxKind::Quote(Box::new(arg.clone())),
+                span.clone(),
+            );
+            Syntax::new(
+                SyntaxKind::List(vec![
+                    Syntax::new(SyntaxKind::Symbol(param.clone()), span.clone()),
+                    quoted_arg,
+                ]),
+                span.clone(),
+            )
+        })
+        .collect();
+
+    let let_expr = Syntax::new(
+        SyntaxKind::List(vec![
+            Syntax::new(SyntaxKind::Symbol("let".to_string()), span.clone()),
+            Syntax::new(SyntaxKind::List(bindings), span.clone()),
+            macro_def.template.clone(),
+        ]),
+        span.clone(),
+    );
+
+    // 4. Compile and execute in the VM
+    let result_value = pipeline::eval_syntax(let_expr, self, symbols, vm)?;
+
+    // 5. Convert result back to Syntax
+    let result_syntax = Syntax::from_value(&result_value, symbols, span)?;
+
+    // 6. Add intro scope for hygiene
+    let intro_scope = self.fresh_scope();
+    let hygienized = self.add_scope_recursive(result_syntax, intro_scope);
+
+    // 7. Decrement recursion guard, continue expanding
+    self.expand(hygienized, symbols, vm)
+}
+```
+
+### Step 3: Delete template substitution machinery
 
 **src/syntax/expand/macro_expand.rs**
 
@@ -266,66 +297,59 @@ Remove:
 The quasiquote-to-code path (`quasiquote.rs`) stays — it's used for
 non-macro quasiquotes (runtime list construction).
 
-### Step 5: Add variadic macro parameters
+### Step 4: Rewrite existing macros for VM semantics
 
-**src/syntax/expand/mod.rs**
+**Semantic shift**: Non-quasiquote macro bodies now compute values
+instead of doing textual substitution. All macros that use arguments
+in computation positions must be rewritten to use quasiquote.
 
-Extend `MacroDef`:
+**examples/meta-programming.lisp** — ~13 macros need rewriting:
+
+| Before | After |
+|--------|-------|
+| `(defmacro double (x) (* x 2))` | `` (defmacro double (x) `(* ,x 2)) `` |
+| `(defmacro triple (x) (* x 3))` | `` (defmacro triple (x) `(* ,x 3)) `` |
+| `(defmacro square (x) (* x x))` | `` (defmacro square (x) `(* ,x ,x)) `` |
+| `(defmacro negate (x) (not x))` | `` (defmacro negate (x) `(not ,x)) `` |
+| etc. | etc. |
+
+**src/syntax/expand/tests.rs** — `test_defmacro_registration` defines
+`(defmacro double (x) (* x 2))` without quasiquote. Must be rewritten.
+
+**tests/integration/pipeline_point.rs** — `my-when` and `add-one`
+already use quasiquote. No changes needed.
+
+### Step 5: Update ALL test call sites
+
+~73 test call sites need the new `expand()` signature. Strategy:
+make the signature change, let compilation errors guide updates.
+
+Most tests that call `expand()` directly don't use macros — they test
+basic expansion of lists, vectors, threading, etc. These just need
+`&mut SymbolTable` and `&mut VM` parameters added. Create a test
+helper:
+
 ```rust
-pub struct MacroDef {
-    pub name: String,
-    pub params: Vec<String>,
-    pub rest_param: Option<String>,
-    pub template: Syntax,
-    pub definition_scope: ScopeId,
+fn setup_expand() -> (SymbolTable, VM) {
+    let mut symbols = SymbolTable::new();
+    let mut vm = VM::new();
+    register_primitives(&mut vm, &mut symbols);
+    (symbols, vm)
 }
 ```
 
-In `handle_defmacro`: detect dotted-pair syntax `(a b . rest)` in the
-parameter list. At call time, bind excess arguments as a quoted list.
+### Step 6: Update docs
 
-### Step 6: REPL Expander persistence
-
-**src/pipeline.rs** — change `compile_new` and `eval_new` to accept an
-optional `&mut Expander`. When provided, use it instead of creating a
-fresh one. The REPL holds a persistent Expander so macros defined in one
-input are available in the next.
-
-`compile_all_new` already shares an Expander across forms — just thread
-the context through.
-
-### Step 7: Tests
-
-**src/syntax/expand/tests.rs**:
-- `test_vm_macro_simple_template`: `(defmacro when ...)` works via VM
-- `test_vm_macro_with_gensym`: macro body calls `(gensym)` successfully
-- `test_vm_macro_with_if`: conditional expansion works
-- `test_vm_macro_with_let`: let-bindings in macro body work
-
-**tests/integration/macros.rs** (new file):
-- `test_try_catch_macro`: try/catch expands and executes correctly
-- `test_swap_with_gensym`: swap doesn't capture caller's variables
-- `test_macro_error_reporting`: bad macro body produces clear error
-- `test_variadic_macro`: rest params work
-- `test_existing_macros`: all existing macro tests still pass
-
-Counterfactual: break gensym, verify capture occurs in swap
-
-### Step 8: Implement key macros
-
-**lib/macros.lisp** (loaded by stdlib):
-- `try`/`catch` — fiber-based exception handling (see docs/EXCEPT.md)
-- `defer` — cleanup on scope exit (see docs/JANET.md)
-- `with` — resource management (see docs/JANET.md)
-- `bench` — timing macro (see docs/DEBUGGING.md)
-
-### Step 9: Update docs
-
-- `docs/MACROS.md` — rewrite to reflect VM-based expansion
-- `docs/EXCEPT.md` — update try/catch as implemented
-- `docs/DEBUGGING.md` — update bench as implemented
-- `src/syntax/AGENTS.md` — document new expansion model
+- `src/syntax/AGENTS.md` — document VM-based expansion model
 - `src/syntax/expand/AGENTS.md` — if exists, update
+
+### Deferred to follow-up PRs
+
+These were originally in PR 2 but are independently shippable:
+
+- **Variadic macro parameters** (`rest_param` on `MacroDef`)
+- **REPL Expander persistence** (optional `&mut Expander` on pipeline fns)
+- **Key macros** (`try`/`catch`, `defer`, `with`, `bench`)
 
 ---
 
@@ -442,54 +466,48 @@ Counterfactual: remove scope stamping, verify capture occurs
 
 ---
 
+## Resolved Questions
+
+1. ~~**Argument quoting mechanism.**~~ **Resolved**: `Quote(Box::new(arg.clone()))`
+   works. The Analyzer handles `quote` at `forms.rs:62-64` by converting
+   to a Value via `to_value()`. Symbols inside quotes are interned, not
+   resolved. Verified by code reading and reviewer confirmation.
+
+2. ~~**Circular dependency / borrow checker.**~~ **Resolved**: Three distinct
+   `&mut` references (`Expander`, `SymbolTable`, `VM`) to three distinct
+   objects. Rust tracks them independently. Recursive macro expansion
+   works via reborrowing at each call level.
+
+3. ~~**Analysis-only paths.**~~ **Resolved**: Both `elle-lsp` (`CompilerState`)
+   and `elle-lint` (`lint_str`) already create VMs. Just thread them
+   through to `analyze_all_new`. Mechanical change.
+
 ## Open Questions
 
-1. **Argument quoting mechanism.** How exactly do we pass Syntax
-   arguments to the VM as data? The plan says `Quote(arg)`, but if `arg`
-   contains symbols that aren't bound in the macro body's scope, the
-   Analyzer will reject them. We may need to convert `Syntax` → `Value`
-   via `to_value()` and embed the Value as a constant, bypassing
-   analysis of the argument content. This needs prototyping.
-
-2. **Circular dependency.** `expand_macro_call` calls `eval_syntax`
-   which calls `expander.expand()`. This is mutual recursion between the
-   Expander and the pipeline. The borrow checker should allow it since
-   `eval_syntax` is a free function taking `&mut Expander`, and
-   `expand_macro_call` passes `self`. But this needs verification.
-
-3. **Performance.** Every macro call compiles and executes bytecode.
+1. **Performance.** Every macro call compiles and executes bytecode.
    For hot macros (e.g., `when` used hundreds of times), this could be
-   slow. Mitigation: cache compiled bytecode per MacroDef. The body
-   doesn't change between calls — only the argument bindings do. We
-   could pre-compile the body at `defmacro` time and replay it with
-   different globals for each call.
+   slow. Mitigation: cache compiled bytecode per MacroDef. Deferred —
+   correctness first per AGENTS.md.
 
-4. **Analysis-only paths.** `analyze_new` and `analyze_all_new` are used
-   by the LSP and linter. They currently don't need a VM. With
-   procedural macros, they do — macro bodies must be evaluated to
-   produce the expanded code that gets analyzed. This means the LSP
-   needs to create a VM at startup.
+2. **Error provenance.** When a macro body errors, the error should
+   point to the macro definition, not the call site. The wrapping
+   let-expression has synthetic spans — errors in argument binding
+   might be confusing. Needs testing.
 
-5. **Error provenance.** When a macro body errors (type mismatch, unbound
-   variable), the error should point to the macro definition, not the
-   call site. The `eval_syntax` path produces errors with spans from the
-   macro body's Syntax nodes, which is correct. But the wrapping
-   let-expression has synthetic spans — errors in argument binding might
-   be confusing.
-
-6. **Side effects during expansion.** Macro bodies run in the real VM,
+3. **Side effects during expansion.** Macro bodies run in the real VM,
    so they can perform I/O, spawn fibers, signal errors, etc. Janet
-   accepts this as a feature ("maximum metaprogramming power with no
-   separate macro language"). We should too — but document it. A macro
-   that writes to a file during expansion is weird but not wrong.
+   accepts this as a feature. We do too. Document it.
+
+4. **VM state pollution.** Macro bodies share the compilation VM's
+   global state. A macro body that calls `(define x 42)` creates a
+   persistent global. Isolation via fibers is a possible future
+   improvement. For now, document as a known limitation.
 
 ## Risk Assessment
 
-**Highest risk: PR 2 argument quoting (open question 1).** The mechanism
-for passing Syntax arguments as data to the VM is the least understood
-part. If `Quote(arg)` doesn't work because the Analyzer rejects unbound
-symbols inside quotes, we need an alternative (constant embedding,
-special syntax form, or a pre-analysis pass that marks quoted regions).
+**Highest risk: semantic shift in existing macros.** All non-quasiquote
+macro bodies change behavior. `examples/meta-programming.lisp` has ~13
+macros that need rewriting. Integration tests using quasiquote are fine.
 
 **Second risk: PR 3 `lookup()` rewrite.** This is the most complex
 function in the Analyzer (~110 lines of capture tracking, function
@@ -497,5 +515,5 @@ boundary detection, transitive capture resolution). The scope-aware
 matching adds a new dimension.
 
 **Lower risk: PR 2 pipeline threading.** Mechanical change — adding
-`symbols` and `vm` parameters to many functions. Tedious but
+`symbols` and `vm` parameters to ~73 call sites. Tedious but
 straightforward. The compiler catches missing parameters.
