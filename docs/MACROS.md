@@ -1,14 +1,16 @@
 # Macros: Design Document
 
-This document describes Elle's macro system — what exists today, what's
-broken, and the plan to fix it.
+This document describes Elle's macro system — what exists today and
+the remaining work for full hygiene.
 
 
 ## Current State
 
-Macros in Elle are template-based. A macro is a name, a parameter list,
-and a syntax template. Expansion substitutes arguments into the template
-at the AST level.
+Macros in Elle are VM-evaluated. A macro is a name, a parameter list,
+and a body. At expansion time, arguments are quoted and the body is
+compiled and executed in the real VM via `pipeline::eval_syntax()`.
+The full language is available in macro bodies: `if`, `let`, closures,
+list operations, recursion — everything.
 
 ```lisp
 (defmacro my-when (test body)
@@ -20,8 +22,12 @@ at the AST level.
 
 ### What works
 
-- **Template macros.** `defmacro` with quasiquote templates. Parameters
-  are substituted, the result is recursively expanded.
+- **VM-evaluated macros.** `defmacro` bodies are normal Elle code.
+  Arguments are quoted and bound via `let`. The body runs in the VM
+  and must return syntax (typically via quasiquote).
+
+- **Conditional expansion.** Macros can use `if`, `cond`, `let`, etc.
+  to generate different code based on their arguments.
 
 - **Threading macros.** `->` and `->>` are built into the expander as
   structural rewrites.
@@ -38,35 +44,31 @@ at the AST level.
 
 - **Arity checking.** Wrong argument count produces a clear error.
 
+- **Recursion guard.** Expansion depth is limited to 200 (matching
+  Janet), preventing infinite macro expansion.
+
 - **Define shorthand.** `(define (f x) body)` desugars to
   `(define f (fn (x) body))` during expansion.
 
-### What's broken
-
-**No compile-time evaluation.** Macro bodies are templates, not code.
-You can't call `gensym`, `if`, `let`, or any function during expansion.
-This blocks every macro that needs fresh bindings or conditional logic —
-which is most useful macros. Documented as broken in `docs/DEBUGGING.md`.
+### Known limitations
 
 **No hygiene.** The Expander stamps scope marks onto expansion results,
 but the Analyzer ignores them. Binding resolution is pure string matching.
 A macro that introduces a binding named `tmp` will shadow the caller's
-`tmp`:
+`tmp`. See PR 3 plan below.
 
-```lisp
-(defmacro broken-swap (a b)
-  `(let ((tmp ,a)) (set! ,a ,b) (set! ,b tmp)))
+**`gensym` returns a string, not a symbol.** Using gensym in quasiquote
+templates produces string literals where symbols are needed. See #306.
 
-(let ((tmp 10) (x 1) (y 2))
-  (broken-swap x y)
-  tmp)  ; BUG: tmp is now 1, not 10
-```
+**`from_value` strips scope sets.** The Value round-trip during macro
+expansion loses scope marks from the original arguments. PR 3 must
+address this.
 
-**Dead infrastructure.** `Syntax.scopes` is written but never read.
-`MacroDef.definition_scope` is always `ScopeId(0)`. (The parallel
-`MacroDef` in `symbol.rs`, `SymbolTable.macros`, `gensym_id()`, and
-the runtime `prim_is_macro`/`prim_expand_macro` stubs were removed in
-PR 1.)
+**Macros cannot return improper lists.** `from_value()` requires proper
+lists. A macro body that returns `(cons 1 2)` will error.
+
+**REPL macro persistence.** `compile` creates a fresh Expander per call,
+so macros defined in one REPL input are lost before the next.
 
 
 ## Architecture
@@ -95,19 +97,20 @@ pub struct MacroDef {
 A macro is a name, positional parameter names, a Syntax template, and a
 scope ID. No pattern matching, no ellipsis, no multiple clauses.
 
-### Expansion algorithm (current — template substitution)
+### Expansion algorithm (VM-based)
 
 1. Check arity: `args.len() == params.len()`
-2. Substitute: walk the template via `substitute()`, replacing symbols
-   matching parameter names with the corresponding argument syntax trees.
-   Quasiquote internals use a separate `substitute_quasiquote()` path
-   that only substitutes inside unquote/unquote-splicing nodes.
-3. If the *substituted* result is a quasiquote, resolve it via
-   `eval_quasiquote_to_syntax()` — collapses unquote nodes in-place
-4. Stamp a fresh `ScopeId` onto every node in the result via
-   `add_scope_recursive()`. **Bug:** this stamps ALL nodes, including
-   substituted call-site arguments. See hygiene plan for the fix.
-5. Recursively expand the result (handles macro-generated macro calls)
+2. Check recursion depth against `MAX_MACRO_EXPANSION_DEPTH` (200)
+3. Build a let-expression: `(let ((p1 'a1) (p2 'a2)) body)` where
+   each argument is quoted so it becomes data, not code
+4. Compile and execute via `pipeline::eval_syntax()` — the full
+   pipeline (expand → analyze → lower → emit → execute) runs on the
+   let-expression, using the same Expander (so nested macros work)
+5. Convert the result `Value` back to `Syntax` via `from_value()`
+6. Stamp a fresh `ScopeId` onto every node in the result via
+   `add_scope_recursive()`. **Note:** this stamps ALL nodes, including
+   argument-derived nodes. See hygiene plan for the fix.
+7. Recursively expand the result (handles macro-generated macro calls)
 
 ### Expander precedence
 
@@ -176,90 +179,7 @@ subset of the reference's scope set. This is what Elle's `Syntax.scopes`
 was designed for — the infrastructure exists, the wiring doesn't.
 
 
-## Plan: VM-Based Macro Expansion + Hygiene
-
-Two PRs after the completed cleanup. The key insight: macros are just
-a phase change. The macro body is normal Elle code that operates on
-data and returns code. We run it in the real VM during expansion.
-
-### PR 2: VM-based macro expansion
-
-**Goal:** Macro bodies are normal Elle code executed in the VM during
-expansion. No separate mini-interpreter, no template substitution
-machinery. The full language is available: `gensym`, `if`, `let`,
-closures, list operations, recursion — everything.
-
-**What changes:**
-
-- The Expander gets access to `&mut SymbolTable` and `&mut VM`
-- At macro call time, arguments are converted to quoted `Value` data
-- The macro body is compiled and executed via a new `eval_syntax()`
-  pipeline entry point that starts from `Syntax` (skipping the Reader)
-- The result `Value` is converted back to `Syntax` via `from_value()`
-- The template substitution path (`substitute`, `substitute_quasiquote`,
-  `eval_quasiquote_to_syntax`) is deleted — all macros go through the VM
-
-**How it works:**
-
-```lisp
-(defmacro when (test body) `(if ,test ,body nil))
-(when (> x 0) (print x))
-```
-
-1. Expander sees `(when (> x 0) (print x))` — it's a macro call
-2. Convert arguments to Values: `test` = `(> x 0)`, `body` = `(print x)`
-3. Build a let-expression binding params to quoted args:
-   `(let ((test '(> x 0)) (body '(print x))) \`(if ,test ,body nil))`
-4. The quasiquote expander converts this to `(list ...)` calls
-5. Compile and execute in the VM → produces list value `(if (> x 0) (print x) nil)`
-6. Convert back to `Syntax` via `from_value()`
-7. Add intro scope, continue expanding
-
-**What this unblocks:**
-
-```lisp
-;; Procedural macro with gensym
-(defmacro swap (a b)
-  (let ((tmp (gensym "tmp")))
-    `(let ((,tmp ,a)) (set! ,a ,b) (set! ,b ,tmp))))
-
-;; try/catch over fiber primitives
-(defmacro try (body handler)
-  (let ((f (gensym "f"))
-        (e (gensym "e")))
-    `(let ((,f (fiber/new (fn () ,body) 1)))
-       (fiber/resume ,f nil)
-       (if (= (fiber/status ,f) :error)
-         (let ((,e (fiber/value ,f)))
-           (,handler ,e))
-         (fiber/value ,f)))))
-
-;; Conditional expansion
-(defmacro assert (test . args)
-  (if (empty? args)
-    `(if (not ,test) (error "assertion failed"))
-    `(if (not ,test) (error ,(first args)))))
-
-;; defer — cleanup on scope exit
-(defmacro defer (cleanup . body)
-  (let ((f (gensym "f"))
-        (r (gensym "r")))
-    `(let ((,f (fiber/new (fn () ,@body) 1))
-           (,r (fiber/resume ,f nil)))
-       ,cleanup
-       (if (= (fiber/status ,f) :error)
-         (fiber/propagate ,r ,f)
-         ,r))))
-```
-
-**What gets deleted:**
-
-- `substitute()` in `macro_expand.rs`
-- `substitute_quasiquote()` in `macro_expand.rs`
-- `eval_quasiquote_to_syntax()` in `macro_expand.rs`
-
-The `quasiquote_to_code()` path in `quasiquote.rs` stays — it handles
-non-macro quasiquotes (runtime list construction).
+## Remaining Work
 
 ### PR 3: Sets-of-scopes hygiene
 
@@ -307,20 +227,20 @@ so code that hasn't been through macro expansion works identically.
 
 ## What This Unblocks
 
-These features are designed but blocked on the macro system:
+Features that are now possible with VM-based macros:
 
-| Feature | Defined in | Needs |
-|---------|-----------|-------|
-| `try`/`catch` | `docs/EXCEPT.md` | PR 2 (VM macros) |
-| `defer` | `docs/JANET.md` | PR 2 (VM macros) |
-| `with` | `docs/JANET.md` | PR 2 (VM macros) |
-| `protect` | `docs/JANET.md` | PR 2 (VM macros) |
-| `generate` | `docs/JANET.md` | PR 2 (VM macros) |
-| `bench` | `docs/DEBUGGING.md` | PR 2 (VM macros) |
-| `swap` | — | PR 2 (gensym) or PR 3 (automatic) |
-| Anaphoric macros | — | PR 3 (hygiene escape) |
-| `assert` (variadic) | — | PR 2 (VM macros + rest params) |
-| `match` (as macro) | — | PR 2 (VM macros) |
+| Feature | Defined in | Status |
+|---------|-----------|--------|
+| `try`/`catch` | `docs/EXCEPT.md` | Ready to implement |
+| `defer` | `docs/JANET.md` | Ready (needs gensym fix #306) |
+| `with` | `docs/JANET.md` | Ready (needs gensym fix #306) |
+| `protect` | `docs/JANET.md` | Ready (needs gensym fix #306) |
+| `generate` | `docs/JANET.md` | Ready to implement |
+| `bench` | `docs/DEBUGGING.md` | Ready to implement |
+| `swap` | — | Needs gensym fix #306 or PR 3 (automatic hygiene) |
+| Anaphoric macros | — | Needs PR 3 (hygiene escape) |
+| `assert` (variadic) | — | Needs variadic macro params |
+| `match` (as macro) | — | Ready to implement |
 
 
 ## Files
@@ -328,7 +248,7 @@ These features are designed but blocked on the macro system:
 | File | Role |
 |------|------|
 | `src/syntax/expand/mod.rs` | Expander struct, `defmacro` handling, scope stamping |
-| `src/syntax/expand/macro_expand.rs` | Substitution (to be replaced with VM eval) |
+| `src/syntax/expand/macro_expand.rs` | VM-based macro expansion via `eval_syntax` |
 | `src/syntax/expand/quasiquote.rs` | Quasiquote → `(list ...)` runtime calls |
 | `src/syntax/expand/threading.rs` | `->` and `->>` |
 | `src/syntax/expand/introspection.rs` | `macro?` and `expand-macro` |
@@ -337,41 +257,40 @@ These features are designed but blocked on the macro system:
 | `src/syntax/mod.rs` | `Syntax`, `SyntaxKind`, `ScopeId` |
 | `src/syntax/convert.rs` | `Syntax` ↔ `Value` conversion |
 | `src/hir/analyze/mod.rs` | `Analyzer`, `Scope`, `lookup()`, `bind()` |
-| `src/pipeline.rs` | Compilation entry points (add `eval_syntax`) |
+| `src/pipeline.rs` | Compilation entry points, `eval_syntax` |
+
+
+## Resolved Questions
+
+These were open during design; now answered by the implementation:
+
+1. **Argument quoting.** `Quote(Box::new(arg.clone()))` works. The
+   Analyzer handles `quote` by converting to a Value via `to_value()`.
+   Symbols inside quotes are interned, not resolved.
+
+2. **Analysis-only paths.** Both `elle-lsp` and `elle-lint` already
+   create VMs. `analyze`/`analyze_all` take `&mut VM`.
+
+3. **Effect system interaction.** Effect inference happens after
+   expansion, so macros that expand to effectful code get correct
+   effect annotations. No changes needed.
 
 
 ## Open Questions
 
-1. **Argument quoting mechanism.** How do we pass Syntax arguments to
-   the VM as data? The plan says `Quote(arg)`, but if `arg` contains
-   symbols that aren't bound in the macro body's scope, the Analyzer
-   may reject them. We may need to convert `Syntax` → `Value` via
-   `to_value()` and embed the Value as a constant, bypassing analysis
-   of the argument content. Needs prototyping.
-
-2. **Performance.** Every macro call compiles and executes bytecode.
+1. **Performance.** Every macro call compiles and executes bytecode.
    For hot macros (e.g., `when` used hundreds of times), this could be
    slow. Mitigation: cache compiled bytecode per MacroDef. The body
    doesn't change between calls — only the argument bindings do.
 
-3. **Analysis-only paths.** `analyze` and `analyze_all` are used
-    by the LSP and linter. They currently don't need a VM. With VM-based
-    macros, they do — macro bodies must be evaluated to produce the
-    expanded code that gets analyzed. The LSP will need a VM at startup.
-
-4. **How do macros interact with the effect system?** A macro that
-   expands to `(fiber/signal ...)` should produce code with `Yields`
-   effect. Currently this works because effect inference happens after
-   expansion. This should continue to work with VM-based expansion.
-
-5. **Interaction between `set!` and scope-aware lookup.** `set!` goes
+2. **Interaction between `set!` and scope-aware lookup.** `set!` goes
    through the Analyzer's `lookup()`. With scope-aware resolution, a
    macro that uses `set!` on a call-site variable must have the right
    scope set for the reference to resolve. This should work naturally
    (call-site arguments keep their original scopes) but needs careful
    testing, especially for mutable captures across closure boundaries.
 
-6. **Scope representation in the Analyzer.** The current
+3. **Scope representation in the Analyzer.** The current
    `HashMap<String, BindingId>` is fast for string lookup. Scope-aware
    lookup needs to find all bindings with a given name and then pick the
    best match. A `HashMap<String, Vec<(Vec<ScopeId>, BindingId)>>` would
