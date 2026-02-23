@@ -44,6 +44,15 @@ data and returns a value that becomes code. No separate template
 substitution path — quasiquote in macro bodies produces `(list ...)`
 calls that the VM evaluates.
 
+**Validation**: This is the same approach Janet uses (see
+`docs/JANET-COMPILER.md`). Janet creates a fiber for the macro function,
+resumes it with the form's arguments as unevaluated values, and uses the
+output as the replacement form. Janet has shipped this successfully for
+years. Our approach differs in two ways: (1) we have a typed `Syntax`
+AST instead of raw values, giving us source locations and scope sets for
+free; (2) we'll add automatic hygiene in PR 3, which Janet lacks
+entirely.
+
 ```lisp
 ;; Simple template macro — works unchanged
 (defmacro when (test body)
@@ -210,6 +219,40 @@ tree to a `Syntax` that, when evaluated, produces the corresponding
 the arg contains unresolvable symbols, we may need `Syntax::to_value()`
 followed by a literal value embedding. The exact mechanism needs
 prototyping — see open questions.
+
+### Step 3b: Add macro expansion recursion guard
+
+**src/syntax/expand/mod.rs**
+
+Add a recursion depth counter to the Expander:
+
+```rust
+const MAX_MACRO_EXPANSION_DEPTH: usize = 200;
+
+pub struct Expander {
+    // ... existing fields ...
+    expansion_depth: usize,
+}
+```
+
+At the top of `expand_macro_call`, increment and check:
+
+```rust
+self.expansion_depth += 1;
+if self.expansion_depth > MAX_MACRO_EXPANSION_DEPTH {
+    return Err(format!(
+        "macro expansion depth exceeded {} (possible infinite expansion)",
+        MAX_MACRO_EXPANSION_DEPTH
+    ));
+}
+// ... expand ...
+// decrement on all exit paths (use a guard or explicit decrement)
+self.expansion_depth -= 1;
+```
+
+Janet uses the same limit (200) for the same reason — macros can expand
+to other macros, and without a guard, recursive macros cause a stack
+overflow. See `docs/JANET-COMPILER.md`, "Macros", step 3.
 
 ### Step 4: Delete template substitution machinery
 
@@ -433,6 +476,12 @@ Counterfactual: remove scope stamping, verify capture occurs
    macro body's Syntax nodes, which is correct. But the wrapping
    let-expression has synthetic spans — errors in argument binding might
    be confusing.
+
+6. **Side effects during expansion.** Macro bodies run in the real VM,
+   so they can perform I/O, spawn fibers, signal errors, etc. Janet
+   accepts this as a feature ("maximum metaprogramming power with no
+   separate macro language"). We should too — but document it. A macro
+   that writes to a file during expansion is weird but not wrong.
 
 ## Risk Assessment
 
