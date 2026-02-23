@@ -122,27 +122,27 @@ signature, and `expand()` calls `eval_syntax` for macro bodies.
 
 ```rust
 pub fn eval_syntax(
-    syntax: Syntax,
-    expander: &mut Expander,
-    symbols: &mut SymbolTable,
-    vm: &mut VM,
-) -> Result<Value, String> {
-    let expanded = expander.expand(syntax, symbols, vm)?;
-    // ... analyze, lower, emit, execute (same as compile_new)
-    vm.execute(&bytecode).map_err(|e| e.to_string())
-}
+     syntax: Syntax,
+     expander: &mut Expander,
+     symbols: &mut SymbolTable,
+     vm: &mut VM,
+ ) -> Result<Value, String> {
+     let expanded = expander.expand(syntax, symbols, vm)?;
+     // ... analyze, lower, emit, execute (same as compile)
+     vm.execute(&bytecode).map_err(|e| e.to_string())
+ }
 ```
 
 **src/pipeline.rs** — change existing functions:
 
-- `compile_new`: creates its own internal VM for macro expansion.
-  Public signature stays `compile_new(source, symbols)`. The internal
-  VM is throwaway — macro side effects don't persist.
-- `compile_all_new`: same — internal VM.
-- `eval_new`: already takes `&mut VM`. Pass it through to `expand()`.
-- `analyze_new`: add `&mut VM` parameter. The LSP (`CompilerState`)
-  and linter (`lint_str`) already have VMs — just thread them through.
-- `analyze_all_new`: add `&mut VM` parameter. Same.
+- `compile`: creates its own internal VM for macro expansion.
+   Public signature stays `compile(source, symbols)`. The internal
+   VM is throwaway — macro side effects don't persist.
+- `compile_all`: same — internal VM.
+- `eval`: already takes `&mut VM`. Pass it through to `expand()`.
+- `analyze`: add `&mut VM` parameter. The LSP (`CompilerState`)
+   and linter (`lint_str`) already have VMs — just thread them through.
+- `analyze_all`: add `&mut VM` parameter. Same.
 
 **src/syntax/expand/mod.rs** — change `expand()` signature:
 
@@ -169,17 +169,17 @@ Thread `symbols` and `vm` through ALL internal methods:
 
 | File | Call sites |
 |------|-----------|
-| `src/pipeline.rs` | 4 (`compile_new`, `compile_all_new`, `eval_new`, `analyze_new`, `analyze_all_new`) |
+| `src/pipeline.rs` | 4 (`compile`, `compile_all`, `eval`, `analyze`, `analyze_all`) |
 | `src/syntax/expand/tests.rs` | ~23 |
 | `src/syntax/mod.rs` (tests) | ~7 |
 | `src/hir/tailcall.rs` (test helper) | 1 |
 | `tests/unittests/lir_debug.rs` | 1 |
 | `tests/unittests/hir_debug.rs` | 1 |
 | `src/lib.rs` | re-exports (signature change cascades) |
-| `elle-lsp/src/compiler_state.rs` | calls `analyze_all_new` |
-| `elle-lint/src/lib.rs` | calls `analyze_all_new` |
+| `elle-lsp/src/compiler_state.rs` | calls `analyze_all` |
+| `elle-lint/src/lib.rs` | calls `analyze_all` |
 
-Tests calling `analyze_new`/`compile_new` indirectly:
+Tests calling `analyze`/`compile` indirectly:
 | `src/hir/lint.rs` tests | ~4 |
 | `src/hir/symbols.rs` tests | ~6 |
 | `src/pipeline.rs` tests | ~30 |
@@ -479,8 +479,8 @@ Counterfactual: remove scope stamping, verify capture occurs
    works via reborrowing at each call level.
 
 3. ~~**Analysis-only paths.**~~ **Resolved**: Both `elle-lsp` (`CompilerState`)
-   and `elle-lint` (`lint_str`) already create VMs. Just thread them
-   through to `analyze_all_new`. Mechanical change.
+    and `elle-lint` (`lint_str`) already create VMs. Just thread them
+    through to `analyze_all`. Mechanical change.
 
 ## Open Questions
 

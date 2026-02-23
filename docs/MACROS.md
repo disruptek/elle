@@ -130,9 +130,9 @@ scope marks are dead data.
 
 ### Cross-form macro visibility
 
-`compile_all_new` shares a single `Expander` across all top-level forms,
+`compile_all` shares a single `Expander` across all top-level forms,
 so macros defined in one form are visible in subsequent forms within the
-same compilation unit. `eval_new` creates a fresh `Expander` per call,
+same compilation unit. `eval` creates a fresh `Expander` per call,
 so macros defined in one REPL input are lost before the next. The REPL
 needs to persist the Expander across inputs.
 
@@ -354,10 +354,10 @@ These features are designed but blocked on the macro system:
    slow. Mitigation: cache compiled bytecode per MacroDef. The body
    doesn't change between calls — only the argument bindings do.
 
-3. **Analysis-only paths.** `analyze_new` and `analyze_all_new` are used
-   by the LSP and linter. They currently don't need a VM. With VM-based
-   macros, they do — macro bodies must be evaluated to produce the
-   expanded code that gets analyzed. The LSP will need a VM at startup.
+3. **Analysis-only paths.** `analyze` and `analyze_all` are used
+    by the LSP and linter. They currently don't need a VM. With VM-based
+    macros, they do — macro bodies must be evaluated to produce the
+    expanded code that gets analyzed. The LSP will need a VM at startup.
 
 4. **How do macros interact with the effect system?** A macro that
    expands to `(fiber/signal ...)` should produce code with `Yields`
