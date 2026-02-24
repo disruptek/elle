@@ -24,3 +24,9 @@ mod determinism {
 mod arithmetic {
     include!("arithmetic.rs");
 }
+mod reader {
+    include!("reader.rs");
+}
+mod effects {
+    include!("effects.rs");
+}
