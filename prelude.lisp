@@ -94,3 +94,14 @@
 (defmacro with (binding ctor dtor & body)
   `(let ((,binding ,ctor))
      (defer (,dtor ,binding) ,@body)))
+
+;; yield* - delegate to sub-coroutine
+;; Resumes the sub-coroutine, yielding each of its values to the caller.
+;; Resume values from the caller are passed through to the sub-coroutine.
+;; Returns the sub-coroutine's final value when it completes.
+(defmacro yield* (co)
+  `(let ((c ,co))
+     (coro/resume c nil)
+     (while (not (coro/done? c))
+       (coro/resume c (yield (coro/value c))))
+     (coro/value c)))

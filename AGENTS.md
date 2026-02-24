@@ -160,6 +160,12 @@ Things that look wrong but aren't:
   `with`) are defined in `prelude.lisp` and loaded by the Expander before
   user code expansion. The prelude is embedded via `include_str!` and
   parsed/expanded on each Expander creation.
+- `begin` and `block` are distinct forms. `begin` sequences expressions
+  without creating a scope (bindings leak into the enclosing scope). `block`
+  sequences expressions within a new lexical scope (bindings are contained).
+  `block` supports an optional keyword name and `break` for early exit:
+  `(block :name body...)` / `(break :name value)`. `break` is validated at
+  compile time — it must be inside a block and cannot cross function boundaries.
 
 ## Conventions
 

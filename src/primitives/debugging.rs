@@ -250,6 +250,48 @@ pub fn prim_string_to_keyword(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
+/// (vm/list-primitives) — list all registered primitive names
+///
+/// Returns a sorted list of strings containing all primitive names.
+pub fn prim_list_primitives(args: &[Value]) -> (SignalBits, Value) {
+    if !args.is_empty() {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!(
+                    "vm/list-primitives: expected 0 arguments, got {}",
+                    args.len()
+                ),
+            ),
+        );
+    }
+    (
+        SIG_QUERY,
+        Value::cons(Value::keyword("list-primitives"), Value::NIL),
+    )
+}
+
+/// (vm/primitive-meta name) — get structured metadata for a primitive
+///
+/// Returns a struct with keys: "name", "doc", "params", "category", "example", "arity", "effect".
+/// Returns nil if the primitive is not found.
+pub fn prim_primitive_meta(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("vm/primitive-meta: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+    (
+        SIG_QUERY,
+        Value::cons(Value::keyword("primitive-meta"), args[0]),
+    )
+}
+
 // ============================================================================
 // Disassembly
 // ============================================================================
@@ -332,7 +374,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         arity: Arity::Exact(1),
         doc: "Returns true if value is a bytecode closure",
         params: &["value"],
-        category: "",
+        category: "predicate",
         example: "(closure? (fn (x) x))",
         aliases: &[],
     },
@@ -343,7 +385,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         arity: Arity::Exact(1),
         doc: "Returns true if closure has JIT-compiled code",
         params: &["value"],
-        category: "",
+        category: "predicate",
         example: "(jit? (fn (x) x))",
         aliases: &[],
     },
@@ -354,7 +396,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         arity: Arity::Exact(1),
         doc: "Returns true if closure has Pure effect (does not suspend)",
         params: &["value"],
-        category: "",
+        category: "predicate",
         example: "(pure? (fn (x) x))",
         aliases: &[],
     },
@@ -365,7 +407,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         arity: Arity::Exact(1),
         doc: "Returns true if value is a coroutine (fiber-based)",
         params: &["value"],
-        category: "",
+        category: "predicate",
         example: "(coro? (coro/new (fn () 42)))",
         aliases: &["coroutine?"],
     },
@@ -431,7 +473,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         arity: Arity::Exact(1),
         doc: "Look up documentation for a primitive.",
         params: &["name"],
-        category: "",
+        category: "meta",
         example: "(doc \"cons\")",
         aliases: &[],
     },
@@ -442,7 +484,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         arity: Arity::Exact(2),
         doc: "Query VM state (call-count, doc, global?, fiber/self)",
         params: &["op", "arg"],
-        category: "",
+        category: "meta",
         example: "(vm/query \"call-count\" some-fn)",
         aliases: &[],
     },
@@ -453,7 +495,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         arity: Arity::Exact(1),
         doc: "Convert a string to a keyword",
         params: &["str"],
-        category: "",
+        category: "conversion",
         example: "(string->keyword \"foo\")",
         aliases: &[],
     },
@@ -478,5 +520,28 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         category: "fn",
         example: "(fn/disasm-jit (fn (x) x))",
         aliases: &["disjit", "fn/disjit"],
+    },
+    PrimitiveDef {
+        name: "vm/list-primitives",
+        func: prim_list_primitives,
+        effect: Effect::none(),
+        arity: Arity::Exact(0),
+        doc: "List all registered primitive names as a sorted list of strings.",
+        params: &[],
+        category: "meta",
+        example: "(vm/list-primitives) ;=> (\"*\" \"+\" \"-\" ...)",
+        aliases: &["list-primitives"],
+    },
+    PrimitiveDef {
+        name: "vm/primitive-meta",
+        func: prim_primitive_meta,
+        effect: Effect::none(),
+        arity: Arity::Exact(1),
+        doc: "Get structured metadata for a primitive as a struct.",
+        params: &["name"],
+        category: "meta",
+        example:
+            "(struct-get (vm/primitive-meta \"cons\") \"doc\") ;=> \"Construct a cons cell...\"",
+        aliases: &["primitive-meta"],
     },
 ];

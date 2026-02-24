@@ -183,6 +183,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> PrimitiveM
                 effect: def.effect,
                 category: def.category,
                 example: def.example,
+                aliases: def.aliases,
             };
             vm.primitive_docs.insert(def.name.to_string(), doc.clone());
 
@@ -222,4 +223,54 @@ pub fn build_primitive_meta(symbols: &mut SymbolTable) -> PrimitiveMeta {
     }
 
     meta
+}
+
+/// Generate help text from the primitive definition tables.
+///
+/// Groups primitives by category, showing name and doc for each.
+pub fn help_text() -> String {
+    use std::collections::BTreeMap;
+
+    let mut categories: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
+
+    for table in ALL_TABLES {
+        for def in *table {
+            let cat = if def.category.is_empty() {
+                "core"
+            } else {
+                def.category
+            };
+            categories.entry(cat).or_default().push((def.name, def.doc));
+        }
+    }
+
+    let mut out = String::new();
+    out.push_str("Primitives:\n");
+
+    for (category, prims) in &categories {
+        // Capitalize category name
+        let display_name: String = {
+            let mut chars = category.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        };
+
+        // Collect just the names, join with ", "
+        let names: Vec<&str> = prims.iter().map(|(name, _)| *name).collect();
+        out.push_str(&format!("  {:14} {}\n", display_name, names.join(", ")));
+    }
+
+    out.push_str("\nSpecial forms:\n");
+    out.push_str("  if, let, def, var, fn, set!, begin, block, break,\n");
+    out.push_str("  match, while, each, yield, quote, defmacro, module, import\n");
+    out.push_str("\nSyntax sugar:\n");
+    out.push_str("  defn, let*, ->, ->>, when, unless, try/catch, protect, defer, with\n");
+    out.push_str("\nREPL commands:\n");
+    out.push_str("  (help)         Show this help\n");
+    out.push_str("  (doc \"name\")   Show documentation for a primitive\n");
+    out.push_str("  (exit)         Exit the REPL\n");
+
+    out
 }

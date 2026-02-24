@@ -73,6 +73,7 @@ pub struct PrimitiveDoc {
     pub effect: Effect,
     pub category: &'static str,
     pub example: &'static str,
+    pub aliases: &'static [&'static str],
 }
 
 impl PrimitiveDoc {
@@ -106,6 +107,12 @@ impl PrimitiveDoc {
                 out.push_str(line);
                 out.push('\n');
             }
+        }
+        // Aliases
+        if !self.aliases.is_empty() {
+            out.push_str("  aliases: ");
+            out.push_str(&self.aliases.join(", "));
+            out.push('\n');
         }
         out
     }

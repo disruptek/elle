@@ -118,7 +118,9 @@ impl VM {
     /// - (:"doc" . name) — return formatted documentation for a primitive
     /// - (:"global?" . symbol) — return #t if symbol is bound as a global
     /// - (:"fiber/self" . _) — return the currently executing fiber, or nil
-    fn dispatch_query(&self, value: Value) -> (SignalBits, Value) {
+    /// - (:"list-primitives" . _) — return sorted list of all primitive names
+    /// - (:"primitive-meta" . name) — return struct with primitive metadata
+    pub(crate) fn dispatch_query(&self, value: Value) -> (SignalBits, Value) {
         let cons = match value.as_cons() {
             Some(c) => c,
             None => {
@@ -182,6 +184,80 @@ impl VM {
                 }
             }
             "fiber/self" => (SIG_OK, self.current_fiber_value.unwrap_or(Value::NIL)),
+            "list-primitives" => {
+                let mut names: Vec<&String> = self.primitive_docs.keys().collect();
+                names.sort();
+                let values: Vec<Value> =
+                    names.iter().map(|n| Value::string(n.to_string())).collect();
+                (SIG_OK, crate::value::list(values))
+            }
+            "primitive-meta" => {
+                let name = if let Some(s) = arg.as_string() {
+                    s.to_string()
+                } else if let Some(s) = arg.as_keyword_name() {
+                    s.to_string()
+                } else {
+                    return (
+                        SIG_ERROR,
+                        error_val(
+                            "type-error",
+                            "primitive-meta: expected string or keyword".to_string(),
+                        ),
+                    );
+                };
+                if let Some(doc) = self.primitive_docs.get(&name) {
+                    use crate::value::heap::TableKey;
+                    use std::collections::BTreeMap;
+                    let mut fields = BTreeMap::new();
+                    fields.insert(
+                        TableKey::Keyword("name".to_string()),
+                        Value::string(doc.name.to_string()),
+                    );
+                    fields.insert(
+                        TableKey::Keyword("doc".to_string()),
+                        Value::string(doc.doc.to_string()),
+                    );
+                    // params as a list of strings
+                    let params: Vec<Value> = doc
+                        .params
+                        .iter()
+                        .map(|p| Value::string(p.to_string()))
+                        .collect();
+                    fields.insert(
+                        TableKey::Keyword("params".to_string()),
+                        crate::value::list(params),
+                    );
+                    fields.insert(
+                        TableKey::Keyword("category".to_string()),
+                        Value::string(doc.category.to_string()),
+                    );
+                    fields.insert(
+                        TableKey::Keyword("example".to_string()),
+                        Value::string(doc.example.to_string()),
+                    );
+                    fields.insert(
+                        TableKey::Keyword("arity".to_string()),
+                        Value::string(format!("{}", doc.arity)),
+                    );
+                    fields.insert(
+                        TableKey::Keyword("effect".to_string()),
+                        Value::string(format!("{}", doc.effect)),
+                    );
+                    // aliases as a list of strings
+                    let aliases: Vec<Value> = doc
+                        .aliases
+                        .iter()
+                        .map(|a| Value::string(a.to_string()))
+                        .collect();
+                    fields.insert(
+                        TableKey::Keyword("aliases".to_string()),
+                        crate::value::list(aliases),
+                    );
+                    (SIG_OK, Value::struct_from(fields))
+                } else {
+                    (SIG_OK, Value::NIL)
+                }
+            }
             _ => (
                 SIG_ERROR,
                 error_val(
