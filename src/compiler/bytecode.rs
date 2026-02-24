@@ -162,6 +162,11 @@ pub enum Instruction {
     /// Array slice from index (for & rest destructuring): returns sub-array from index to end
     /// Operand: u16 index (immediate)
     ArraySliceFrom,
+
+    /// Type check: is value an array?
+    IsArray,
+    /// Get array length as integer
+    ArrayLen,
 }
 
 /// Inline cache entry for function lookups

@@ -30,7 +30,11 @@ pub fn prim_is_pair(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (SIG_OK, Value::bool(args[0].as_cons().is_some()))
+    let is_pair = args[0].as_cons().is_some()
+        || args[0].as_syntax().is_some_and(
+            |s| matches!(s.kind, crate::syntax::SyntaxKind::List(ref items) if !items.is_empty()),
+        );
+    (SIG_OK, Value::bool(is_pair))
 }
 
 /// Check if value is a list (empty list or cons cell)
@@ -44,10 +48,12 @@ pub fn prim_is_list(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (
-        SIG_OK,
-        Value::bool(args[0].is_empty_list() || args[0].as_cons().is_some()),
-    )
+    let is_list = args[0].is_empty_list()
+        || args[0].as_cons().is_some()
+        || args[0]
+            .as_syntax()
+            .is_some_and(|s| matches!(s.kind, crate::syntax::SyntaxKind::List(_)));
+    (SIG_OK, Value::bool(is_list))
 }
 
 /// Check if value is a number
@@ -75,7 +81,11 @@ pub fn prim_is_symbol(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (SIG_OK, Value::bool(args[0].is_symbol()))
+    let is_symbol = args[0].is_symbol()
+        || args[0]
+            .as_syntax()
+            .is_some_and(|s| matches!(s.kind, crate::syntax::SyntaxKind::Symbol(_)));
+    (SIG_OK, Value::bool(is_symbol))
 }
 
 /// Check if value is a string

@@ -59,9 +59,13 @@ impl Syntax {
     /// scopes from the original Syntax. The passed `span` is ignored in
     /// this case; the syntax object carries its own (more accurate) span.
     pub fn from_value(value: &Value, symbols: &SymbolTable, span: Span) -> Result<Syntax, String> {
-        // Syntax objects pass through directly, preserving scopes
+        // Syntax objects pass through directly, preserving scopes.
+        // Mark as scope_exempt so the intro scope isn't stamped on
+        // call-site identifiers that survived the Value round-trip.
         if let Some(syntax_rc) = value.as_syntax() {
-            return Ok(syntax_rc.as_ref().clone());
+            let mut s = syntax_rc.as_ref().clone();
+            s.scope_exempt = true;
+            return Ok(s);
         }
         let kind = if value.is_nil() {
             SyntaxKind::Nil

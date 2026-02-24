@@ -156,7 +156,10 @@ Things that look wrong but aren't:
   pattern matching which is conditional. `CarOrNil`/`CdrOrNil`/`ArrayRefOrNil`
   are dedicated bytecode instructions for this — they never signal errors.
 - `defn` and `let*` are desugared in the Rust expander, not as `defmacro`
-  macros. Elle does not yet have a prelude loading mechanism.
+  macros. Higher-level macros (`when`, `unless`, `try`, `protect`, `defer`,
+  `with`) are defined in `prelude.lisp` and loaded by the Expander before
+  user code expansion. The prelude is embedded via `include_str!` and
+  parsed/expanded on each Expander creation.
 
 ## Conventions
 

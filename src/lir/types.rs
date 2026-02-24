@@ -187,6 +187,10 @@ pub enum LirInstr {
     IsNil { dst: Reg, src: Reg },
     /// Check if value is a pair
     IsPair { dst: Reg, src: Reg },
+    /// Check if value is an array (for pattern matching)
+    IsArray { dst: Reg, src: Reg },
+    /// Get array length (for pattern matching)
+    ArrayLen { dst: Reg, src: Reg },
 
     // === Cell Operations (for mutable captures) ===
     /// Create a cell containing a value

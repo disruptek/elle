@@ -750,6 +750,9 @@ impl<'a> Analyzer<'a> {
         // For nested lambdas, the parent captures are the captures from the enclosing lambda
         self.parent_captures = saved_captures.clone();
 
+        // Increment fn_depth so break cannot target blocks outside this lambda
+        self.fn_depth += 1;
+
         self.push_scope(true);
 
         // Split params at & for variadic rest parameter
@@ -834,6 +837,7 @@ impl<'a> Analyzer<'a> {
         let inferred_effect = self.compute_inferred_effect(&body, &params);
 
         self.pop_scope();
+        self.fn_depth -= 1;
         let captures = std::mem::replace(&mut self.current_captures, saved_captures);
         self.parent_captures = saved_parent_captures;
 

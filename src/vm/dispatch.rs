@@ -232,6 +232,12 @@ impl VM {
                 Instruction::IsPair => {
                     types::handle_is_pair(self);
                 }
+                Instruction::IsArray => {
+                    types::handle_is_array(self);
+                }
+                Instruction::ArrayLen => {
+                    types::handle_array_len(self);
+                }
                 Instruction::IsNumber => {
                     types::handle_is_number(self);
                 }

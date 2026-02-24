@@ -505,6 +505,12 @@ impl<'a> FunctionTranslator<'a> {
                     "ArraySliceFrom".to_string(),
                 ));
             }
+            LirInstr::IsArray { .. } => {
+                return Err(JitError::UnsupportedInstruction("IsArray".to_string()));
+            }
+            LirInstr::ArrayLen { .. } => {
+                return Err(JitError::UnsupportedInstruction("ArrayLen".to_string()));
+            }
         }
         Ok(false)
     }

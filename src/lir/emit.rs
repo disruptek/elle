@@ -482,6 +482,20 @@ impl Emitter {
                 self.push_reg(*dst);
             }
 
+            LirInstr::IsArray { dst, src } => {
+                self.ensure_on_top(*src);
+                self.bytecode.emit(Instruction::IsArray);
+                self.pop();
+                self.push_reg(*dst);
+            }
+
+            LirInstr::ArrayLen { dst, src } => {
+                self.ensure_on_top(*src);
+                self.bytecode.emit(Instruction::ArrayLen);
+                self.pop();
+                self.push_reg(*dst);
+            }
+
             LirInstr::MakeCell { dst, value } => {
                 self.ensure_on_top(*value);
                 self.bytecode.emit(Instruction::MakeCell);
