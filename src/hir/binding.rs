@@ -106,8 +106,8 @@ pub struct CaptureInfo {
 /// How a capture is accessed from the enclosing scope
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureKind {
-    /// Capture from parent's local slot
-    Local { index: u16 },
+    /// Capture from parent's local slot (resolved by lowerer via binding_to_slot)
+    Local,
     /// Capture from parent's capture (transitive capture)
     Capture { index: u16 },
     /// Capture from global scope

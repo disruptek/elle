@@ -25,7 +25,7 @@ impl Lowerer {
             let binding_needs_cell = cap.binding.needs_cell();
 
             match cap.kind {
-                CaptureKind::Local { index: _ } => {
+                CaptureKind::Local => {
                     // Load from parent's local/parameter slot
                     // Use binding_to_slot to find where this binding is in the current context
                     if let Some(&slot) = self.binding_to_slot.get(&cap.binding) {

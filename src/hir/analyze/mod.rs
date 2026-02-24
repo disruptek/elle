@@ -256,7 +256,7 @@ impl<'a> Analyzer<'a> {
                         // Direct capture from parent's locals
                         // Use binding_to_slot in the lowerer to find the actual index
                         // For now, use 0 as placeholder — the lowerer resolves this
-                        CaptureKind::Local { index: 0 }
+                        CaptureKind::Local
                     }
                     BindingScope::Global => {
                         // This should not happen due to the check above
