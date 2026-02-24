@@ -547,3 +547,161 @@ fn test_wildcard_and_rest_array() {
         Value::int(20)
     );
 }
+
+// ============================================================
+// Variadic & rest in fn/lambda parameters
+// ============================================================
+
+#[test]
+fn test_variadic_fn_rest_only() {
+    // (fn (& args) args) — all args collected into a list
+    assert_eq!(
+        eval("((fn (& args) args) 1 2 3)").unwrap(),
+        eval("(list 1 2 3)").unwrap()
+    );
+}
+
+#[test]
+fn test_variadic_fn_rest_empty() {
+    // No extra args → rest is empty list
+    assert_eq!(eval("((fn (& args) args))").unwrap(), Value::EMPTY_LIST);
+}
+
+#[test]
+fn test_variadic_fn_fixed_and_rest() {
+    // (fn (a b & rest) ...) — first two are fixed, rest collected
+    assert_eq!(
+        eval("((fn (a b & rest) (+ a b)) 10 20 30 40)").unwrap(),
+        Value::int(30)
+    );
+}
+
+#[test]
+fn test_variadic_fn_rest_value() {
+    // Check the rest parameter value
+    assert_eq!(
+        eval("((fn (a & rest) rest) 1 2 3)").unwrap(),
+        eval("(list 2 3)").unwrap()
+    );
+}
+
+#[test]
+fn test_variadic_fn_rest_single_extra() {
+    assert_eq!(
+        eval("((fn (a & rest) rest) 1 2)").unwrap(),
+        eval("(list 2)").unwrap()
+    );
+}
+
+#[test]
+fn test_variadic_fn_rest_no_extra() {
+    // No extra args beyond fixed → rest is empty list
+    assert_eq!(eval("((fn (a & rest) rest) 1)").unwrap(), Value::EMPTY_LIST);
+}
+
+#[test]
+fn test_variadic_defn() {
+    // defn with variadic params
+    assert_eq!(
+        eval("(begin (defn my-list (& items) items) (my-list 1 2 3))").unwrap(),
+        eval("(list 1 2 3)").unwrap()
+    );
+}
+
+#[test]
+fn test_variadic_defn_fixed_and_rest() {
+    assert_eq!(
+        eval("(begin (defn f (x & rest) (cons x rest)) (f 1 2 3))").unwrap(),
+        eval("(list 1 2 3)").unwrap()
+    );
+}
+
+#[test]
+fn test_variadic_let_binding() {
+    // let binding with variadic lambda
+    assert_eq!(
+        eval("(let ((f (fn (& args) args))) (f 10 20))").unwrap(),
+        eval("(list 10 20)").unwrap()
+    );
+}
+
+#[test]
+fn test_variadic_arity_check_too_few() {
+    // (fn (a b & rest) ...) requires at least 2 args
+    assert!(eval("((fn (a b & rest) a) 1)").is_err());
+}
+
+#[test]
+fn test_variadic_recursive() {
+    // Recursive variadic function
+    assert_eq!(
+        eval(
+            "(begin
+            (defn my-len (& args)
+                (def lst (first args))
+                (if (empty? lst) 0
+                    (+ 1 (my-len (rest lst)))))
+            (my-len (list 1 2 3)))"
+        )
+        .unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_variadic_tail_call() {
+    // Tail-recursive variadic function (non-variadic self-call for clean recursion)
+    assert_eq!(
+        eval(
+            "(begin
+            (defn sum-list (acc lst)
+                (if (empty? lst) acc
+                    (sum-list (+ acc (first lst)) (rest lst))))
+            (defn sum-all (& nums)
+                (sum-list 0 nums))
+            (sum-all 1 2 3 4 5))"
+        )
+        .unwrap(),
+        Value::int(15)
+    );
+}
+
+#[test]
+fn test_variadic_closure_capture() {
+    // Variadic function that captures a variable
+    assert_eq!(
+        eval(
+            "(begin
+            (def x 100)
+            (defn add-to-x (& nums)
+                (+ x (first nums)))
+            (add-to-x 42))"
+        )
+        .unwrap(),
+        Value::int(142)
+    );
+}
+
+#[test]
+fn test_variadic_higher_order() {
+    // Pass variadic function as argument
+    assert_eq!(
+        eval(
+            "(begin
+            (defn apply-fn (f & args)
+                (f (first args)))
+            (apply-fn (fn (x) (+ x 1)) 10))"
+        )
+        .unwrap(),
+        Value::int(11)
+    );
+}
+
+#[test]
+fn test_variadic_compile_time_arity_check() {
+    // Compile-time arity check should work for variadic functions
+    // This should succeed (at least 1 arg)
+    assert!(eval("(begin (defn f (x & rest) x) (f 1))").is_ok());
+    // This should fail at compile time (0 args, needs at least 1)
+    assert!(eval("(begin (defn f (x & rest) x) (f))").is_err());
+}

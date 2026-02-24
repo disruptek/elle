@@ -62,6 +62,9 @@ pub enum HirKind {
     /// Lambda expression
     Lambda {
         params: Vec<Binding>,
+        /// If present, this function is variadic: extra args are collected
+        /// into a list and bound to this parameter.
+        rest_param: Option<Binding>,
         captures: Vec<CaptureInfo>,
         body: Box<Hir>,
         /// Number of local slots needed (params + locals)

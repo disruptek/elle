@@ -8,6 +8,7 @@
 ; - Destructuring in function parameters
 ; - Silent nil semantics for missing values
 ; - defn with destructured parameters
+; - Variadic & rest in function parameters
 
 (import-file "./examples/assertions.lisp")
 
@@ -290,10 +291,66 @@
 (newline)
 
 ; ============================================================================
-; PART 10: Practical Examples
+; PART 10: Variadic & rest in Function Parameters
 ; ============================================================================
 
-(display "PART 10: Practical Examples")
+(display "PART 10: Variadic & rest in Function Parameters")
+(newline)
+(newline)
+
+; Collect all arguments into a list
+(defn my-list (& items) items)
+(assert-eq (my-list 1 2 3) (list 1 2 3) "variadic: collect all")
+(display "  (defn my-list (& items) items) => (my-list 1 2 3) = ")
+(display (my-list 1 2 3))
+(newline)
+
+; No extra args → empty list
+(assert-eq (my-list) (list) "variadic: no args => empty list")
+(display "  (my-list) => ")
+(display (my-list))
+(newline)
+
+; Fixed params + rest
+(defn head-and-rest (x & rest) (list x rest))
+(def (hd rst) (head-and-rest 1 2 3))
+(assert-eq hd 1 "variadic: fixed head")
+(assert-eq rst (list 2 3) "variadic: rest list")
+(display "  (defn head-and-rest (x & rest) ...) => (head-and-rest 1 2 3) = ")
+(display (head-and-rest 1 2 3))
+(newline)
+
+; Rest with no extra args
+(def (hd2 rst2) (head-and-rest 42))
+(assert-eq hd2 42 "variadic: fixed only")
+(assert-eq rst2 (list) "variadic: rest empty")
+(display "  (head-and-rest 42) => ")
+(display (head-and-rest 42))
+(newline)
+
+; Variadic with closure capture
+(def multiplier 10)
+(defn scale-all (& nums)
+  (if (empty? nums) (list)
+      (cons (* multiplier (first nums))
+            (scale-all))))
+(display "  Variadic with closure capture: scale-all defined")
+(newline)
+
+; Variadic higher-order: apply-fn
+(defn apply-fn (f & args)
+  (f (first args)))
+(assert-eq (apply-fn (fn (x) (+ x 1)) 10) 11 "variadic higher-order")
+(display "  (defn apply-fn (f & args) (f (first args))) => (apply-fn inc 10) = ")
+(display (apply-fn (fn (x) (+ x 1)) 10))
+(newline)
+(newline)
+
+; ============================================================================
+; PART 11: Practical Examples
+; ============================================================================
+
+(display "PART 11: Practical Examples")
 (newline)
 (newline)
 

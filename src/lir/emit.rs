@@ -5,7 +5,7 @@
 
 use super::types::*;
 use crate::compiler::bytecode::{Bytecode, Instruction};
-use crate::value::{Arity, Closure, Value};
+use crate::value::{Closure, Value};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -244,7 +244,7 @@ impl Emitter {
                 // Create closure template
                 let closure = Closure {
                     bytecode: Rc::new(nested_bytecode.instructions),
-                    arity: Arity::Exact(func.arity as usize),
+                    arity: func.arity,
                     env: Rc::new(vec![]), // Empty - captures added at runtime
                     num_locals: func.num_locals as usize,
                     num_captures: captures.len(),
@@ -773,6 +773,7 @@ impl Default for Emitter {
 mod tests {
     use super::*;
     use crate::syntax::Span;
+    use crate::value::Arity;
 
     fn synthetic_span() -> Span {
         Span::synthetic()
@@ -782,7 +783,7 @@ mod tests {
     fn test_emit_simple() {
         let mut emitter = Emitter::new();
 
-        let mut func = LirFunction::new(0);
+        let mut func = LirFunction::new(Arity::Exact(0));
         let mut block = BasicBlock::new(Label(0));
         block.instructions.push(SpannedInstr::new(
             LirInstr::Const {
@@ -803,7 +804,7 @@ mod tests {
     fn test_emit_branch() {
         let mut emitter = Emitter::new();
 
-        let mut func = LirFunction::new(0);
+        let mut func = LirFunction::new(Arity::Exact(0));
 
         // Entry block
         let mut entry = BasicBlock::new(Label(0));

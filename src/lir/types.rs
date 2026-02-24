@@ -2,7 +2,7 @@
 
 use crate::effects::Effect;
 use crate::syntax::Span;
-use crate::value::SymbolId;
+use crate::value::{Arity, SymbolId};
 
 /// Virtual register
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,8 +29,8 @@ impl Label {
 pub struct LirFunction {
     /// Function name (for debugging)
     pub name: Option<String>,
-    /// Number of parameters
-    pub arity: u16,
+    /// Function arity (Exact for fixed, AtLeast for variadic)
+    pub arity: Arity,
     /// Basic blocks
     pub blocks: Vec<BasicBlock>,
     /// Entry block label
@@ -52,7 +52,7 @@ pub struct LirFunction {
 }
 
 impl LirFunction {
-    pub fn new(arity: u16) -> Self {
+    pub fn new(arity: Arity) -> Self {
         LirFunction {
             name: None,
             arity,

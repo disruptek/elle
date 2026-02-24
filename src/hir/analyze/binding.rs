@@ -59,13 +59,18 @@ impl<'a> Analyzer<'a> {
                     // Track effect and arity for interprocedural analysis
                     if let HirKind::Lambda {
                         params: lambda_params,
+                        rest_param,
                         inferred_effect,
                         ..
                     } = &value.kind
                     {
                         self.effect_env.insert(binding, *inferred_effect);
-                        self.arity_env
-                            .insert(binding, Arity::Exact(lambda_params.len()));
+                        let arity = if rest_param.is_some() {
+                            Arity::AtLeast(lambda_params.len() - 1)
+                        } else {
+                            Arity::Exact(lambda_params.len())
+                        };
+                        self.arity_env.insert(binding, arity);
                     }
                     bindings.push((binding, value));
                 }
@@ -164,13 +169,18 @@ impl<'a> Analyzer<'a> {
             // since later bindings haven't been analyzed yet. This is conservative.
             if let HirKind::Lambda {
                 params: lambda_params,
+                rest_param,
                 inferred_effect,
                 ..
             } = &value.kind
             {
                 self.effect_env.insert(binding_handles[i], *inferred_effect);
-                self.arity_env
-                    .insert(binding_handles[i], Arity::Exact(lambda_params.len()));
+                let arity = if rest_param.is_some() {
+                    Arity::AtLeast(lambda_params.len() - 1)
+                } else {
+                    Arity::Exact(lambda_params.len())
+                };
+                self.arity_env.insert(binding_handles[i], arity);
             }
             bindings.push((binding_handles[i], value));
         }
@@ -236,6 +246,24 @@ impl<'a> Analyzer<'a> {
     /// Check if a syntax node is a destructuring pattern (list or array of symbols/patterns).
     fn is_destructure_pattern(syntax: &Syntax) -> bool {
         matches!(&syntax.kind, SyntaxKind::List(_) | SyntaxKind::Array(_))
+    }
+
+    /// Estimate arity from syntax-level parameter list (before analysis).
+    /// Detects `&` for variadic functions.
+    fn arity_from_syntax_params(params: &[Syntax]) -> Arity {
+        let has_rest = params
+            .iter()
+            .any(|s| matches!(&s.kind, SyntaxKind::Symbol(n) if n == "&"));
+        if has_rest {
+            // Count fixed params (everything before &)
+            let fixed = params
+                .iter()
+                .position(|s| matches!(&s.kind, SyntaxKind::Symbol(n) if n == "&"))
+                .unwrap_or(params.len());
+            Arity::AtLeast(fixed)
+        } else {
+            Arity::Exact(params.len())
+        }
     }
 
     /// Split a pattern's items at `&` into (fixed_elements, optional_rest).
@@ -405,7 +433,7 @@ impl<'a> Analyzer<'a> {
                 if let Some(list) = items[2].as_list() {
                     if let Some(params_syn) = list.get(1).and_then(|s| s.as_list()) {
                         self.arity_env
-                            .insert(binding, Arity::Exact(params_syn.len()));
+                            .insert(binding, Self::arity_from_syntax_params(params_syn));
                     }
                 }
             }
@@ -416,13 +444,18 @@ impl<'a> Analyzer<'a> {
             // Update effect_env and arity_env with the actual inferred values
             if let HirKind::Lambda {
                 params: lambda_params,
+                rest_param,
                 inferred_effect,
                 ..
             } = &value.kind
             {
                 self.effect_env.insert(binding, *inferred_effect);
-                self.arity_env
-                    .insert(binding, Arity::Exact(lambda_params.len()));
+                let arity = if rest_param.is_some() {
+                    Arity::AtLeast(lambda_params.len() - 1)
+                } else {
+                    Arity::Exact(lambda_params.len())
+                };
+                self.arity_env.insert(binding, arity);
             }
 
             // Emit a Define (the lowerer checks binding.is_global())
@@ -447,7 +480,7 @@ impl<'a> Analyzer<'a> {
                 // Pre-seed arity from syntax (count params in the lambda form)
                 if let Some(list) = items[2].as_list() {
                     if let Some(params_syn) = list.get(1).and_then(|s| s.as_list()) {
-                        let arity = Arity::Exact(params_syn.len());
+                        let arity = Self::arity_from_syntax_params(params_syn);
                         self.arity_env.insert(binding, arity);
                         self.defined_global_arities.insert(sym, arity);
                     }
@@ -461,13 +494,18 @@ impl<'a> Analyzer<'a> {
             // Also record in defined_global_effects/arities for cross-form tracking
             if let HirKind::Lambda {
                 params: lambda_params,
+                rest_param,
                 inferred_effect,
                 ..
             } = &value.kind
             {
                 self.effect_env.insert(binding, *inferred_effect);
                 self.defined_global_effects.insert(sym, *inferred_effect);
-                let arity = Arity::Exact(lambda_params.len());
+                let arity = if rest_param.is_some() {
+                    Arity::AtLeast(lambda_params.len() - 1)
+                } else {
+                    Arity::Exact(lambda_params.len())
+                };
                 self.arity_env.insert(binding, arity);
                 self.defined_global_arities.insert(sym, arity);
             }
@@ -546,7 +584,7 @@ impl<'a> Analyzer<'a> {
                 if let Some(list) = items[2].as_list() {
                     if let Some(params_syn) = list.get(1).and_then(|s| s.as_list()) {
                         self.arity_env
-                            .insert(binding, Arity::Exact(params_syn.len()));
+                            .insert(binding, Self::arity_from_syntax_params(params_syn));
                     }
                 }
             }
@@ -557,13 +595,18 @@ impl<'a> Analyzer<'a> {
             // Update effect_env and arity_env with the actual inferred values
             if let HirKind::Lambda {
                 params: lambda_params,
+                rest_param,
                 inferred_effect,
                 ..
             } = &value.kind
             {
                 self.effect_env.insert(binding, *inferred_effect);
-                self.arity_env
-                    .insert(binding, Arity::Exact(lambda_params.len()));
+                let arity = if rest_param.is_some() {
+                    Arity::AtLeast(lambda_params.len() - 1)
+                } else {
+                    Arity::Exact(lambda_params.len())
+                };
+                self.arity_env.insert(binding, arity);
             }
 
             Ok(Hir::new(
@@ -592,7 +635,7 @@ impl<'a> Analyzer<'a> {
                 // Pre-seed arity from syntax (count params in the lambda form)
                 if let Some(list) = items[2].as_list() {
                     if let Some(params_syn) = list.get(1).and_then(|s| s.as_list()) {
-                        let arity = Arity::Exact(params_syn.len());
+                        let arity = Self::arity_from_syntax_params(params_syn);
                         self.arity_env.insert(binding, arity);
                         self.defined_global_arities.insert(sym, arity);
                     }
@@ -606,13 +649,18 @@ impl<'a> Analyzer<'a> {
             // Also record in defined_global_effects/arities for cross-form tracking
             if let HirKind::Lambda {
                 params: lambda_params,
+                rest_param,
                 inferred_effect,
                 ..
             } = &value.kind
             {
                 self.effect_env.insert(binding, *inferred_effect);
                 self.defined_global_effects.insert(sym, *inferred_effect);
-                let arity = Arity::Exact(lambda_params.len());
+                let arity = if rest_param.is_some() {
+                    Arity::AtLeast(lambda_params.len() - 1)
+                } else {
+                    Arity::Exact(lambda_params.len())
+                };
                 self.arity_env.insert(binding, arity);
                 self.defined_global_arities.insert(sym, arity);
             }
@@ -704,10 +752,13 @@ impl<'a> Analyzer<'a> {
 
         self.push_scope(true);
 
-        // Bind parameters — some may be destructuring patterns
+        // Split params at & for variadic rest parameter
+        let (fixed_params, rest_syntax) = Self::split_rest_pattern(params_syntax, &span)?;
+
+        // Bind fixed parameters — some may be destructuring patterns
         let mut params = Vec::new();
         let mut param_destructures = Vec::new();
-        for param in params_syntax.iter() {
+        for param in fixed_params.iter() {
             if let Some(name) = param.as_symbol() {
                 let binding = self.bind(name, param.scopes.as_slice(), BindingScope::Parameter);
                 params.push(binding);
@@ -725,6 +776,19 @@ impl<'a> Analyzer<'a> {
                 ));
             }
         }
+
+        // Bind rest parameter if present — it occupies a parameter slot
+        // that the VM will fill with a list of extra arguments
+        let rest_param = if let Some(rest_syn) = rest_syntax {
+            let name = rest_syn
+                .as_symbol()
+                .ok_or_else(|| format!("{}: rest parameter after & must be a symbol", span))?;
+            let binding = self.bind(name, rest_syn.scopes.as_slice(), BindingScope::Parameter);
+            params.push(binding);
+            Some(binding)
+        } else {
+            None
+        };
 
         // Set current lambda params for effect source tracking
         self.current_lambda_params = params.clone();
@@ -807,6 +871,7 @@ impl<'a> Analyzer<'a> {
         Ok(Hir::new(
             HirKind::Lambda {
                 params,
+                rest_param,
                 captures,
                 body: Box::new(body),
                 num_locals,
