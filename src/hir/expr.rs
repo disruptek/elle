@@ -147,6 +147,15 @@ pub enum HirKind {
     /// Quote stores a pre-computed Value (converted at analysis time)
     Quote(Value),
 
+    // === Destructuring ===
+    /// Unconditional destructuring: extract values from a compound and bind them.
+    /// Missing values → nil, no type checks, no branching on failure.
+    /// Used by def/var/let/let*/fn when the binding position is a list or array.
+    Destructure {
+        pattern: HirPattern,
+        value: Box<Hir>,
+    },
+
     // === Module System ===
     Module {
         name: SymbolId,

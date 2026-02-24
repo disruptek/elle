@@ -207,11 +207,10 @@ impl Emitter {
                 // Add symbol to constants with name for cross-thread portability
                 let name = self.symbol_names.get(&sym.0).cloned().unwrap_or_default();
                 let const_idx = self.bytecode.add_symbol(sym.0, &name);
-                // StoreGlobal reads the symbol index directly from bytecode
-                // Stack should have the value on top
+                // StoreGlobal pops the value, stores it, and pushes it back.
+                // The stack simulation stays the same (value is still on top).
                 self.bytecode.emit(Instruction::StoreGlobal);
                 self.bytecode.emit_u16(const_idx);
-                self.pop();
             }
 
             LirInstr::MakeClosure {
@@ -376,6 +375,28 @@ impl Emitter {
                 self.push_reg(*dst);
             }
 
+            LirInstr::CarOrNil { dst, src } => {
+                self.ensure_on_top(*src);
+                self.bytecode.emit(Instruction::CarOrNil);
+                self.pop();
+                self.push_reg(*dst);
+            }
+
+            LirInstr::CdrOrNil { dst, src } => {
+                self.ensure_on_top(*src);
+                self.bytecode.emit(Instruction::CdrOrNil);
+                self.pop();
+                self.push_reg(*dst);
+            }
+
+            LirInstr::ArrayRefOrNil { dst, src, index } => {
+                self.ensure_on_top(*src);
+                self.bytecode.emit(Instruction::ArrayRefOrNil);
+                self.bytecode.emit_u16(*index);
+                self.pop();
+                self.push_reg(*dst);
+            }
+
             LirInstr::BinOp { dst, op, lhs, rhs } => {
                 // Check if lhs and rhs are already the top two stack elements
                 // (lhs at top-1, rhs at top). This is the common case from the
@@ -471,8 +492,11 @@ impl Emitter {
                 self.ensure_on_top(*cell);
                 self.ensure_on_top(*value);
                 self.bytecode.emit(Instruction::UpdateCell);
-                self.pop();
-                self.pop();
+                // UpdateCell pops value, pops cell, pushes value back.
+                // Net stack effect: -1 (cell is consumed, value survives).
+                self.pop(); // value (will be re-pushed)
+                self.pop(); // cell (consumed)
+                self.push_reg(*value); // value pushed back by VM
             }
 
             LirInstr::Move { dst, src } => {

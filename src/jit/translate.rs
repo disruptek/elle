@@ -489,6 +489,17 @@ impl<'a> FunctionTranslator<'a> {
                     "LoadResumeValue".to_string(),
                 ));
             }
+            LirInstr::CarOrNil { .. } => {
+                return Err(JitError::UnsupportedInstruction("CarOrNil".to_string()));
+            }
+            LirInstr::CdrOrNil { .. } => {
+                return Err(JitError::UnsupportedInstruction("CdrOrNil".to_string()));
+            }
+            LirInstr::ArrayRefOrNil { .. } => {
+                return Err(JitError::UnsupportedInstruction(
+                    "ArrayRefOrNil".to_string(),
+                ));
+            }
         }
         Ok(false)
     }

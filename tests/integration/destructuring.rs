@@ -1,0 +1,371 @@
+// Integration tests for destructuring patterns in def, var, let, let*, and fn
+use elle::ffi::primitives::context::set_symbol_table;
+use elle::pipeline::{compile, compile_all};
+use elle::primitives::register_primitives;
+use elle::{SymbolTable, Value, VM};
+
+fn eval(input: &str) -> Result<Value, String> {
+    let mut vm = VM::new();
+    let mut symbols = SymbolTable::new();
+    let _effects = register_primitives(&mut vm, &mut symbols);
+    set_symbol_table(&mut symbols as *mut SymbolTable);
+
+    match compile(input, &mut symbols) {
+        Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
+        Err(_) => {
+            let wrapped = format!("(begin {})", input);
+            match compile(&wrapped, &mut symbols) {
+                Ok(result) => vm.execute(&result.bytecode).map_err(|e| e.to_string()),
+                Err(_) => {
+                    let results = compile_all(input, &mut symbols)?;
+                    let mut last_result = Value::NIL;
+                    for result in results {
+                        last_result = vm.execute(&result.bytecode).map_err(|e| e.to_string())?;
+                    }
+                    Ok(last_result)
+                }
+            }
+        }
+    }
+}
+
+// === def: list destructuring ===
+
+#[test]
+fn test_def_list_basic() {
+    assert_eq!(
+        eval("(begin (def (a b c) (list 1 2 3)) a)").unwrap(),
+        Value::int(1)
+    );
+    assert_eq!(
+        eval("(begin (def (a b c) (list 1 2 3)) b)").unwrap(),
+        Value::int(2)
+    );
+    assert_eq!(
+        eval("(begin (def (a b c) (list 1 2 3)) c)").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_def_list_short_source() {
+    // Missing elements become nil
+    assert_eq!(
+        eval("(begin (def (a b c) (list 1)) a)").unwrap(),
+        Value::int(1)
+    );
+    assert_eq!(
+        eval("(begin (def (a b c) (list 1)) b)").unwrap(),
+        Value::NIL
+    );
+    assert_eq!(
+        eval("(begin (def (a b c) (list 1)) c)").unwrap(),
+        Value::NIL
+    );
+}
+
+#[test]
+fn test_def_list_empty_source() {
+    assert_eq!(eval("(begin (def (a b) (list)) a)").unwrap(), Value::NIL);
+    assert_eq!(eval("(begin (def (a b) (list)) b)").unwrap(), Value::NIL);
+}
+
+#[test]
+fn test_def_list_extra_elements_ignored() {
+    // More elements than bindings — extras are silently dropped
+    assert_eq!(
+        eval("(begin (def (a b) (list 1 2 3 4)) a)").unwrap(),
+        Value::int(1)
+    );
+    assert_eq!(
+        eval("(begin (def (a b) (list 1 2 3 4)) b)").unwrap(),
+        Value::int(2)
+    );
+}
+
+#[test]
+fn test_def_list_wrong_type_gives_nil() {
+    // Destructuring a non-list gives nil for all bindings
+    assert_eq!(eval("(begin (def (a b) 42) a)").unwrap(), Value::NIL);
+    assert_eq!(eval("(begin (def (a b) 42) b)").unwrap(), Value::NIL);
+}
+
+// === def: array destructuring ===
+
+#[test]
+fn test_def_array_basic() {
+    assert_eq!(
+        eval("(begin (def [x y] [10 20]) x)").unwrap(),
+        Value::int(10)
+    );
+    assert_eq!(
+        eval("(begin (def [x y] [10 20]) y)").unwrap(),
+        Value::int(20)
+    );
+}
+
+#[test]
+fn test_def_array_short_source() {
+    assert_eq!(
+        eval("(begin (def [x y z] [10]) x)").unwrap(),
+        Value::int(10)
+    );
+    assert_eq!(eval("(begin (def [x y z] [10]) y)").unwrap(), Value::NIL);
+    assert_eq!(eval("(begin (def [x y z] [10]) z)").unwrap(), Value::NIL);
+}
+
+#[test]
+fn test_def_array_wrong_type_gives_nil() {
+    assert_eq!(eval("(begin (def [a b] 42) a)").unwrap(), Value::NIL);
+}
+
+// === def: nested destructuring ===
+
+#[test]
+fn test_def_nested_list() {
+    assert_eq!(
+        eval("(begin (def ((a b) c) (list (list 1 2) 3)) a)").unwrap(),
+        Value::int(1)
+    );
+    assert_eq!(
+        eval("(begin (def ((a b) c) (list (list 1 2) 3)) b)").unwrap(),
+        Value::int(2)
+    );
+    assert_eq!(
+        eval("(begin (def ((a b) c) (list (list 1 2) 3)) c)").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_def_nested_array_in_list() {
+    assert_eq!(
+        eval("(begin (def ([x y] z) (list [10 20] 30)) x)").unwrap(),
+        Value::int(10)
+    );
+    assert_eq!(
+        eval("(begin (def ([x y] z) (list [10 20] 30)) y)").unwrap(),
+        Value::int(20)
+    );
+    assert_eq!(
+        eval("(begin (def ([x y] z) (list [10 20] 30)) z)").unwrap(),
+        Value::int(30)
+    );
+}
+
+// === def: immutability ===
+
+#[test]
+fn test_def_destructured_bindings_are_immutable() {
+    let result = eval("(begin (def (a b) (list 1 2)) (set! a 10))");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("immutable"));
+}
+
+// === var: mutable destructuring ===
+
+#[test]
+fn test_var_list_basic() {
+    assert_eq!(
+        eval("(begin (var (a b) (list 1 2)) a)").unwrap(),
+        Value::int(1)
+    );
+    assert_eq!(
+        eval("(begin (var (a b) (list 1 2)) b)").unwrap(),
+        Value::int(2)
+    );
+}
+
+#[test]
+fn test_var_destructured_bindings_are_mutable() {
+    assert_eq!(
+        eval("(begin (var (a b) (list 1 2)) (set! a 10) a)").unwrap(),
+        Value::int(10)
+    );
+}
+
+// === let: destructuring in bindings ===
+
+#[test]
+fn test_let_list_destructure() {
+    assert_eq!(
+        eval("(let (((a b) (list 10 20))) (+ a b))").unwrap(),
+        Value::int(30)
+    );
+}
+
+#[test]
+fn test_let_array_destructure() {
+    assert_eq!(
+        eval("(let (([x y] [3 4])) (+ x y))").unwrap(),
+        Value::int(7)
+    );
+}
+
+#[test]
+fn test_let_mixed_bindings() {
+    // Mix of simple and destructured bindings
+    assert_eq!(
+        eval("(let ((a 1) ((b c) (list 2 3))) (+ a b c))").unwrap(),
+        Value::int(6)
+    );
+}
+
+#[test]
+fn test_let_nested_destructure() {
+    assert_eq!(
+        eval("(let ((((a b) c) (list (list 1 2) 3))) (+ a b c))").unwrap(),
+        Value::int(6)
+    );
+}
+
+// === let*: sequential destructuring ===
+
+#[test]
+fn test_let_star_destructure_basic() {
+    assert_eq!(
+        eval("(let* (((a b) (list 1 2)) (c (+ a b))) c)").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_let_star_destructure_sequential_reference() {
+    // Second destructure references first
+    assert_eq!(
+        eval("(let* (((a b) (list 1 2)) ((c d) (list a b))) (+ c d))").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_let_star_mixed_simple_and_destructure() {
+    assert_eq!(
+        eval("(let* ((x 10) ((a b) (list x 20))) (+ a b))").unwrap(),
+        Value::int(30)
+    );
+}
+
+#[test]
+fn test_let_star_shadowing_with_destructure() {
+    // Rebind via destructuring
+    assert_eq!(
+        eval("(let* ((a 1) ((a b) (list 10 20))) a)").unwrap(),
+        Value::int(10)
+    );
+}
+
+// === fn: parameter destructuring ===
+
+#[test]
+fn test_fn_list_param() {
+    assert_eq!(
+        eval("((fn ((a b)) (+ a b)) (list 3 4))").unwrap(),
+        Value::int(7)
+    );
+}
+
+#[test]
+fn test_fn_array_param() {
+    assert_eq!(
+        eval("((fn ([x y]) (+ x y)) [5 6])").unwrap(),
+        Value::int(11)
+    );
+}
+
+#[test]
+fn test_fn_mixed_params() {
+    assert_eq!(
+        eval("((fn (x (a b)) (+ x a b)) 10 (list 20 30))").unwrap(),
+        Value::int(60)
+    );
+}
+
+#[test]
+fn test_fn_nested_param() {
+    assert_eq!(
+        eval("((fn (((a b) c)) (+ a b c)) (list (list 1 2) 3))").unwrap(),
+        Value::int(6)
+    );
+}
+
+// === defn: destructuring in named function params ===
+
+#[test]
+fn test_defn_with_destructured_param() {
+    assert_eq!(
+        eval("(begin (defn f ((a b)) (+ a b)) (f (list 3 4)))").unwrap(),
+        Value::int(7)
+    );
+}
+
+#[test]
+fn test_defn_mixed_params() {
+    assert_eq!(
+        eval("(begin (defn f (x (a b)) (+ x a b)) (f 10 (list 20 30)))").unwrap(),
+        Value::int(60)
+    );
+}
+
+// === Edge cases ===
+
+#[test]
+fn test_destructure_single_element_list() {
+    assert_eq!(
+        eval("(begin (def (a) (list 42)) a)").unwrap(),
+        Value::int(42)
+    );
+}
+
+#[test]
+fn test_destructure_single_element_array() {
+    assert_eq!(eval("(begin (def [a] [42]) a)").unwrap(), Value::int(42));
+}
+
+#[test]
+fn test_destructure_string_values() {
+    assert_eq!(
+        eval(r#"(begin (def (a b) (list "hello" "world")) a)"#).unwrap(),
+        Value::string("hello")
+    );
+}
+
+#[test]
+fn test_destructure_boolean_values() {
+    assert_eq!(
+        eval("(begin (def (a b) (list #t #f)) a)").unwrap(),
+        Value::bool(true)
+    );
+    assert_eq!(
+        eval("(begin (def (a b) (list #t #f)) b)").unwrap(),
+        Value::bool(false)
+    );
+}
+
+#[test]
+fn test_destructure_nil_in_list() {
+    assert_eq!(
+        eval("(begin (def (a b) (list nil 2)) a)").unwrap(),
+        Value::NIL
+    );
+    assert_eq!(
+        eval("(begin (def (a b) (list nil 2)) b)").unwrap(),
+        Value::int(2)
+    );
+}
+
+#[test]
+fn test_destructure_in_closure_capture() {
+    assert_eq!(
+        eval("(begin (def (a b) (list 1 2)) (def f (fn () (+ a b))) (f))").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_let_destructure_in_closure() {
+    assert_eq!(
+        eval("(let (((a b) (list 10 20))) ((fn () (+ a b))))").unwrap(),
+        Value::int(30)
+    );
+}

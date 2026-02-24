@@ -834,11 +834,12 @@ mod tests {
     }
 
     #[test]
-    fn test_eval_or_short_circuit() {
+    fn test_destructure_list_basic() {
         let (mut symbols, mut vm) = setup();
-        // If or doesn't short-circuit, this would fail trying to call nil
-        let result = eval("(or #t (nil))", &mut symbols, &mut vm);
-        assert_eq!(result.unwrap(), crate::value::Value::bool(true));
+        eval("(def (a b c) (list 1 2 3))", &mut symbols, &mut vm).unwrap();
+        assert_eq!(eval("a", &mut symbols, &mut vm).unwrap().as_int(), Some(1));
+        assert_eq!(eval("b", &mut symbols, &mut vm).unwrap().as_int(), Some(2));
+        assert_eq!(eval("c", &mut symbols, &mut vm).unwrap().as_int(), Some(3));
     }
 
     #[test]

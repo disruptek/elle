@@ -1,0 +1,230 @@
+; Destructuring in Elle
+;
+; This example demonstrates:
+; - List destructuring with def and var
+; - Array destructuring with def
+; - Nested destructuring
+; - Destructuring in let and let*
+; - Destructuring in function parameters
+; - Silent nil semantics for missing values
+; - defn with destructured parameters
+
+(import-file "./examples/assertions.lisp")
+
+(display "=== Destructuring ===")
+(newline)
+(newline)
+
+; ============================================================================
+; PART 1: List Destructuring with def
+; ============================================================================
+
+(display "PART 1: List Destructuring with def")
+(newline)
+(newline)
+
+; Basic list destructuring binds names to successive elements
+(def (a b c) (list 1 2 3))
+(assert-eq a 1 "list destructure first element")
+(assert-eq b 2 "list destructure second element")
+(assert-eq c 3 "list destructure third element")
+(display "  (def (a b c) (list 1 2 3)) => a=")
+(display a) (display " b=") (display b) (display " c=") (display c)
+(newline)
+
+; Missing elements become nil (no error)
+(def (x y z) (list 10))
+(assert-eq x 10 "short list first element")
+(assert-eq y nil "short list missing second => nil")
+(assert-eq z nil "short list missing third => nil")
+(display "  (def (x y z) (list 10)) => x=")
+(display x) (display " y=") (display y) (display " z=") (display z)
+(newline)
+
+; Extra elements are silently ignored
+(def (p q) (list 1 2 3 4 5))
+(assert-eq p 1 "extra elements: first")
+(assert-eq q 2 "extra elements: second")
+(display "  (def (p q) (list 1 2 3 4 5)) => p=")
+(display p) (display " q=") (display q)
+(newline)
+(newline)
+
+; ============================================================================
+; PART 2: Array Destructuring with def
+; ============================================================================
+
+(display "PART 2: Array Destructuring with def")
+(newline)
+(newline)
+
+(def [i j] [10 20])
+(assert-eq i 10 "array destructure first")
+(assert-eq j 20 "array destructure second")
+(display "  (def [i j] [10 20]) => i=")
+(display i) (display " j=") (display j)
+(newline)
+
+; Short array gives nil for missing
+(def [m n o] [42])
+(assert-eq m 42 "short array first")
+(assert-eq n nil "short array missing => nil")
+(assert-eq o nil "short array missing => nil")
+(display "  (def [m n o] [42]) => m=")
+(display m) (display " n=") (display n) (display " o=") (display o)
+(newline)
+(newline)
+
+; ============================================================================
+; PART 3: Nested Destructuring
+; ============================================================================
+
+(display "PART 3: Nested Destructuring")
+(newline)
+(newline)
+
+; List within list
+(def ((d e) f) (list (list 1 2) 3))
+(assert-eq d 1 "nested list inner first")
+(assert-eq e 2 "nested list inner second")
+(assert-eq f 3 "nested list outer second")
+(display "  (def ((d e) f) (list (list 1 2) 3)) => d=")
+(display d) (display " e=") (display e) (display " f=") (display f)
+(newline)
+
+; Array within list
+(def ([g h] k) (list [10 20] 30))
+(assert-eq g 10 "array-in-list first")
+(assert-eq h 20 "array-in-list second")
+(assert-eq k 30 "array-in-list outer")
+(display "  (def ([g h] k) (list [10 20] 30)) => g=")
+(display g) (display " h=") (display h) (display " k=") (display k)
+(newline)
+(newline)
+
+; ============================================================================
+; PART 4: Mutable Destructuring with var
+; ============================================================================
+
+(display "PART 4: Mutable Destructuring with var")
+(newline)
+(newline)
+
+(var (va vb) (list 1 2))
+(assert-eq va 1 "var destructure first")
+(set! va 100)
+(assert-eq va 100 "var destructure mutated")
+(display "  (var (va vb) (list 1 2)) then (set! va 100) => va=")
+(display va) (display " vb=") (display vb)
+(newline)
+(newline)
+
+; ============================================================================
+; PART 5: Destructuring in let
+; ============================================================================
+
+(display "PART 5: Destructuring in let")
+(newline)
+(newline)
+
+(var let-result (let (((la lb) (list 10 20))) (+ la lb)))
+(assert-eq let-result 30 "let destructure sum")
+(display "  (let (((la lb) (list 10 20))) (+ la lb)) => ")
+(display let-result)
+(newline)
+
+; Mixed simple and destructured bindings
+(var mixed-result (let ((s 1) ((t u) (list 2 3))) (+ s t u)))
+(assert-eq mixed-result 6 "let mixed bindings")
+(display "  (let ((s 1) ((t u) (list 2 3))) (+ s t u)) => ")
+(display mixed-result)
+(newline)
+(newline)
+
+; ============================================================================
+; PART 6: Destructuring in let*
+; ============================================================================
+
+(display "PART 6: Destructuring in let*")
+(newline)
+(newline)
+
+; Sequential: second binding uses first
+(var star-result (let* (((sa sb) (list 1 2)) (sc (+ sa sb))) sc))
+(assert-eq star-result 3 "let* destructure sequential")
+(display "  (let* (((sa sb) (list 1 2)) (sc (+ sa sb))) sc) => ")
+(display star-result)
+(newline)
+
+; Destructure referencing previous binding
+(var star2 (let* ((w 10) ((wa wb) (list w 20))) (+ wa wb)))
+(assert-eq star2 30 "let* mixed sequential")
+(display "  (let* ((w 10) ((wa wb) (list w 20))) (+ wa wb)) => ")
+(display star2)
+(newline)
+(newline)
+
+; ============================================================================
+; PART 7: Destructuring in Function Parameters
+; ============================================================================
+
+(display "PART 7: Destructuring in Function Parameters")
+(newline)
+(newline)
+
+(defn add-pair ((pa pb)) (+ pa pb))
+(var pair-result (add-pair (list 3 4)))
+(assert-eq pair-result 7 "fn param destructure")
+(display "  (defn add-pair ((pa pb)) (+ pa pb)) => (add-pair (list 3 4)) = ")
+(display pair-result)
+(newline)
+
+; Mixed normal and destructured params
+(defn weighted-sum (weight (wa wb))
+  (+ (* weight wa) (* weight wb)))
+(var ws-result (weighted-sum 2 (list 3 4)))
+(assert-eq ws-result 14 "fn mixed params")
+(display "  (defn weighted-sum (weight (wa wb)) ...) => (weighted-sum 2 (list 3 4)) = ")
+(display ws-result)
+(newline)
+
+; Nested destructuring in params
+(defn deep-sum (((da db) dc))
+  (+ da db dc))
+(var deep-result (deep-sum (list (list 1 2) 3)))
+(assert-eq deep-result 6 "fn nested param destructure")
+(display "  (defn deep-sum (((da db) dc)) ...) => (deep-sum (list (list 1 2) 3)) = ")
+(display deep-result)
+(newline)
+(newline)
+
+; ============================================================================
+; PART 8: Practical Examples
+; ============================================================================
+
+(display "PART 8: Practical Examples")
+(newline)
+(newline)
+
+; Swap two values
+(def (first-val second-val) (list 1 2))
+(def (swapped-b swapped-a) (list second-val first-val))
+(assert-eq swapped-a 1 "swap a")
+(assert-eq swapped-b 2 "swap b")
+(display "  Swap: (1, 2) => (")
+(display swapped-a) (display ", ") (display swapped-b) (display ")")
+(newline)
+
+; Destructure a function's return value
+(defn divide-with-remainder (a b)
+  (list (/ a b) (% a b)))
+(def (quotient remainder) (divide-with-remainder 17 5))
+(assert-eq quotient 3 "divmod quotient")
+(assert-eq remainder 2 "divmod remainder")
+(display "  17 / 5 => quotient=")
+(display quotient) (display " remainder=") (display remainder)
+(newline)
+
+(newline)
+(display "=== All destructuring tests passed ===")
+(newline)

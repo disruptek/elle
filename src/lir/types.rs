@@ -208,6 +208,14 @@ pub enum LirInstr {
     /// Pop a register's value from the stack (discard it).
     Pop { src: Reg },
 
+    // === Destructuring (silent nil) ===
+    /// Car with silent nil: returns nil if not a cons cell
+    CarOrNil { dst: Reg, src: Reg },
+    /// Cdr with silent nil: returns nil if not a cons cell
+    CdrOrNil { dst: Reg, src: Reg },
+    /// Array ref with silent nil: returns nil if out of bounds or not an array
+    ArrayRefOrNil { dst: Reg, src: Reg, index: u16 },
+
     // === Coroutines ===
     /// Load the resume value after a yield.
     /// This is the first instruction in a yield's resume block.

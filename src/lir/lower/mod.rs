@@ -8,7 +8,7 @@ mod pattern;
 
 use super::intrinsics::IntrinsicOp;
 use super::types::*;
-use crate::hir::{Binding, Hir, HirKind};
+use crate::hir::{Binding, Hir, HirKind, HirPattern};
 use crate::syntax::Span;
 use crate::value::{SymbolId, Value};
 use rustc_hash::FxHashMap;
