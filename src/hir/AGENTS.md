@@ -99,11 +99,17 @@ HIR (bindings are inline — no separate HashMap)
     current scope. `let*` is desugared to nested `let` in the expander,
     so the analyzer never sees `let*`.
 
-11. **Destructured bindings use silent nil semantics.** Missing list/array
-    elements produce `nil`, not errors. Wrong-type values produce `nil`
-    for all bindings. No runtime type checks.
+11. **Destructured bindings use silent nil semantics.** Missing list/array/table
+     elements produce `nil`, not errors. Wrong-type values produce `nil`
+     for all bindings. No runtime type checks.
 
-12. **`Block` and `Break` are compile-time control flow.** `HirKind::Block`
+12. **`HirPattern::Table` supports table/struct destructuring.**
+     `HirPattern::Table { entries: Vec<(String, HirPattern)> }` maps keyword
+     keys to sub-patterns. In binding forms (`def`, `var`, `let`, `fn` params),
+     uses `TableGetOrNil` with silent nil. In `match` patterns, emits an
+     `IsTable` type guard first so non-table values fall through to the next arm.
+
+13. **`Block` and `Break` are compile-time control flow.** `HirKind::Block`
     has a `BlockId` and optional name. `HirKind::Break` targets a `BlockId`.
     The analyzer validates: break outside block → error, unknown block name
     → error, break across function boundary → error. The lowerer compiles

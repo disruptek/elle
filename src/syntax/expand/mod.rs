@@ -130,6 +130,9 @@ impl Expander {
             SyntaxKind::Array(items) => {
                 self.expand_array(items, syntax.span, syntax.scopes, symbols, vm)
             }
+            SyntaxKind::Table(items) => {
+                self.expand_table(items, syntax.span, syntax.scopes, symbols, vm)
+            }
             SyntaxKind::Quote(_) => {
                 // Don't expand inside quote
                 Ok(syntax)
@@ -230,6 +233,12 @@ impl Expander {
                     .map(|item| self.add_scope_recursive(item, scope))
                     .collect(),
             ),
+            SyntaxKind::Table(items) => SyntaxKind::Table(
+                items
+                    .into_iter()
+                    .map(|item| self.add_scope_recursive(item, scope))
+                    .collect(),
+            ),
             SyntaxKind::Quote(inner) => {
                 // Don't add scope inside quote - it's literal data
                 SyntaxKind::Quote(inner)
@@ -285,6 +294,25 @@ impl Expander {
             .collect();
         Ok(Syntax::with_scopes(
             SyntaxKind::Array(expanded?),
+            span,
+            scopes,
+        ))
+    }
+
+    fn expand_table(
+        &mut self,
+        items: &[Syntax],
+        span: Span,
+        scopes: Vec<ScopeId>,
+        symbols: &mut SymbolTable,
+        vm: &mut VM,
+    ) -> Result<Syntax, String> {
+        let expanded: Result<Vec<Syntax>, String> = items
+            .iter()
+            .map(|item| self.expand(item.clone(), symbols, vm))
+            .collect();
+        Ok(Syntax::with_scopes(
+            SyntaxKind::Table(expanded?),
             span,
             scopes,
         ))

@@ -121,7 +121,9 @@ stored in `Closure.location_map` and used by the VM for error reporting.
 | `CdrOrNil` | value → cdr | Cdr of cons, or nil if not a cons |
 | `ArrayRefOrNil` | array → elem | Array element by immediate u16 index, or nil if out of bounds |
 | `IsArray` | value → bool | Type check: is value an array? (for pattern matching) |
+| `IsTable` | value → bool | Type check: is value a table or struct? (for pattern matching) |
 | `ArrayLen` | array → int | Get array length (for pattern matching) |
+| `TableGetOrNil` | table → value | Get key from table/struct, or nil if missing/wrong type (u16 const_idx operand) |
 
 ## Yield as terminator
 

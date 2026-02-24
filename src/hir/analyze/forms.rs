@@ -53,6 +53,29 @@ impl<'a> Analyzer<'a> {
                 ))
             }
 
+            // Table literal {k1 v1 k2 v2} - desugar to (struct k1 v1 k2 v2)
+            SyntaxKind::Table(items) => {
+                let mut args = Vec::new();
+                let mut effect = Effect::none();
+                for item in items {
+                    let hir = self.analyze_expr(item)?;
+                    effect = effect.combine(hir.effect);
+                    args.push(hir);
+                }
+                let sym = self.symbols.intern("struct");
+                let binding = Binding::new(sym, BindingScope::Global);
+                let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::none());
+                Ok(Hir::new(
+                    HirKind::Call {
+                        func: Box::new(func),
+                        args,
+                        is_tail: false,
+                    },
+                    span,
+                    effect,
+                ))
+            }
+
             // Quote - convert to Value at analysis time
             SyntaxKind::Quote(inner) => {
                 let value = (**inner).to_value(self.symbols);
@@ -105,6 +128,21 @@ impl<'a> Analyzer<'a> {
                         "cond" => return self.analyze_cond(items, span),
                         "module" => return self.analyze_module(items, span),
                         "import" => return self.analyze_import(items, span),
+                        // (doc <symbol>) → (doc "<symbol-name>")
+                        // Rewrites the symbol arg to a string so bare symbols
+                        // like (doc if) work without quoting.
+                        "doc" if items.len() == 2 => {
+                            if let SyntaxKind::Symbol(sym_name) = &items[1].kind {
+                                let mut rewritten = items.to_vec();
+                                rewritten[1] = Syntax {
+                                    kind: SyntaxKind::String(sym_name.clone()),
+                                    span: items[1].span.clone(),
+                                    scopes: items[1].scopes.clone(),
+                                    scope_exempt: items[1].scope_exempt,
+                                };
+                                return self.analyze_call(&rewritten, span);
+                            }
+                        }
                         _ => {}
                     }
                 }

@@ -168,10 +168,10 @@ pub fn prim_bytecode_size(args: &[Value]) -> (SignalBits, Value) {
 // VM-access introspection (SIG_QUERY)
 // ============================================================================
 
-/// (doc name) — look up documentation for a primitive by name (string or symbol)
+/// (doc name) — look up documentation for any named form (primitive, special form, or macro)
 ///
 /// Sends a SIG_QUERY to the VM which looks up the name in its
-/// `primitive_docs` map and returns a formatted doc string.
+/// `docs` map and returns a formatted doc string.
 pub fn prim_doc(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -250,25 +250,27 @@ pub fn prim_string_to_keyword(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// (vm/list-primitives) — list all registered primitive names
+/// (vm/list-primitives) or (vm/list-primitives :category) — list registered names
 ///
-/// Returns a sorted list of strings containing all primitive names.
+/// Returns a sorted list of strings. With no arguments, returns all names.
+/// With a category keyword or string, filters by category (e.g., :math, :"special form").
 pub fn prim_list_primitives(args: &[Value]) -> (SignalBits, Value) {
-    if !args.is_empty() {
+    if args.len() > 1 {
         return (
             SIG_ERROR,
             error_val(
                 "arity-error",
                 format!(
-                    "vm/list-primitives: expected 0 arguments, got {}",
+                    "vm/list-primitives: expected 0-1 arguments, got {}",
                     args.len()
                 ),
             ),
         );
     }
+    let filter = if args.is_empty() { Value::NIL } else { args[0] };
     (
         SIG_QUERY,
-        Value::cons(Value::keyword("list-primitives"), Value::NIL),
+        Value::cons(Value::keyword("list-primitives"), filter),
     )
 }
 
@@ -525,11 +527,11 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         name: "vm/list-primitives",
         func: prim_list_primitives,
         effect: Effect::none(),
-        arity: Arity::Exact(0),
-        doc: "List all registered primitive names as a sorted list of strings.",
-        params: &[],
+        arity: Arity::Range(0, 1),
+        doc: "List registered names as a sorted list of strings. Optional category filter.",
+        params: &["category?"],
         category: "meta",
-        example: "(vm/list-primitives) ;=> (\"*\" \"+\" \"-\" ...)",
+        example: "(vm/list-primitives)\n(vm/list-primitives :math)\n(vm/list-primitives :\"special form\")",
         aliases: &["list-primitives"],
     },
     PrimitiveDef {

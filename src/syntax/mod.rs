@@ -76,7 +76,7 @@ impl Syntax {
         self.scopes = scopes.to_vec();
         self.scope_exempt = true;
         match &mut self.kind {
-            SyntaxKind::List(items) | SyntaxKind::Array(items) => {
+            SyntaxKind::List(items) | SyntaxKind::Array(items) | SyntaxKind::Table(items) => {
                 for item in items {
                     item.set_scopes_recursive(scopes);
                 }
@@ -139,6 +139,9 @@ pub enum SyntaxKind {
     // Compounds
     List(Vec<Syntax>),
     Array(Vec<Syntax>),
+    /// Brace-delimited content: `{...}`. In expression position, desugars to
+    /// a struct literal. In destructuring position, destructures by keyword key.
+    Table(Vec<Syntax>),
 
     // Quote forms - preserved as structure for macro handling
     Quote(Box<Syntax>),

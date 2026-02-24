@@ -174,7 +174,7 @@ impl VM {
                         error_val("type-error", "doc: expected string or keyword".to_string()),
                     );
                 };
-                if let Some(doc) = self.primitive_docs.get(&name) {
+                if let Some(doc) = self.docs.get(&name) {
                     (SIG_OK, Value::string(doc.format()))
                 } else {
                     (
@@ -185,7 +185,24 @@ impl VM {
             }
             "fiber/self" => (SIG_OK, self.current_fiber_value.unwrap_or(Value::NIL)),
             "list-primitives" => {
-                let mut names: Vec<&String> = self.primitive_docs.keys().collect();
+                // arg is nil (no filter) or a keyword/string category name
+                let category_filter: Option<String> = if arg.is_nil() {
+                    None
+                } else if let Some(k) = arg.as_keyword_name() {
+                    Some(k.to_string())
+                } else {
+                    arg.as_string().map(|s| s.to_string())
+                };
+
+                let mut names: Vec<&String> = if let Some(ref cat) = category_filter {
+                    self.docs
+                        .iter()
+                        .filter(|(_, doc)| doc.category == cat.as_str())
+                        .map(|(name, _)| name)
+                        .collect()
+                } else {
+                    self.docs.keys().collect()
+                };
                 names.sort();
                 let values: Vec<Value> =
                     names.iter().map(|n| Value::string(n.to_string())).collect();
@@ -205,7 +222,7 @@ impl VM {
                         ),
                     );
                 };
-                if let Some(doc) = self.primitive_docs.get(&name) {
+                if let Some(doc) = self.docs.get(&name) {
                     use crate::value::heap::TableKey;
                     use std::collections::BTreeMap;
                     let mut fields = BTreeMap::new();

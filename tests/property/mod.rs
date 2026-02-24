@@ -11,3 +11,6 @@ mod fibers {
 mod macros {
     include!("macros.rs");
 }
+mod destructuring {
+    include!("destructuring.rs");
+}

@@ -153,6 +153,9 @@ impl VM {
                 Instruction::ArraySliceFrom => {
                     data::handle_array_slice_from(self, bc, &mut ip);
                 }
+                Instruction::TableGetOrNil => {
+                    data::handle_table_get_or_nil(self, bc, &mut ip, constants);
+                }
 
                 // Arithmetic (integer)
                 Instruction::AddInt => {
@@ -234,6 +237,9 @@ impl VM {
                 }
                 Instruction::IsArray => {
                     types::handle_is_array(self);
+                }
+                Instruction::IsTable => {
+                    types::handle_is_table(self);
                 }
                 Instruction::ArrayLen => {
                     types::handle_array_len(self);

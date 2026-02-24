@@ -31,6 +31,13 @@ impl Syntax {
                 let values: Vec<Value> = items.iter().map(|item| item.to_value(symbols)).collect();
                 Value::array(values)
             }
+            SyntaxKind::Table(items) => {
+                // Convert to (struct k1 v1 k2 v2 ...) list
+                let struct_sym = symbols.intern("struct");
+                let mut values = vec![Value::symbol(struct_sym.0)];
+                values.extend(items.iter().map(|item| item.to_value(symbols)));
+                crate::value::list(values)
+            }
             SyntaxKind::Quote(inner) => {
                 let quote_sym = symbols.intern("quote");
                 crate::value::list(vec![Value::symbol(quote_sym.0), inner.to_value(symbols)])

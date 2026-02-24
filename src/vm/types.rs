@@ -65,6 +65,17 @@ pub fn handle_array_len(vm: &mut VM) {
     vm.fiber.stack.push(Value::int(len));
 }
 
+pub fn handle_is_table(vm: &mut VM) {
+    let val = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on IsTable");
+    vm.fiber
+        .stack
+        .push(Value::bool(val.is_table() || val.is_struct()));
+}
+
 pub fn handle_is_empty_list(vm: &mut VM) {
     let val = vm
         .fiber
