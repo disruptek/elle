@@ -18,3 +18,9 @@ mod destructuring {
 mod nanboxing {
     include!("nanboxing.rs");
 }
+mod determinism {
+    include!("determinism.rs");
+}
+mod arithmetic {
+    include!("arithmetic.rs");
+}

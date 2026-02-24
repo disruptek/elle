@@ -1,5 +1,7 @@
 //! Proptest strategies for generating arbitrary Elle Values.
 
+#![allow(dead_code)]
+
 use elle::value::repr::{INT_MAX, INT_MIN};
 use elle::Value;
 use proptest::prelude::*;
@@ -56,7 +58,7 @@ fn arb_value_depth(depth: u32) -> BoxedStrategy<Value> {
             1 => Just(Value::float(f64::INFINITY)),
             1 => Just(Value::float(f64::NEG_INFINITY)),
             3 => (0u32..10000).prop_map(Value::symbol),
-            5 => "[a-zA-Z0-9_ ]{0,20}".prop_map(|s| Value::string(s)),
+            5 => "[a-zA-Z0-9_ ]{0,20}".prop_map(Value::string),
             1 => Just(Value::keyword("test")),
             1 => Just(Value::keyword("a")),
             1 => Just(Value::keyword("key")),
@@ -78,7 +80,7 @@ fn arb_value_depth(depth: u32) -> BoxedStrategy<Value> {
                 }),
             // Arrays (0-5 elements)
             1 => prop::collection::vec(arb_value_depth(depth - 1), 0..=5)
-                .prop_map(|elems| Value::array(elems)),
+                .prop_map(Value::array),
         ]
         .boxed()
     }

@@ -290,6 +290,24 @@ pub fn eval(
     vm.execute(&bytecode).map_err(|e| e.to_string())
 }
 
+/// Compile and execute multiple top-level forms.
+///
+/// Each form is compiled with fixpoint effect inference (like `compile_all`)
+/// then executed sequentially. Returns the value of the last form.
+/// Returns `Ok(Value::NIL)` for empty input.
+pub fn eval_all(
+    source: &str,
+    symbols: &mut SymbolTable,
+    vm: &mut VM,
+) -> Result<crate::value::Value, String> {
+    let results = compile_all(source, symbols)?;
+    let mut last_value = crate::value::Value::NIL;
+    for result in results {
+        last_value = vm.execute(&result.bytecode).map_err(|e| e.to_string())?;
+    }
+    Ok(last_value)
+}
+
 /// Analyze source code without generating bytecode.
 /// Used by linter and LSP which need HIR but not bytecode.
 pub fn analyze(
