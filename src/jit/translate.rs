@@ -500,6 +500,11 @@ impl<'a> FunctionTranslator<'a> {
                     "ArrayRefOrNil".to_string(),
                 ));
             }
+            LirInstr::ArraySliceFrom { .. } => {
+                return Err(JitError::UnsupportedInstruction(
+                    "ArraySliceFrom".to_string(),
+                ));
+            }
         }
         Ok(false)
     }

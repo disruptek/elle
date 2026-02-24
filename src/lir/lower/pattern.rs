@@ -174,13 +174,13 @@ impl Lowerer {
 
                 Ok(())
             }
-            HirPattern::List(patterns) => {
+            HirPattern::List { elements, rest } => {
                 // Check if value is a list of the right length
                 // Iterate through patterns and match each element
 
                 let mut current_reg = value_reg;
 
-                for pat in patterns.iter() {
+                for (i, pat) in elements.iter().enumerate() {
                     // Store current to a temporary slot BEFORE IsPair, so we can
                     // reload it after the block boundary.
                     // Inside a lambda, slots need to account for the captures offset.
@@ -243,62 +243,72 @@ impl Lowerer {
                     // Match head against pattern
                     self.lower_pattern_match(pat, head_reg, fail_label)?;
 
-                    // Load for cdr extraction
-                    let current_for_cdr = self.fresh_reg();
-                    if self.in_lambda {
-                        self.emit(LirInstr::LoadCapture {
-                            dst: current_for_cdr,
-                            index: temp_slot,
+                    // Only extract cdr if there are more elements or a rest pattern
+                    let need_cdr = i < elements.len() - 1 || rest.is_some();
+                    if need_cdr {
+                        // Load for cdr extraction
+                        let current_for_cdr = self.fresh_reg();
+                        if self.in_lambda {
+                            self.emit(LirInstr::LoadCapture {
+                                dst: current_for_cdr,
+                                index: temp_slot,
+                            });
+                        } else {
+                            self.emit(LirInstr::LoadLocal {
+                                dst: current_for_cdr,
+                                slot: temp_slot,
+                            });
+                        }
+
+                        // Extract tail for next iteration
+                        let tail_reg = self.fresh_reg();
+                        self.emit(LirInstr::Cdr {
+                            dst: tail_reg,
+                            pair: current_for_cdr,
                         });
-                    } else {
-                        self.emit(LirInstr::LoadLocal {
-                            dst: current_for_cdr,
-                            slot: temp_slot,
-                        });
+
+                        current_reg = tail_reg;
                     }
-
-                    // Extract tail for next iteration
-                    let tail_reg = self.fresh_reg();
-                    self.emit(LirInstr::Cdr {
-                        dst: tail_reg,
-                        pair: current_for_cdr,
-                    });
-
-                    current_reg = tail_reg;
                 }
 
-                // Check that tail is empty_list (list ends)
-                // Proper lists end with empty_list ()
+                if let Some(rest_pat) = rest {
+                    // With & rest: bind remaining tail to rest pattern
+                    self.lower_pattern_match(rest_pat, current_reg, fail_label)?;
+                } else {
+                    // Without rest: check that tail is empty_list (exact length)
+                    let empty_list_reg = self.fresh_reg();
+                    self.emit(LirInstr::ValueConst {
+                        dst: empty_list_reg,
+                        value: Value::EMPTY_LIST,
+                    });
+                    let is_empty_reg = self.fresh_reg();
+                    self.emit(LirInstr::Compare {
+                        dst: is_empty_reg,
+                        op: CmpOp::Eq,
+                        lhs: current_reg,
+                        rhs: empty_list_reg,
+                    });
 
-                // Load current_reg for the empty_list check
-                let empty_list_reg = self.fresh_reg();
-                self.emit(LirInstr::ValueConst {
-                    dst: empty_list_reg,
-                    value: Value::EMPTY_LIST,
-                });
-                let is_empty_reg = self.fresh_reg();
-                self.emit(LirInstr::Compare {
-                    dst: is_empty_reg,
-                    op: CmpOp::Eq,
-                    lhs: current_reg,
-                    rhs: empty_list_reg,
-                });
-
-                // If NOT empty_list, fail
-                let continue_label = self.fresh_label();
-                self.terminate(Terminator::Branch {
-                    cond: is_empty_reg,
-                    then_label: continue_label,
-                    else_label: fail_label,
-                });
-                self.finish_block();
-                self.current_block = BasicBlock::new(continue_label);
+                    let continue_label = self.fresh_label();
+                    self.terminate(Terminator::Branch {
+                        cond: is_empty_reg,
+                        then_label: continue_label,
+                        else_label: fail_label,
+                    });
+                    self.finish_block();
+                    self.current_block = BasicBlock::new(continue_label);
+                }
 
                 Ok(())
             }
-            HirPattern::Array(_patterns) => {
+            HirPattern::Array { elements, rest } => {
                 // TODO: Implement array pattern matching
-                Err("Array pattern matching not yet implemented".to_string())
+                // For now, arrays in match patterns are not supported
+                if !elements.is_empty() || rest.is_some() {
+                    Err("Array pattern matching not yet implemented".to_string())
+                } else {
+                    Ok(())
+                }
             }
         }
     }

@@ -369,3 +369,181 @@ fn test_let_destructure_in_closure() {
         Value::int(30)
     );
 }
+
+// === Wildcard _ ===
+
+#[test]
+fn test_wildcard_list_basic() {
+    // Skip first element
+    assert_eq!(
+        eval("(begin (def (_ b) (list 1 2)) b)").unwrap(),
+        Value::int(2)
+    );
+}
+
+#[test]
+fn test_wildcard_list_middle() {
+    // Skip middle element
+    assert_eq!(
+        eval("(begin (def (a _ c) (list 1 2 3)) (+ a c))").unwrap(),
+        Value::int(4)
+    );
+}
+
+#[test]
+fn test_wildcard_array_basic() {
+    assert_eq!(
+        eval("(begin (def [_ y] [10 20]) y)").unwrap(),
+        Value::int(20)
+    );
+}
+
+#[test]
+fn test_wildcard_multiple() {
+    // Multiple wildcards
+    assert_eq!(
+        eval("(begin (def (_ _ c) (list 1 2 3)) c)").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_wildcard_in_let() {
+    assert_eq!(
+        eval("(let (((_ b) (list 10 20))) b)").unwrap(),
+        Value::int(20)
+    );
+}
+
+#[test]
+fn test_wildcard_in_fn_param() {
+    assert_eq!(
+        eval("((fn ((_ b)) b) (list 10 20))").unwrap(),
+        Value::int(20)
+    );
+}
+
+#[test]
+fn test_wildcard_nested() {
+    // Wildcard in nested destructuring
+    assert_eq!(
+        eval("(begin (def ((_ b) c) (list (list 1 2) 3)) (+ b c))").unwrap(),
+        Value::int(5)
+    );
+}
+
+// === & rest: list destructuring ===
+
+#[test]
+fn test_rest_list_basic() {
+    // Collect remaining elements
+    assert_eq!(
+        eval("(begin (def (a & r) (list 1 2 3)) a)").unwrap(),
+        Value::int(1)
+    );
+    // r should be (2 3)
+    assert_eq!(
+        eval("(begin (def (a & r) (list 1 2 3)) (first r))").unwrap(),
+        Value::int(2)
+    );
+    assert_eq!(
+        eval("(begin (def (a & r) (list 1 2 3)) (first (rest r)))").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_rest_list_empty_rest() {
+    // When all elements are consumed, rest is empty list (cdr of last cons)
+    assert_eq!(
+        eval("(begin (def (a b & r) (list 1 2)) r)").unwrap(),
+        Value::EMPTY_LIST
+    );
+}
+
+#[test]
+fn test_rest_list_single_rest() {
+    assert_eq!(
+        eval("(begin (def (a & r) (list 1)) r)").unwrap(),
+        Value::EMPTY_LIST
+    );
+}
+
+#[test]
+fn test_rest_list_all_rest() {
+    // No fixed elements, just rest
+    assert_eq!(
+        eval("(begin (def (& r) (list 1 2 3)) (first r))").unwrap(),
+        Value::int(1)
+    );
+}
+
+#[test]
+fn test_rest_list_in_let() {
+    assert_eq!(
+        eval("(let (((a & r) (list 10 20 30))) (+ a (first r)))").unwrap(),
+        Value::int(30)
+    );
+}
+
+#[test]
+fn test_rest_list_in_fn_param() {
+    assert_eq!(
+        eval("((fn ((a & r)) (+ a (first r))) (list 10 20))").unwrap(),
+        Value::int(30)
+    );
+}
+
+// === & rest: array destructuring ===
+
+#[test]
+fn test_rest_array_basic() {
+    assert_eq!(
+        eval("(begin (def [a & r] [1 2 3]) a)").unwrap(),
+        Value::int(1)
+    );
+    // r should be [2 3]
+    assert_eq!(
+        eval("(begin (def [a & r] [1 2 3]) (array-ref r 0))").unwrap(),
+        Value::int(2)
+    );
+    assert_eq!(
+        eval("(begin (def [a & r] [1 2 3]) (array-ref r 1))").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn test_rest_array_empty_rest() {
+    assert_eq!(
+        eval("(begin (def [a b & r] [1 2]) (length r))").unwrap(),
+        Value::int(0)
+    );
+}
+
+#[test]
+fn test_rest_array_in_let() {
+    assert_eq!(
+        eval("(let (([a & r] [10 20 30])) (+ a (array-ref r 0)))").unwrap(),
+        Value::int(30)
+    );
+}
+
+// === Wildcard + rest combined ===
+
+#[test]
+fn test_wildcard_with_rest() {
+    // Skip first, collect rest
+    assert_eq!(
+        eval("(begin (def (_ & r) (list 1 2 3)) (first r))").unwrap(),
+        Value::int(2)
+    );
+}
+
+#[test]
+fn test_wildcard_and_rest_array() {
+    assert_eq!(
+        eval("(begin (def [_ & r] [10 20 30]) (array-ref r 0))").unwrap(),
+        Value::int(20)
+    );
+}

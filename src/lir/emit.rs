@@ -397,6 +397,14 @@ impl Emitter {
                 self.push_reg(*dst);
             }
 
+            LirInstr::ArraySliceFrom { dst, src, index } => {
+                self.ensure_on_top(*src);
+                self.bytecode.emit(Instruction::ArraySliceFrom);
+                self.bytecode.emit_u16(*index);
+                self.pop();
+                self.push_reg(*dst);
+            }
+
             LirInstr::BinOp { dst, op, lhs, rhs } => {
                 // Check if lhs and rhs are already the top two stack elements
                 // (lhs at top-1, rhs at top). This is the common case from the

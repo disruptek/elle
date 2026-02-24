@@ -267,16 +267,21 @@ impl Lowerer {
     /// Recursively destructure a value into pattern bindings.
     fn lower_destructure(&mut self, pattern: &HirPattern, value_reg: Reg) -> Result<(), String> {
         match pattern {
+            HirPattern::Wildcard => {
+                // Discard the value — don't bind it
+                Ok(())
+            }
             HirPattern::Var(binding) => {
                 self.lower_bind_value(*binding, value_reg)?;
                 Ok(())
             }
-            HirPattern::List(elements) => {
+            HirPattern::List { elements, rest } => {
                 let mut current = value_reg;
+                let has_rest = rest.is_some();
                 for (i, element) in elements.iter().enumerate() {
-                    let is_last = i == elements.len() - 1;
+                    let is_last = i == elements.len() - 1 && !has_rest;
                     if is_last {
-                        // Last element: just take car, no need for cdr
+                        // Last fixed element, no rest: just take car
                         let car = self.fresh_reg();
                         self.emit(LirInstr::CarOrNil {
                             dst: car,
@@ -284,7 +289,7 @@ impl Lowerer {
                         });
                         self.lower_destructure(element, car)?;
                     } else {
-                        // Not last: need both car and cdr. Dup first so we have
+                        // Need both car and cdr. Dup first so we have
                         // two copies — CdrOrNil consumes the original, CarOrNil
                         // consumes the dup.
                         let dup = self.fresh_reg();
@@ -303,23 +308,27 @@ impl Lowerer {
                         current = cdr;
                     }
                 }
+                // Bind the remaining tail to the rest pattern
+                if let Some(rest_pat) = rest {
+                    self.lower_destructure(rest_pat, current)?;
+                }
                 Ok(())
             }
-            HirPattern::Array(elements) => {
+            HirPattern::Array { elements, rest } => {
                 let mut current = value_reg;
+                let need_rest = rest.is_some();
                 for (i, element) in elements.iter().enumerate() {
-                    let is_last = i == elements.len() - 1;
+                    let is_last = i == elements.len() - 1 && !need_rest;
                     let src = if is_last {
-                        // Last element: consume the array directly
+                        // Last element, no rest: consume the array directly
                         current
                     } else {
-                        // Not last: dup the array so we can use it again
+                        // Not last (or has rest): dup the array
                         let dup = self.fresh_reg();
                         self.emit(LirInstr::Dup {
                             dst: dup,
                             src: current,
                         });
-                        // ArrayRefOrNil will consume `current`, dup survives
                         let src = current;
                         current = dup;
                         src
@@ -331,6 +340,18 @@ impl Lowerer {
                         index: i as u16,
                     });
                     self.lower_destructure(element, elem)?;
+                }
+                // Bind the remaining array slice to the rest pattern.
+                // For arrays, we need a slice-from-index operation.
+                // Use ArraySliceFrom instruction (to be added).
+                if let Some(rest_pat) = rest {
+                    let slice = self.fresh_reg();
+                    self.emit(LirInstr::ArraySliceFrom {
+                        dst: slice,
+                        src: current,
+                        index: elements.len() as u16,
+                    });
+                    self.lower_destructure(rest_pat, slice)?;
                 }
                 Ok(())
             }

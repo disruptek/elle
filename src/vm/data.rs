@@ -257,3 +257,23 @@ pub fn handle_array_ref_or_nil(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
         .and_then(|vec_ref| vec_ref.borrow().get(index).copied());
     vm.fiber.stack.push(result.unwrap_or(Value::NIL));
 }
+
+pub fn handle_array_slice_from(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
+    let index = vm.read_u16(bytecode, ip) as usize;
+    let arr = vm
+        .fiber
+        .stack
+        .pop()
+        .expect("VM bug: Stack underflow on ArraySliceFrom");
+    let result = if let Some(vec_ref) = arr.as_array() {
+        let borrowed = vec_ref.borrow();
+        if index < borrowed.len() {
+            Value::array(borrowed[index..].to_vec())
+        } else {
+            Value::array(vec![])
+        }
+    } else {
+        Value::array(vec![])
+    };
+    vm.fiber.stack.push(result);
+}

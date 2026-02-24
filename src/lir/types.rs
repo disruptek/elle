@@ -215,6 +215,8 @@ pub enum LirInstr {
     CdrOrNil { dst: Reg, src: Reg },
     /// Array ref with silent nil: returns nil if out of bounds or not an array
     ArrayRefOrNil { dst: Reg, src: Reg, index: u16 },
+    /// Array slice from index: returns a new array from index to end, or empty array
+    ArraySliceFrom { dst: Reg, src: Reg, index: u16 },
 
     // === Coroutines ===
     /// Load the resume value after a yield.

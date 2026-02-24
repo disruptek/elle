@@ -150,6 +150,9 @@ impl VM {
                 Instruction::ArrayRefOrNil => {
                     data::handle_array_ref_or_nil(self, bc, &mut ip);
                 }
+                Instruction::ArraySliceFrom => {
+                    data::handle_array_slice_from(self, bc, &mut ip);
+                }
 
                 // Arithmetic (integer)
                 Instruction::AddInt => {

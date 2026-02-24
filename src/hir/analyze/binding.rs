@@ -218,6 +218,9 @@ impl<'a> Analyzer<'a> {
     /// Recursively extract all symbol names from a syntax pattern (list or array).
     fn extract_pattern_names<'s>(syntax: &'s Syntax, out: &mut Vec<(&'s str, &'s [ScopeId])>) {
         match &syntax.kind {
+            SyntaxKind::Symbol(name) if name == "_" || name == "&" => {
+                // Skip wildcard and rest marker
+            }
             SyntaxKind::Symbol(name) => {
                 out.push((name.as_str(), syntax.scopes.as_slice()));
             }
@@ -235,6 +238,37 @@ impl<'a> Analyzer<'a> {
         matches!(&syntax.kind, SyntaxKind::List(_) | SyntaxKind::Array(_))
     }
 
+    /// Split a pattern's items at `&` into (fixed_elements, optional_rest).
+    /// Validates: at most one `&`, exactly one pattern after `&`, `&` not at end.
+    pub(super) fn split_rest_pattern<'s>(
+        items: &'s [Syntax],
+        span: &Span,
+    ) -> Result<(&'s [Syntax], Option<&'s Syntax>), String> {
+        let amp_pos = items
+            .iter()
+            .position(|s| matches!(&s.kind, SyntaxKind::Symbol(n) if n == "&"));
+        match amp_pos {
+            None => Ok((items, None)),
+            Some(pos) => {
+                // Check for multiple &
+                let second = items[pos + 1..]
+                    .iter()
+                    .any(|s| matches!(&s.kind, SyntaxKind::Symbol(n) if n == "&"));
+                if second {
+                    return Err(format!("{}: multiple & in pattern", span));
+                }
+                let remaining = &items[pos + 1..];
+                if remaining.len() != 1 {
+                    return Err(format!(
+                        "{}: & must be followed by exactly one pattern",
+                        span
+                    ));
+                }
+                Ok((&items[..pos], Some(&remaining[0])))
+            }
+        }
+    }
+
     /// Convert a syntax pattern into an HirPattern, creating bindings for each leaf symbol.
     /// `scope` determines whether bindings are Local or Global.
     /// `immutable` determines whether bindings are marked immutable (def vs var).
@@ -246,6 +280,7 @@ impl<'a> Analyzer<'a> {
         span: &Span,
     ) -> Result<HirPattern, String> {
         match &syntax.kind {
+            SyntaxKind::Symbol(name) if name == "_" => Ok(HirPattern::Wildcard),
             SyntaxKind::Symbol(name) => {
                 let in_function = self.scopes.iter().any(|s| s.is_function);
                 let binding_scope = if in_function {
@@ -274,18 +309,32 @@ impl<'a> Analyzer<'a> {
                 Ok(HirPattern::Var(binding))
             }
             SyntaxKind::List(items) => {
+                let (fixed, rest_syntax) = Self::split_rest_pattern(items, span)?;
                 let mut elements = Vec::new();
-                for item in items {
+                for item in fixed {
                     elements.push(self.analyze_destructure_pattern(item, scope, immutable, span)?);
                 }
-                Ok(HirPattern::List(elements))
+                let rest = match rest_syntax {
+                    Some(r) => Some(Box::new(
+                        self.analyze_destructure_pattern(r, scope, immutable, span)?,
+                    )),
+                    None => None,
+                };
+                Ok(HirPattern::List { elements, rest })
             }
             SyntaxKind::Array(items) => {
+                let (fixed, rest_syntax) = Self::split_rest_pattern(items, span)?;
                 let mut elements = Vec::new();
-                for item in items {
+                for item in fixed {
                     elements.push(self.analyze_destructure_pattern(item, scope, immutable, span)?);
                 }
-                Ok(HirPattern::Array(elements))
+                let rest = match rest_syntax {
+                    Some(r) => Some(Box::new(
+                        self.analyze_destructure_pattern(r, scope, immutable, span)?,
+                    )),
+                    None => None,
+                };
+                Ok(HirPattern::Array { elements, rest })
             }
             _ => Err(format!(
                 "{}: destructuring pattern element must be a symbol, list, or array",

@@ -199,10 +199,101 @@
 (newline)
 
 ; ============================================================================
-; PART 8: Practical Examples
+; PART 8: Wildcard _ Pattern
 ; ============================================================================
 
-(display "PART 8: Practical Examples")
+(display "PART 8: Wildcard _ Pattern")
+(newline)
+(newline)
+
+; _ discards the matched value — no binding is created
+(def (_ second _) (list 10 20 30))
+(assert-eq second 20 "wildcard skips first and third")
+(display "  (def (_ second _) (list 10 20 30)) => second=")
+(display second)
+(newline)
+
+; Wildcard in array destructuring
+(def [_ y2] [100 200])
+(assert-eq y2 200 "array wildcard")
+(display "  (def [_ y2] [100 200]) => y2=")
+(display y2)
+(newline)
+
+; Wildcard in nested destructuring
+(def ((_ nb) nc) (list (list 1 2) 3))
+(assert-eq nb 2 "nested wildcard inner")
+(assert-eq nc 3 "nested wildcard outer")
+(display "  (def ((_ nb) nc) (list (list 1 2) 3)) => nb=")
+(display nb) (display " nc=") (display nc)
+(newline)
+
+; Wildcard in function parameters
+(defn second-of-pair ((_ b)) b)
+(assert-eq (second-of-pair (list 10 20)) 20 "fn wildcard param")
+(display "  (defn second-of-pair ((_ b)) b) => (second-of-pair (list 10 20)) = ")
+(display (second-of-pair (list 10 20)))
+(newline)
+(newline)
+
+; ============================================================================
+; PART 9: & rest Pattern
+; ============================================================================
+
+(display "PART 9: & rest Pattern")
+(newline)
+(newline)
+
+; Collect remaining list elements
+(def (head & tail) (list 1 2 3 4))
+(assert-eq head 1 "rest: head")
+(assert-eq (first tail) 2 "rest: tail first")
+(assert-eq (length tail) 3 "rest: tail length")
+(display "  (def (head & tail) (list 1 2 3 4)) => head=")
+(display head) (display " tail=") (display tail)
+(newline)
+
+; Empty rest when all elements consumed
+(def (ra rb & rc) (list 1 2))
+(assert-eq ra 1 "rest empty: first")
+(assert-eq rb 2 "rest empty: second")
+(assert-eq rc (list) "rest empty: rest is empty list")
+(display "  (def (ra rb & rc) (list 1 2)) => ra=")
+(display ra) (display " rb=") (display rb) (display " rc=") (display rc)
+(newline)
+
+; Array rest collects into a sub-array
+(def [ax & ar] [10 20 30])
+(assert-eq ax 10 "array rest: first")
+(assert-eq (array-ref ar 0) 20 "array rest: rest[0]")
+(assert-eq (array-ref ar 1) 30 "array rest: rest[1]")
+(display "  (def [ax & ar] [10 20 30]) => ax=")
+(display ax) (display " ar=") (display ar)
+(newline)
+
+; Wildcard + rest combined
+(def (_ & wr) (list 1 2 3))
+(assert-eq (first wr) 2 "wildcard+rest: first of rest")
+(display "  (def (_ & wr) (list 1 2 3)) => wr=")
+(display wr)
+(newline)
+
+; Rest in function parameters (via list destructuring)
+(defn sum-head-next ((hd & r))
+  (if (empty? r)
+    hd
+    (+ hd (first r))))
+(assert-eq (sum-head-next (list 10 20)) 30 "fn rest param")
+(display "  (defn sum-head-next ((hd & r)) ...) => (sum-head-next (list 10 20)) = ")
+(display (sum-head-next (list 10 20)))
+(newline)
+(newline)
+
+; ============================================================================
+; PART 10: Practical Examples
+; ============================================================================
+
+(display "PART 10: Practical Examples")
 (newline)
 (newline)
 

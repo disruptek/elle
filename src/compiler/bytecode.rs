@@ -159,6 +159,9 @@ pub enum Instruction {
     /// Array ref with silent nil (for destructuring): returns nil if out of bounds
     /// Operand: u16 index (immediate)
     ArrayRefOrNil,
+    /// Array slice from index (for & rest destructuring): returns sub-array from index to end
+    /// Operand: u16 index (immediate)
+    ArraySliceFrom,
 }
 
 /// Inline cache entry for function lookups
