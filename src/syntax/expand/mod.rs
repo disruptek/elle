@@ -108,34 +108,28 @@ impl Expander {
                         return self.handle_expand_macro(items, &syntax.span, symbols, vm);
                     }
 
-                    // Handle (var (f x y) body...) and (def (f x y) body...) shorthand
-                    // Desugar to (var/def f (fn (x y) body...))
-                    if (name == "var" || name == "def") && items.len() >= 3 {
-                        if let SyntaxKind::List(name_and_params) = &items[1].kind {
-                            if !name_and_params.is_empty() {
-                                let func_name = name_and_params[0].clone();
-                                let params = Syntax::new(
-                                    SyntaxKind::List(name_and_params[1..].to_vec()),
-                                    items[1].span.clone(),
-                                );
-                                let fn_sym = Syntax::new(
-                                    SyntaxKind::Symbol("fn".to_string()),
-                                    items[1].span.clone(),
-                                );
-                                let mut lambda_parts = vec![fn_sym, params];
-                                lambda_parts.extend(items[2..].iter().cloned());
-                                let lambda = Syntax::new(
-                                    SyntaxKind::List(lambda_parts),
-                                    syntax.span.clone(),
-                                );
-                                let binding_sym = items[0].clone();
-                                let desugared = Syntax::new(
-                                    SyntaxKind::List(vec![binding_sym, func_name, lambda]),
-                                    syntax.span.clone(),
-                                );
-                                return self.expand(desugared, symbols, vm);
-                            }
-                        }
+                    // Handle (defn f (x y) body...) shorthand
+                    // Desugar to (def f (fn (x y) body...))
+                    if name == "defn" && items.len() >= 4 {
+                        let func_name = items[1].clone();
+                        let params = items[2].clone();
+                        let fn_sym = Syntax::new(
+                            SyntaxKind::Symbol("fn".to_string()),
+                            items[2].span.clone(),
+                        );
+                        let mut lambda_parts = vec![fn_sym, params];
+                        lambda_parts.extend(items[3..].iter().cloned());
+                        let lambda =
+                            Syntax::new(SyntaxKind::List(lambda_parts), syntax.span.clone());
+                        let def_sym = Syntax::new(
+                            SyntaxKind::Symbol("def".to_string()),
+                            items[0].span.clone(),
+                        );
+                        let desugared = Syntax::new(
+                            SyntaxKind::List(vec![def_sym, func_name, lambda]),
+                            syntax.span.clone(),
+                        );
+                        return self.expand(desugared, symbols, vm);
                     }
 
                     // Check if it's a macro call
