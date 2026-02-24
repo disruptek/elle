@@ -180,7 +180,7 @@ impl Lowerer {
 
                 let mut current_reg = value_reg;
 
-                for (i, pat) in elements.iter().enumerate() {
+                for pat in elements.iter() {
                     // Store current to a temporary slot BEFORE IsPair, so we can
                     // reload it after the block boundary.
                     // Inside a lambda, slots need to account for the captures offset.
@@ -243,32 +243,29 @@ impl Lowerer {
                     // Match head against pattern
                     self.lower_pattern_match(pat, head_reg, fail_label)?;
 
-                    // Only extract cdr if there are more elements or a rest pattern
-                    let need_cdr = i < elements.len() - 1 || rest.is_some();
-                    if need_cdr {
-                        // Load for cdr extraction
-                        let current_for_cdr = self.fresh_reg();
-                        if self.in_lambda {
-                            self.emit(LirInstr::LoadCapture {
-                                dst: current_for_cdr,
-                                index: temp_slot,
-                            });
-                        } else {
-                            self.emit(LirInstr::LoadLocal {
-                                dst: current_for_cdr,
-                                slot: temp_slot,
-                            });
-                        }
-
-                        // Extract tail for next iteration
-                        let tail_reg = self.fresh_reg();
-                        self.emit(LirInstr::Cdr {
-                            dst: tail_reg,
-                            pair: current_for_cdr,
+                    // Load for cdr extraction — always needed for next
+                    // element, rest binding, or EMPTY_LIST check at end
+                    let current_for_cdr = self.fresh_reg();
+                    if self.in_lambda {
+                        self.emit(LirInstr::LoadCapture {
+                            dst: current_for_cdr,
+                            index: temp_slot,
                         });
-
-                        current_reg = tail_reg;
+                    } else {
+                        self.emit(LirInstr::LoadLocal {
+                            dst: current_for_cdr,
+                            slot: temp_slot,
+                        });
                     }
+
+                    // Extract tail for next iteration
+                    let tail_reg = self.fresh_reg();
+                    self.emit(LirInstr::Cdr {
+                        dst: tail_reg,
+                        pair: current_for_cdr,
+                    });
+
+                    current_reg = tail_reg;
                 }
 
                 if let Some(rest_pat) = rest {
