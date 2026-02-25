@@ -73,7 +73,7 @@ fn is_value_sendable(value: &Value) -> bool {
         HeapObject::NativeFn(_) => false,
 
         // Unsafe: FFI handles
-        HeapObject::LibHandle(_) | HeapObject::CHandle(_, _) => false,
+        HeapObject::LibHandle(_) => false,
 
         // Unsafe: thread handles
         HeapObject::ThreadHandle(_) => false,

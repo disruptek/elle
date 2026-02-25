@@ -61,9 +61,6 @@ impl PartialEq for Value {
                 // LibHandle comparison
                 (HeapObject::LibHandle(h1), HeapObject::LibHandle(h2)) => h1 == h2,
 
-                // CHandle comparison
-                (HeapObject::CHandle(p1, h1), HeapObject::CHandle(p2, h2)) => p1 == p2 && h1 == h2,
-
                 // ThreadHandle comparison (compare by reference)
                 (HeapObject::ThreadHandle(_), HeapObject::ThreadHandle(_)) => {
                     std::ptr::eq(self_obj as *const _, other_obj as *const _)

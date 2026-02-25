@@ -5,7 +5,6 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::ffi::c_void;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -48,7 +47,6 @@ pub enum HeapTag {
     Float = 9, // For NaN values that can't be inline
     NativeFn = 10,
     LibHandle = 12,
-    CHandle = 13,
     ThreadHandle = 14,
     Fiber = 16,
     Binding = 17,
@@ -94,9 +92,6 @@ pub enum HeapObject {
 
     /// FFI library handle
     LibHandle(u32),
-
-    /// FFI C pointer handle
-    CHandle(*const c_void, u32),
 
     /// Thread handle for concurrent execution
     ThreadHandle(ThreadHandle),
@@ -196,7 +191,6 @@ impl HeapObject {
             HeapObject::Float(_) => HeapTag::Float,
             HeapObject::NativeFn(_) => HeapTag::NativeFn,
             HeapObject::LibHandle(_) => HeapTag::LibHandle,
-            HeapObject::CHandle(_, _) => HeapTag::CHandle,
             HeapObject::ThreadHandle(_) => HeapTag::ThreadHandle,
             HeapObject::Fiber(_) => HeapTag::Fiber,
             HeapObject::Syntax(_) => HeapTag::Syntax,
@@ -218,7 +212,6 @@ impl HeapObject {
             HeapObject::Float(_) => "float",
             HeapObject::NativeFn(_) => "native-function",
             HeapObject::LibHandle(_) => "library-handle",
-            HeapObject::CHandle(_, _) => "c-handle",
             HeapObject::ThreadHandle(_) => "thread-handle",
             HeapObject::Fiber(_) => "fiber",
             HeapObject::Syntax(_) => "syntax",
@@ -256,7 +249,6 @@ impl std::fmt::Debug for HeapObject {
             HeapObject::Float(n) => write!(f, "{}", n),
             HeapObject::NativeFn(_) => write!(f, "<native-fn>"),
             HeapObject::LibHandle(id) => write!(f, "<lib-handle:{}>", id),
-            HeapObject::CHandle(_, id) => write!(f, "<c-handle:{}>", id),
             HeapObject::ThreadHandle(_) => write!(f, "<thread-handle>"),
             HeapObject::Fiber(handle) => match handle.try_with(|fib| fib.status.as_str()) {
                 Some(status) => write!(f, "<fiber:{}>", status),

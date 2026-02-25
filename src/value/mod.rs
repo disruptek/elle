@@ -38,7 +38,7 @@ pub use fiber::{
 };
 
 // Export FFI types
-pub use ffi::{CHandle, LibHandle};
+pub use ffi::LibHandle;
 
 // Export ThreadHandle from heap
 pub use heap::ThreadHandle;

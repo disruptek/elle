@@ -53,9 +53,6 @@ pub mod syntax;
 pub mod value;
 pub mod vm;
 
-// Re-export ffi primitives from the ffi module
-pub use ffi::primitives as ffi_primitives;
-
 pub use compiler::Bytecode;
 pub use error::{RuntimeError, SourceLoc};
 pub use lint::diagnostics::{Diagnostic, Severity};

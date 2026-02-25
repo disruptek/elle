@@ -141,7 +141,6 @@ impl SendValue {
 
             // Unsafe: FFI handles
             HeapObject::LibHandle(_) => Err("Cannot send library handle".to_string()),
-            HeapObject::CHandle(_, _) => Err("Cannot send C handle".to_string()),
 
             // Unsafe: thread handles
             HeapObject::ThreadHandle(_) => Err("Cannot send thread handle".to_string()),
