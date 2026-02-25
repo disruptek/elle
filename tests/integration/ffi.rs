@@ -209,6 +209,37 @@ fn test_ffi_call_sqrt() {
     }
 }
 
+// ── Self-process loading ───────────────────────────────────────────
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_ffi_native_self() {
+    // Load self process and look up strlen
+    let result = eval_source(
+        r#"
+        (def self (ffi/native nil))
+        (def strlen-ptr (ffi/lookup self "strlen"))
+        (def strlen-sig (ffi/signature :size [:string]))
+        (ffi/call strlen-ptr strlen-sig "world")
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::int(5));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_ffi_native_self_abs() {
+    let result = eval_source(
+        r#"
+        (def self (ffi/native nil))
+        (def abs-ptr (ffi/lookup self "abs"))
+        (def abs-sig (ffi/signature :int [:int]))
+        (ffi/call abs-ptr abs-sig -99)
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::int(99));
+}
+
 // ── Error handling ──────────────────────────────────────────────────
 
 #[test]

@@ -39,6 +39,16 @@ impl FFISubsystem {
         Ok(id)
     }
 
+    /// Load the current process as a library (dlopen(NULL)).
+    pub fn load_self(&mut self) -> Result<u32, String> {
+        let mut lib = loader::load_self()?;
+        let id = self.next_lib_id;
+        lib.id = id;
+        self.next_lib_id += 1;
+        self.libraries.insert(id, lib);
+        Ok(id)
+    }
+
     /// Get a loaded library by ID.
     pub fn get_library(&self, id: u32) -> Option<&LibraryHandle> {
         self.libraries.get(&id)

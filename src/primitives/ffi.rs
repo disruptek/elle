@@ -20,18 +20,6 @@ pub fn prim_ffi_native(args: &[Value]) -> (SignalBits, Value) {
             error_val("arity-error", "ffi/native: expected 1 argument"),
         );
     }
-    let path = match args[0].as_string() {
-        Some(s) => s,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("ffi/native: expected string, got {}", args[0].type_name()),
-                ),
-            )
-        }
-    };
     let vm_ptr = match crate::context::get_vm_context() {
         Some(ptr) => ptr,
         None => {
@@ -42,6 +30,33 @@ pub fn prim_ffi_native(args: &[Value]) -> (SignalBits, Value) {
         }
     };
     let vm = unsafe { &mut *vm_ptr };
+
+    // nil → load self process (dlopen(NULL))
+    if args[0].is_nil() {
+        return match vm.ffi_mut().load_self() {
+            Ok(id) => (SIG_OK, Value::lib_handle(id)),
+            Err(e) => (
+                SIG_ERROR,
+                error_val("ffi-error", format!("ffi/native: {}", e)),
+            ),
+        };
+    }
+
+    let path = match args[0].as_string() {
+        Some(s) => s,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "ffi/native: expected string or nil, got {}",
+                        args[0].type_name()
+                    ),
+                ),
+            )
+        }
+    };
     match vm.ffi_mut().load_library(path) {
         Ok(id) => (SIG_OK, Value::lib_handle(id)),
         Err(e) => (
@@ -732,7 +747,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_ffi_native,
         effect: Effect::ffi_raises(),
         arity: Arity::Exact(1),
-        doc: "Load a shared library.",
+        doc: "Load a shared library. Pass nil for the current process.",
         params: &["path"],
         category: "ffi",
         example: "(ffi/native \"libm.so.6\")",
@@ -952,6 +967,12 @@ mod tests {
     #[test]
     fn test_ffi_call_arity_error() {
         let result = prim_ffi_call(&[]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_native_wrong_type() {
+        let result = prim_ffi_native(&[Value::int(42)]);
         assert_eq!(result.0, SIG_ERROR);
     }
 }
