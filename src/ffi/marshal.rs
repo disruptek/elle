@@ -118,7 +118,7 @@ enum ArgStorage {
     /// pointer that libffi reads through (it's a `char*` argument).
     /// The CString must outlive the Arg.
     Str(CString, *const std::ffi::c_char),
-    /// Struct/array data in an aligned buffer. The Vec<MarshalledArg>
+    /// Struct/array data in an aligned buffer. The `Vec<MarshalledArg>`
     /// keeps CStrings and nested buffers alive for the buffer's lifetime.
     Struct(AlignedBuffer, Vec<MarshalledArg>),
 }
