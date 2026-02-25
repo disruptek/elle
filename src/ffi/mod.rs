@@ -4,20 +4,24 @@
 //! to match the design in docs/FFI.md.
 
 pub mod call;
+pub mod callback;
 pub mod loader;
 pub mod marshal;
 pub mod primitives;
 pub mod types;
 
+use callback::CallbackStore;
 use loader::LibraryHandle;
 use std::collections::HashMap;
 
-/// The FFI subsystem manages loaded libraries.
+/// The FFI subsystem manages loaded libraries and active callbacks.
 pub struct FFISubsystem {
     /// Loaded libraries: id -> handle
     libraries: HashMap<u32, LibraryHandle>,
     /// Next library ID to assign
     next_lib_id: u32,
+    /// Active FFI callbacks: code_ptr -> ActiveCallback
+    callbacks: CallbackStore,
 }
 
 impl FFISubsystem {
@@ -26,6 +30,7 @@ impl FFISubsystem {
         FFISubsystem {
             libraries: HashMap::new(),
             next_lib_id: 1,
+            callbacks: CallbackStore::new(),
         }
     }
 
@@ -60,6 +65,11 @@ impl FFISubsystem {
             .iter()
             .map(|(id, lib)| (*id, lib.path.clone()))
             .collect()
+    }
+
+    /// Get mutable access to the callback store.
+    pub fn callbacks_mut(&mut self) -> &mut CallbackStore {
+        &mut self.callbacks
     }
 }
 

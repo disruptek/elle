@@ -421,7 +421,7 @@ impl Value {
             return None;
         }
         match unsafe { deref(*self) } {
-            HeapObject::FFISignature(sig) => Some(sig),
+            HeapObject::FFISignature(sig, _) => Some(sig),
             _ => None,
         }
     }
@@ -435,6 +435,33 @@ impl Value {
         }
         match unsafe { deref(*self) } {
             HeapObject::FFIType(desc) => Some(desc),
+            _ => None,
+        }
+    }
+
+    /// Get or prepare the cached CIF for an FFI signature.
+    /// Returns None if this is not an FFI signature.
+    ///
+    /// The CIF is lazily prepared on first access and cached for reuse.
+    pub fn get_or_prepare_cif(&self) -> Option<std::cell::Ref<'_, libffi::middle::Cif>> {
+        use crate::value::heap::{deref, HeapObject};
+        if !self.is_heap() {
+            return None;
+        }
+        match unsafe { deref(*self) } {
+            HeapObject::FFISignature(sig, cif_cache) => {
+                // Prepare CIF if not cached
+                {
+                    let mut cache = cif_cache.borrow_mut();
+                    if cache.is_none() {
+                        *cache = Some(crate::ffi::call::prepare_cif(sig));
+                    }
+                }
+                // Return a Ref to the cached CIF
+                Some(std::cell::Ref::map(cif_cache.borrow(), |opt| {
+                    opt.as_ref().unwrap()
+                }))
+            }
             _ => None,
         }
     }

@@ -295,14 +295,40 @@ pub fn prim_ffi_call(args: &[Value]) -> (SignalBits, Value) {
 
     let call_args = &args[2..];
 
-    match unsafe { crate::ffi::call::ffi_call(fn_addr as *const std::ffi::c_void, call_args, &sig) }
-    {
+    // Get or prepare cached CIF
+    let cif_ref = match args[1].get_or_prepare_cif() {
+        Some(cif) => cif,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val("ffi-error", "ffi/call: failed to get CIF from signature"),
+            )
+        }
+    };
+
+    let result = match unsafe {
+        crate::ffi::call::ffi_call(
+            fn_addr as *const std::ffi::c_void,
+            call_args,
+            &sig,
+            &cif_ref,
+        )
+    } {
         Ok(val) => (SIG_OK, val),
         Err(e) => (
             SIG_ERROR,
             error_val("ffi-error", format!("ffi/call: {}", e)),
         ),
+    };
+
+    // Check for errors from FFI callbacks that ran during this call.
+    // If a callback errored, it wrote a zero return value to C and
+    // stored the error here. Propagate it to the Elle caller.
+    if let Some(cb_err) = crate::ffi::callback::take_callback_error() {
+        return (SIG_ERROR, cb_err);
     }
+
+    result
 }
 
 // ── Struct/array type creation ──────────────────────────────────────
@@ -885,6 +911,141 @@ pub fn prim_ffi_string(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
+// ── Callback creation ───────────────────────────────────────────────
+
+pub fn prim_ffi_callback(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 2 {
+        return (
+            SIG_ERROR,
+            error_val("arity-error", "ffi/callback: expected 2 arguments"),
+        );
+    }
+    let sig = match args[0].as_ffi_signature() {
+        Some(s) => s.clone(),
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "ffi/callback: expected signature, got {}",
+                        args[0].type_name()
+                    ),
+                ),
+            )
+        }
+    };
+    let closure_rc = match args[1].as_closure() {
+        Some(c) => c.clone(),
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "ffi/callback: expected closure, got {}",
+                        args[1].type_name()
+                    ),
+                ),
+            )
+        }
+    };
+
+    // Validate arity: closure must accept the right number of arguments
+    let expected_args = sig.args.len();
+    let arity_ok = match closure_rc.arity {
+        Arity::Exact(n) => n == expected_args,
+        Arity::AtLeast(n) => expected_args >= n,
+        Arity::Range(min, max) => expected_args >= min && expected_args <= max,
+    };
+    if !arity_ok {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!(
+                    "ffi/callback: signature has {} args but closure has arity {}",
+                    expected_args, closure_rc.arity
+                ),
+            ),
+        );
+    }
+
+    let callback = match crate::ffi::callback::create_callback(closure_rc, sig) {
+        Ok(cb) => cb,
+        Err(e) => {
+            return (
+                SIG_ERROR,
+                error_val("ffi-error", format!("ffi/callback: {}", e)),
+            )
+        }
+    };
+
+    // Store the callback in the FFI subsystem so it stays alive
+    let vm_ptr = match crate::context::get_vm_context() {
+        Some(ptr) => ptr,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val("ffi-error", "ffi/callback: no VM context"),
+            )
+        }
+    };
+    let vm = unsafe { &mut *vm_ptr };
+    let code_ptr = vm.ffi_mut().callbacks_mut().insert(callback);
+
+    (SIG_OK, Value::pointer(code_ptr))
+}
+
+pub fn prim_ffi_callback_free(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val("arity-error", "ffi/callback-free: expected 1 argument"),
+        );
+    }
+    if args[0].is_nil() {
+        return (SIG_OK, Value::NIL); // free(nil) is a no-op
+    }
+    let addr = match args[0].as_pointer() {
+        Some(a) => a,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "ffi/callback-free: expected pointer, got {}",
+                        args[0].type_name()
+                    ),
+                ),
+            )
+        }
+    };
+
+    let vm_ptr = match crate::context::get_vm_context() {
+        Some(ptr) => ptr,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val("ffi-error", "ffi/callback-free: no VM context"),
+            )
+        }
+    };
+    let vm = unsafe { &mut *vm_ptr };
+    if vm.ffi_mut().callbacks_mut().remove(addr) {
+        (SIG_OK, Value::NIL)
+    } else {
+        (
+            SIG_ERROR,
+            error_val(
+                "ffi-error",
+                format!("ffi/callback-free: no callback at address {:#x}", addr),
+            ),
+        )
+    }
+}
+
 // ── PRIMITIVES table ────────────────────────────────────────────────
 
 pub const PRIMITIVES: &[PrimitiveDef] = &[
@@ -1031,6 +1192,28 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         example: "(ffi/array :i32 10)",
         aliases: &[],
     },
+    PrimitiveDef {
+        name: "ffi/callback",
+        func: prim_ffi_callback,
+        effect: Effect::ffi_raises(),
+        arity: Arity::Exact(2),
+        doc: "Create a C function pointer from an Elle closure. Returns a pointer.",
+        params: &["sig", "closure"],
+        category: "ffi",
+        example: "(ffi/callback (ffi/signature :int [:ptr :ptr]) (fn (a b) 0))",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "ffi/callback-free",
+        func: prim_ffi_callback_free,
+        effect: Effect::ffi_raises(),
+        arity: Arity::Exact(1),
+        doc: "Free a callback created by ffi/callback.",
+        params: &["ptr"],
+        category: "ffi",
+        example: "(ffi/callback-free cb-ptr)",
+        aliases: &[],
+    },
 ];
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -1169,6 +1352,25 @@ mod tests {
         assert_eq!(result.0, SIG_OK);
         let sig = result.1.as_ffi_signature().unwrap();
         assert_eq!(sig.fixed_args, Some(2));
+    }
+
+    #[test]
+    fn test_ffi_signature_cif_caching() {
+        let result = prim_ffi_signature(&[
+            Value::keyword("int"),
+            Value::array(vec![Value::keyword("int")]),
+        ]);
+        assert_eq!(result.0, SIG_OK);
+        let sig_val = result.1;
+
+        // First access prepares the CIF
+        let cif1 = sig_val.get_or_prepare_cif();
+        assert!(cif1.is_some());
+        drop(cif1);
+
+        // Second access reuses the cached CIF
+        let cif2 = sig_val.get_or_prepare_cif();
+        assert!(cif2.is_some());
     }
 
     #[test]

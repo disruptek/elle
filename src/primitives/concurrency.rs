@@ -101,7 +101,7 @@ fn is_value_sendable(value: &Value) -> bool {
         HeapObject::Binding(_) => false,
 
         // FFI signatures are not sendable
-        HeapObject::FFISignature(_) => false,
+        HeapObject::FFISignature(_, _) => false,
 
         // FFI type descriptors are pure data — safe to send
         HeapObject::FFIType(_) => true,

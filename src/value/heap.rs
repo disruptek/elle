@@ -112,8 +112,12 @@ pub enum HeapObject {
     /// during lowering. Never appears at runtime — the VM never sees this type.
     Binding(RefCell<BindingInner>),
 
-    /// Reified FFI function signature (calling convention + return type + arg types)
-    FFISignature(crate::ffi::types::Signature),
+    /// Reified FFI function signature with optional cached CIF.
+    /// The CIF is lazily prepared on first use and reused thereafter.
+    FFISignature(
+        crate::ffi::types::Signature,
+        RefCell<Option<libffi::middle::Cif>>,
+    ),
 
     /// Reified FFI compound type descriptor (struct or array layout)
     FFIType(crate::ffi::types::TypeDesc),
@@ -203,7 +207,7 @@ impl HeapObject {
             HeapObject::Fiber(_) => HeapTag::Fiber,
             HeapObject::Syntax(_) => HeapTag::Syntax,
             HeapObject::Binding(_) => HeapTag::Binding,
-            HeapObject::FFISignature(_) => HeapTag::FFISignature,
+            HeapObject::FFISignature(_, _) => HeapTag::FFISignature,
             HeapObject::FFIType(_) => HeapTag::FFIType,
         }
     }
@@ -226,7 +230,7 @@ impl HeapObject {
             HeapObject::Fiber(_) => "fiber",
             HeapObject::Syntax(_) => "syntax",
             HeapObject::Binding(_) => "binding",
-            HeapObject::FFISignature(_) => "ffi-signature",
+            HeapObject::FFISignature(_, _) => "ffi-signature",
             HeapObject::FFIType(_) => "ffi-type",
         }
     }
@@ -268,7 +272,7 @@ impl std::fmt::Debug for HeapObject {
             },
             HeapObject::Syntax(s) => write!(f, "#<syntax:{}>", s),
             HeapObject::Binding(_) => write!(f, "#<binding>"),
-            HeapObject::FFISignature(_) => write!(f, "<ffi-signature>"),
+            HeapObject::FFISignature(_, _) => write!(f, "<ffi-signature>"),
             HeapObject::FFIType(desc) => write!(f, "<ffi-type:{:?}>", desc),
         }
     }

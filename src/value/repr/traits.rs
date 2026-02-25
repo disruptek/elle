@@ -79,8 +79,8 @@ impl PartialEq for Value {
                     std::ptr::eq(self_obj as *const _, other_obj as *const _)
                 }
 
-                // FFI signature comparison (structural equality)
-                (HeapObject::FFISignature(s1), HeapObject::FFISignature(s2)) => s1 == s2,
+                // FFI signature comparison (structural equality, skip CIF cache)
+                (HeapObject::FFISignature(s1, _), HeapObject::FFISignature(s2, _)) => s1 == s2,
 
                 // FFI type descriptor comparison (structural equality)
                 (HeapObject::FFIType(t1), HeapObject::FFIType(t2)) => t1 == t2,

@@ -59,8 +59,8 @@ pub struct StructDesc {
 impl StructDesc {
     /// Compute the byte offset of each field within the struct layout.
     ///
-    /// Returns `(offsets, total_size)` where offsets[i] is the byte offset
-    /// of field i, and total_size includes tail padding.
+    /// Returns `(offsets, total_size)` where `offsets[i]` is the byte offset
+    /// of field `i`, and `total_size` includes tail padding.
     /// Returns `None` if any field has unknown size/alignment (e.g., contains Void).
     pub fn field_offsets(&self) -> Option<(Vec<usize>, usize)> {
         let mut offsets = Vec::with_capacity(self.fields.len());

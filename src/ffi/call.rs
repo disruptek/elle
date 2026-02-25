@@ -20,12 +20,18 @@ pub fn prepare_cif(sig: &Signature) -> Cif {
     }
 }
 
-/// Call a C function through libffi.
+/// Call a C function through libffi using a pre-prepared CIF.
 ///
 /// # Safety
 /// The function pointer must be valid and match the signature.
 /// Arguments must match the expected C types.
-pub unsafe fn ffi_call(fn_ptr: *const c_void, args: &[Value], sig: &Signature) -> LResult<Value> {
+/// The CIF must match the signature.
+pub unsafe fn ffi_call(
+    fn_ptr: *const c_void,
+    args: &[Value],
+    sig: &Signature,
+    cif: &Cif,
+) -> LResult<Value> {
     if args.len() != sig.args.len() {
         return Err(LError::ffi_error(
             "call",
@@ -33,7 +39,6 @@ pub unsafe fn ffi_call(fn_ptr: *const c_void, args: &[Value], sig: &Signature) -
         ));
     }
 
-    let cif = prepare_cif(sig);
     let code_ptr = CodePtr(fn_ptr as *mut c_void);
 
     let marshalled: Vec<MarshalledArg> = args
@@ -171,8 +176,9 @@ mod tests {
             args: vec![TypeDesc::I32],
             fixed_args: None,
         };
+        let cif = prepare_cif(&sig);
         // Wrong number of args
-        let result = unsafe { ffi_call(std::ptr::null(), &[], &sig) };
+        let result = unsafe { ffi_call(std::ptr::null(), &[], &sig, &cif) };
         assert!(result.is_err());
     }
 
@@ -188,7 +194,8 @@ mod tests {
             args: vec![TypeDesc::Int],
             fixed_args: None,
         };
-        let result = unsafe { ffi_call(abs as *const c_void, &[Value::int(-42)], &sig) };
+        let cif = prepare_cif(&sig);
+        let result = unsafe { ffi_call(abs as *const c_void, &[Value::int(-42)], &sig, &cif) };
         assert!(result.is_ok());
         assert_eq!(result.unwrap().as_int(), Some(42));
     }
@@ -205,8 +212,9 @@ mod tests {
             args: vec![TypeDesc::Str],
             fixed_args: None,
         };
+        let cif = prepare_cif(&sig);
         let hello = Value::string("hello");
-        let result = unsafe { ffi_call(strlen as *const c_void, &[hello], &sig) };
+        let result = unsafe { ffi_call(strlen as *const c_void, &[hello], &sig, &cif) };
         assert!(result.is_ok());
         assert_eq!(result.unwrap().as_int(), Some(5));
     }

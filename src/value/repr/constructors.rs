@@ -240,7 +240,8 @@ impl Value {
     #[inline]
     pub fn ffi_signature(sig: crate::ffi::types::Signature) -> Self {
         use crate::value::heap::{alloc, HeapObject};
-        alloc(HeapObject::FFISignature(sig))
+        use std::cell::RefCell;
+        alloc(HeapObject::FFISignature(sig, RefCell::new(None)))
     }
 
     /// Create an FFI compound type descriptor value.

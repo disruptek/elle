@@ -462,3 +462,251 @@ fn test_ffi_struct_with_all_numeric_types() {
     assert_eq!(arr[8].as_float(), Some(1.5)); // float
     assert_eq!(arr[9].as_float(), Some(2.5)); // double
 }
+
+// ── Callback creation ───────────────────────────────────────────────
+
+#[test]
+fn test_ffi_callback_creation() {
+    // Create a callback and verify it returns a pointer
+    let result = eval_source(
+        r#"
+        (def sig (ffi/signature :int [:ptr :ptr]))
+        (def cb (ffi/callback sig (fn (a b) 0)))
+        (def is-ptr (not (nil? cb)))
+        (ffi/callback-free cb)
+        is-ptr
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::bool(true));
+}
+
+#[test]
+fn test_ffi_callback_free_nil() {
+    // Freeing nil is a no-op
+    let result = eval_source("(ffi/callback-free nil)");
+    assert_eq!(result.unwrap(), Value::NIL);
+}
+
+#[test]
+fn test_ffi_callback_wrong_type() {
+    // Passing a non-closure should error
+    let result = eval_source(
+        r#"
+        (def sig (ffi/signature :int [:ptr :ptr]))
+        (ffi/callback sig 42)
+    "#,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_ffi_callback_arity_mismatch() {
+    // Closure arity doesn't match signature arg count
+    let result = eval_source(
+        r#"
+        (def sig (ffi/signature :int [:ptr :ptr]))
+        (ffi/callback sig (fn (a) 0))
+    "#,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_ffi_callback_variadic_rejected() {
+    // Variadic signatures are not supported for callbacks
+    let result = eval_source(
+        r#"
+        (def sig (ffi/signature :int [:ptr :int] 1))
+        (ffi/callback sig (fn (a b) 0))
+    "#,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_ffi_callback_free_unknown_ptr() {
+    // Freeing a pointer that's not a callback should error
+    let result = eval_source("(ffi/callback-free (ffi/malloc 8))");
+    assert!(result.is_err());
+}
+
+// ── Callback with qsort ────────────────────────────────────────────
+
+#[test]
+fn test_ffi_callback_qsort() {
+    // Use qsort from libc to sort an array of i32s via an Elle callback
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (def qsort-ptr (ffi/lookup libc "qsort"))
+        (def compar-sig (ffi/signature :int [:ptr :ptr]))
+        (def compar (ffi/callback compar-sig
+          (fn (a b)
+            (- (ffi/read a :i32) (ffi/read b :i32)))))
+        (def qsort-sig (ffi/signature :void [:ptr :size :size :ptr]))
+        (def arr (ffi/malloc 20))
+        (ffi/write arr (ffi/array :i32 5) [5 3 1 4 2])
+        (ffi/call qsort-ptr qsort-sig arr 5 4 compar)
+        (def sorted (ffi/read arr (ffi/array :i32 5)))
+        (ffi/free arr)
+        (ffi/callback-free compar)
+        sorted
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr.len(), 5);
+    assert_eq!(arr[0].as_int(), Some(1));
+    assert_eq!(arr[1].as_int(), Some(2));
+    assert_eq!(arr[2].as_int(), Some(3));
+    assert_eq!(arr[3].as_int(), Some(4));
+    assert_eq!(arr[4].as_int(), Some(5));
+}
+
+#[test]
+fn test_ffi_callback_qsort_descending() {
+    // Sort descending by reversing the comparator
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (def qsort-ptr (ffi/lookup libc "qsort"))
+        (def compar-sig (ffi/signature :int [:ptr :ptr]))
+        (def compar (ffi/callback compar-sig
+          (fn (a b)
+            (- (ffi/read b :i32) (ffi/read a :i32)))))
+        (def qsort-sig (ffi/signature :void [:ptr :size :size :ptr]))
+        (def arr (ffi/malloc 20))
+        (ffi/write arr (ffi/array :i32 5) [10 30 20 50 40])
+        (ffi/call qsort-ptr qsort-sig arr 5 4 compar)
+        (def sorted (ffi/read arr (ffi/array :i32 5)))
+        (ffi/free arr)
+        (ffi/callback-free compar)
+        sorted
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr.len(), 5);
+    assert_eq!(arr[0].as_int(), Some(50));
+    assert_eq!(arr[1].as_int(), Some(40));
+    assert_eq!(arr[2].as_int(), Some(30));
+    assert_eq!(arr[3].as_int(), Some(20));
+    assert_eq!(arr[4].as_int(), Some(10));
+}
+
+#[test]
+fn test_ffi_callback_qsort_already_sorted() {
+    // Sort an already-sorted array — should be a no-op
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (def qsort-ptr (ffi/lookup libc "qsort"))
+        (def compar-sig (ffi/signature :int [:ptr :ptr]))
+        (def compar (ffi/callback compar-sig
+          (fn (a b)
+            (- (ffi/read a :i32) (ffi/read b :i32)))))
+        (def qsort-sig (ffi/signature :void [:ptr :size :size :ptr]))
+        (def arr (ffi/malloc 12))
+        (ffi/write arr (ffi/array :i32 3) [1 2 3])
+        (ffi/call qsort-ptr qsort-sig arr 3 4 compar)
+        (def sorted (ffi/read arr (ffi/array :i32 3)))
+        (ffi/free arr)
+        (ffi/callback-free compar)
+        sorted
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(1));
+    assert_eq!(arr[1].as_int(), Some(2));
+    assert_eq!(arr[2].as_int(), Some(3));
+}
+
+#[test]
+fn test_ffi_callback_qsort_single_element() {
+    // Sort a single-element array
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (def qsort-ptr (ffi/lookup libc "qsort"))
+        (def compar-sig (ffi/signature :int [:ptr :ptr]))
+        (def compar (ffi/callback compar-sig
+          (fn (a b)
+            (- (ffi/read a :i32) (ffi/read b :i32)))))
+        (def qsort-sig (ffi/signature :void [:ptr :size :size :ptr]))
+        (def arr (ffi/malloc 4))
+        (ffi/write arr (ffi/array :i32 1) [42])
+        (ffi/call qsort-ptr qsort-sig arr 1 4 compar)
+        (def sorted (ffi/read arr (ffi/array :i32 1)))
+        (ffi/free arr)
+        (ffi/callback-free compar)
+        sorted
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(42));
+}
+
+#[test]
+fn test_ffi_callback_qsort_two_elements() {
+    // Sort just 2 elements
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (def qsort-ptr (ffi/lookup libc "qsort"))
+        (def compar-sig (ffi/signature :int [:ptr :ptr]))
+        (def compar (ffi/callback compar-sig
+          (fn (a b)
+            (- (ffi/read a :i32) (ffi/read b :i32)))))
+        (def qsort-sig (ffi/signature :void [:ptr :size :size :ptr]))
+        (def arr (ffi/malloc 8))
+        (ffi/write arr (ffi/array :i32 2) [2 1])
+        (ffi/call qsort-ptr qsort-sig arr 2 4 compar)
+        (def sorted (ffi/read arr (ffi/array :i32 2)))
+        (ffi/free arr)
+        (ffi/callback-free compar)
+        sorted
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(1));
+    assert_eq!(arr[1].as_int(), Some(2));
+}
+
+#[test]
+fn test_ffi_callback_with_closure_capture() {
+    // Callback closure captures a variable from the enclosing scope
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (def qsort-ptr (ffi/lookup libc "qsort"))
+        (def compar-sig (ffi/signature :int [:ptr :ptr]))
+        ;; Capture `direction` — 1 for ascending, -1 for descending
+        (def direction 1)
+        (def compar (ffi/callback compar-sig
+          (fn (a b)
+            (* direction (- (ffi/read a :i32) (ffi/read b :i32))))))
+        (def qsort-sig (ffi/signature :void [:ptr :size :size :ptr]))
+        (def arr (ffi/malloc 12))
+        (ffi/write arr (ffi/array :i32 3) [3 1 2])
+        (ffi/call qsort-ptr qsort-sig arr 3 4 compar)
+        (def sorted (ffi/read arr (ffi/array :i32 3)))
+        (ffi/free arr)
+        (ffi/callback-free compar)
+        sorted
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(1));
+    assert_eq!(arr[1].as_int(), Some(2));
+    assert_eq!(arr[2].as_int(), Some(3));
+}
