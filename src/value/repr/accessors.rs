@@ -413,6 +413,32 @@ impl Value {
         self.heap_tag() == Some(HeapTag::Binding)
     }
 
+    /// Extract as FFI signature if this is an FFI signature.
+    #[inline]
+    pub fn as_ffi_signature(&self) -> Option<&crate::ffi::types::Signature> {
+        use crate::value::heap::{deref, HeapObject};
+        if !self.is_heap() {
+            return None;
+        }
+        match unsafe { deref(*self) } {
+            HeapObject::FFISignature(sig) => Some(sig),
+            _ => None,
+        }
+    }
+
+    /// Extract as library handle ID if this is a library handle.
+    #[inline]
+    pub fn as_lib_handle(&self) -> Option<u32> {
+        use crate::value::heap::{deref, HeapObject};
+        if !self.is_heap() {
+            return None;
+        }
+        match unsafe { deref(*self) } {
+            HeapObject::LibHandle(id) => Some(*id),
+            _ => None,
+        }
+    }
+
     /// Extract as binding inner if this is a binding.
     #[inline]
     pub fn as_binding(&self) -> Option<&std::cell::RefCell<crate::value::heap::BindingInner>> {

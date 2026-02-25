@@ -99,6 +99,9 @@ fn is_value_sendable(value: &Value) -> bool {
 
         // Bindings are compile-time only, not sendable
         HeapObject::Binding(_) => false,
+
+        // FFI signatures are not sendable
+        HeapObject::FFISignature(_) => false,
     }
 }
 

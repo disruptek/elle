@@ -236,6 +236,20 @@ impl Value {
         alloc(HeapObject::Syntax(Rc::new(s)))
     }
 
+    /// Create an FFI signature value.
+    #[inline]
+    pub fn ffi_signature(sig: crate::ffi::types::Signature) -> Self {
+        use crate::value::heap::{alloc, HeapObject};
+        alloc(HeapObject::FFISignature(sig))
+    }
+
+    /// Create a library handle value.
+    #[inline]
+    pub fn lib_handle(id: u32) -> Self {
+        use crate::value::heap::{alloc, HeapObject};
+        alloc(HeapObject::LibHandle(id))
+    }
+
     /// Create a binding value (compile-time only).
     #[inline]
     pub fn binding(

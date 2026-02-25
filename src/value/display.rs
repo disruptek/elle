@@ -153,6 +153,16 @@ impl fmt::Display for Value {
             return write!(f, "]");
         }
 
+        // FFI signature
+        if self.as_ffi_signature().is_some() {
+            return write!(f, "<ffi-signature>");
+        }
+
+        // Library handle
+        if let Some(id) = self.as_lib_handle() {
+            return write!(f, "<lib-handle:{}>", id);
+        }
+
         // Default for unknown heap types
         write!(f, "<heap:{:#x}>", self.to_bits() & 0x0000_FFFF_FFFF_FFFF)
     }

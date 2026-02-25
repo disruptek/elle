@@ -50,6 +50,7 @@ pub enum HeapTag {
     ThreadHandle = 14,
     Fiber = 16,
     Binding = 17,
+    FFISignature = 18,
 }
 
 /// All heap-allocated value types.
@@ -109,6 +110,9 @@ pub enum HeapObject {
     /// discovers captures and mutations after creating the binding), read-only
     /// during lowering. Never appears at runtime — the VM never sees this type.
     Binding(RefCell<BindingInner>),
+
+    /// Reified FFI function signature (calling convention + return type + arg types)
+    FFISignature(crate::ffi::types::Signature),
 }
 
 /// Internal binding metadata, heap-allocated behind the Value pointer.
@@ -195,6 +199,7 @@ impl HeapObject {
             HeapObject::Fiber(_) => HeapTag::Fiber,
             HeapObject::Syntax(_) => HeapTag::Syntax,
             HeapObject::Binding(_) => HeapTag::Binding,
+            HeapObject::FFISignature(_) => HeapTag::FFISignature,
         }
     }
 
@@ -216,6 +221,7 @@ impl HeapObject {
             HeapObject::Fiber(_) => "fiber",
             HeapObject::Syntax(_) => "syntax",
             HeapObject::Binding(_) => "binding",
+            HeapObject::FFISignature(_) => "ffi-signature",
         }
     }
 }
@@ -256,6 +262,7 @@ impl std::fmt::Debug for HeapObject {
             },
             HeapObject::Syntax(s) => write!(f, "#<syntax:{}>", s),
             HeapObject::Binding(_) => write!(f, "#<binding>"),
+            HeapObject::FFISignature(_) => write!(f, "<ffi-signature>"),
         }
     }
 }

@@ -153,6 +153,9 @@ impl SendValue {
 
             // Unsafe: bindings (compile-time only)
             HeapObject::Binding(_) => Err("Cannot send binding".to_string()),
+
+            // Unsafe: FFI signatures (contain non-Send types)
+            HeapObject::FFISignature(_) => Err("Cannot send FFI signature".to_string()),
         }
     }
 

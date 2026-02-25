@@ -283,3 +283,72 @@ fn test_pointer() {
     // Display format
     assert_eq!(format!("{}", ptr), "<pointer 0x7f4a2b3c0000>");
 }
+
+#[test]
+fn test_ffi_signature_roundtrip() {
+    use crate::ffi::types::{CallingConvention, Signature, TypeDesc};
+    let sig = Signature {
+        convention: CallingConvention::Default,
+        ret: TypeDesc::I32,
+        args: vec![TypeDesc::Ptr, TypeDesc::U64],
+    };
+    let v = Value::ffi_signature(sig.clone());
+    assert!(v.is_heap());
+    assert_eq!(v.as_ffi_signature(), Some(&sig));
+    assert_eq!(v.type_name(), "ffi-signature");
+    assert_eq!(format!("{}", v), "<ffi-signature>");
+}
+
+#[test]
+fn test_lib_handle_roundtrip() {
+    let v = Value::lib_handle(42);
+    assert!(v.is_heap());
+    assert_eq!(v.as_lib_handle(), Some(42));
+    assert_eq!(v.type_name(), "library-handle");
+    assert_eq!(format!("{}", v), "<lib-handle:42>");
+}
+
+#[test]
+fn test_ffi_signature_equality() {
+    use crate::ffi::types::{CallingConvention, Signature, TypeDesc};
+    let sig1 = Signature {
+        convention: CallingConvention::Default,
+        ret: TypeDesc::Void,
+        args: vec![],
+    };
+    let sig2 = Signature {
+        convention: CallingConvention::Default,
+        ret: TypeDesc::Void,
+        args: vec![],
+    };
+    let sig3 = Signature {
+        convention: CallingConvention::Default,
+        ret: TypeDesc::I32,
+        args: vec![],
+    };
+    assert_eq!(
+        Value::ffi_signature(sig1.clone()),
+        Value::ffi_signature(sig2)
+    );
+    assert_ne!(Value::ffi_signature(sig1), Value::ffi_signature(sig3));
+}
+
+#[test]
+fn test_lib_handle_equality() {
+    assert_eq!(Value::lib_handle(1), Value::lib_handle(1));
+    assert_ne!(Value::lib_handle(1), Value::lib_handle(2));
+}
+
+#[test]
+fn test_ffi_signature_not_on_non_signature() {
+    assert_eq!(Value::int(42).as_ffi_signature(), None);
+    assert_eq!(Value::NIL.as_ffi_signature(), None);
+    assert_eq!(Value::string("hello").as_ffi_signature(), None);
+}
+
+#[test]
+fn test_lib_handle_not_on_non_handle() {
+    assert_eq!(Value::int(42).as_lib_handle(), None);
+    assert_eq!(Value::NIL.as_lib_handle(), None);
+    assert_eq!(Value::string("hello").as_lib_handle(), None);
+}
