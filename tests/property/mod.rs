@@ -30,3 +30,12 @@ mod reader {
 mod effects {
     include!("effects.rs");
 }
+mod strings {
+    include!("strings.rs");
+}
+mod eval {
+    include!("eval.rs");
+}
+mod convert {
+    include!("convert.rs");
+}
