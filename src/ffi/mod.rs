@@ -5,6 +5,7 @@
 
 pub mod loader;
 pub mod primitives;
+pub mod types;
 
 use loader::LibraryHandle;
 use std::collections::HashMap;
