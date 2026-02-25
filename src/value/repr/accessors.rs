@@ -333,7 +333,7 @@ impl Value {
 
     /// Extract as thread handle if this is a thread handle.
     #[inline]
-    pub fn as_thread_handle(&self) -> Option<&crate::value::heap::ThreadHandleData> {
+    pub fn as_thread_handle(&self) -> Option<&crate::value::heap::ThreadHandle> {
         use crate::value::heap::{deref, HeapObject};
         if !self.is_heap() {
             return None;

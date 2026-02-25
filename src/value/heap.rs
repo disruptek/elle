@@ -10,7 +10,6 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use crate::syntax::Syntax;
-use crate::value::ffi::ThreadHandle;
 use crate::value::fiber::FiberHandle;
 use crate::value::types::SymbolId;
 use crate::value::Value;
@@ -100,7 +99,7 @@ pub enum HeapObject {
     CHandle(*const c_void, u32),
 
     /// Thread handle for concurrent execution
-    ThreadHandle(ThreadHandleData),
+    ThreadHandle(ThreadHandle),
 
     /// Fiber: independent execution context with its own stack and frames
     Fiber(FiberHandle),
@@ -143,18 +142,41 @@ pub enum BindingScope {
     Global,
 }
 
-/// Data for thread handles.
+/// Thread handle for concurrent execution.
+///
 /// Holds the result of a spawned thread's execution.
-/// Uses Arc<Mutex<>> to safely share the result across threads.
-pub struct ThreadHandleData {
+/// Uses `Arc<Mutex<>>` to safely share the result across threads.
+#[derive(Clone)]
+pub struct ThreadHandle {
+    /// The result of the spawned thread execution.
+    /// The `Result` is wrapped in `SendValue` to make it Send.
     pub result: Arc<Mutex<Option<Result<crate::value::SendValue, String>>>>,
 }
 
-impl From<ThreadHandle> for ThreadHandleData {
-    fn from(handle: ThreadHandle) -> Self {
-        ThreadHandleData {
-            result: handle.result,
+impl ThreadHandle {
+    /// Create a new thread handle with no result yet
+    pub fn new() -> Self {
+        ThreadHandle {
+            result: Arc::new(Mutex::new(None)),
         }
+    }
+}
+
+impl Default for ThreadHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Debug for ThreadHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ThreadHandle")
+    }
+}
+
+impl PartialEq for ThreadHandle {
+    fn eq(&self, _other: &Self) -> bool {
+        false // Thread handles are never equal
     }
 }
 

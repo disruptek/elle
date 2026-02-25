@@ -248,8 +248,8 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> Result<Value, String> 
     });
 
     // Return a thread handle with the result holder
-    use crate::value::heap::{alloc, HeapObject, ThreadHandleData};
-    let thread_handle_data = ThreadHandleData {
+    use crate::value::heap::{alloc, HeapObject, ThreadHandle};
+    let thread_handle_data = ThreadHandle {
         result: result_holder,
     };
     Ok(alloc(HeapObject::ThreadHandle(thread_handle_data)))

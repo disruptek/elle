@@ -1,10 +1,6 @@
-//! FFI types for the Elle runtime
-//!
-//! Types for interacting with foreign (C) code via libloading.
+//! FFI value types for the Elle runtime
 
-use crate::value::SendValue;
 use std::ffi::c_void;
-use std::sync::{Arc, Mutex};
 
 /// FFI library handle
 ///
@@ -25,44 +21,6 @@ impl CHandle {
     /// Create a new C handle
     pub fn new(ptr: *const c_void, id: u32) -> Self {
         CHandle { ptr, id }
-    }
-}
-
-/// Thread handle for concurrent execution.
-///
-/// Holds the result of a spawned thread's execution.
-/// Uses `Arc<Mutex<>>` to safely share the result across threads.
-#[derive(Clone)]
-pub struct ThreadHandle {
-    /// The result of the spawned thread execution.
-    /// The `Result` is wrapped in `SendValue` to make it Send.
-    pub result: Arc<Mutex<Option<Result<SendValue, String>>>>,
-}
-
-impl ThreadHandle {
-    /// Create a new thread handle with no result yet
-    pub fn new() -> Self {
-        ThreadHandle {
-            result: Arc::new(Mutex::new(None)),
-        }
-    }
-}
-
-impl Default for ThreadHandle {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl std::fmt::Debug for ThreadHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ThreadHandle")
-    }
-}
-
-impl PartialEq for ThreadHandle {
-    fn eq(&self, _other: &Self) -> bool {
-        false // Thread handles are never equal
     }
 }
 
@@ -89,14 +47,5 @@ mod tests {
 
         assert_eq!(h1, h2);
         assert_ne!(h1, h3);
-    }
-
-    #[test]
-    fn test_thread_handle_not_equal() {
-        let h1 = ThreadHandle::new();
-        let h2 = ThreadHandle::new();
-
-        // Thread handles are never equal
-        assert_ne!(h1, h2);
     }
 }
