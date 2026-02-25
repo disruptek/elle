@@ -71,3 +71,6 @@ mod eval {
 mod primitives {
     include!("primitives.rs");
 }
+mod ffi {
+    include!("ffi.rs");
+}
