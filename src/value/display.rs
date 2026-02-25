@@ -9,7 +9,7 @@ use std::fmt;
 
 /// Resolve a symbol ID to its name via the thread-local symbol table.
 fn resolve_symbol(id: u32) -> Option<String> {
-    crate::ffi::primitives::context::resolve_symbol_name(id)
+    crate::context::resolve_symbol_name(id)
 }
 
 impl fmt::Display for Value {

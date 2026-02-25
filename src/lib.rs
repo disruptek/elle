@@ -34,6 +34,7 @@
 
 pub mod arithmetic;
 pub mod compiler;
+pub mod context;
 pub mod effects;
 pub mod error;
 pub mod ffi;
