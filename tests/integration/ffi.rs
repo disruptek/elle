@@ -685,23 +685,23 @@ fn test_ffi_callback_with_closure_capture() {
     // Callback closure captures a variable from the enclosing scope
     let result = eval_source(
         r#"
-        (def libc (ffi/native nil))
-        (def qsort-ptr (ffi/lookup libc "qsort"))
-        (def compar-sig (ffi/signature :int [:ptr :ptr]))
-        ;; Capture `direction` — 1 for ascending, -1 for descending
-        (def direction 1)
-        (def compar (ffi/callback compar-sig
-          (fn (a b)
-            (* direction (- (ffi/read a :i32) (ffi/read b :i32))))))
-        (def qsort-sig (ffi/signature :void [:ptr :size :size :ptr]))
-        (def arr (ffi/malloc 12))
-        (ffi/write arr (ffi/array :i32 3) [3 1 2])
-        (ffi/call qsort-ptr qsort-sig arr 3 4 compar)
-        (def sorted (ffi/read arr (ffi/array :i32 3)))
-        (ffi/free arr)
-        (ffi/callback-free compar)
-        sorted
-    "#,
+         (def libc (ffi/native nil))
+         (def qsort-ptr (ffi/lookup libc "qsort"))
+         (def compar-sig (ffi/signature :int [:ptr :ptr]))
+         ;; Capture `direction` — 1 for ascending, -1 for descending
+         (def direction 1)
+         (def compar (ffi/callback compar-sig
+           (fn (a b)
+             (* direction (- (ffi/read a :i32) (ffi/read b :i32))))))
+         (def qsort-sig (ffi/signature :void [:ptr :size :size :ptr]))
+         (def arr (ffi/malloc 12))
+         (ffi/write arr (ffi/array :i32 3) [3 1 2])
+         (ffi/call qsort-ptr qsort-sig arr 3 4 compar)
+         (def sorted (ffi/read arr (ffi/array :i32 3)))
+         (ffi/free arr)
+         (ffi/callback-free compar)
+         sorted
+     "#,
     );
     let v = result.unwrap();
     let arr = v.as_array().unwrap();
@@ -709,4 +709,77 @@ fn test_ffi_callback_with_closure_capture() {
     assert_eq!(arr[0].as_int(), Some(1));
     assert_eq!(arr[1].as_int(), Some(2));
     assert_eq!(arr[2].as_int(), Some(3));
+}
+
+// ── ffi/defbind macro ────────────────────────────────────────────
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_ffi_defbind_abs() {
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (ffi/defbind abs libc "abs" :int [:int])
+        (abs -42)
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::int(42));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_ffi_defbind_sqrt() {
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (ffi/defbind sqrt libc "sqrt" :double [:double])
+        (= (sqrt 144.0) 12.0)
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::TRUE);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_ffi_defbind_strlen() {
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (ffi/defbind strlen libc "strlen" :size [:string])
+        (strlen "hello")
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::int(5));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_ffi_defbind_multiple() {
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (ffi/defbind abs libc "abs" :int [:int])
+        (ffi/defbind strlen libc "strlen" :size [:string])
+        [(abs -99) (strlen "world")]
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(99));
+    assert_eq!(arr[1].as_int(), Some(5));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_ffi_defbind_zero_args() {
+    let result = eval_source(
+        r#"
+        (def libc (ffi/native nil))
+        (ffi/defbind getpid libc "getpid" :int [])
+        (def pid (getpid))
+        (> pid 0)
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::TRUE);
 }
