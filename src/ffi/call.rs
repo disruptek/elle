@@ -4,7 +4,7 @@
 //! converting between Elle `Value` and C types.
 
 use crate::error::{LError, LResult};
-use crate::ffi::marshal::{to_libffi_type, MarshalledArg};
+use crate::ffi::marshal::{read_value_from_buffer, to_libffi_type, AlignedBuffer, MarshalledArg};
 use crate::ffi::types::{Signature, TypeDesc};
 use crate::value::Value;
 use libffi::middle::{Cif, CodePtr, Type};
@@ -97,10 +97,31 @@ pub unsafe fn ffi_call(fn_ptr: *const c_void, args: &[Value], sig: &Signature) -
             let r: *const c_void = cif.call(code_ptr, &ffi_args);
             Ok(Value::pointer(r as usize))
         }
-        TypeDesc::Struct(_) | TypeDesc::Array(_, _) => Err(LError::ffi_error(
-            "call",
-            "struct/array return types not yet supported",
-        )),
+        TypeDesc::Struct(sd) => {
+            let (_, total_size) = sd.field_offsets().ok_or_else(|| {
+                LError::ffi_error("call", "cannot compute struct layout for return type")
+            })?;
+            let align = sig.ret.align().unwrap_or(1);
+            let buf = AlignedBuffer::new(total_size, align);
+            let ret = libffi::middle::Ret::new(unsafe {
+                std::slice::from_raw_parts_mut(buf.as_mut_ptr(), total_size.max(1))
+            });
+            cif.call_return_into(code_ptr, &ffi_args, ret);
+            read_value_from_buffer(buf.as_mut_ptr(), &sig.ret)
+        }
+        TypeDesc::Array(ref elem_desc, count) => {
+            let elem_size = elem_desc.size().ok_or_else(|| {
+                LError::ffi_error("call", "cannot compute array element size for return type")
+            })?;
+            let total_size = elem_size * count;
+            let align = elem_desc.align().unwrap_or(1);
+            let buf = AlignedBuffer::new(total_size, align);
+            let ret = libffi::middle::Ret::new(unsafe {
+                std::slice::from_raw_parts_mut(buf.as_mut_ptr(), total_size.max(1))
+            });
+            cif.call_return_into(code_ptr, &ffi_args, ret);
+            read_value_from_buffer(buf.as_mut_ptr(), &sig.ret)
+        }
     }
 }
 

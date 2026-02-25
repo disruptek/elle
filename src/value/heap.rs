@@ -51,6 +51,7 @@ pub enum HeapTag {
     Fiber = 16,
     Binding = 17,
     FFISignature = 18,
+    FFIType = 19,
 }
 
 /// All heap-allocated value types.
@@ -113,6 +114,9 @@ pub enum HeapObject {
 
     /// Reified FFI function signature (calling convention + return type + arg types)
     FFISignature(crate::ffi::types::Signature),
+
+    /// Reified FFI compound type descriptor (struct or array layout)
+    FFIType(crate::ffi::types::TypeDesc),
 }
 
 /// Internal binding metadata, heap-allocated behind the Value pointer.
@@ -200,6 +204,7 @@ impl HeapObject {
             HeapObject::Syntax(_) => HeapTag::Syntax,
             HeapObject::Binding(_) => HeapTag::Binding,
             HeapObject::FFISignature(_) => HeapTag::FFISignature,
+            HeapObject::FFIType(_) => HeapTag::FFIType,
         }
     }
 
@@ -222,6 +227,7 @@ impl HeapObject {
             HeapObject::Syntax(_) => "syntax",
             HeapObject::Binding(_) => "binding",
             HeapObject::FFISignature(_) => "ffi-signature",
+            HeapObject::FFIType(_) => "ffi-type",
         }
     }
 }
@@ -263,6 +269,7 @@ impl std::fmt::Debug for HeapObject {
             HeapObject::Syntax(s) => write!(f, "#<syntax:{}>", s),
             HeapObject::Binding(_) => write!(f, "#<binding>"),
             HeapObject::FFISignature(_) => write!(f, "<ffi-signature>"),
+            HeapObject::FFIType(desc) => write!(f, "<ffi-type:{:?}>", desc),
         }
     }
 }

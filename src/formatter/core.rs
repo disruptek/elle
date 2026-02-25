@@ -133,6 +133,7 @@ fn format_value(
             HeapObject::Syntax(s) => return format!("#<syntax:{}>", s),
             HeapObject::Binding(_) => return "#<binding>".to_string(),
             HeapObject::FFISignature(_) => return "<ffi-signature>".to_string(),
+            HeapObject::FFIType(_) => return "<ffi-type>".to_string(),
         }
     }
 

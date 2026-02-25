@@ -350,3 +350,173 @@ fn test_ffi_string_nil() {
     let result = eval_source("(ffi/string nil)");
     assert_eq!(result.unwrap(), Value::NIL);
 }
+
+// ── ffi/struct + struct marshalling ────────────────────────────────
+
+#[test]
+fn test_ffi_struct_creation() {
+    let result = eval_source("(ffi/struct [:i32 :double :ptr])");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_ffi_struct_size() {
+    // struct { i32, double } — i32 at 0, double at 8, total 16
+    let result = eval_source("(ffi/size (ffi/struct [:i32 :double]))");
+    assert_eq!(result.unwrap(), Value::int(16));
+}
+
+#[test]
+fn test_ffi_struct_align() {
+    let result = eval_source("(ffi/align (ffi/struct [:i8 :double]))");
+    assert_eq!(result.unwrap(), Value::int(8));
+}
+
+#[test]
+fn test_ffi_struct_read_write_roundtrip() {
+    let result = eval_source(
+        r#"
+        (def st (ffi/struct [:i32 :double]))
+        (def buf (ffi/malloc (ffi/size st)))
+        (ffi/write buf st [42 3.14])
+        (def vals (ffi/read buf st))
+        (ffi/free buf)
+        vals
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(42));
+    let expected = 314.0 / 100.0;
+    assert!((arr[1].as_float().unwrap() - expected).abs() < 1e-10);
+}
+
+#[test]
+fn test_ffi_struct_nested_read_write() {
+    let result = eval_source(
+        r#"
+        (def inner (ffi/struct [:i8 :i32]))
+        (def outer (ffi/struct [:i64 inner]))
+        (def buf (ffi/malloc (ffi/size outer)))
+        (ffi/write buf outer [999 [7 42]])
+        (def vals (ffi/read buf outer))
+        (ffi/free buf)
+        vals
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(999));
+    let inner = arr[1].as_array().unwrap();
+    let inner = inner.borrow();
+    assert_eq!(inner[0].as_int(), Some(7));
+    assert_eq!(inner[1].as_int(), Some(42));
+}
+
+#[test]
+fn test_ffi_array_creation() {
+    let result = eval_source("(ffi/array :i32 10)");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_ffi_array_size() {
+    let result = eval_source("(ffi/size (ffi/array :i32 10))");
+    assert_eq!(result.unwrap(), Value::int(40));
+}
+
+#[test]
+fn test_ffi_array_read_write_roundtrip() {
+    let result = eval_source(
+        r#"
+        (def at (ffi/array :i32 3))
+        (def buf (ffi/malloc (ffi/size at)))
+        (ffi/write buf at [10 20 30])
+        (def vals (ffi/read buf at))
+        (ffi/free buf)
+        vals
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(10));
+    assert_eq!(arr[1].as_int(), Some(20));
+    assert_eq!(arr[2].as_int(), Some(30));
+}
+
+#[test]
+fn test_ffi_struct_wrong_field_count() {
+    let result = eval_source(
+        r#"
+        (def st (ffi/struct [:i32 :double]))
+        (def buf (ffi/malloc (ffi/size st)))
+        (ffi/write buf st [42])
+        (ffi/free buf)
+    "#,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_ffi_struct_empty_rejected() {
+    let result = eval_source("(ffi/struct [])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_ffi_array_zero_rejected() {
+    let result = eval_source("(ffi/array :i32 0)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_ffi_signature_with_struct_type() {
+    let result = eval_source(
+        r#"
+        (def st (ffi/struct [:i32 :double]))
+        (ffi/signature st [:ptr])
+    "#,
+    );
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_ffi_signature_with_struct_arg() {
+    let result = eval_source(
+        r#"
+        (def st (ffi/struct [:i32 :double]))
+        (ffi/signature :void [st])
+    "#,
+    );
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_ffi_struct_with_all_numeric_types() {
+    let result = eval_source(
+        r#"
+        (def st (ffi/struct [:i8 :u8 :i16 :u16 :i32 :u32 :i64 :u64 :float :double]))
+        (def buf (ffi/malloc (ffi/size st)))
+        (ffi/write buf st [-1 255 -1000 60000 -100000 3000000000 -999999999 999999999 1.5 2.5])
+        (def vals (ffi/read buf st))
+        (ffi/free buf)
+        vals
+    "#,
+    );
+    let v = result.unwrap();
+    let arr = v.as_array().unwrap();
+    let arr = arr.borrow();
+    assert_eq!(arr[0].as_int(), Some(-1)); // i8
+    assert_eq!(arr[1].as_int(), Some(255)); // u8
+    assert_eq!(arr[2].as_int(), Some(-1000)); // i16
+    assert_eq!(arr[3].as_int(), Some(60000)); // u16
+    assert_eq!(arr[4].as_int(), Some(-100000)); // i32
+    assert_eq!(arr[5].as_int(), Some(3000000000)); // u32
+    assert_eq!(arr[6].as_int(), Some(-999999999)); // i64
+    assert_eq!(arr[7].as_int(), Some(999999999)); // u64
+    assert_eq!(arr[8].as_float(), Some(1.5)); // float
+    assert_eq!(arr[9].as_float(), Some(2.5)); // double
+}

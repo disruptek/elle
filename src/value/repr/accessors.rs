@@ -426,6 +426,19 @@ impl Value {
         }
     }
 
+    /// Extract as FFI type descriptor if this is an FFI type.
+    #[inline]
+    pub fn as_ffi_type(&self) -> Option<&crate::ffi::types::TypeDesc> {
+        use crate::value::heap::{deref, HeapObject};
+        if !self.is_heap() {
+            return None;
+        }
+        match unsafe { deref(*self) } {
+            HeapObject::FFIType(desc) => Some(desc),
+            _ => None,
+        }
+    }
+
     /// Extract as library handle ID if this is a library handle.
     #[inline]
     pub fn as_lib_handle(&self) -> Option<u32> {

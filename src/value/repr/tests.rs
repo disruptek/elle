@@ -356,3 +356,46 @@ fn test_lib_handle_not_on_non_handle() {
     assert_eq!(Value::NIL.as_lib_handle(), None);
     assert_eq!(Value::string("hello").as_lib_handle(), None);
 }
+
+#[test]
+fn test_ffi_type_roundtrip() {
+    use crate::ffi::types::{StructDesc, TypeDesc};
+    let desc = TypeDesc::Struct(StructDesc {
+        fields: vec![TypeDesc::I32, TypeDesc::Double, TypeDesc::Ptr],
+    });
+    let v = Value::ffi_type(desc.clone());
+    assert_eq!(v.type_name(), "ffi-type");
+    assert_eq!(v.as_ffi_type(), Some(&desc));
+}
+
+#[test]
+fn test_ffi_type_equality() {
+    use crate::ffi::types::{StructDesc, TypeDesc};
+    let desc1 = TypeDesc::Struct(StructDesc {
+        fields: vec![TypeDesc::I32, TypeDesc::Double],
+    });
+    let desc2 = TypeDesc::Struct(StructDesc {
+        fields: vec![TypeDesc::I32, TypeDesc::Double],
+    });
+    let desc3 = TypeDesc::Struct(StructDesc {
+        fields: vec![TypeDesc::I32, TypeDesc::I32],
+    });
+    assert_eq!(Value::ffi_type(desc1.clone()), Value::ffi_type(desc2));
+    assert_ne!(Value::ffi_type(desc1), Value::ffi_type(desc3));
+}
+
+#[test]
+fn test_ffi_type_not_on_non_type() {
+    assert_eq!(Value::int(42).as_ffi_type(), None);
+    assert_eq!(Value::NIL.as_ffi_type(), None);
+    assert_eq!(Value::string("hello").as_ffi_type(), None);
+}
+
+#[test]
+fn test_ffi_type_array() {
+    use crate::ffi::types::TypeDesc;
+    let desc = TypeDesc::Array(Box::new(TypeDesc::I32), 10);
+    let v = Value::ffi_type(desc.clone());
+    assert_eq!(v.as_ffi_type(), Some(&desc));
+    assert_eq!(v.type_name(), "ffi-type");
+}

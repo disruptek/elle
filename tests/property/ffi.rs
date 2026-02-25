@@ -2,15 +2,19 @@
 //
 // Tests cover: pointer NaN-boxing invariants, marshal range checking,
 // memory read-write roundtrips, TypeDesc size/align consistency,
-// and string marshalling edge cases.
+// string marshalling edge cases, and struct/array marshalling roundtrips.
 
 use elle::ffi::marshal::MarshalledArg;
 use elle::ffi::types::TypeDesc;
-use elle::primitives::ffi::{prim_ffi_free, prim_ffi_malloc, prim_ffi_read, prim_ffi_write};
+use elle::primitives::ffi::{
+    prim_ffi_align, prim_ffi_free, prim_ffi_malloc, prim_ffi_read, prim_ffi_size, prim_ffi_write,
+};
 use elle::value::fiber::SIG_OK;
 use elle::value::repr::{INT_MAX, INT_MIN};
 use elle::Value;
 use proptest::prelude::*;
+
+use crate::property::strategies::{arb_flat_struct, arb_primitive_type, arb_struct_and_values};
 
 // =========================================================================
 // A. Pointer NaN-boxing invariants
@@ -385,5 +389,392 @@ proptest! {
     fn marshal_string_rejects_int(n in INT_MIN..=INT_MAX) {
         let v = Value::int(n);
         prop_assert!(MarshalledArg::new(&v, &TypeDesc::Str).is_err());
+    }
+}
+
+// =========================================================================
+// F. Struct marshalling roundtrip
+// =========================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(200))]
+
+    // Struct write-read roundtrip: write a struct, read it back, values match
+    #[test]
+    fn struct_roundtrip((sd, val) in arb_struct_and_values()) {
+        let desc = TypeDesc::Struct(sd.clone());
+        let size = desc.size().unwrap();
+        let alloc = prim_ffi_malloc(&[Value::int(size as i64)]);
+        prop_assert_eq!(alloc.0, SIG_OK);
+        let ptr = alloc.1;
+
+        let type_val = Value::ffi_type(desc.clone());
+        let write = prim_ffi_write(&[ptr, type_val, val]);
+        prop_assert_eq!(write.0, SIG_OK, "write failed");
+
+        let read = prim_ffi_read(&[ptr, type_val]);
+        prop_assert_eq!(read.0, SIG_OK, "read failed");
+
+        // Compare field by field
+        let original = val.as_array().unwrap();
+        let original = original.borrow();
+        let result = read.1.as_array().unwrap();
+        let result = result.borrow();
+        prop_assert_eq!(original.len(), result.len(), "field count mismatch");
+
+        for (i, (field_desc, (orig, res))) in sd
+            .fields
+            .iter()
+            .zip(original.iter().zip(result.iter()))
+            .enumerate()
+        {
+            match field_desc {
+                TypeDesc::Float => {
+                    // Float roundtrip loses precision (f64→f32→f64)
+                    let orig_f = orig
+                        .as_float()
+                        .or_else(|| orig.as_int().map(|i| i as f64))
+                        .unwrap();
+                    let res_f = res.as_float().unwrap();
+                    let orig_f32 = orig_f as f32;
+                    prop_assert_eq!(
+                        orig_f32.to_bits(),
+                        (res_f as f32).to_bits(),
+                        "float field {} mismatch: {} vs {}",
+                        i,
+                        orig_f,
+                        res_f
+                    );
+                }
+                TypeDesc::Double => {
+                    let orig_f = orig
+                        .as_float()
+                        .or_else(|| orig.as_int().map(|i| i as f64))
+                        .unwrap();
+                    let res_f = res.as_float().unwrap();
+                    prop_assert_eq!(
+                        orig_f.to_bits(),
+                        res_f.to_bits(),
+                        "double field {} mismatch: {} vs {}",
+                        i,
+                        orig_f,
+                        res_f
+                    );
+                }
+                TypeDesc::Ptr => {
+                    // Pointer roundtrip: nil→nil, pointer→pointer
+                    if orig.is_nil() {
+                        prop_assert!(
+                            res.is_nil() || res.as_pointer() == Some(0),
+                            "null pointer field {} mismatch",
+                            i
+                        );
+                    } else {
+                        prop_assert_eq!(
+                            orig.as_pointer(),
+                            res.as_pointer(),
+                            "pointer field {} mismatch",
+                            i
+                        );
+                    }
+                }
+                _ => {
+                    // Integer types: exact match
+                    prop_assert_eq!(
+                        orig.as_int(),
+                        res.as_int(),
+                        "integer field {} mismatch: {:?} vs {:?}",
+                        i,
+                        orig,
+                        res
+                    );
+                }
+            }
+        }
+
+        prim_ffi_free(&[ptr]);
+    }
+}
+
+// =========================================================================
+// G. Struct field count validation
+// =========================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(100))]
+
+    // Writing with wrong number of fields fails
+    #[test]
+    fn struct_wrong_field_count(sd in arb_flat_struct(), extra in 1usize..=3) {
+        let desc = TypeDesc::Struct(sd.clone());
+        let size = desc.size().unwrap();
+        let alloc = prim_ffi_malloc(&[Value::int(size as i64)]);
+        prop_assert_eq!(alloc.0, SIG_OK);
+        let ptr = alloc.1;
+
+        // Too few values
+        if sd.fields.len() > 1 {
+            let too_few = Value::array(vec![Value::int(0); sd.fields.len() - 1]);
+            let write = prim_ffi_write(&[ptr, Value::ffi_type(desc.clone()), too_few]);
+            prop_assert_eq!(write.0, SIG_OK | 1, "should reject too few fields");
+        }
+
+        // Too many values
+        let too_many = Value::array(vec![Value::int(0); sd.fields.len() + extra]);
+        let write = prim_ffi_write(&[ptr, Value::ffi_type(desc), too_many]);
+        prop_assert_eq!(write.0, SIG_OK | 1, "should reject too many fields");
+
+        prim_ffi_free(&[ptr]);
+    }
+
+    // Writing non-array value for struct fails
+    #[test]
+    fn struct_non_array_rejected(sd in arb_flat_struct()) {
+        let desc = TypeDesc::Struct(sd);
+        let size = desc.size().unwrap();
+        let alloc = prim_ffi_malloc(&[Value::int(size as i64)]);
+        prop_assert_eq!(alloc.0, SIG_OK);
+        let ptr = alloc.1;
+
+        let write = prim_ffi_write(&[ptr, Value::ffi_type(desc), Value::int(42)]);
+        prop_assert_eq!(write.0, SIG_OK | 1, "should reject non-array");
+
+        prim_ffi_free(&[ptr]);
+    }
+}
+
+// =========================================================================
+// H. TypeDesc struct layout properties
+// =========================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(200))]
+
+    // Struct size >= sum of field sizes
+    #[test]
+    fn struct_size_ge_field_sum(sd in arb_flat_struct()) {
+        let desc = TypeDesc::Struct(sd.clone());
+        let struct_size = desc.size().unwrap();
+        let field_sum: usize = sd.fields.iter().map(|f| f.size().unwrap()).sum();
+        prop_assert!(
+            struct_size >= field_sum,
+            "struct size {} < field sum {}",
+            struct_size,
+            field_sum
+        );
+    }
+
+    // Struct alignment is max of field alignments
+    #[test]
+    fn struct_align_is_max_field_align(sd in arb_flat_struct()) {
+        let desc = TypeDesc::Struct(sd.clone());
+        let struct_align = desc.align().unwrap();
+        let max_field_align = sd
+            .fields
+            .iter()
+            .map(|f| f.align().unwrap())
+            .max()
+            .unwrap_or(1);
+        prop_assert_eq!(
+            struct_align, max_field_align,
+            "struct align {} != max field align {}",
+            struct_align, max_field_align
+        );
+    }
+
+    // Struct size is divisible by alignment (tail padding)
+    #[test]
+    fn struct_size_aligned(sd in arb_flat_struct()) {
+        let desc = TypeDesc::Struct(sd);
+        let size = desc.size().unwrap();
+        let align = desc.align().unwrap();
+        prop_assert_eq!(
+            size % align,
+            0,
+            "struct size {} not aligned to {}",
+            size,
+            align
+        );
+    }
+
+    // Field offsets are sorted and non-overlapping
+    #[test]
+    fn field_offsets_sorted_non_overlapping(sd in arb_flat_struct()) {
+        let (offsets, total_size) = sd.field_offsets().unwrap();
+        for i in 0..offsets.len() {
+            // Offset is aligned to field alignment
+            let field_align = sd.fields[i].align().unwrap();
+            prop_assert_eq!(
+                offsets[i] % field_align,
+                0,
+                "field {} offset {} not aligned to {}",
+                i,
+                offsets[i],
+                field_align
+            );
+
+            // Non-overlapping: offset[i] + size[i] <= offset[i+1]
+            if i + 1 < offsets.len() {
+                let field_end = offsets[i] + sd.fields[i].size().unwrap();
+                prop_assert!(
+                    field_end <= offsets[i + 1],
+                    "field {} end {} overlaps field {} at {}",
+                    i,
+                    field_end,
+                    i + 1,
+                    offsets[i + 1]
+                );
+            }
+
+            // Last field + size <= total
+            if i == offsets.len() - 1 {
+                let field_end = offsets[i] + sd.fields[i].size().unwrap();
+                prop_assert!(
+                    field_end <= total_size,
+                    "last field end {} > total size {}",
+                    field_end,
+                    total_size
+                );
+            }
+        }
+    }
+
+    // Field offsets total_size matches TypeDesc::size()
+    #[test]
+    fn field_offsets_total_matches_size(sd in arb_flat_struct()) {
+        let desc = TypeDesc::Struct(sd.clone());
+        let (_, total_size) = sd.field_offsets().unwrap();
+        prop_assert_eq!(desc.size(), Some(total_size));
+    }
+}
+
+// =========================================================================
+// I. Array type properties
+// =========================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(100))]
+
+    // Array size = element_size * count
+    #[test]
+    fn array_size_is_elem_times_count(
+        elem in arb_primitive_type(),
+        count in 1usize..=10,
+    ) {
+        let desc = TypeDesc::Array(Box::new(elem.clone()), count);
+        let expected = elem.size().unwrap() * count;
+        prop_assert_eq!(desc.size(), Some(expected));
+    }
+
+    // Array write-read roundtrip
+    #[test]
+    fn array_roundtrip(
+        elem_desc in arb_primitive_type(),
+        count in 1usize..=5,
+    ) {
+        // Skip pointer and float for simpler comparison
+        prop_assume!(!matches!(elem_desc, TypeDesc::Ptr | TypeDesc::Float));
+
+        let desc = TypeDesc::Array(Box::new(elem_desc.clone()), count);
+        // Generate deterministic values
+        let vals: Vec<Value> = (0..count)
+            .map(|i| match &elem_desc {
+                TypeDesc::I8 => Value::int((i as i64) % 127),
+                TypeDesc::U8 => Value::int(i as i64),
+                TypeDesc::I16 => Value::int(i as i64 * 100),
+                TypeDesc::U16 => Value::int(i as i64 * 100),
+                TypeDesc::I32 => Value::int(i as i64 * 10000),
+                TypeDesc::U32 => Value::int(i as i64 * 10000),
+                TypeDesc::I64 => Value::int(i as i64 * 100000),
+                TypeDesc::U64 => Value::int(i as i64 * 100000),
+                TypeDesc::Double => Value::float(i as f64 * 1.5),
+                _ => Value::int(i as i64),
+            })
+            .collect();
+        let val = Value::array(vals.clone());
+
+        let size = desc.size().unwrap();
+        let alloc = prim_ffi_malloc(&[Value::int(size as i64)]);
+        prop_assert_eq!(alloc.0, SIG_OK);
+        let ptr = alloc.1;
+
+        let type_val = Value::ffi_type(desc);
+        let write = prim_ffi_write(&[ptr, type_val, val]);
+        prop_assert_eq!(write.0, SIG_OK, "write failed");
+
+        let read = prim_ffi_read(&[ptr, type_val]);
+        prop_assert_eq!(read.0, SIG_OK, "read failed");
+
+        let result = read.1.as_array().unwrap();
+        let result = result.borrow();
+        prop_assert_eq!(result.len(), count, "element count mismatch");
+
+        for (i, (orig, res)) in vals.iter().zip(result.iter()).enumerate() {
+            if matches!(elem_desc, TypeDesc::Double) {
+                let orig_f = orig.as_float().unwrap();
+                let res_f = res.as_float().unwrap();
+                prop_assert_eq!(
+                    orig_f.to_bits(),
+                    res_f.to_bits(),
+                    "double element {} mismatch",
+                    i
+                );
+            } else {
+                prop_assert_eq!(orig.as_int(), res.as_int(), "element {} mismatch", i);
+            }
+        }
+
+        prim_ffi_free(&[ptr]);
+    }
+}
+
+// =========================================================================
+// J. FFIType value properties
+// =========================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(100))]
+
+    // FFIType structural equality
+    #[test]
+    fn ffi_type_structural_eq(sd in arb_flat_struct()) {
+        let desc1 = TypeDesc::Struct(sd.clone());
+        let desc2 = TypeDesc::Struct(sd);
+        prop_assert_eq!(Value::ffi_type(desc1), Value::ffi_type(desc2));
+    }
+
+    // FFIType type name is always "ffi-type"
+    #[test]
+    fn ffi_type_name(sd in arb_flat_struct()) {
+        let v = Value::ffi_type(TypeDesc::Struct(sd));
+        prop_assert_eq!(v.type_name(), "ffi-type");
+    }
+
+    // FFIType roundtrip through as_ffi_type
+    #[test]
+    fn ffi_type_accessor_roundtrip(sd in arb_flat_struct()) {
+        let desc = TypeDesc::Struct(sd);
+        let v = Value::ffi_type(desc.clone());
+        prop_assert_eq!(v.as_ffi_type(), Some(&desc));
+    }
+
+    // ffi/size matches TypeDesc::size() for structs
+    #[test]
+    fn ffi_size_matches_type_desc(sd in arb_flat_struct()) {
+        let desc = TypeDesc::Struct(sd);
+        let expected = desc.size().unwrap();
+        let result = prim_ffi_size(&[Value::ffi_type(desc)]);
+        prop_assert_eq!(result.0, SIG_OK);
+        prop_assert_eq!(result.1.as_int(), Some(expected as i64));
+    }
+
+    // ffi/align matches TypeDesc::align() for structs
+    #[test]
+    fn ffi_align_matches_type_desc(sd in arb_flat_struct()) {
+        let desc = TypeDesc::Struct(sd);
+        let expected = desc.align().unwrap();
+        let result = prim_ffi_align(&[Value::ffi_type(desc)]);
+        prop_assert_eq!(result.0, SIG_OK);
+        prop_assert_eq!(result.1.as_int(), Some(expected as i64));
     }
 }

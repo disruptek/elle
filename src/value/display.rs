@@ -158,6 +158,17 @@ impl fmt::Display for Value {
             return write!(f, "<ffi-signature>");
         }
 
+        // FFI type descriptor
+        if let Some(desc) = self.as_ffi_type() {
+            return match desc {
+                crate::ffi::types::TypeDesc::Struct(sd) if sd.fields.len() <= 5 => {
+                    let names: Vec<String> = sd.fields.iter().map(|f| f.short_name()).collect();
+                    write!(f, "<ffi-type:struct({})>", names.join(", "))
+                }
+                _ => write!(f, "<ffi-type:{}>", desc.short_name()),
+            };
+        }
+
         // Library handle
         if let Some(id) = self.as_lib_handle() {
             return write!(f, "<lib-handle:{}>", id);

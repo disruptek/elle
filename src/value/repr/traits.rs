@@ -82,6 +82,9 @@ impl PartialEq for Value {
                 // FFI signature comparison (structural equality)
                 (HeapObject::FFISignature(s1), HeapObject::FFISignature(s2)) => s1 == s2,
 
+                // FFI type descriptor comparison (structural equality)
+                (HeapObject::FFIType(t1), HeapObject::FFIType(t2)) => t1 == t2,
+
                 // Different types are not equal
                 _ => false,
             }

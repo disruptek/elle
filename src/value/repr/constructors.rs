@@ -243,6 +243,22 @@ impl Value {
         alloc(HeapObject::FFISignature(sig))
     }
 
+    /// Create an FFI compound type descriptor value.
+    ///
+    /// Only for compound types (Struct, Array). Primitive types use keywords.
+    #[inline]
+    pub fn ffi_type(desc: crate::ffi::types::TypeDesc) -> Self {
+        use crate::value::heap::{alloc, HeapObject};
+        debug_assert!(
+            matches!(
+                desc,
+                crate::ffi::types::TypeDesc::Struct(_) | crate::ffi::types::TypeDesc::Array(_, _)
+            ),
+            "FFIType should only wrap compound types"
+        );
+        alloc(HeapObject::FFIType(desc))
+    }
+
     /// Create a library handle value.
     #[inline]
     pub fn lib_handle(id: u32) -> Self {

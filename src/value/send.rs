@@ -48,6 +48,9 @@ pub enum SendValue {
 
     /// Float values that couldn't be stored inline
     Float(f64),
+
+    /// Deep copy of FFI type descriptor (pure data, no Rc)
+    FFIType(crate::ffi::types::TypeDesc),
 }
 
 impl SendValue {
@@ -156,6 +159,9 @@ impl SendValue {
 
             // Unsafe: FFI signatures (contain non-Send types)
             HeapObject::FFISignature(_) => Err("Cannot send FFI signature".to_string()),
+
+            // FFI type descriptors are pure data — safe to send
+            HeapObject::FFIType(desc) => Ok(SendValue::FFIType(desc.clone())),
         }
     }
 
@@ -196,6 +202,7 @@ impl SendValue {
                 alloc(HeapObject::Cell(std::cell::RefCell::new(val), is_local))
             }
             SendValue::Float(f) => alloc(HeapObject::Float(f)),
+            SendValue::FFIType(desc) => alloc(HeapObject::FFIType(desc)),
         }
     }
 }

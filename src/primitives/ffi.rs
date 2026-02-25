@@ -11,6 +11,39 @@ use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
+// ── Type descriptor resolution ──────────────────────────────────────
+
+/// Resolve a type descriptor from a keyword or FFIType value.
+///
+/// Used by ffi/read, ffi/write, ffi/size, ffi/align, ffi/signature.
+/// Returns the TypeDesc or an error tuple.
+fn resolve_type_desc(value: &Value, context: &str) -> Result<TypeDesc, (SignalBits, Value)> {
+    // First try keyword
+    if let Some(name) = value.as_keyword_name() {
+        return TypeDesc::from_keyword(name).ok_or_else(|| {
+            (
+                SIG_ERROR,
+                error_val("ffi-error", format!("{}: unknown type :{}", context, name)),
+            )
+        });
+    }
+    // Then try FFIType value
+    if let Some(desc) = value.as_ffi_type() {
+        return Ok(desc.clone());
+    }
+    Err((
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!(
+                "{}: expected keyword or ffi-type, got {}",
+                context,
+                value.type_name()
+            ),
+        ),
+    ))
+}
+
 // ── Library loading ─────────────────────────────────────────────────
 
 pub fn prim_ffi_native(args: &[Value]) -> (SignalBits, Value) {
@@ -142,32 +175,9 @@ pub fn prim_ffi_signature(args: &[Value]) -> (SignalBits, Value) {
             error_val("arity-error", "ffi/signature: expected 2 or 3 arguments"),
         );
     }
-    let ret_name = match args[0].as_keyword_name() {
-        Some(name) => name,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!(
-                        "ffi/signature: expected keyword for return type, got {}",
-                        args[0].type_name()
-                    ),
-                ),
-            )
-        }
-    };
-    let ret = match TypeDesc::from_keyword(ret_name) {
-        Some(t) => t,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "ffi-error",
-                    format!("ffi/signature: unknown type :{}", ret_name),
-                ),
-            )
-        }
+    let ret = match resolve_type_desc(&args[0], "ffi/signature") {
+        Ok(t) => t,
+        Err(e) => return e,
     };
 
     // Parse argument types from array or list
@@ -193,32 +203,9 @@ pub fn prim_ffi_signature(args: &[Value]) -> (SignalBits, Value) {
 
     let mut arg_types = Vec::with_capacity(arg_vals.len());
     for val in &arg_vals {
-        let name = match val.as_keyword_name() {
-            Some(n) => n,
-            None => {
-                return (
-                    SIG_ERROR,
-                    error_val(
-                        "type-error",
-                        format!(
-                            "ffi/signature: expected keyword in arg types, got {}",
-                            val.type_name()
-                        ),
-                    ),
-                )
-            }
-        };
-        match TypeDesc::from_keyword(name) {
-            Some(t) => arg_types.push(t),
-            None => {
-                return (
-                    SIG_ERROR,
-                    error_val(
-                        "ffi-error",
-                        format!("ffi/signature: unknown type :{}", name),
-                    ),
-                )
-            }
+        match resolve_type_desc(val, "ffi/signature") {
+            Ok(t) => arg_types.push(t),
+            Err(e) => return e,
         }
     }
 
@@ -318,6 +305,125 @@ pub fn prim_ffi_call(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
+// ── Struct/array type creation ──────────────────────────────────────
+
+pub fn prim_ffi_struct(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val("arity-error", "ffi/struct: expected 1 argument"),
+        );
+    }
+    // Accept array or list of type descriptors
+    let field_vals = if let Some(arr) = args[0].as_array() {
+        arr.borrow().clone()
+    } else {
+        match args[0].list_to_vec() {
+            Ok(v) => v,
+            Err(_) => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "ffi/struct: expected array or list of types, got {}",
+                            args[0].type_name()
+                        ),
+                    ),
+                )
+            }
+        }
+    };
+
+    if field_vals.is_empty() {
+        return (
+            SIG_ERROR,
+            error_val(
+                "argument-error",
+                "ffi/struct: struct must have at least one field",
+            ),
+        );
+    }
+
+    let mut fields = Vec::with_capacity(field_vals.len());
+    for val in &field_vals {
+        match resolve_type_desc(val, "ffi/struct") {
+            Ok(desc) => {
+                if matches!(desc, TypeDesc::Void) {
+                    return (
+                        SIG_ERROR,
+                        error_val(
+                            "argument-error",
+                            "ffi/struct: void is not valid as a field type",
+                        ),
+                    );
+                }
+                fields.push(desc);
+            }
+            Err(e) => return e,
+        }
+    }
+
+    let desc = TypeDesc::Struct(crate::ffi::types::StructDesc { fields });
+    (SIG_OK, Value::ffi_type(desc))
+}
+
+pub fn prim_ffi_array(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 2 {
+        return (
+            SIG_ERROR,
+            error_val("arity-error", "ffi/array: expected 2 arguments"),
+        );
+    }
+    let elem_desc = match resolve_type_desc(&args[0], "ffi/array") {
+        Ok(desc) => {
+            if matches!(desc, TypeDesc::Void) {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "argument-error",
+                        "ffi/array: void is not valid as element type",
+                    ),
+                );
+            }
+            desc
+        }
+        Err(e) => return e,
+    };
+    let count = match args[1].as_int() {
+        Some(n) if n > 0 => n as usize,
+        Some(0) => {
+            return (
+                SIG_ERROR,
+                error_val("argument-error", "ffi/array: count must be positive"),
+            )
+        }
+        Some(n) => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "argument-error",
+                    format!("ffi/array: count must be positive, got {}", n),
+                ),
+            )
+        }
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "ffi/array: expected integer for count, got {}",
+                        args[1].type_name()
+                    ),
+                ),
+            )
+        }
+    };
+    let desc = TypeDesc::Array(Box::new(elem_desc), count);
+    (SIG_OK, Value::ffi_type(desc))
+}
+
 // ── Type introspection ──────────────────────────────────────────────
 
 pub fn prim_ffi_size(args: &[Value]) -> (SignalBits, Value) {
@@ -327,26 +433,9 @@ pub fn prim_ffi_size(args: &[Value]) -> (SignalBits, Value) {
             error_val("arity-error", "ffi/size: expected 1 argument"),
         );
     }
-    let name = match args[0].as_keyword_name() {
-        Some(n) => n,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("ffi/size: expected keyword, got {}", args[0].type_name()),
-                ),
-            )
-        }
-    };
-    let desc = match TypeDesc::from_keyword(name) {
-        Some(t) => t,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val("ffi-error", format!("ffi/size: unknown type :{}", name)),
-            )
-        }
+    let desc = match resolve_type_desc(&args[0], "ffi/size") {
+        Ok(t) => t,
+        Err(e) => return e,
     };
     match desc.size() {
         Some(s) => (SIG_OK, Value::int(s as i64)),
@@ -361,26 +450,9 @@ pub fn prim_ffi_align(args: &[Value]) -> (SignalBits, Value) {
             error_val("arity-error", "ffi/align: expected 1 argument"),
         );
     }
-    let name = match args[0].as_keyword_name() {
-        Some(n) => n,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("ffi/align: expected keyword, got {}", args[0].type_name()),
-                ),
-            )
-        }
-    };
-    let desc = match TypeDesc::from_keyword(name) {
-        Some(t) => t,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val("ffi-error", format!("ffi/align: unknown type :{}", name)),
-            )
-        }
+    let desc = match resolve_type_desc(&args[0], "ffi/align") {
+        Ok(t) => t,
+        Err(e) => return e,
     };
     match desc.align() {
         Some(a) => (SIG_OK, Value::int(a as i64)),
@@ -479,29 +551,9 @@ pub fn prim_ffi_read(args: &[Value]) -> (SignalBits, Value) {
             )
         }
     };
-    let type_name = match args[1].as_keyword_name() {
-        Some(n) => n,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("ffi/read: expected keyword, got {}", args[1].type_name()),
-                ),
-            )
-        }
-    };
-    let desc = match TypeDesc::from_keyword(type_name) {
-        Some(t) => t,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "ffi-error",
-                    format!("ffi/read: unknown type :{}", type_name),
-                ),
-            )
-        }
+    let desc = match resolve_type_desc(&args[1], "ffi/read") {
+        Ok(t) => t,
+        Err(e) => return e,
     };
     let ptr = addr as *const u8;
     unsafe {
@@ -544,10 +596,15 @@ pub fn prim_ffi_read(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
             TypeDesc::Struct(_) | TypeDesc::Array(_, _) => {
-                return (
-                    SIG_ERROR,
-                    error_val("ffi-error", "ffi/read: struct/array not yet supported"),
-                )
+                match crate::ffi::marshal::read_value_from_buffer(ptr, &desc) {
+                    Ok(val) => val,
+                    Err(e) => {
+                        return (
+                            SIG_ERROR,
+                            error_val("ffi-error", format!("ffi/read: {}", e)),
+                        )
+                    }
+                }
             }
         };
         (SIG_OK, val)
@@ -579,29 +636,9 @@ pub fn prim_ffi_write(args: &[Value]) -> (SignalBits, Value) {
             )
         }
     };
-    let type_name = match args[1].as_keyword_name() {
-        Some(n) => n,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("ffi/write: expected keyword, got {}", args[1].type_name()),
-                ),
-            )
-        }
-    };
-    let desc = match TypeDesc::from_keyword(type_name) {
-        Some(t) => t,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "ffi-error",
-                    format!("ffi/write: unknown type :{}", type_name),
-                ),
-            )
-        }
+    let desc = match resolve_type_desc(&args[1], "ffi/write") {
+        Ok(t) => t,
+        Err(e) => return e,
     };
 
     let ptr = addr as *mut u8;
@@ -764,10 +801,19 @@ pub fn prim_ffi_write(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
             TypeDesc::Struct(_) | TypeDesc::Array(_, _) => {
-                return (
-                    SIG_ERROR,
-                    error_val("ffi-error", "ffi/write: struct/array not yet supported"),
-                )
+                match crate::ffi::marshal::write_value_to_buffer(ptr, value, &desc) {
+                    Ok(_owned) => {
+                        // Note: owned data (CStrings for string fields) is dropped here.
+                        // This is fine for ffi/write since the data has already been written
+                        // to the buffer at this point.
+                    }
+                    Err(e) => {
+                        return (
+                            SIG_ERROR,
+                            error_val("ffi-error", format!("ffi/write: {}", e)),
+                        )
+                    }
+                }
             }
         }
     }
@@ -961,6 +1007,28 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["ptr", "max-len"],
         category: "ffi",
         example: "(ffi/string ptr)",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "ffi/struct",
+        func: prim_ffi_struct,
+        effect: Effect::raises(),
+        arity: Arity::Exact(1),
+        doc: "Create a struct type descriptor from field types.",
+        params: &["fields"],
+        category: "ffi",
+        example: "(ffi/struct [:i32 :double :ptr])",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "ffi/array",
+        func: prim_ffi_array,
+        effect: Effect::raises(),
+        arity: Arity::Exact(2),
+        doc: "Create an array type descriptor from element type and count.",
+        params: &["elem-type", "count"],
+        category: "ffi",
+        example: "(ffi/array :i32 10)",
         aliases: &[],
     },
 ];
@@ -1165,5 +1233,145 @@ mod tests {
     fn test_ffi_string_arity() {
         let result = prim_ffi_string(&[]);
         assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_struct_basic() {
+        let result = prim_ffi_struct(&[Value::array(vec![
+            Value::keyword("i32"),
+            Value::keyword("double"),
+        ])]);
+        assert_eq!(result.0, SIG_OK);
+        assert!(result.1.as_ffi_type().is_some());
+    }
+
+    #[test]
+    fn test_ffi_struct_nested() {
+        // Create inner struct
+        let inner_result = prim_ffi_struct(&[Value::array(vec![
+            Value::keyword("i8"),
+            Value::keyword("i32"),
+        ])]);
+        assert_eq!(inner_result.0, SIG_OK);
+        let inner = inner_result.1;
+
+        // Create outer struct using inner
+        let result = prim_ffi_struct(&[Value::array(vec![Value::keyword("i64"), inner])]);
+        assert_eq!(result.0, SIG_OK);
+    }
+
+    #[test]
+    fn test_ffi_struct_empty() {
+        let result = prim_ffi_struct(&[Value::array(vec![])]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_struct_void_field() {
+        let result = prim_ffi_struct(&[Value::array(vec![Value::keyword("void")])]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_array_basic() {
+        let result = prim_ffi_array(&[Value::keyword("i32"), Value::int(10)]);
+        assert_eq!(result.0, SIG_OK);
+        assert!(result.1.as_ffi_type().is_some());
+    }
+
+    #[test]
+    fn test_ffi_array_zero_count() {
+        let result = prim_ffi_array(&[Value::keyword("i32"), Value::int(0)]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_array_negative_count() {
+        let result = prim_ffi_array(&[Value::keyword("i32"), Value::int(-5)]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_size_with_struct() {
+        // Create a struct type
+        let struct_result = prim_ffi_struct(&[Value::array(vec![
+            Value::keyword("i32"),
+            Value::keyword("i32"),
+        ])]);
+        assert_eq!(struct_result.0, SIG_OK);
+        let struct_type = struct_result.1;
+
+        // Get its size
+        let size_result = prim_ffi_size(&[struct_type]);
+        assert_eq!(size_result.0, SIG_OK);
+        assert_eq!(size_result.1.as_int(), Some(8));
+    }
+
+    #[test]
+    fn test_ffi_align_with_struct() {
+        let struct_result = prim_ffi_struct(&[Value::array(vec![
+            Value::keyword("i8"),
+            Value::keyword("double"),
+        ])]);
+        assert_eq!(struct_result.0, SIG_OK);
+        let struct_type = struct_result.1;
+
+        let align_result = prim_ffi_align(&[struct_type]);
+        assert_eq!(align_result.0, SIG_OK);
+        assert_eq!(align_result.1.as_int(), Some(8));
+    }
+
+    #[test]
+    fn test_ffi_signature_with_struct() {
+        // Create a struct type for use in signature
+        let struct_result = prim_ffi_struct(&[Value::array(vec![
+            Value::keyword("i32"),
+            Value::keyword("double"),
+        ])]);
+        assert_eq!(struct_result.0, SIG_OK);
+        let struct_type = struct_result.1;
+
+        // Use struct as return type
+        let sig_result =
+            prim_ffi_signature(&[struct_type, Value::array(vec![Value::keyword("ptr")])]);
+        assert_eq!(sig_result.0, SIG_OK);
+
+        // Use struct as argument type
+        let sig_result2 =
+            prim_ffi_signature(&[Value::keyword("void"), Value::array(vec![struct_type])]);
+        assert_eq!(sig_result2.0, SIG_OK);
+    }
+
+    #[test]
+    fn test_ffi_read_write_struct() {
+        // Create a struct type
+        let struct_result = prim_ffi_struct(&[Value::array(vec![
+            Value::keyword("i32"),
+            Value::keyword("double"),
+        ])]);
+        assert_eq!(struct_result.0, SIG_OK);
+        let struct_type = struct_result.1;
+
+        // Allocate memory for the struct
+        let size = prim_ffi_size(&[struct_type]);
+        let alloc_result = prim_ffi_malloc(&[size.1]);
+        assert_eq!(alloc_result.0, SIG_OK);
+        let ptr = alloc_result.1;
+
+        // Write struct
+        let test_float = 2.5;
+        let struct_val = Value::array(vec![Value::int(42), Value::float(test_float)]);
+        let write_result = prim_ffi_write(&[ptr, struct_type, struct_val]);
+        assert_eq!(write_result.0, SIG_OK);
+
+        // Read struct back
+        let read_result = prim_ffi_read(&[ptr, struct_type]);
+        assert_eq!(read_result.0, SIG_OK);
+        let arr = read_result.1.as_array().unwrap();
+        let arr = arr.borrow();
+        assert_eq!(arr[0].as_int(), Some(42));
+        assert!((arr[1].as_float().unwrap() - test_float).abs() < 1e-10);
+
+        prim_ffi_free(&[ptr]);
     }
 }

@@ -56,6 +56,33 @@ pub struct StructDesc {
     pub fields: Vec<TypeDesc>,
 }
 
+impl StructDesc {
+    /// Compute the byte offset of each field within the struct layout.
+    ///
+    /// Returns `(offsets, total_size)` where offsets[i] is the byte offset
+    /// of field i, and total_size includes tail padding.
+    /// Returns `None` if any field has unknown size/alignment (e.g., contains Void).
+    pub fn field_offsets(&self) -> Option<(Vec<usize>, usize)> {
+        let mut offsets = Vec::with_capacity(self.fields.len());
+        let mut offset = 0usize;
+        for field in &self.fields {
+            let field_align = field.align()?;
+            offset = (offset + field_align - 1) & !(field_align - 1);
+            offsets.push(offset);
+            offset += field.size()?;
+        }
+        // Tail padding: align total size to struct alignment
+        let struct_align = self
+            .fields
+            .iter()
+            .filter_map(|f| f.align())
+            .max()
+            .unwrap_or(1);
+        offset = (offset + struct_align - 1) & !(struct_align - 1);
+        Some((offsets, offset))
+    }
+}
+
 impl TypeDesc {
     /// Parse a type descriptor from an Elle keyword name.
     ///
@@ -110,22 +137,7 @@ impl TypeDesc {
             TypeDesc::Size => Some(std::mem::size_of::<usize>()),
             TypeDesc::SSize => Some(std::mem::size_of::<isize>()),
             TypeDesc::Ptr | TypeDesc::Str => Some(std::mem::size_of::<*const ()>()),
-            TypeDesc::Struct(desc) => {
-                // Sum of field sizes with alignment padding
-                let mut offset = 0usize;
-                for field in &desc.fields {
-                    let field_size = field.size()?;
-                    let field_align = field.align()?;
-                    // Align offset
-                    offset = (offset + field_align - 1) & !(field_align - 1);
-                    offset += field_size;
-                }
-                // Align to struct alignment
-                if let Some(align) = self.align() {
-                    offset = (offset + align - 1) & !(align - 1);
-                }
-                Some(offset)
-            }
+            TypeDesc::Struct(desc) => desc.field_offsets().map(|(_, total_size)| total_size),
             TypeDesc::Array(elem, count) => elem.size().map(|s| s * count),
         }
     }
@@ -159,6 +171,38 @@ impl TypeDesc {
                     .or(Some(1))
             }
             TypeDesc::Array(elem, _) => elem.align(),
+        }
+    }
+
+    /// Short display name for this type descriptor.
+    pub fn short_name(&self) -> String {
+        match self {
+            TypeDesc::Void => "void".to_string(),
+            TypeDesc::Bool => "bool".to_string(),
+            TypeDesc::I8 => "i8".to_string(),
+            TypeDesc::U8 => "u8".to_string(),
+            TypeDesc::I16 => "i16".to_string(),
+            TypeDesc::U16 => "u16".to_string(),
+            TypeDesc::I32 => "i32".to_string(),
+            TypeDesc::U32 => "u32".to_string(),
+            TypeDesc::I64 => "i64".to_string(),
+            TypeDesc::U64 => "u64".to_string(),
+            TypeDesc::Float => "float".to_string(),
+            TypeDesc::Double => "double".to_string(),
+            TypeDesc::Int => "int".to_string(),
+            TypeDesc::UInt => "uint".to_string(),
+            TypeDesc::Long => "long".to_string(),
+            TypeDesc::ULong => "ulong".to_string(),
+            TypeDesc::Char => "char".to_string(),
+            TypeDesc::UChar => "uchar".to_string(),
+            TypeDesc::Short => "short".to_string(),
+            TypeDesc::UShort => "ushort".to_string(),
+            TypeDesc::Size => "size".to_string(),
+            TypeDesc::SSize => "ssize".to_string(),
+            TypeDesc::Ptr => "ptr".to_string(),
+            TypeDesc::Str => "string".to_string(),
+            TypeDesc::Struct(sd) => format!("struct({})", sd.fields.len()),
+            TypeDesc::Array(elem, count) => format!("array({}, {})", elem.short_name(), count),
         }
     }
 }
@@ -255,5 +299,70 @@ mod tests {
             Some(CallingConvention::Default)
         );
         assert_eq!(CallingConvention::from_keyword("sysv64"), None);
+    }
+
+    #[test]
+    fn test_field_offsets_simple() {
+        let desc = StructDesc {
+            fields: vec![TypeDesc::I32, TypeDesc::I32],
+        };
+        let (offsets, total) = desc.field_offsets().unwrap();
+        assert_eq!(offsets, vec![0, 4]);
+        assert_eq!(total, 8);
+    }
+
+    #[test]
+    fn test_field_offsets_padding() {
+        // i8 at 0, then i32 needs 4-byte alignment → padding
+        let desc = StructDesc {
+            fields: vec![TypeDesc::I8, TypeDesc::I32],
+        };
+        let (offsets, total) = desc.field_offsets().unwrap();
+        assert_eq!(offsets, vec![0, 4]);
+        assert_eq!(total, 8);
+    }
+
+    #[test]
+    fn test_field_offsets_tail_padding() {
+        // i32 at 0, i8 at 4, tail padding to align to 4
+        let desc = StructDesc {
+            fields: vec![TypeDesc::I32, TypeDesc::I8],
+        };
+        let (offsets, total) = desc.field_offsets().unwrap();
+        assert_eq!(offsets, vec![0, 4]);
+        assert_eq!(total, 8); // 5 bytes + 3 padding
+    }
+
+    #[test]
+    fn test_field_offsets_mixed() {
+        // i8 at 0, double at 8, i32 at 16, ptr at 24
+        let desc = StructDesc {
+            fields: vec![TypeDesc::I8, TypeDesc::Double, TypeDesc::I32, TypeDesc::Ptr],
+        };
+        let (offsets, total) = desc.field_offsets().unwrap();
+        assert_eq!(offsets, vec![0, 8, 16, 24]);
+        assert_eq!(total, 32);
+    }
+
+    #[test]
+    fn test_field_offsets_empty() {
+        let desc = StructDesc { fields: vec![] };
+        let (offsets, total) = desc.field_offsets().unwrap();
+        assert_eq!(offsets, Vec::<usize>::new());
+        assert_eq!(total, 0);
+    }
+
+    #[test]
+    fn test_field_offsets_nested_struct() {
+        let inner = StructDesc {
+            fields: vec![TypeDesc::I8, TypeDesc::I32],
+        };
+        // inner struct is 8 bytes, align 4
+        let outer = StructDesc {
+            fields: vec![TypeDesc::I8, TypeDesc::Struct(inner)],
+        };
+        let (offsets, total) = outer.field_offsets().unwrap();
+        assert_eq!(offsets, vec![0, 4]); // inner aligns to 4
+        assert_eq!(total, 12); // 4 + 8 = 12
     }
 }
