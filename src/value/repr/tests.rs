@@ -291,6 +291,7 @@ fn test_ffi_signature_roundtrip() {
         convention: CallingConvention::Default,
         ret: TypeDesc::I32,
         args: vec![TypeDesc::Ptr, TypeDesc::U64],
+        fixed_args: None,
     };
     let v = Value::ffi_signature(sig.clone());
     assert!(v.is_heap());
@@ -315,16 +316,19 @@ fn test_ffi_signature_equality() {
         convention: CallingConvention::Default,
         ret: TypeDesc::Void,
         args: vec![],
+        fixed_args: None,
     };
     let sig2 = Signature {
         convention: CallingConvention::Default,
         ret: TypeDesc::Void,
         args: vec![],
+        fixed_args: None,
     };
     let sig3 = Signature {
         convention: CallingConvention::Default,
         ret: TypeDesc::I32,
         args: vec![],
+        fixed_args: None,
     };
     assert_eq!(
         Value::ffi_signature(sig1.clone()),

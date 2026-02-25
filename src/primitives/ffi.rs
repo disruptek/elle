@@ -136,10 +136,10 @@ pub fn prim_ffi_lookup(args: &[Value]) -> (SignalBits, Value) {
 // ── Signature creation ──────────────────────────────────────────────
 
 pub fn prim_ffi_signature(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() != 2 {
+    if args.len() < 2 || args.len() > 3 {
         return (
             SIG_ERROR,
-            error_val("arity-error", "ffi/signature: expected 2 arguments"),
+            error_val("arity-error", "ffi/signature: expected 2 or 3 arguments"),
         );
     }
     let ret_name = match args[0].as_keyword_name() {
@@ -222,10 +222,45 @@ pub fn prim_ffi_signature(args: &[Value]) -> (SignalBits, Value) {
         }
     }
 
+    // Optional third arg: fixed_args count for variadic
+    let fixed_args = if args.len() == 3 {
+        match args[2].as_int() {
+            Some(n) if n >= 0 && (n as usize) <= arg_types.len() => Some(n as usize),
+            Some(n) => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "argument-error",
+                        format!(
+                            "ffi/signature: fixed_args {} out of range [0, {}]",
+                            n,
+                            arg_types.len()
+                        ),
+                    ),
+                )
+            }
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "ffi/signature: expected integer for fixed_args, got {}",
+                            args[2].type_name()
+                        ),
+                    ),
+                )
+            }
+        }
+    } else {
+        None
+    };
+
     let sig = Signature {
         convention: CallingConvention::Default,
         ret,
         args: arg_types,
+        fixed_args,
     };
     (SIG_OK, Value::ffi_signature(sig))
 }
@@ -739,6 +774,71 @@ pub fn prim_ffi_write(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::NIL)
 }
 
+// ── String from pointer ─────────────────────────────────────────────
+
+pub fn prim_ffi_string(args: &[Value]) -> (SignalBits, Value) {
+    if args.is_empty() || args.len() > 2 {
+        return (
+            SIG_ERROR,
+            error_val("arity-error", "ffi/string: expected 1 or 2 arguments"),
+        );
+    }
+    if args[0].is_nil() {
+        return (SIG_OK, Value::NIL);
+    }
+    let addr = match args[0].as_pointer() {
+        Some(a) => a,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!("ffi/string: expected pointer, got {}", args[0].type_name()),
+                ),
+            )
+        }
+    };
+
+    let ptr = addr as *const std::ffi::c_char;
+    unsafe {
+        if args.len() == 2 {
+            // Read up to N bytes
+            let max_len = match args[1].as_int() {
+                Some(n) if n >= 0 => n as usize,
+                _ => {
+                    return (
+                        SIG_ERROR,
+                        error_val(
+                            "type-error",
+                            "ffi/string: expected non-negative integer for length",
+                        ),
+                    )
+                }
+            };
+            let slice = std::slice::from_raw_parts(ptr as *const u8, max_len);
+            // Find null terminator within the slice
+            let len = slice.iter().position(|&b| b == 0).unwrap_or(max_len);
+            match std::str::from_utf8(&slice[..len]) {
+                Ok(s) => (SIG_OK, Value::string(s)),
+                Err(_) => (
+                    SIG_ERROR,
+                    error_val("ffi-error", "ffi/string: not valid UTF-8"),
+                ),
+            }
+        } else {
+            // Read null-terminated string
+            let cstr = std::ffi::CStr::from_ptr(ptr);
+            match cstr.to_str() {
+                Ok(s) => (SIG_OK, Value::string(s)),
+                Err(_) => (
+                    SIG_ERROR,
+                    error_val("ffi-error", "ffi/string: not valid UTF-8"),
+                ),
+            }
+        }
+    }
+}
+
 // ── PRIMITIVES table ────────────────────────────────────────────────
 
 pub const PRIMITIVES: &[PrimitiveDef] = &[
@@ -768,11 +868,11 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         name: "ffi/signature",
         func: prim_ffi_signature,
         effect: Effect::raises(),
-        arity: Arity::Exact(2),
-        doc: "Create a reified function signature.",
-        params: &["return-type", "arg-types"],
+        arity: Arity::Range(2, 3),
+        doc: "Create a reified function signature. Optional third arg for variadic functions.",
+        params: &["return-type", "arg-types", "fixed-args"],
         category: "ffi",
-        example: "(ffi/signature :double [:double])",
+        example: "(ffi/signature :int [:ptr :size :ptr :int] 3)",
         aliases: &[],
     },
     PrimitiveDef {
@@ -850,6 +950,17 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["ptr", "type", "value"],
         category: "ffi",
         example: "(ffi/write ptr :i32 42)",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "ffi/string",
+        func: prim_ffi_string,
+        effect: Effect::ffi_raises(),
+        arity: Arity::Range(1, 2),
+        doc: "Read a null-terminated C string from a pointer.",
+        params: &["ptr", "max-len"],
+        category: "ffi",
+        example: "(ffi/string ptr)",
         aliases: &[],
     },
 ];
@@ -973,6 +1084,86 @@ mod tests {
     #[test]
     fn test_ffi_native_wrong_type() {
         let result = prim_ffi_native(&[Value::int(42)]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_signature_variadic() {
+        let result = prim_ffi_signature(&[
+            Value::keyword("int"),
+            Value::array(vec![
+                Value::keyword("ptr"),
+                Value::keyword("string"),
+                Value::keyword("int"),
+            ]),
+            Value::int(2),
+        ]);
+        assert_eq!(result.0, SIG_OK);
+        let sig = result.1.as_ffi_signature().unwrap();
+        assert_eq!(sig.fixed_args, Some(2));
+    }
+
+    #[test]
+    fn test_ffi_signature_variadic_out_of_range() {
+        let result = prim_ffi_signature(&[
+            Value::keyword("int"),
+            Value::array(vec![Value::keyword("int")]),
+            Value::int(5), // 5 > 1 arg
+        ]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_signature_variadic_bad_type() {
+        let result = prim_ffi_signature(&[
+            Value::keyword("int"),
+            Value::array(vec![Value::keyword("int")]),
+            Value::string("bad"),
+        ]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_string_null() {
+        let result = prim_ffi_string(&[Value::NIL]);
+        assert_eq!(result.0, SIG_OK);
+        assert!(result.1.is_nil());
+    }
+
+    #[test]
+    fn test_ffi_string_from_buffer() {
+        // Allocate a buffer, write "hello\0" into it, read it back
+        let alloc = prim_ffi_malloc(&[Value::int(16)]);
+        assert_eq!(alloc.0, SIG_OK);
+        let ptr = alloc.1;
+        let addr = ptr.as_pointer().unwrap();
+        unsafe {
+            let p = addr as *mut u8;
+            for (i, &b) in b"hello\0".iter().enumerate() {
+                *p.add(i) = b;
+            }
+        }
+        let result = prim_ffi_string(&[ptr]);
+        assert_eq!(result.0, SIG_OK);
+        assert_eq!(result.1.as_string(), Some("hello"));
+
+        // Also test with max-len
+        let result2 = prim_ffi_string(&[ptr, Value::int(3)]);
+        assert_eq!(result2.0, SIG_OK);
+        assert_eq!(result2.1.as_string(), Some("hel"));
+
+        prim_ffi_free(&[ptr]);
+    }
+
+    #[test]
+    fn test_ffi_string_wrong_type() {
+        let result = prim_ffi_string(&[Value::int(42)]);
+        assert_eq!(result.0, SIG_ERROR);
+    }
+
+    #[test]
+    fn test_ffi_string_arity() {
+        let result = prim_ffi_string(&[]);
         assert_eq!(result.0, SIG_ERROR);
     }
 }

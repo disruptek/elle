@@ -14,7 +14,10 @@ use std::ffi::c_void;
 pub fn prepare_cif(sig: &Signature) -> Cif {
     let arg_types: Vec<Type> = sig.args.iter().map(to_libffi_type).collect();
     let ret_type = to_libffi_type(&sig.ret);
-    Cif::new(arg_types, ret_type)
+    match sig.fixed_args {
+        Some(fixed) => Cif::new_variadic(arg_types, fixed, ret_type),
+        None => Cif::new(arg_types, ret_type),
+    }
 }
 
 /// Call a C function through libffi.
@@ -112,6 +115,7 @@ mod tests {
             convention: CallingConvention::Default,
             ret: TypeDesc::I32,
             args: vec![TypeDesc::I32],
+            fixed_args: None,
         };
         let _cif = prepare_cif(&sig);
     }
@@ -122,6 +126,18 @@ mod tests {
             convention: CallingConvention::Default,
             ret: TypeDesc::Void,
             args: vec![],
+            fixed_args: None,
+        };
+        let _cif = prepare_cif(&sig);
+    }
+
+    #[test]
+    fn test_prepare_variadic_cif() {
+        let sig = Signature {
+            convention: CallingConvention::Default,
+            ret: TypeDesc::I32,
+            args: vec![TypeDesc::Ptr, TypeDesc::Size, TypeDesc::Ptr, TypeDesc::I32],
+            fixed_args: Some(3),
         };
         let _cif = prepare_cif(&sig);
     }
@@ -132,6 +148,7 @@ mod tests {
             convention: CallingConvention::Default,
             ret: TypeDesc::I32,
             args: vec![TypeDesc::I32],
+            fixed_args: None,
         };
         // Wrong number of args
         let result = unsafe { ffi_call(std::ptr::null(), &[], &sig) };
@@ -148,6 +165,7 @@ mod tests {
             convention: CallingConvention::Default,
             ret: TypeDesc::Int,
             args: vec![TypeDesc::Int],
+            fixed_args: None,
         };
         let result = unsafe { ffi_call(abs as *const c_void, &[Value::int(-42)], &sig) };
         assert!(result.is_ok());
@@ -164,6 +182,7 @@ mod tests {
             convention: CallingConvention::Default,
             ret: TypeDesc::Size,
             args: vec![TypeDesc::Str],
+            fixed_args: None,
         };
         let hello = Value::string("hello");
         let result = unsafe { ffi_call(strlen as *const c_void, &[hello], &sig) };

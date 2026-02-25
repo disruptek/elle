@@ -176,6 +176,9 @@ pub struct Signature {
     pub ret: TypeDesc,
     /// Argument types
     pub args: Vec<TypeDesc>,
+    /// For variadic functions: number of fixed arguments.
+    /// `None` means non-variadic (all args are fixed).
+    pub fixed_args: Option<usize>,
 }
 
 /// Calling convention for FFI functions.
