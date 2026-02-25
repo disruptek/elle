@@ -111,35 +111,15 @@ fn test_ffi_malloc_negative_error() {
 #[cfg(target_os = "linux")]
 #[test]
 fn test_ffi_call_abs() {
-    // abs() is in libc
     let result = eval_source(
         r#"
-        (def libc (ffi/native "/lib64/libc.so.6"))
+        (def libc (ffi/native nil))
         (def abs-ptr (ffi/lookup libc "abs"))
         (def abs-sig (ffi/signature :int [:int]))
         (ffi/call abs-ptr abs-sig -42)
     "#,
     );
-    match &result {
-        Ok(v) => assert_eq!(*v, Value::int(42)),
-        Err(e) => {
-            // Try alternative libc path
-            let result2 = eval_source(
-                r#"
-                (def libc (ffi/native "libc.so.6"))
-                (def abs-ptr (ffi/lookup libc "abs"))
-                (def abs-sig (ffi/signature :int [:int]))
-                (ffi/call abs-ptr abs-sig -42)
-            "#,
-            );
-            assert_eq!(
-                result2.unwrap(),
-                Value::int(42),
-                "Neither /lib64/libc.so.6 nor libc.so.6 worked: {}",
-                e
-            );
-        }
-    }
+    assert_eq!(result.unwrap(), Value::int(42));
 }
 
 #[cfg(target_os = "linux")]
@@ -147,66 +127,28 @@ fn test_ffi_call_abs() {
 fn test_ffi_call_strlen() {
     let result = eval_source(
         r#"
-        (def libc (ffi/native "/lib64/libc.so.6"))
+        (def libc (ffi/native nil))
         (def strlen-ptr (ffi/lookup libc "strlen"))
         (def strlen-sig (ffi/signature :size [:string]))
         (ffi/call strlen-ptr strlen-sig "hello")
     "#,
     );
-    match &result {
-        Ok(v) => assert_eq!(*v, Value::int(5)),
-        Err(e) => {
-            let result2 = eval_source(
-                r#"
-                (def libc (ffi/native "libc.so.6"))
-                (def strlen-ptr (ffi/lookup libc "strlen"))
-                (def strlen-sig (ffi/signature :size [:string]))
-                (ffi/call strlen-ptr strlen-sig "hello")
-            "#,
-            );
-            assert_eq!(
-                result2.unwrap(),
-                Value::int(5),
-                "Neither /lib64/libc.so.6 nor libc.so.6 worked: {}",
-                e
-            );
-        }
-    }
+    assert_eq!(result.unwrap(), Value::int(5));
 }
 
 #[cfg(target_os = "linux")]
 #[test]
 fn test_ffi_call_sqrt() {
-    // sqrt() is in libm — tests double argument and double return (float ABI)
     let result = eval_source(
         r#"
-        (def libm (ffi/native "/lib64/libm.so.6"))
+        (def libm (ffi/native nil))
         (def sqrt-ptr (ffi/lookup libm "sqrt"))
         (def sqrt-sig (ffi/signature :double [:double]))
         (def result (ffi/call sqrt-ptr sqrt-sig 4.0))
         (= result 2.0)
     "#,
     );
-    match &result {
-        Ok(v) => assert_eq!(*v, Value::TRUE),
-        Err(e) => {
-            let result2 = eval_source(
-                r#"
-                (def libm (ffi/native "libm.so.6"))
-                (def sqrt-ptr (ffi/lookup libm "sqrt"))
-                (def sqrt-sig (ffi/signature :double [:double]))
-                (def result (ffi/call sqrt-ptr sqrt-sig 4.0))
-                (= result 2.0)
-            "#,
-            );
-            assert_eq!(
-                result2.unwrap(),
-                Value::TRUE,
-                "Neither /lib64/libm.so.6 nor libm.so.6 worked: {}",
-                e
-            );
-        }
-    }
+    assert_eq!(result.unwrap(), Value::TRUE);
 }
 
 // ── Self-process loading ───────────────────────────────────────────
