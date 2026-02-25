@@ -3,7 +3,9 @@
 //! Enables calling C functions from Elle code. This module is being rebuilt
 //! to match the design in docs/FFI.md.
 
+pub mod call;
 pub mod loader;
+pub mod marshal;
 pub mod primitives;
 pub mod types;
 
