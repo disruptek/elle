@@ -72,6 +72,16 @@ impl Value {
         }
     }
 
+    /// Extract raw C pointer address if this is a pointer.
+    #[inline]
+    pub fn as_pointer(&self) -> Option<usize> {
+        if self.is_pointer() {
+            Some((self.0 & PAYLOAD_MASK) as usize)
+        } else {
+            None
+        }
+    }
+
     /// Extract keyword name if this is a keyword.
     #[inline]
     pub fn as_keyword_name(&self) -> Option<&str> {
@@ -387,6 +397,8 @@ impl Value {
             "symbol"
         } else if self.is_keyword() {
             "keyword"
+        } else if self.is_pointer() {
+            "pointer"
         } else if self.is_heap() {
             unsafe { deref(*self).type_name() }
         } else {

@@ -1,8 +1,8 @@
 //! Value constructors for immediate and heap-allocated types.
 
 use super::{
-    Value, INT_MAX, INT_MIN, PAYLOAD_MASK, QNAN, QNAN_MASK, TAG_INT, TAG_KEYWORD, TAG_NAN,
-    TAG_POINTER, TAG_SYMBOL,
+    Value, INT_MAX, INT_MIN, PAYLOAD_MASK, QNAN, QNAN_MASK, TAG_CPOINTER, TAG_INT, TAG_KEYWORD,
+    TAG_NAN, TAG_POINTER, TAG_SYMBOL,
 };
 
 impl Value {
@@ -74,6 +74,23 @@ impl Value {
         } else {
             Self::FALSE
         }
+    }
+
+    /// Create a raw C pointer value.
+    ///
+    /// NULL pointers (address 0) are represented as `Value::NIL`.
+    /// This is an immediate value, not heap-allocated.
+    #[inline]
+    pub fn pointer(addr: usize) -> Self {
+        if addr == 0 {
+            return Self::NIL;
+        }
+        let addr_u64 = addr as u64;
+        debug_assert!(
+            addr_u64 & !PAYLOAD_MASK == 0,
+            "C pointer exceeds 48-bit address space"
+        );
+        Value(TAG_CPOINTER | (addr_u64 & PAYLOAD_MASK))
     }
 
     /// Create an empty list value.

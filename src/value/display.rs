@@ -51,6 +51,10 @@ impl fmt::Display for Value {
             return write!(f, ":{}", name);
         }
 
+        if let Some(addr) = self.as_pointer() {
+            return write!(f, "<pointer 0x{:x}>", addr);
+        }
+
         // Handle heap values
         if !self.is_heap() {
             return write!(f, "<unknown:{:#x}>", self.to_bits());
@@ -184,6 +188,9 @@ impl fmt::Debug for Value {
         }
         if let Some(name) = self.as_keyword_name() {
             return write!(f, ":{}", name);
+        }
+        if let Some(addr) = self.as_pointer() {
+            return write!(f, "<pointer 0x{:x}>", addr);
         }
         if !self.is_heap() {
             return write!(f, "<unknown:{:#x}>", self.to_bits());

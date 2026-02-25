@@ -251,3 +251,35 @@ fn test_truthiness_semantics() {
     // Cell is truthy
     assert!(Value::cell(Value::int(42)).is_truthy(), "cell is truthy");
 }
+
+#[test]
+fn test_pointer() {
+    // NULL pointer becomes nil
+    let null = Value::pointer(0);
+    assert!(null.is_nil());
+    assert!(!null.is_pointer());
+    assert_eq!(null.as_pointer(), None);
+
+    // Non-null pointer
+    let ptr = Value::pointer(0x7F4A_2B3C_0000);
+    assert!(ptr.is_pointer());
+    assert!(!ptr.is_nil());
+    assert!(!ptr.is_heap());
+    assert!(!ptr.is_int());
+    assert_eq!(ptr.as_pointer(), Some(0x7F4A_2B3C_0000));
+    assert_eq!(ptr.type_name(), "pointer");
+
+    // Pointer equality
+    let ptr2 = Value::pointer(0x7F4A_2B3C_0000);
+    assert_eq!(ptr, ptr2);
+
+    // Different pointers are not equal
+    let ptr3 = Value::pointer(0x1234_5678_0000);
+    assert_ne!(ptr, ptr3);
+
+    // Pointers are truthy
+    assert!(ptr.is_truthy());
+
+    // Display format
+    assert_eq!(format!("{}", ptr), "<pointer 0x7f4a2b3c0000>");
+}
