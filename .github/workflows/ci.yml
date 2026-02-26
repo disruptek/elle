@@ -277,7 +277,7 @@ jobs:
       - name: Install gnuplot
         run: sudo apt-get install -y gnuplot
       - name: Run Criterion benchmarks
-        run: cargo bench --bench benchmarks -- --output-format bencher | tee output.txt
+        run: cargo bench --bench benchmarks -- --sample-size 10 --warm-up-time 1 --measurement-time 2 --nresamples 100 --output-format bencher | tee output.txt
         env:
           RAYON_NUM_THREADS: 1
       - name: Upload benchmark reports
