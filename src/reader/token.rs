@@ -81,7 +81,7 @@ pub enum Token<'a> {
     Integer(i64),
     Float(f64),
     String(String),
-    Bool(bool),
+    Bool(bool, usize),
     Nil,
 }
 
@@ -104,7 +104,7 @@ pub enum OwnedToken {
     Integer(i64),
     Float(f64),
     String(String),
-    Bool(bool),
+    Bool(bool, usize),
     Nil,
 }
 
@@ -127,7 +127,7 @@ impl<'a> From<Token<'a>> for OwnedToken {
             Token::Integer(i) => OwnedToken::Integer(i),
             Token::Float(f) => OwnedToken::Float(f),
             Token::String(s) => OwnedToken::String(s),
-            Token::Bool(b) => OwnedToken::Bool(b),
+            Token::Bool(b, len) => OwnedToken::Bool(b, len),
             Token::Nil => OwnedToken::Nil,
         }
     }

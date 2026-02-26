@@ -336,14 +336,14 @@ impl<'a> Lexer<'a> {
                     Some('t') => {
                         self.advance();
                         Ok(Some(TokenWithLoc {
-                            token: Token::Bool(true),
+                            token: Token::Bool(true, 2),
                             loc,
                         }))
                     }
                     Some('f') => {
                         self.advance();
                         Ok(Some(TokenWithLoc {
-                            token: Token::Bool(false),
+                            token: Token::Bool(false, 2),
                             loc,
                         }))
                     }
@@ -356,6 +356,16 @@ impl<'a> Lexer<'a> {
                 if sym == "nil" {
                     Ok(Some(TokenWithLoc {
                         token: Token::Nil,
+                        loc,
+                    }))
+                } else if sym == "true" {
+                    Ok(Some(TokenWithLoc {
+                        token: Token::Bool(true, 4),
+                        loc,
+                    }))
+                } else if sym == "false" {
+                    Ok(Some(TokenWithLoc {
+                        token: Token::Bool(false, 5),
                         loc,
                     }))
                 } else {

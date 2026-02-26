@@ -154,8 +154,8 @@ impl SyntaxReader {
                 self.advance();
                 Ok(Syntax::new(SyntaxKind::String(s.clone()), span))
             }
-            OwnedToken::Bool(b) => {
-                let span = self.source_loc_to_span(loc, loc.col + 2);
+            OwnedToken::Bool(b, len) => {
+                let span = self.source_loc_to_span(loc, loc.col + len);
                 self.advance();
                 Ok(Syntax::new(SyntaxKind::Bool(*b), span))
             }

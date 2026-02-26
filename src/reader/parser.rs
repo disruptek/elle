@@ -146,7 +146,7 @@ impl Reader {
                 self.advance();
                 Ok(val)
             }
-            OwnedToken::Bool(b) => {
+            OwnedToken::Bool(b, _) => {
                 let val = Value::bool(*b);
                 self.advance();
                 Ok(val)
