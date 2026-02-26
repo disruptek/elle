@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "elle-lsp", "elle-lint"]
+members = ["."]
 resolver = "2"
 
 [package]
