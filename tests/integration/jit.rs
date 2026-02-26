@@ -1548,3 +1548,170 @@ fn test_jit_accepts_raises_only_effect() {
         result
     );
 }
+
+// =============================================================================
+// Batch JIT: Mutual Recursion Tests
+// =============================================================================
+
+#[test]
+fn test_jit_mutual_recursion_even_odd() {
+    // Classic mutual recursion: is-even? and is-odd? call each other
+    use elle::pipeline::eval;
+    use elle::primitives::register_primitives;
+    use elle::symbol::SymbolTable;
+    use elle::vm::VM;
+
+    let mut symbols = SymbolTable::new();
+    let mut vm = VM::new();
+    let _effects = register_primitives(&mut vm, &mut symbols);
+
+    let result = eval(
+        r#"(begin
+        (var is-even? (fn (n) (if (= n 0) #t (is-odd? (- n 1)))))
+        (var is-odd? (fn (n) (if (= n 0) #f (is-even? (- n 1)))))
+        (list (is-even? 10) (is-odd? 10) (is-even? 11) (is-odd? 11)))"#,
+        &mut symbols,
+        &mut vm,
+    );
+    assert!(result.is_ok(), "even-odd failed: {:?}", result);
+    // (is-even? 10) = #t, (is-odd? 10) = #f, (is-even? 11) = #f, (is-odd? 11) = #t
+    let list = result.unwrap();
+    let first = list.as_cons().unwrap();
+    assert_eq!(first.first.as_bool(), Some(true)); // (is-even? 10)
+    let rest1 = first.rest.as_cons().unwrap();
+    assert_eq!(rest1.first.as_bool(), Some(false)); // (is-odd? 10)
+    let rest2 = rest1.rest.as_cons().unwrap();
+    assert_eq!(rest2.first.as_bool(), Some(false)); // (is-even? 11)
+    let rest3 = rest2.rest.as_cons().unwrap();
+    assert_eq!(rest3.first.as_bool(), Some(true)); // (is-odd? 11)
+}
+
+#[test]
+fn test_jit_mutual_recursion_deep() {
+    // Deep mutual recursion — exercises tail call optimization across SCC
+    use elle::pipeline::eval;
+    use elle::primitives::register_primitives;
+    use elle::symbol::SymbolTable;
+    use elle::vm::VM;
+
+    let mut symbols = SymbolTable::new();
+    let mut vm = VM::new();
+    let _effects = register_primitives(&mut vm, &mut symbols);
+
+    // ping-pong: ping(n) -> pong(n-1), pong(n) -> ping(n-1)
+    // Both are tail calls, so this should handle deep recursion
+    let result = eval(
+        r#"(begin
+        (var ping (fn (n) (if (= n 0) "ping" (pong (- n 1)))))
+        (var pong (fn (n) (if (= n 0) "pong" (ping (- n 1)))))
+        (list (ping 0) (pong 0) (ping 1) (pong 1) (ping 100) (pong 100)))"#,
+        &mut symbols,
+        &mut vm,
+    );
+    assert!(result.is_ok(), "ping-pong failed: {:?}", result);
+    let list = result.unwrap();
+    let vals: Vec<String> = {
+        let mut v = Vec::new();
+        let mut cur = list;
+        while let Some(cons) = cur.as_cons() {
+            v.push(cons.first.as_string().unwrap().to_string());
+            cur = cons.rest;
+        }
+        v
+    };
+    assert_eq!(vals, vec!["ping", "pong", "pong", "ping", "ping", "pong"]);
+}
+
+#[test]
+fn test_jit_mutual_recursion_nqueens_small() {
+    // Verify nqueens works correctly with JIT batch compilation
+    use elle::pipeline::eval;
+    use elle::primitives::register_primitives;
+    use elle::symbol::SymbolTable;
+    use elle::vm::VM;
+
+    let mut symbols = SymbolTable::new();
+    let mut vm = VM::new();
+    let _effects = register_primitives(&mut vm, &mut symbols);
+
+    let result = eval(
+        r#"(begin
+        (var check-safe-helper
+          (fn (col remaining row-offset)
+            (if (empty? remaining)
+              #t
+              (let ((placed-col (first remaining)))
+                (if (or (= col placed-col)
+                        (= row-offset (abs (- col placed-col))))
+                  #f
+                  (check-safe-helper col (rest remaining) (+ row-offset 1)))))))
+
+        (var safe?
+          (fn (col queens)
+            (check-safe-helper col queens 1)))
+
+        (var try-cols-helper
+          (fn (n col queens row)
+            (if (= col n)
+              (list)
+              (if (safe? col queens)
+                (let ((new-queens (cons col queens)))
+                  (append (solve-helper n (+ row 1) new-queens)
+                          (try-cols-helper n (+ col 1) queens row)))
+                (try-cols-helper n (+ col 1) queens row)))))
+
+        (var solve-helper
+          (fn (n row queens)
+            (if (= row n)
+              (list (reverse queens))
+              (try-cols-helper n 0 queens row))))
+
+        (var solve-nqueens
+          (fn (n)
+            (solve-helper n 0 (list))))
+
+        (length (solve-nqueens 8)))"#,
+        &mut symbols,
+        &mut vm,
+    );
+    assert!(result.is_ok(), "nqueens failed: {:?}", result);
+    // 8-queens has 92 solutions
+    assert_eq!(result.unwrap().as_int(), Some(92));
+}
+
+#[test]
+fn test_jit_mutual_recursion_three_way() {
+    // Three mutually recursive functions forming a cycle
+    use elle::pipeline::eval;
+    use elle::primitives::register_primitives;
+    use elle::symbol::SymbolTable;
+    use elle::vm::VM;
+
+    let mut symbols = SymbolTable::new();
+    let mut vm = VM::new();
+    let _effects = register_primitives(&mut vm, &mut symbols);
+
+    let result = eval(
+        r#"(begin
+        (var fa (fn (n) (if (= n 0) "a" (fb (- n 1)))))
+        (var fb (fn (n) (if (= n 0) "b" (fc (- n 1)))))
+        (var fc (fn (n) (if (= n 0) "c" (fa (- n 1)))))
+        (list (fa 0) (fa 1) (fa 2) (fa 3) (fa 6) (fa 9)))"#,
+        &mut symbols,
+        &mut vm,
+    );
+    assert!(result.is_ok(), "three-way failed: {:?}", result);
+    let list = result.unwrap();
+    let vals: Vec<String> = {
+        let mut v = Vec::new();
+        let mut cur = list;
+        while let Some(cons) = cur.as_cons() {
+            v.push(cons.first.as_string().unwrap().to_string());
+            cur = cons.rest;
+        }
+        v
+    };
+    // fa(0)=a, fa(1)=fb(0)=b, fa(2)=fb(1)=fc(0)=c,
+    // fa(3)=fb(2)=fc(1)=fa(0)=a, fa(6)=a, fa(9)=a
+    assert_eq!(vals, vec!["a", "b", "c", "a", "a", "a"]);
+}
