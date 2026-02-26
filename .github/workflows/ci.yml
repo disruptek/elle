@@ -263,7 +263,6 @@ jobs:
           comment-on-alert: true
           fail-on-alert: false
           auto-push: false
-          skip-fetch-gh-pages: true
 
   benchmarks-publish:
     name: Publish Benchmarks
