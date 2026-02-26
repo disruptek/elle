@@ -245,6 +245,8 @@ jobs:
         run: sudo apt-get install -y gnuplot
       - name: Run Criterion benchmarks
         run: cargo bench --bench benchmarks -- --sample-size 10 --warm-up-time 1 --measurement-time 2 --output-format bencher | tee output.txt
+        env:
+          RAYON_NUM_THREADS: 1
       - name: Upload benchmark reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -278,6 +280,8 @@ jobs:
         run: sudo apt-get install -y gnuplot
       - name: Run Criterion benchmarks
         run: cargo bench --bench benchmarks -- --output-format bencher | tee output.txt
+        env:
+          RAYON_NUM_THREADS: 1
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
