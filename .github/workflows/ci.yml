@@ -241,8 +241,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install gnuplot
+        run: sudo apt-get install -y gnuplot
       - name: Run Criterion benchmarks
-        run: cargo bench --bench benchmarks -- --output-format bencher | tee output.txt
+        run: cargo bench --bench benchmarks -- --sample-size 10 --warm-up-time 1 --measurement-time 2 --output-format bencher | tee output.txt
       - name: Upload benchmark reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -272,6 +274,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install gnuplot
+        run: sudo apt-get install -y gnuplot
       - name: Run Criterion benchmarks
         run: cargo bench --bench benchmarks -- --output-format bencher | tee output.txt
       - name: Store benchmark result
