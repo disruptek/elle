@@ -38,45 +38,6 @@ const RESERVED_WORDS: &[&str] = &[
     "use-modules",
 ];
 
-/// Built-in functions that are shadow-able
-const BUILTIN_FUNCTIONS: &[&str] = &[
-    "+",
-    "-",
-    "*",
-    "/",
-    "=",
-    "<",
-    ">",
-    "<=",
-    ">=",
-    "number?",
-    "string?",
-    "symbol?",
-    "list?",
-    "pair?",
-    "null?",
-    "procedure?",
-    "car",
-    "cdr",
-    "cons",
-    "length",
-    "append",
-    "reverse",
-    "member",
-    "assoc",
-    "map",
-    "filter",
-    "fold",
-    "reduce",
-    "display",
-    "newline",
-    "read",
-    "open-input-file",
-    "open-output-file",
-    "close-input-port",
-    "close-output-port",
-];
-
 /// Validate that a new name is acceptable for renaming
 fn validate_new_name(new_name: &str) -> Result<(), String> {
     if new_name.is_empty() {
@@ -99,9 +60,6 @@ fn validate_new_name(new_name: &str) -> Result<(), String> {
             new_name
         ));
     }
-
-    // Shadowing builtins is allowed silently
-    if BUILTIN_FUNCTIONS.contains(&new_name) {}
 
     Ok(())
 }
