@@ -532,6 +532,7 @@ impl<'a> FunctionTranslator<'a> {
             }
 
             // === Still unsupported (Phase 4+) ===
+            // NOTE: Keep group.rs::has_unsupported_instructions in sync with this list.
             LirInstr::MakeClosure { .. } => {
                 return Err(JitError::UnsupportedInstruction("MakeClosure".to_string()));
             }
@@ -798,9 +799,22 @@ impl<'a> FunctionTranslator<'a> {
     /// `fn(env, args_ptr, nargs, vm, self_bits) -> Value`
     ///
     /// For Phase 1, we pass null env (capture-free functions only) and
-    /// 0 for self_bits (the callee's own self-tail-call detection won't
-    /// match against 0, so self-tail-calls within the callee still go
-    /// through `elle_jit_tail_call` — safe but suboptimal).
+    /// 0 for self_bits. This has two consequences:
+    ///
+    /// 1. **Self-tail-call degradation**: When peer A calls peer B directly,
+    ///    B receives `self_bits = 0`. If B is also self-recursive, its
+    ///    self-tail-call optimization won't fire (the comparison against
+    ///    `self_bits` always fails). B's self-recursion goes through
+    ///    `elle_jit_tail_call` instead of becoming a native loop. This
+    ///    means batch-compiled self-recursive functions are *slower* on
+    ///    the peer-called path than solo-compiled ones. Phase 2 should
+    ///    pass the peer's actual closure bits as `self_bits`.
+    ///
+    /// 2. **No mutual tail-call elimination**: Direct SCC calls in tail
+    ///    position use `call + return`, not jumps. Deep mutual tail
+    ///    recursion between peers grows the native stack and will segfault
+    ///    rather than producing a clean stack overflow error. Phase 2
+    ///    should implement function fusion for true mutual TCE.
     fn emit_direct_scc_call(
         &mut self,
         builder: &mut FunctionBuilder,

@@ -45,7 +45,7 @@ impl JitCode {
     pub(crate) fn new(fn_ptr: *const u8, module: cranelift_jit::JITModule) -> Self {
         JitCode {
             fn_ptr,
-            _module: Arc::new(ModuleHolder(module)),
+            _module: Arc::new(ModuleHolder::new(module)),
         }
     }
 

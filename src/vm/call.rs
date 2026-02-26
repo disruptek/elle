@@ -438,7 +438,12 @@ impl VM {
 
         let hot_sym = self.find_global_sym_for_bytecode(bytecode_ptr)?;
 
-        let compiler = JitCompiler::new().ok()?;
+        let compiler = match JitCompiler::new() {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("JIT compiler creation failed: {}. This is a bug.", e);
+            }
+        };
 
         let mut members = Vec::with_capacity(group.len() + 1);
         members.push(crate::jit::BatchMember {
@@ -458,7 +463,20 @@ impl VM {
 
         let results = match compiler.compile_batch(&members) {
             Ok(r) => r,
-            Err(_) => return None,
+            Err(e) => match &e {
+                crate::jit::JitError::UnsupportedInstruction(_) => {
+                    // Some member has an instruction the JIT can't handle.
+                    // Fall through to solo compilation for the hot function.
+                    return None;
+                }
+                _ => {
+                    panic!(
+                        "Batch JIT compilation failed: {}. \
+                         This is a bug — all members were pre-validated as JIT-compilable.",
+                        e
+                    );
+                }
+            },
         };
 
         // Insert all compiled functions into cache

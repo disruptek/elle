@@ -380,8 +380,10 @@ pub extern "C" fn elle_jit_resolve_tail_call(result: u64, vm: *mut ()) -> u64 {
             }
         }
     } else {
-        // Sentinel without pending_tail_call — shouldn't happen
-        result
+        panic!(
+            "VM bug: TAIL_CALL_SENTINEL returned but no pending_tail_call set. \
+             This indicates a bug in the JIT tail call protocol."
+        );
     }
 }
 
