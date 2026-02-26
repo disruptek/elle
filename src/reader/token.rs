@@ -61,6 +61,7 @@ impl SourceLoc {
 pub struct TokenWithLoc<'a> {
     pub token: Token<'a>,
     pub loc: SourceLoc,
+    pub len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,7 +82,7 @@ pub enum Token<'a> {
     Integer(i64),
     Float(f64),
     String(String),
-    Bool(bool, usize),
+    Bool(bool),
     Nil,
 }
 
@@ -104,7 +105,7 @@ pub enum OwnedToken {
     Integer(i64),
     Float(f64),
     String(String),
-    Bool(bool, usize),
+    Bool(bool),
     Nil,
 }
 
@@ -127,7 +128,7 @@ impl<'a> From<Token<'a>> for OwnedToken {
             Token::Integer(i) => OwnedToken::Integer(i),
             Token::Float(f) => OwnedToken::Float(f),
             Token::String(s) => OwnedToken::String(s),
-            Token::Bool(b, len) => OwnedToken::Bool(b, len),
+            Token::Bool(b) => OwnedToken::Bool(b),
             Token::Nil => OwnedToken::Nil,
         }
     }
