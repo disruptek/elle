@@ -407,6 +407,18 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_bool_true_word() {
+        let result = lex_and_parse("true").unwrap();
+        assert!(matches!(result.kind, SyntaxKind::Bool(true)));
+    }
+
+    #[test]
+    fn test_parse_bool_false_word() {
+        let result = lex_and_parse("false").unwrap();
+        assert!(matches!(result.kind, SyntaxKind::Bool(false)));
+    }
+
+    #[test]
     fn test_parse_nil() {
         let result = lex_and_parse("nil").unwrap();
         assert!(matches!(result.kind, SyntaxKind::Nil));
