@@ -84,6 +84,8 @@ pub(crate) struct RuntimeHelpers {
     pub(crate) tail_call: FuncId,
     pub(crate) has_exception: FuncId,
     pub(crate) resolve_tail_call: FuncId,
+    pub(crate) call_depth_enter: FuncId,
+    pub(crate) call_depth_exit: FuncId,
 }
 
 impl JitCompiler {
@@ -185,6 +187,14 @@ impl JitCompiler {
         builder.symbol(
             "elle_jit_resolve_tail_call",
             dispatch::elle_jit_resolve_tail_call as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_call_depth_enter",
+            dispatch::elle_jit_call_depth_enter as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_call_depth_exit",
+            dispatch::elle_jit_call_depth_exit as *const u8,
         );
 
         let mut module = JITModule::new(builder);
@@ -288,6 +298,8 @@ impl JitCompiler {
             tail_call: declare(module, "elle_jit_tail_call", &call_sig)?,
             has_exception: declare(module, "elle_jit_has_exception", &unary_sig)?,
             resolve_tail_call: declare(module, "elle_jit_resolve_tail_call", &binary_sig)?,
+            call_depth_enter: declare(module, "elle_jit_call_depth_enter", &unary_sig)?,
+            call_depth_exit: declare(module, "elle_jit_call_depth_exit", &unary_sig)?,
         })
     }
 

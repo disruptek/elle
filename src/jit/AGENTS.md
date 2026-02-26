@@ -73,7 +73,7 @@ Unsupported (returns JitError::UnsupportedInstruction):
 | `runtime.rs` | ~420 | Arithmetic, comparison, type-checking helpers |
 | `dispatch.rs` | ~530 | Data structure, cell, global, function call helpers (incl. JIT-to-JIT) |
 | `code.rs` | ~80 | `JitCode` wrapper type |
-| `group.rs` | ~200 | Compilation group discovery for batch JIT (no Cranelift dependency) |
+| `group.rs` | ~590 | Compilation group discovery for batch JIT (no Cranelift dependency) |
 
 ## Runtime Helpers
 

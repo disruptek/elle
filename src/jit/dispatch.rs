@@ -387,6 +387,34 @@ pub extern "C" fn elle_jit_resolve_tail_call(result: u64, vm: *mut ()) -> u64 {
     }
 }
 
+/// Increment call depth and check for stack overflow.
+///
+/// Used by direct SCC calls (which bypass `elle_jit_call` and its built-in
+/// depth tracking). Returns 0 (falsy) on success, or non-zero (truthy) if
+/// the call depth exceeds 1000 (after setting the error signal on the fiber).
+#[no_mangle]
+pub extern "C" fn elle_jit_call_depth_enter(vm: *mut ()) -> u64 {
+    let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
+    vm.fiber.call_depth += 1;
+    if vm.fiber.call_depth > 1000 {
+        vm.fiber.signal = Some((SIG_ERROR, error_val("error", "Stack overflow")));
+        vm.fiber.call_depth -= 1;
+        return 1; // truthy — overflow
+    }
+    0 // falsy — ok
+}
+
+/// Decrement call depth after a direct SCC call returns.
+///
+/// Pairs with `elle_jit_call_depth_enter`. Always returns TAG_NIL (ignored
+/// by callers — this is a void-like helper).
+#[no_mangle]
+pub extern "C" fn elle_jit_call_depth_exit(vm: *mut ()) -> u64 {
+    let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
+    vm.fiber.call_depth -= 1;
+    TAG_NIL
+}
+
 /// Handle a non-self tail call from JIT code.
 ///
 /// If the target closure has JIT code in the cache, calls it directly —

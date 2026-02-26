@@ -375,8 +375,30 @@ impl<'a> FunctionTranslator<'a> {
                     .get(func)
                     .and_then(|sym| self.scc_peers.get(sym))
                 {
+                    // Track call depth (direct SCC calls bypass elle_jit_call)
+                    let overflow =
+                        self.call_helper_unary(builder, self.helpers.call_depth_enter, vm)?;
+                    // If overflow (non-zero return), bail out (signal already set)
+                    let zero = builder.ins().iconst(I64, 0);
+                    let is_overflow = builder.ins().icmp(IntCC::NotEqual, overflow, zero);
+                    let overflow_block = builder.create_block();
+                    let call_block = builder.create_block();
+                    builder
+                        .ins()
+                        .brif(is_overflow, overflow_block, &[], call_block, &[]);
+
+                    builder.switch_to_block(overflow_block);
+                    builder.seal_block(overflow_block);
+                    let nil = builder.ins().iconst(I64, TAG_NIL as i64);
+                    builder.ins().return_(&[nil]);
+
+                    builder.switch_to_block(call_block);
+                    builder.seal_block(call_block);
+
                     // Direct call to SCC peer — skip elle_jit_call dispatch
                     let result = self.emit_direct_scc_call(builder, peer_func_id, args, vm)?;
+                    // Decrement call depth
+                    self.call_helper_unary(builder, self.helpers.call_depth_exit, vm)?;
                     // Resolve pending tail call if the peer returned TAIL_CALL_SENTINEL
                     let resolved = self.call_helper_binary(
                         builder,
