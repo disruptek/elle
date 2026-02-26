@@ -80,3 +80,6 @@ mod bracket_errors {
 mod booleans {
     include!("booleans.rs");
 }
+mod dispatch {
+    include!("dispatch.rs");
+}

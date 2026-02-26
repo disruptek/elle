@@ -414,6 +414,7 @@ dependencies = [
  "proptest",
  "rustc-hash",
  "rustyline",
+ "serde_json",
  "smallvec",
  "target-lexicon",
 ]
