@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -239,8 +243,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run Criterion benchmarks
         run: cargo bench --bench benchmarks -- --output-format bencher | tee output.txt
-        env:
-          CRITERION_HOME: /tmp/criterion
+      - name: Upload benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-reports
+          path: target/criterion/
+          retention-days: 30
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -265,8 +274,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run Criterion benchmarks
         run: cargo bench --bench benchmarks -- --output-format bencher | tee output.txt
-        env:
-          CRITERION_HOME: /tmp/criterion
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
