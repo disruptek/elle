@@ -784,7 +784,11 @@ mod tests {
     #[test]
     fn test_eval_cond_else() {
         let (mut symbols, mut vm) = setup();
-        let result = eval("(cond (false 1) (false 2) (else 42))", &mut symbols, &mut vm);
+        let result = eval(
+            "(cond (false 1) (false 2) (else 42))",
+            &mut symbols,
+            &mut vm,
+        );
         assert_eq!(result.unwrap(), crate::value::Value::int(42));
     }
 
