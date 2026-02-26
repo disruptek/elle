@@ -383,3 +383,56 @@ impl<'a> Lexer<'a> {
             .map(|opt| opt.map(|twl| twl.token))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lex_single(input: &str) -> Token<'_> {
+        let mut lexer = Lexer::new(input);
+        lexer.next_token().unwrap().unwrap()
+    }
+
+    #[test]
+    fn true_word_lexes_as_bool() {
+        assert!(matches!(lex_single("true"), Token::Bool(true, 4)));
+    }
+
+    #[test]
+    fn false_word_lexes_as_bool() {
+        assert!(matches!(lex_single("false"), Token::Bool(false, 5)));
+    }
+
+    #[test]
+    fn hash_t_lexes_as_bool() {
+        assert!(matches!(lex_single("#t"), Token::Bool(true, 2)));
+    }
+
+    #[test]
+    fn hash_f_lexes_as_bool() {
+        assert!(matches!(lex_single("#f"), Token::Bool(false, 2)));
+    }
+
+    #[test]
+    fn true_question_mark_is_symbol() {
+        assert!(matches!(lex_single("true?"), Token::Symbol("true?")));
+    }
+
+    #[test]
+    fn trueish_is_symbol() {
+        assert!(matches!(lex_single("trueish"), Token::Symbol("trueish")));
+    }
+
+    #[test]
+    fn false_positive_is_symbol() {
+        assert!(matches!(
+            lex_single("false-positive"),
+            Token::Symbol("false-positive")
+        ));
+    }
+
+    #[test]
+    fn truetrue_is_symbol() {
+        assert!(matches!(lex_single("truetrue"), Token::Symbol("truetrue")));
+    }
+}

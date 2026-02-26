@@ -341,7 +341,7 @@
 (assert-true (boolean? true) "boolean? returns true for #t")
 (assert-true (boolean? false) "boolean? returns true for #f")
 (assert-false (boolean? 1) "boolean? returns false for number")
-(assert-false (boolean? 'true) "boolean? returns false for symbol")
+(assert-true (boolean? 'true) "boolean? returns true for quoted true (true is a literal)")
 (assert-false (boolean? "true") "boolean? returns false for string")
 (assert-false (boolean? '()) "boolean? returns false for list")
 
