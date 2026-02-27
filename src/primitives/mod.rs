@@ -8,6 +8,7 @@ pub mod comparison;
 pub mod concurrency;
 pub mod convert;
 pub mod coroutines;
+pub mod crypto;
 pub mod debug;
 pub mod debugging;
 pub mod def;
