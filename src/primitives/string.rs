@@ -653,7 +653,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["strs"],
         category: "string",
         example: "(string/append \"hello\" \" \" \"world\") ;=> \"hello world\"",
-        aliases: &["string-append"],
+        aliases: &[],
     },
     PrimitiveDef {
         name: "string/upcase",

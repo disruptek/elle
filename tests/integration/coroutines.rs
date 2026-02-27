@@ -395,7 +395,7 @@ fn test_coroutine_captures_mutable_state() {
         r#"
         (let ((counter (box 0)))
           (var co (make-coroutine (fn ()
-            (box-set! counter (+ (unbox counter) 1))
+            (rebox counter (+ (unbox counter) 1))
             (yield (unbox counter)))))
           (coro/resume co))
         "#,

@@ -314,7 +314,7 @@ fn test_spawned_closure_array_operations() {
     let result = eval_source(
         r#"
         (let ((v @[1 2 3]))
-          (join (spawn (fn () (array-ref v 1)))))
+          (join (spawn (fn () (get v 1)))))
         "#,
     );
 

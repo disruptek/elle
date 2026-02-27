@@ -427,7 +427,7 @@
 (var greeting-start "Hello")
 (var greeting-end "!")
 (def make-greeting (fn (name)
-  (string-append greeting-start ", " name greeting-end)))
+  (append (append (append greeting-start ", ") name) greeting-end)))
 
 (display "Greeting: ")
 (display (make-greeting "Alice"))
@@ -990,18 +990,14 @@
   (fn (words)
     (if (= (length words) 0)
       ""
-      (string-append
-        (string-upcase (first words))
-        " "
+      (append (append (string-upcase (first words)) " ")
         (process-separators (rest words))))))
 
 (var process-separators
   (fn (words)
     (if (= (length words) 0)
       ""
-      (string-append
-        "-"
-        (process-words words)))))
+      (append "-" (process-words words)))))
 
 (display "Processing: ")
 (display (process-words (list "hello" "world" "elle")))

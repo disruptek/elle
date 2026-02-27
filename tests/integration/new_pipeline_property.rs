@@ -449,7 +449,7 @@ proptest! {
 
     #[test]
     fn array_ref_first(a in -100i64..100, b in -100i64..100) {
-        let expr = format!("(array-ref @[{} {}] 0)", a, b);
+        let expr = format!("(get @[{} {}] 0)", a, b);
         let result = eval_source(&expr);
 
         prop_assert!(result.is_ok(), "failed: {:?}", result);
@@ -1376,8 +1376,8 @@ proptest! {
             "(fold (fn (acc x)
                      (begin
                        (var num-str (number->string x))
-                       (var wrapped (string-append \"[\" num-str \"]\"))
-                       (string-append acc wrapped)))
+                        (var wrapped (append (append \"[\" num-str) \"]\"))
+                        (append acc wrapped)))
                    \"\"
                    (list {} {}))",
             a, b

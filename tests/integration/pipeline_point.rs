@@ -973,7 +973,7 @@ fn test_put_struct_immutable_original_unchanged() {
 #[test]
 fn test_put_empty_struct() {
     // (put {} :a 1) → {:a 1}
-    let result = eval_source("(put {} :a 1)").unwrap();
+    let _result = eval_source("(put {} :a 1)").unwrap();
     let val = eval_source("(get (put {} :a 1) :a)").unwrap();
     assert_eq!(val, Value::int(1));
 }
@@ -1016,7 +1016,7 @@ fn test_put_table_mutable_same_reference() {
 #[test]
 fn test_put_empty_table() {
     // (put @{} :a 1) → @{:a 1}
-    let result = eval_source("(put @{} :a 1)").unwrap();
+    let _result = eval_source("(put @{} :a 1)").unwrap();
     let val = eval_source("(get (put @{} :a 1) :a)").unwrap();
     assert_eq!(val, Value::int(1));
 }
@@ -1064,5 +1064,830 @@ fn test_put_unsupported_type() {
 fn test_put_nil_type() {
     // (put nil 0 99) → error
     let result = eval_source("(put nil 0 99)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// rebox - replace box-set!
+// ============================================================================
+
+#[test]
+fn test_rebox_returns_value() {
+    // (rebox (box 1) 42) → 42 (returns the value, not the cell)
+    let result = eval_source("(rebox (box 1) 42)").unwrap();
+    assert_eq!(result, Value::int(42));
+}
+
+#[test]
+fn test_rebox_updates_cell() {
+    // (var b (box 1)) (rebox b 2) (unbox b) → 2
+    let result = eval_source(
+        r#"(var b (box 1))
+           (rebox b 2)
+           (unbox b)"#,
+    );
+    assert_eq!(result.unwrap(), Value::int(2));
+}
+
+#[test]
+fn test_rebox_with_different_types() {
+    // (var b (box 1)) (rebox b "hello") (unbox b) → "hello"
+    let result = eval_source(
+        r#"(var b (box 1))
+           (rebox b "hello")
+           (unbox b)"#,
+    );
+    assert_eq!(result.unwrap(), Value::string("hello"));
+}
+
+#[test]
+fn test_rebox_with_nil() {
+    // (var b (box 1)) (rebox b nil) (unbox b) → nil
+    let result = eval_source(
+        r#"(var b (box 1))
+           (rebox b nil)
+           (unbox b)"#,
+    );
+    assert_eq!(result.unwrap(), Value::NIL);
+}
+
+#[test]
+fn test_rebox_wrong_arity_no_args() {
+    // (rebox) → error
+    let result = eval_source("(rebox)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_rebox_wrong_arity_one_arg() {
+    // (rebox (box 1)) → error
+    let result = eval_source("(rebox (box 1))");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_rebox_wrong_arity_too_many_args() {
+    // (rebox (box 1) 2 3) → error
+    let result = eval_source("(rebox (box 1) 2 3)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_rebox_non_cell_error() {
+    // (rebox 42 99) → error (not a cell)
+    let result = eval_source("(rebox 42 99)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// push - add element to end of array
+// ============================================================================
+
+#[test]
+fn test_push_single_element() {
+    // (push @[1 2] 3) → @[1 2 3]
+    let result = eval_source("(push @[1 2] 3)").unwrap();
+    assert!(result.is_array());
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_push_returns_same_array() {
+    // push returns the same array (mutated in place)
+    let result = eval_source(
+        r#"(let ((a @[1 2]))
+             (let ((a2 (push a 3)))
+               (eq? a a2)))"#,
+    );
+    assert_eq!(result.unwrap(), Value::bool(true));
+}
+
+#[test]
+fn test_push_empty_array() {
+    // (push @[] 1) → @[1]
+    let result = eval_source("(push @[] 1)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 1);
+    assert_eq!(vec[0], Value::int(1));
+}
+
+#[test]
+fn test_push_multiple_times() {
+    // (var a @[]) (push a 1) (push a 2) (push a 3) a → @[1 2 3]
+    let result = eval_source(
+        r#"(var a @[])
+           (push a 1)
+           (push a 2)
+           (push a 3)
+           a"#,
+    );
+    let val = result.unwrap();
+    let vec = val.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_push_wrong_arity_no_args() {
+    // (push) → error
+    let result = eval_source("(push)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_push_wrong_arity_one_arg() {
+    // (push @[1 2]) → error
+    let result = eval_source("(push @[1 2])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_push_wrong_arity_too_many_args() {
+    // (push @[1 2] 3 4) → error
+    let result = eval_source("(push @[1 2] 3 4)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_push_non_array_error() {
+    // (push [1 2] 3) → error (tuple, not array)
+    let result = eval_source("(push [1 2] 3)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// pop - remove and return last element
+// ============================================================================
+
+#[test]
+fn test_pop_single_element() {
+    // (pop @[1 2 3]) → 3
+    let result = eval_source("(pop @[1 2 3])").unwrap();
+    assert_eq!(result, Value::int(3));
+}
+
+#[test]
+fn test_pop_mutates_array() {
+    // (var a @[1 2 3]) (pop a) a → @[1 2]
+    let result = eval_source(
+        r#"(var a @[1 2 3])
+           (pop a)
+           a"#,
+    );
+    let val = result.unwrap();
+    let vec = val.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+}
+
+#[test]
+fn test_pop_empty_array_returns_nil() {
+    // (pop @[]) → nil
+    let result = eval_source("(pop @[])").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_pop_single_element_array() {
+    // (var a @[42]) (pop a) a → @[]
+    let result = eval_source(
+        r#"(var a @[42])
+           (pop a)
+           a"#,
+    );
+    let val = result.unwrap();
+    let vec = val.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 0);
+}
+
+#[test]
+fn test_pop_wrong_arity_no_args() {
+    // (pop) → error
+    let result = eval_source("(pop)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_pop_wrong_arity_too_many_args() {
+    // (pop @[1 2] 3) → error
+    let result = eval_source("(pop @[1 2] 3)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_pop_non_array_error() {
+    // (pop [1 2 3]) → error (tuple, not array)
+    let result = eval_source("(pop [1 2 3])");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// popn - remove and return last n elements as new array
+// ============================================================================
+
+#[test]
+fn test_popn_two_elements() {
+    // (popn @[1 2 3 4] 2) → @[3 4]
+    let result = eval_source("(popn @[1 2 3 4] 2)").unwrap();
+    assert!(result.is_array());
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(3));
+    assert_eq!(vec[1], Value::int(4));
+}
+
+#[test]
+fn test_popn_mutates_original() {
+    // (var a @[1 2 3 4]) (popn a 2) a → @[1 2]
+    let result = eval_source(
+        r#"(var a @[1 2 3 4])
+           (popn a 2)
+           a"#,
+    );
+    let val = result.unwrap();
+    let vec = val.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+}
+
+#[test]
+fn test_popn_all_elements() {
+    // (var a @[1 2 3]) (popn a 3) a → @[]
+    let result = eval_source(
+        r#"(var a @[1 2 3])
+           (popn a 3)
+           a"#,
+    );
+    let val = result.unwrap();
+    let vec = val.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 0);
+}
+
+#[test]
+fn test_popn_more_than_available() {
+    // (var a @[1 2]) (popn a 5) a → @[] (removes all)
+    let result = eval_source(
+        r#"(var a @[1 2])
+           (popn a 5)
+           a"#,
+    );
+    let val = result.unwrap();
+    let vec = val.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 0);
+}
+
+#[test]
+fn test_popn_zero_elements() {
+    // (popn @[1 2 3] 0) → @[]
+    let result = eval_source("(popn @[1 2 3] 0)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 0);
+}
+
+#[test]
+fn test_popn_empty_array() {
+    // (popn @[] 2) → @[]
+    let result = eval_source("(popn @[] 2)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 0);
+}
+
+#[test]
+fn test_popn_wrong_arity_no_args() {
+    // (popn) → error
+    let result = eval_source("(popn)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_popn_wrong_arity_one_arg() {
+    // (popn @[1 2 3]) → error
+    let result = eval_source("(popn @[1 2 3])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_popn_wrong_arity_too_many_args() {
+    // (popn @[1 2 3] 2 3) → error
+    let result = eval_source("(popn @[1 2 3] 2 3)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_popn_non_integer_count_error() {
+    // (popn @[1 2 3] :key) → error
+    let result = eval_source("(popn @[1 2 3] :key)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_popn_non_array_error() {
+    // (popn [1 2 3] 2) → error (tuple, not array)
+    let result = eval_source("(popn [1 2 3] 2)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// insert - insert element at index
+// ============================================================================
+
+#[test]
+fn test_insert_at_beginning() {
+    // (insert @[2 3] 0 1) → @[1 2 3]
+    let result = eval_source("(insert @[2 3] 0 1)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_insert_at_middle() {
+    // (insert @[1 3] 1 2) → @[1 2 3]
+    let result = eval_source("(insert @[1 3] 1 2)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_insert_at_end() {
+    // (insert @[1 2] 2 3) → @[1 2 3]
+    let result = eval_source("(insert @[1 2] 2 3)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_insert_returns_same_array() {
+    // insert returns the same array (mutated in place)
+    let result = eval_source(
+        r#"(let ((a @[1 3]))
+             (let ((a2 (insert a 1 2)))
+               (eq? a a2)))"#,
+    );
+    assert_eq!(result.unwrap(), Value::bool(true));
+}
+
+#[test]
+fn test_insert_empty_array() {
+    // (insert @[] 0 1) → @[1]
+    let result = eval_source("(insert @[] 0 1)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 1);
+    assert_eq!(vec[0], Value::int(1));
+}
+
+#[test]
+fn test_insert_out_of_bounds_appends() {
+    // (insert @[1 2] 10 3) → @[1 2 3] (out of bounds, appends)
+    let result = eval_source("(insert @[1 2] 10 3)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_insert_wrong_arity_no_args() {
+    // (insert) → error
+    let result = eval_source("(insert)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_wrong_arity_one_arg() {
+    // (insert @[1 2]) → error
+    let result = eval_source("(insert @[1 2])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_wrong_arity_two_args() {
+    // (insert @[1 2] 0) → error
+    let result = eval_source("(insert @[1 2] 0)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_wrong_arity_too_many_args() {
+    // (insert @[1 2] 0 3 4) → error
+    let result = eval_source("(insert @[1 2] 0 3 4)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_non_integer_index_error() {
+    // (insert @[1 2] :key 3) → error
+    let result = eval_source("(insert @[1 2] :key 3)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_non_array_error() {
+    // (insert [1 2] 0 3) → error (tuple, not array)
+    let result = eval_source("(insert [1 2] 0 3)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// remove - remove element at index
+// ============================================================================
+
+#[test]
+fn test_remove_at_beginning() {
+    // (remove @[1 2 3] 0) → @[2 3]
+    let result = eval_source("(remove @[1 2 3] 0)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(2));
+    assert_eq!(vec[1], Value::int(3));
+}
+
+#[test]
+fn test_remove_at_middle() {
+    // (remove @[1 2 3] 1) → @[1 3]
+    let result = eval_source("(remove @[1 2 3] 1)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(3));
+}
+
+#[test]
+fn test_remove_at_end() {
+    // (remove @[1 2 3] 2) → @[1 2]
+    let result = eval_source("(remove @[1 2 3] 2)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+}
+
+#[test]
+fn test_remove_with_count() {
+    // (remove @[1 2 3 4] 1 2) → @[1 4] (remove 2 elements starting at index 1)
+    let result = eval_source("(remove @[1 2 3 4] 1 2)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(4));
+}
+
+#[test]
+fn test_remove_returns_same_array() {
+    // remove returns the same array (mutated in place)
+    let result = eval_source(
+        r#"(let ((a @[1 2 3]))
+             (let ((a2 (remove a 1)))
+               (eq? a a2)))"#,
+    );
+    assert_eq!(result.unwrap(), Value::bool(true));
+}
+
+#[test]
+fn test_remove_out_of_bounds_no_change() {
+    // (remove @[1 2 3] 10) → @[1 2 3] (out of bounds, no change)
+    let result = eval_source("(remove @[1 2 3] 10)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+}
+
+#[test]
+fn test_remove_count_exceeds_available() {
+    // (remove @[1 2 3] 1 10) → @[1] (remove all from index 1 onward)
+    let result = eval_source("(remove @[1 2 3] 1 10)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 1);
+    assert_eq!(vec[0], Value::int(1));
+}
+
+#[test]
+fn test_remove_zero_count() {
+    // (remove @[1 2 3] 1 0) → @[1 2 3] (remove 0 elements, no change)
+    let result = eval_source("(remove @[1 2 3] 1 0)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+}
+
+#[test]
+fn test_remove_wrong_arity_no_args() {
+    // (remove) → error
+    let result = eval_source("(remove)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_remove_wrong_arity_one_arg() {
+    // (remove @[1 2 3]) → error
+    let result = eval_source("(remove @[1 2 3])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_remove_wrong_arity_too_many_args() {
+    // (remove @[1 2 3] 0 1 2) → error
+    let result = eval_source("(remove @[1 2 3] 0 1 2)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_remove_non_integer_index_error() {
+    // (remove @[1 2 3] :key) → error
+    let result = eval_source("(remove @[1 2 3] :key)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_remove_non_integer_count_error() {
+    // (remove @[1 2 3] 0 :key) → error
+    let result = eval_source("(remove @[1 2 3] 0 :key)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_remove_non_array_error() {
+    // (remove [1 2 3] 0) → error (tuple, not array)
+    let result = eval_source("(remove [1 2 3] 0)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// append - polymorphic, mutates mutable types, returns new for immutable
+// ============================================================================
+
+#[test]
+fn test_append_arrays_mutates() {
+    // (append @[1 2] @[3 4]) → same array, now @[1 2 3 4]
+    let result = eval_source("(append @[1 2] @[3 4])").unwrap();
+    assert!(result.is_array());
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 4);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+    assert_eq!(vec[3], Value::int(4));
+}
+
+#[test]
+fn test_append_arrays_returns_same_reference() {
+    // append returns the same array (mutated in place)
+    let result = eval_source(
+        r#"(let ((a @[1 2]))
+             (let ((a2 (append a @[3 4])))
+               (eq? a a2)))"#,
+    );
+    assert_eq!(result.unwrap(), Value::bool(true));
+}
+
+#[test]
+fn test_append_tuples_returns_new() {
+    // (append [1 2] [3 4]) → new tuple [1 2 3 4]
+    let result = eval_source("(append [1 2] [3 4])").unwrap();
+    assert!(result.is_tuple());
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec.len(), 4);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+    assert_eq!(vec[3], Value::int(4));
+}
+
+#[test]
+fn test_append_tuples_original_unchanged() {
+    // Original tuple should be unchanged
+    let result = eval_source(
+        r#"(let ((t [1 2]))
+             (let ((t2 (append t [3 4])))
+               (list t t2)))"#,
+    );
+    let list = result.unwrap().list_to_vec().unwrap();
+    let orig = list[0].as_tuple().unwrap();
+    let appended = list[1].as_tuple().unwrap();
+    assert_eq!(orig.len(), 2); // Original unchanged
+    assert_eq!(appended.len(), 4); // New tuple has both
+}
+
+#[test]
+fn test_append_strings() {
+    // (append "hello" " world") → "hello world"
+    let result = eval_source("(append \"hello\" \" world\")").unwrap();
+    assert_eq!(result, Value::string("hello world"));
+}
+
+#[test]
+fn test_append_strings_returns_new() {
+    // String append returns new string (immutable)
+    let result = eval_source(
+        r#"(let ((s "hello"))
+             (let ((s2 (append s " world")))
+               (list s s2)))"#,
+    );
+    let list = result.unwrap().list_to_vec().unwrap();
+    assert_eq!(list[0], Value::string("hello")); // Original unchanged
+    assert_eq!(list[1], Value::string("hello world")); // New string
+}
+
+#[test]
+fn test_append_empty_arrays() {
+    // (append @[] @[1 2]) → @[1 2]
+    let result = eval_source("(append @[] @[1 2])").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+}
+
+#[test]
+fn test_append_to_empty_array() {
+    // (append @[1 2] @[]) → @[1 2]
+    let result = eval_source("(append @[1 2] @[])").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+}
+
+#[test]
+fn test_append_empty_tuples() {
+    // (append [] [1 2]) → [1 2]
+    let result = eval_source("(append [] [1 2])").unwrap();
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec.len(), 2);
+}
+
+#[test]
+fn test_append_empty_strings() {
+    // (append "" "hello") → "hello"
+    let result = eval_source("(append \"\" \"hello\")").unwrap();
+    assert_eq!(result, Value::string("hello"));
+}
+
+#[test]
+fn test_append_to_empty_string() {
+    // (append "hello" "") → "hello"
+    let result = eval_source("(append \"hello\" \"\")").unwrap();
+    assert_eq!(result, Value::string("hello"));
+}
+
+#[test]
+fn test_append_wrong_arity_no_args() {
+    // (append) → error
+    let result = eval_source("(append)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_append_wrong_arity_one_arg() {
+    // (append @[1 2]) → error
+    let result = eval_source("(append @[1 2])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_append_wrong_arity_too_many_args() {
+    // (append @[1 2] @[3 4] @[5 6]) → error
+    let result = eval_source("(append @[1 2] @[3 4] @[5 6])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_append_mismatched_types_error() {
+    // (append @[1 2] [3 4]) → error (array and tuple)
+    let result = eval_source("(append @[1 2] [3 4])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_append_unsupported_type_error() {
+    // (append 42 99) → error
+    let result = eval_source("(append 42 99)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// concat - always returns new value, never mutates
+// ============================================================================
+
+#[test]
+fn test_concat_arrays_returns_new() {
+    // (concat @[1 2] @[3 4]) → new array @[1 2 3 4]
+    let result = eval_source("(concat @[1 2] @[3 4])").unwrap();
+    assert!(result.is_array());
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 4);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+    assert_eq!(vec[3], Value::int(4));
+}
+
+#[test]
+fn test_concat_arrays_original_unchanged() {
+    // Original arrays should be unchanged
+    let result = eval_source(
+        r#"(let ((a @[1 2]))
+             (let ((a2 (concat a @[3 4])))
+               (list a a2)))"#,
+    );
+    let list = result.unwrap().list_to_vec().unwrap();
+    let orig = list[0].as_array().unwrap().borrow();
+    let concatenated = list[1].as_array().unwrap().borrow();
+    assert_eq!(orig.len(), 2); // Original unchanged
+    assert_eq!(concatenated.len(), 4); // New array has both
+}
+
+#[test]
+fn test_concat_tuples_returns_new() {
+    // (concat [1 2] [3 4]) → new tuple [1 2 3 4]
+    let result = eval_source("(concat [1 2] [3 4])").unwrap();
+    assert!(result.is_tuple());
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec.len(), 4);
+}
+
+#[test]
+fn test_concat_strings() {
+    // (concat "hello" " world") → "hello world"
+    let result = eval_source("(concat \"hello\" \" world\")").unwrap();
+    assert_eq!(result, Value::string("hello world"));
+}
+
+#[test]
+fn test_concat_empty_arrays() {
+    // (concat @[] @[1 2]) → @[1 2]
+    let result = eval_source("(concat @[] @[1 2])").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+}
+
+#[test]
+fn test_concat_to_empty_array() {
+    // (concat @[1 2] @[]) → @[1 2]
+    let result = eval_source("(concat @[1 2] @[])").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 2);
+}
+
+#[test]
+fn test_concat_empty_tuples() {
+    // (concat [] [1 2]) → [1 2]
+    let result = eval_source("(concat [] [1 2])").unwrap();
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec.len(), 2);
+}
+
+#[test]
+fn test_concat_empty_strings() {
+    // (concat "" "hello") → "hello"
+    let result = eval_source("(concat \"\" \"hello\")").unwrap();
+    assert_eq!(result, Value::string("hello"));
+}
+
+#[test]
+fn test_concat_wrong_arity_no_args() {
+    // (concat) → error
+    let result = eval_source("(concat)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_concat_wrong_arity_one_arg() {
+    // (concat @[1 2]) → error
+    let result = eval_source("(concat @[1 2])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_concat_wrong_arity_too_many_args() {
+    // (concat @[1 2] @[3 4] @[5 6]) → error
+    let result = eval_source("(concat @[1 2] @[3 4] @[5 6])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_concat_mismatched_types_error() {
+    // (concat @[1 2] [3 4]) → error (array and tuple)
+    let result = eval_source("(concat @[1 2] [3 4])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_concat_unsupported_type_error() {
+    // (concat 42 99) → error
+    let result = eval_source("(concat 42 99)");
     assert!(result.is_err());
 }

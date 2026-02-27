@@ -492,11 +492,11 @@ fn test_rest_array_basic() {
     );
     // r should be [2 3]
     assert_eq!(
-        eval_source("(begin (def [a & r] [1 2 3]) (array-ref r 0))").unwrap(),
+        eval_source("(begin (def [a & r] [1 2 3]) (get r 0))").unwrap(),
         Value::int(2)
     );
     assert_eq!(
-        eval_source("(begin (def [a & r] [1 2 3]) (array-ref r 1))").unwrap(),
+        eval_source("(begin (def [a & r] [1 2 3]) (get r 1))").unwrap(),
         Value::int(3)
     );
 }
@@ -512,7 +512,7 @@ fn test_rest_array_empty_rest() {
 #[test]
 fn test_rest_array_in_let() {
     assert_eq!(
-        eval_source("(let (([a & r] [10 20 30])) (+ a (array-ref r 0)))").unwrap(),
+        eval_source("(let (([a & r] [10 20 30])) (+ a (get r 0)))").unwrap(),
         Value::int(30)
     );
 }
@@ -531,7 +531,7 @@ fn test_wildcard_with_rest() {
 #[test]
 fn test_wildcard_and_rest_array() {
     assert_eq!(
-        eval_source("(begin (def [_ & r] [10 20 30]) (array-ref r 0))").unwrap(),
+        eval_source("(begin (def [_ & r] [10 20 30]) (get r 0))").unwrap(),
         Value::int(20)
     );
 }

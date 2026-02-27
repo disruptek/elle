@@ -39,7 +39,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["collection", "key", "value"],
         category: "table",
         example: "(put (table) :a 1)",
-        aliases: &["put!"],
+        aliases: &[],
     },
     PrimitiveDef {
         name: "del",
@@ -50,7 +50,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["collection", "key"],
         category: "table",
         example: "(del (table :a 1) :a)",
-        aliases: &["del!"],
+        aliases: &[],
     },
     PrimitiveDef {
         name: "keys",
@@ -574,13 +574,51 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
         return (SIG_OK, s.get(&key).copied().unwrap_or(default));
     }
 
+    // List (cons-based)
+    if args[0].is_cons() || args[0].is_empty_list() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "get: list index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        if index < 0 {
+            return (SIG_OK, default);
+        }
+        let mut current = args[0];
+        let mut i = 0i64;
+        loop {
+            if current.is_empty_list() || current.is_nil() {
+                return (SIG_OK, default);
+            }
+            if let Some(cons) = current.as_cons() {
+                if i == index {
+                    return (SIG_OK, cons.first);
+                }
+                current = cons.rest;
+                i += 1;
+            } else {
+                return (SIG_OK, default);
+            }
+        }
+    }
+
     // Unsupported type
     (
         SIG_ERROR,
         error_val(
             "type-error",
             format!(
-                "get: expected collection (tuple, array, string, table, or struct), got {}",
+                "get: expected collection (list, tuple, array, string, table, or struct), got {}",
                 args[0].type_name()
             ),
         ),

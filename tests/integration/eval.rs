@@ -313,7 +313,7 @@ fn test_eval_with_recursion() {
 #[test]
 fn test_eval_with_array() {
     assert_eq!(
-        eval_source("(eval '(array-ref @[10 20 30] 1))").unwrap(),
+        eval_source("(eval '(get @[10 20 30] 1))").unwrap(),
         Value::int(20)
     );
 }
