@@ -1,14 +1,14 @@
-;; AWS Signature Version 4 Implementation
-;; Elle version — idiomatic translation of sigv4.scm
-;;
-;; Exercises: string manipulation, bytes type, crypto primitives,
-;; uri-encode, higher-order functions, recursive patterns.
+## AWS Signature Version 4 Implementation
+## Elle version — idiomatic translation of sigv4.scm
+##
+## Exercises: string manipulation, bytes type, crypto primitives,
+## uri-encode, higher-order functions, recursive patterns.
 
-;; ============================================================================
-;; DateTime Functions
-;; ============================================================================
+## ============================================================================
+## DateTime Functions
+## ============================================================================
 
-;; Pad integer to width with leading zeros
+## Pad integer to width with leading zeros
 (defn pad-int (n width)
   (letrec ((pad (fn (s)
                   (if (>= (length s) width)
@@ -16,9 +16,9 @@
                     (pad (append "0" s))))))
     (pad (number->string n))))
 
-;; Parse simplified ISO 8601 timestamp
-;; Format: 2023-02-08T15:30:45Z
-;; Returns: (year month day hour minute second)
+## Parse simplified ISO 8601 timestamp
+## Format: 2023-02-08T15:30:45Z
+## Returns: (year month day hour minute second)
 (defn parse-timestamp-simple (timestamp-str)
   (let ((year   (string->int (substring timestamp-str 0 4)))
         (month  (string->int (substring timestamp-str 5 7)))
@@ -28,14 +28,14 @@
         (second (string->int (substring timestamp-str 17 19))))
     (list year month day hour minute second)))
 
-;; Format timestamp as AWS date (YYYYMMDD)
+## Format timestamp as AWS date (YYYYMMDD)
 (defn format-aws-date (year month day)
   (string-join (list (pad-int year 4)
                      (pad-int month 2)
                      (pad-int day 2))
                ""))
 
-;; Format timestamp as AWS datetime (YYYYMMDDTHHMMSSZ)
+## Format timestamp as AWS datetime (YYYYMMDDTHHMMSSZ)
 (defn format-aws-datetime (year month day hour minute second)
   (string-join (list (pad-int year 4)
                      (pad-int month 2)
@@ -47,13 +47,13 @@
                      "Z")
                ""))
 
-;; ============================================================================
-;; AWS SigV4 Components
-;; ============================================================================
+## ============================================================================
+## AWS SigV4 Components
+## ============================================================================
 
-;; Create canonical headers string
-;; Headers are alist: ((name . value) ...)
-;; Output: name:value\n for each, lowercase, trimmed
+## Create canonical headers string
+## Headers are alist: ((name . value) ...)
+## Output: name:value\n for each, lowercase, trimmed
 (defn canonical-headers-string (headers)
   (string-join
     (map (fn (header)
@@ -65,15 +65,15 @@
          headers)
     ""))
 
-;; Get semicolon-separated list of signed header names (lowercase, sorted)
+## Get semicolon-separated list of signed header names (lowercase, sorted)
 (defn signed-headers-list (headers)
   (string-join
     (map (fn (h) (string-downcase (first h))) headers)
     ";"))
 
-;; Create canonical query string
-;; Params are alist: ((key . value) ...)
-;; Output: key=value&key=value (no trailing &)
+## Create canonical query string
+## Params are alist: ((key . value) ...)
+## Output: key=value&key=value (no trailing &)
 (defn canonical-query-string (params)
   (if (empty? params)
     ""
@@ -82,11 +82,11 @@
            params)
       "&")))
 
-;; ============================================================================
-;; Full SigV4 Signing (with real crypto)
-;; ============================================================================
+## ============================================================================
+## Full SigV4 Signing (with real crypto)
+## ============================================================================
 
-;; Create the canonical request string
+## Create the canonical request string
 (defn canonical-request (method uri query-params headers payload)
   (let* ((canonical-headers (canonical-headers-string headers))
          (signed-headers (signed-headers-list headers))
@@ -99,7 +99,7 @@
                        payload-hash)
                  "")))
 
-;; Create the string to sign
+## Create the string to sign
 (defn string-to-sign (datetime scope canonical-req)
   (string-join (list "AWS4-HMAC-SHA256" "\n"
                      datetime "\n"
@@ -107,8 +107,8 @@
                      (bytes->hex (crypto/sha256 canonical-req)))
                ""))
 
-;; Derive the signing key
-;; kSecret -> kDate -> kRegion -> kService -> kSigning
+## Derive the signing key
+## kSecret -> kDate -> kRegion -> kService -> kSigning
 (defn derive-signing-key (secret-key date region service)
   (let* ((k-secret (string-join (list "AWS4" secret-key) ""))
          (k-date    (crypto/hmac-sha256 k-secret date))
@@ -117,13 +117,13 @@
          (k-signing (crypto/hmac-sha256 k-service "aws4_request")))
     k-signing))
 
-;; Compute the final signature
+## Compute the final signature
 (defn compute-signature (signing-key string-to-sign)
   (bytes->hex (crypto/hmac-sha256 signing-key string-to-sign)))
 
-;; ============================================================================
-;; Test Cases
-;; ============================================================================
+## ============================================================================
+## Test Cases
+## ============================================================================
 
 (defn test-timestamp-parsing ()
   (display "=== Timestamp Parsing Test ===")
@@ -172,15 +172,15 @@
 (defn test-crypto ()
   (display "=== Crypto Test ===")
   (newline)
-  ;; SHA-256 of empty string
+  ## SHA-256 of empty string
   (display "SHA-256(\"\"):     ")
   (display (bytes->hex (crypto/sha256 "")))
   (newline)
-  ;; SHA-256 of "hello"
+  ## SHA-256 of "hello"
   (display "SHA-256(\"hello\"): ")
   (display (bytes->hex (crypto/sha256 "hello")))
   (newline)
-  ;; HMAC-SHA256
+  ## HMAC-SHA256
   (display "HMAC-SHA256(\"key\", \"message\"): ")
   (display (bytes->hex (crypto/hmac-sha256 "key" "message")))
   (newline))
@@ -188,7 +188,7 @@
 (defn test-sigv4-signing ()
   (display "=== SigV4 Signing Test ===")
   (newline)
-  ;; AWS test case parameters
+  ## AWS test case parameters
   (let* ((method "GET")
          (uri "/")
          (query-params (list (cons "Action" "ListUsers")
@@ -204,7 +204,7 @@
          (scope (string-join (list date "/" region "/" service "/aws4_request") ""))
          (datetime "20150830T123600Z"))
 
-    ;; Build canonical request
+    ## Build canonical request
     (def canon-req (canonical-request method uri query-params headers payload))
     (display "Canonical Request:")
     (newline)
@@ -212,7 +212,7 @@
     (newline)
     (newline)
 
-    ;; Build string to sign
+    ## Build string to sign
     (def sts (string-to-sign datetime scope canon-req))
     (display "String to Sign:")
     (newline)
@@ -220,16 +220,16 @@
     (newline)
     (newline)
 
-    ;; Derive signing key and compute signature
+    ## Derive signing key and compute signature
     (def signing-key (derive-signing-key secret-key date region service))
     (def signature (compute-signature signing-key sts))
     (display "Signature: ")
     (display signature)
     (newline)))
 
-;; ============================================================================
-;; Main
-;; ============================================================================
+## ============================================================================
+## Main
+## ============================================================================
 
 (display "=== AWS Signature Version 4 Demo (Elle) ===")
 (newline)

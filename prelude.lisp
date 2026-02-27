@@ -131,10 +131,10 @@
          (fn ,params
             (ffi/call ,ptr-sym ,sig-sym ,;call-args))))))
 
-;; each - iterate over a sequence
-;; Dispatches on type: lists use first/rest, indexed types use get/length,
-;; strings use char-at/length.
-;; (each x coll body...) or (each x in coll body...)
+## each - iterate over a sequence
+## Dispatches on type: lists use first/rest, indexed types use get/length,
+## strings use char-at/length.
+## (each x coll body...) or (each x in coll body...)
 (defmacro each (var iter-or-in & forms)
   (let* ((has-in (and (not (empty? forms))
                       (not (empty? (rest forms)))
