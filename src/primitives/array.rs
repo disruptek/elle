@@ -53,7 +53,7 @@ pub fn prim_array_new(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::array(vec))
 }
 
-/// Push a value onto the end of an array (mutates in place, returns the same array)
+/// Push a value onto the end of an array or buffer (mutates in place, returns the collection)
 pub fn prim_push(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
@@ -65,26 +65,55 @@ pub fn prim_push(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let vec_ref = match args[0].as_array() {
-        Some(v) => v,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("push: expected array, got {}", args[0].type_name()),
-                ),
-            )
-        }
-    };
+    if let Some(vec_ref) = args[0].as_array() {
+        let mut vec = vec_ref.borrow_mut();
+        vec.push(args[1]);
+        drop(vec);
+        return (SIG_OK, args[0]);
+    }
 
-    let mut vec = vec_ref.borrow_mut();
-    vec.push(args[1]);
-    drop(vec);
-    (SIG_OK, args[0])
+    if let Some(buf_ref) = args[0].as_buffer() {
+        let byte = match args[1].as_int() {
+            Some(n) if (0..=255).contains(&n) => n as u8,
+            Some(n) => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "error",
+                        format!("push: byte value out of range 0-255: {}", n),
+                    ),
+                )
+            }
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "push: buffer value must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        buf_ref.borrow_mut().push(byte);
+        return (SIG_OK, args[0]);
+    }
+
+    (
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!(
+                "push: expected array or buffer, got {}",
+                args[0].type_name()
+            ),
+        ),
+    )
 }
 
-/// Pop a value from the end of an array (mutates in place, returns the removed element)
+/// Pop a value from the end of an array or buffer (mutates in place, returns the removed element)
 pub fn prim_pop(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -96,33 +125,50 @@ pub fn prim_pop(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    let vec_ref = match args[0].as_array() {
-        Some(v) => v,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("pop: expected array, got {}", args[0].type_name()),
-                ),
-            )
-        }
-    };
-
-    let mut vec = vec_ref.borrow_mut();
-    match vec.pop() {
-        Some(v) => {
-            drop(vec);
-            (SIG_OK, v)
-        }
-        None => {
-            drop(vec);
-            (SIG_OK, Value::NIL)
+    if let Some(vec_ref) = args[0].as_array() {
+        let mut vec = vec_ref.borrow_mut();
+        match vec.pop() {
+            Some(v) => {
+                drop(vec);
+                return (SIG_OK, v);
+            }
+            None => {
+                drop(vec);
+                return (
+                    SIG_ERROR,
+                    error_val("error", "pop: empty array".to_string()),
+                );
+            }
         }
     }
+
+    if let Some(buf_ref) = args[0].as_buffer() {
+        let mut buf = buf_ref.borrow_mut();
+        match buf.pop() {
+            Some(byte) => {
+                drop(buf);
+                return (SIG_OK, Value::int(byte as i64));
+            }
+            None => {
+                drop(buf);
+                return (
+                    SIG_ERROR,
+                    error_val("error", "pop: empty buffer".to_string()),
+                );
+            }
+        }
+    }
+
+    (
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!("pop: expected array or buffer, got {}", args[0].type_name()),
+        ),
+    )
 }
 
-/// Pop n values from the end of an array and return them as a new array
+/// Pop n values from the end of an array or buffer and return them as a new collection
 pub fn prim_popn(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
@@ -133,19 +179,6 @@ pub fn prim_popn(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-
-    let vec_ref = match args[0].as_array() {
-        Some(v) => v,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("popn: expected array, got {}", args[0].type_name()),
-                ),
-            )
-        }
-    };
 
     let n = match args[1].as_int() {
         Some(i) => {
@@ -168,15 +201,37 @@ pub fn prim_popn(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let mut vec = vec_ref.borrow_mut();
-    let len = vec.len();
-    let remove_count = std::cmp::min(n, len);
-    let removed: Vec<Value> = vec.drain(len - remove_count..).collect();
-    drop(vec);
-    (SIG_OK, Value::array(removed))
+    if let Some(vec_ref) = args[0].as_array() {
+        let mut vec = vec_ref.borrow_mut();
+        let len = vec.len();
+        let remove_count = std::cmp::min(n, len);
+        let removed: Vec<Value> = vec.drain(len - remove_count..).collect();
+        drop(vec);
+        return (SIG_OK, Value::array(removed));
+    }
+
+    if let Some(buf_ref) = args[0].as_buffer() {
+        let mut buf = buf_ref.borrow_mut();
+        let len = buf.len();
+        let remove_count = std::cmp::min(n, len);
+        let removed: Vec<u8> = buf.drain(len - remove_count..).collect();
+        drop(buf);
+        return (SIG_OK, Value::buffer(removed));
+    }
+
+    (
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!(
+                "popn: expected array or buffer, got {}",
+                args[0].type_name()
+            ),
+        ),
+    )
 }
 
-/// Insert a value at an index in an array (mutates in place, returns the same array)
+/// Insert a value at an index in an array or buffer (mutates in place, returns the collection)
 pub fn prim_insert(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
@@ -187,19 +242,6 @@ pub fn prim_insert(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-
-    let vec_ref = match args[0].as_array() {
-        Some(v) => v,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("insert: expected array, got {}", args[0].type_name()),
-                ),
-            )
-        }
-    };
 
     let index = match args[1].as_int() {
         Some(i) => {
@@ -222,17 +264,65 @@ pub fn prim_insert(args: &[Value]) -> (SignalBits, Value) {
         }
     };
 
-    let mut vec = vec_ref.borrow_mut();
-    if index > vec.len() {
-        vec.push(args[2]);
-    } else {
-        vec.insert(index, args[2]);
+    if let Some(vec_ref) = args[0].as_array() {
+        let mut vec = vec_ref.borrow_mut();
+        if index > vec.len() {
+            vec.push(args[2]);
+        } else {
+            vec.insert(index, args[2]);
+        }
+        drop(vec);
+        return (SIG_OK, args[0]);
     }
-    drop(vec);
-    (SIG_OK, args[0])
+
+    if let Some(buf_ref) = args[0].as_buffer() {
+        let byte = match args[2].as_int() {
+            Some(n) if (0..=255).contains(&n) => n as u8,
+            Some(n) => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "error",
+                        format!("insert: byte value out of range 0-255: {}", n),
+                    ),
+                )
+            }
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "insert: buffer value must be integer, got {}",
+                            args[2].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        let mut buf = buf_ref.borrow_mut();
+        if index > buf.len() {
+            buf.push(byte);
+        } else {
+            buf.insert(index, byte);
+        }
+        drop(buf);
+        return (SIG_OK, args[0]);
+    }
+
+    (
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!(
+                "insert: expected array or buffer, got {}",
+                args[0].type_name()
+            ),
+        ),
+    )
 }
 
-/// Remove element(s) at an index from an array (mutates in place, returns the same array)
+/// Remove element(s) at an index from an array or buffer (mutates in place, returns the collection)
 pub fn prim_remove(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
         return (
@@ -243,19 +333,6 @@ pub fn prim_remove(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-
-    let vec_ref = match args[0].as_array() {
-        Some(v) => v,
-        None => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "type-error",
-                    format!("remove: expected array, got {}", args[0].type_name()),
-                ),
-            )
-        }
-    };
 
     let index = match args[1].as_int() {
         Some(i) => {
@@ -303,16 +380,42 @@ pub fn prim_remove(args: &[Value]) -> (SignalBits, Value) {
         1
     };
 
-    let mut vec = vec_ref.borrow_mut();
-    let len = vec.len();
-    if index < len {
-        let remove_count = std::cmp::min(count, len - index);
-        for _ in 0..remove_count {
-            vec.remove(index);
+    if let Some(vec_ref) = args[0].as_array() {
+        let mut vec = vec_ref.borrow_mut();
+        let len = vec.len();
+        if index < len {
+            let remove_count = std::cmp::min(count, len - index);
+            for _ in 0..remove_count {
+                vec.remove(index);
+            }
         }
+        drop(vec);
+        return (SIG_OK, args[0]);
     }
-    drop(vec);
-    (SIG_OK, args[0])
+
+    if let Some(buf_ref) = args[0].as_buffer() {
+        let mut buf = buf_ref.borrow_mut();
+        let len = buf.len();
+        if index < len {
+            let remove_count = std::cmp::min(count, len - index);
+            for _ in 0..remove_count {
+                buf.remove(index);
+            }
+        }
+        drop(buf);
+        return (SIG_OK, args[0]);
+    }
+
+    (
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!(
+                "remove: expected array or buffer, got {}",
+                args[0].type_name()
+            ),
+        ),
+    )
 }
 
 pub const PRIMITIVES: &[PrimitiveDef] = &[

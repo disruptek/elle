@@ -1248,10 +1248,10 @@ fn test_pop_mutates_array() {
 }
 
 #[test]
-fn test_pop_empty_array_returns_nil() {
-    // (pop @[]) → nil
-    let result = eval_source("(pop @[])").unwrap();
-    assert_eq!(result, Value::NIL);
+fn test_pop_empty_array_errors() {
+    // (pop @[]) → error
+    let result = eval_source("(pop @[])");
+    assert!(result.is_err());
 }
 
 #[test]

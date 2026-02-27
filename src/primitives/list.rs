@@ -161,6 +161,8 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
                 ),
             )
         }
+    } else if let Some(buf_ref) = args[0].as_buffer() {
+        (SIG_OK, Value::int(buf_ref.borrow().len() as i64))
     } else if let Some(s) = args[0].as_string() {
         (SIG_OK, Value::int(s.chars().count() as i64))
     } else if let Some(elems) = args[0].as_tuple() {
@@ -239,7 +241,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             SIG_ERROR,
             error_val(
                 "type-error",
-                "empty?: expected collection type (list, string, array, table, struct, or tuple), got nil"
+                "empty?: expected collection type (list, string, array, buffer, table, struct, or tuple), got nil"
                     .to_string(),
             ),
         );
@@ -254,7 +256,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
                 error_val(
                     "type-error",
                     format!(
-                        "empty?: expected collection type (list, string, array, table, struct, or tuple), got {}",
+                        "empty?: expected collection type (list, string, array, buffer, table, struct, or tuple), got {}",
                         args[0].type_name()
                     ),
                 ),
@@ -264,6 +266,8 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
         true
     } else if args[0].is_cons() {
         false
+    } else if let Some(buf_ref) = args[0].as_buffer() {
+        buf_ref.borrow().is_empty()
     } else if let Some(s) = args[0].as_string() {
         s.is_empty()
     } else if args[0].is_array() {
@@ -316,7 +320,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             error_val(
                 "type-error",
                 format!(
-                "empty?: expected collection type (list, string, array, table, struct, or tuple), got {}",
+                "empty?: expected collection type (list, string, array, buffer, table, struct, or tuple), got {}",
                 args[0].type_name()
             ),
             ),
@@ -341,6 +345,28 @@ pub fn prim_append(args: &[Value]) -> (SignalBits, Value) {
                 format!("append: expected 2 arguments, got {}", args.len()),
             ),
         );
+    }
+
+    // Buffer (mutable) - mutate in place
+    if let Some(buf_ref) = args[0].as_buffer() {
+        if let Some(other_buf_ref) = args[1].as_buffer() {
+            let other_borrowed = other_buf_ref.borrow();
+            let mut borrowed = buf_ref.borrow_mut();
+            borrowed.extend(other_borrowed.iter());
+            drop(borrowed);
+            return (SIG_OK, args[0]); // Return the mutated buffer
+        } else {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "append: both arguments must be same type, got buffer and {}",
+                        args[1].type_name()
+                    ),
+                ),
+            );
+        }
     }
 
     // Array (mutable) - mutate in place
@@ -461,6 +487,28 @@ pub fn prim_concat(args: &[Value]) -> (SignalBits, Value) {
                 format!("concat: expected 2 arguments, got {}", args.len()),
             ),
         );
+    }
+
+    // Buffer - return new buffer
+    if let Some(buf_ref) = args[0].as_buffer() {
+        if let Some(other_buf_ref) = args[1].as_buffer() {
+            let borrowed = buf_ref.borrow();
+            let other_borrowed = other_buf_ref.borrow();
+            let mut result = borrowed.clone();
+            result.extend(other_borrowed.iter());
+            return (SIG_OK, Value::buffer(result));
+        } else {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "concat: both arguments must be same type, got buffer and {}",
+                        args[1].type_name()
+                    ),
+                ),
+            );
+        }
     }
 
     // Array - return new array

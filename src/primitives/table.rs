@@ -264,6 +264,30 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
         return (SIG_OK, elems[index as usize]);
     }
 
+    // Buffer (mutable byte sequence)
+    if let Some(buf_ref) = args[0].as_buffer() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "get: buffer index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        let borrowed = buf_ref.borrow();
+        if index < 0 || index as usize >= borrowed.len() {
+            return (SIG_OK, default);
+        }
+        return (SIG_OK, Value::int(borrowed[index as usize] as i64));
+    }
+
     // String (immutable character sequence)
     if let Some(s) = args[0].as_string() {
         let index = match args[1].as_int() {
@@ -380,7 +404,7 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
         error_val(
             "type-error",
             format!(
-                "get: expected collection (list, tuple, array, string, table, or struct), got {}",
+                "get: expected collection (list, tuple, array, string, buffer, table, or struct), got {}",
                 args[0].type_name()
             ),
         ),
@@ -601,6 +625,53 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
+    // Buffer (mutable byte sequence) - mutate in place
+    if let Some(buf_ref) = args[0].as_buffer() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "put: buffer index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        let byte = match args[2].as_int() {
+            Some(n) if (0..=255).contains(&n) => n as u8,
+            Some(n) => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "error",
+                        format!("put: byte value out of range 0-255: {}", n),
+                    ),
+                )
+            }
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "put: buffer value must be integer, got {}",
+                            args[2].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        if index >= 0 && (index as usize) < buf_ref.borrow().len() {
+            buf_ref.borrow_mut()[index as usize] = byte;
+        }
+        return (SIG_OK, args[0]); // Return the mutated buffer
+    }
+
     // Array (mutable indexed collection) - mutate in place
     if let Some(vec_ref) = args[0].as_array() {
         let index = match args[1].as_int() {
@@ -749,7 +820,7 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
         error_val(
             "type-error",
             format!(
-                "put: expected collection (tuple, array, string, table, or struct), got {}",
+                "put: expected collection (tuple, array, string, buffer, table, or struct), got {}",
                 args[0].type_name()
             ),
         ),

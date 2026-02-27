@@ -318,8 +318,21 @@ impl SyntaxReader {
                     }
                 }
             }
+            Some(OwnedToken::String(s)) => {
+                // @"..." is sugar for (string->buffer "...")
+                let string_val = s.clone();
+                let len = self.current_length();
+                self.advance(); // skip the string token
+                let span = self.source_loc_to_span(start_loc, start_loc.col + len + 1);
+                let sym = Syntax::new(
+                    SyntaxKind::Symbol("string->buffer".to_string()),
+                    span.clone(),
+                );
+                let str_lit = Syntax::new(SyntaxKind::String(string_val), span.clone());
+                Ok(Syntax::new(SyntaxKind::List(vec![sym, str_lit]), span))
+            }
             _ => Err(format!(
-                "{}: @ must be followed by [...] or {{...}}",
+                "{}: @ must be followed by [...], {{...}}, or \"...\"",
                 start_loc.position()
             )),
         }
@@ -718,6 +731,36 @@ mod tests {
         let result = lex_and_parse("}");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unexpected closing brace"));
+    }
+
+    #[test]
+    fn test_parse_buffer_literal() {
+        let result = lex_and_parse(r#"@"hello""#).unwrap();
+        match result.kind {
+            SyntaxKind::List(ref items) => {
+                assert_eq!(items.len(), 2);
+                assert!(
+                    matches!(items[0].kind, SyntaxKind::Symbol(ref s) if s == "string->buffer")
+                );
+                assert!(matches!(items[1].kind, SyntaxKind::String(ref s) if s == "hello"));
+            }
+            _ => panic!("Expected list (string->buffer \"hello\")"),
+        }
+    }
+
+    #[test]
+    fn test_parse_buffer_literal_empty() {
+        let result = lex_and_parse(r#"@"""#).unwrap();
+        match result.kind {
+            SyntaxKind::List(ref items) => {
+                assert_eq!(items.len(), 2);
+                assert!(
+                    matches!(items[0].kind, SyntaxKind::Symbol(ref s) if s == "string->buffer")
+                );
+                assert!(matches!(items[1].kind, SyntaxKind::String(ref s) if s.is_empty()));
+            }
+            _ => panic!("Expected list (string->buffer \"\")"),
+        }
     }
 
     #[test]

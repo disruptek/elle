@@ -91,12 +91,13 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 | `logic.rs` | `not` |
 | `list.rs` | `cons`, `first`, `rest`, `list`, `length`, `empty?`, `append`, `concat`, `reverse`, `last`, `butlast`, `take`, `drop` |
 | `array.rs` | `tuple`, `array`, `array/new`, `push`, `pop`, `popn`, `insert`, `remove` |
+| `buffer.rs` | `buffer`, `string->buffer`, `buffer->string` |
 | `string.rs` | `string/upcase`, `string/downcase`, `string/slice`, `string/index`, `string/char-at`, `string/split`, `string/replace`, `string/trim`, `string/contains?`, `string/starts-with?`, `string/ends-with?`, `string/join` |
 | `table.rs` | `table`, `get`, `put`, `del`, `keys`, `values`, `has-key?` |
 | `structs.rs` | `struct` |
 | `file_io.rs` | `slurp`, `spit`, `file-exists?`, `join-path` |
 | `display.rs` | `print`, `println`, `display`, `newline` |
-| `type_check.rs` | `nil?`, `pair?`, `list?`, `number?`, `integer?`, `float?`, `string?`, `boolean?`, `symbol?`, `keyword?`, `array?`, `tuple?`, `box?`, `type-of`, `eq?`, `equal?` |
+| `type_check.rs` | `nil?`, `pair?`, `list?`, `number?`, `integer?`, `float?`, `string?`, `boolean?`, `symbol?`, `keyword?`, `array?`, `tuple?`, `table?`, `struct?`, `buffer?`, `box?`, `type-of`, `eq?`, `equal?` |
 | `concurrency.rs` | `spawn`, `join`, `current-thread-id` |
 | `coroutines.rs` | `coro/new`, `coro/resume`, `coro/done?`, `coro/status`, `coro/value`, `coro/>iterator` |
 | `fibers.rs` | `fiber/new`, `fiber/resume`, `fiber/signal`, `fiber/status`, `fiber/value`, `fiber/bits`, `fiber/mask`, `fiber/parent`, `fiber/child`, `fiber/propagate`, `fiber/cancel`, `fiber?` |

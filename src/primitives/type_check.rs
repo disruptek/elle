@@ -206,6 +206,20 @@ pub fn prim_is_table(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::bool(args[0].as_table().is_some()))
 }
 
+/// Check if value is a buffer (mutable byte sequence)
+pub fn prim_is_buffer(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("buffer?: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+    (SIG_OK, Value::bool(args[0].is_buffer()))
+}
+
 /// Check if value is a struct (immutable key-value map)
 pub fn prim_is_struct(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
@@ -373,6 +387,17 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["value"],
         category: "predicate",
         example: "(struct? {:a 1}) ;=> true\n(struct? @{:a 1}) ;=> false",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "buffer?",
+        func: prim_is_buffer,
+        effect: Effect::none(),
+        arity: Arity::Exact(1),
+        doc: "Check if value is a buffer (mutable byte sequence).",
+        params: &["value"],
+        category: "predicate",
+        example: "(buffer? @\"hello\") ;=> true\n(buffer? \"hello\") ;=> false",
         aliases: &[],
     },
 ];
