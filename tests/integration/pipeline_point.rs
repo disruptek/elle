@@ -396,3 +396,673 @@ fn test_let_nested_shadowing() {
     let result = eval_source("(let ((x 1)) (let ((x 2)) x))").unwrap();
     assert_eq!(result, Value::int(2));
 }
+
+// ============================================================================
+// 8. Polymorphic `get` - Unit A Tests
+// ============================================================================
+// Extend `get` to work on tuples, arrays, strings, structs, and tables
+
+// Tuple (immutable indexed collection)
+#[test]
+fn test_get_tuple_by_index() {
+    // (get [1 2 3] 0) → 1
+    let result = eval_source("(get [1 2 3] 0)").unwrap();
+    assert_eq!(result, Value::int(1));
+}
+
+#[test]
+fn test_get_tuple_by_index_middle() {
+    // (get [1 2 3] 1) → 2
+    let result = eval_source("(get [1 2 3] 1)").unwrap();
+    assert_eq!(result, Value::int(2));
+}
+
+#[test]
+fn test_get_tuple_by_index_last() {
+    // (get [1 2 3] 2) → 3
+    let result = eval_source("(get [1 2 3] 2)").unwrap();
+    assert_eq!(result, Value::int(3));
+}
+
+#[test]
+fn test_get_tuple_out_of_bounds_returns_default() {
+    // (get [1 2 3] 10) → nil (default)
+    let result = eval_source("(get [1 2 3] 10)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_tuple_out_of_bounds_with_default() {
+    // (get [1 2 3] 10 :missing) → :missing
+    let result = eval_source("(get [1 2 3] 10 :missing)").unwrap();
+    assert_eq!(result, Value::keyword("missing"));
+}
+
+#[test]
+fn test_get_tuple_negative_index_returns_default() {
+    // (get [1 2 3] -1) → nil (negative indices not supported)
+    let result = eval_source("(get [1 2 3] -1)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_tuple_negative_index_with_default() {
+    // (get [1 2 3] -1 :default) → :default
+    let result = eval_source("(get [1 2 3] -1 :default)").unwrap();
+    assert_eq!(result, Value::keyword("default"));
+}
+
+#[test]
+fn test_get_empty_tuple_returns_default() {
+    // (get [] 0) → nil
+    let result = eval_source("(get [] 0)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_tuple_non_integer_index_error() {
+    // (get [1 2 3] :key) → error
+    let result = eval_source("(get [1 2 3] :key)");
+    assert!(result.is_err());
+}
+
+// Array (mutable indexed collection)
+#[test]
+fn test_get_array_by_index() {
+    // (get @[1 2 3] 0) → 1
+    let result = eval_source("(get @[1 2 3] 0)").unwrap();
+    assert_eq!(result, Value::int(1));
+}
+
+#[test]
+fn test_get_array_by_index_middle() {
+    // (get @[1 2 3] 1) → 2
+    let result = eval_source("(get @[1 2 3] 1)").unwrap();
+    assert_eq!(result, Value::int(2));
+}
+
+#[test]
+fn test_get_array_by_index_last() {
+    // (get @[1 2 3] 2) → 3
+    let result = eval_source("(get @[1 2 3] 2)").unwrap();
+    assert_eq!(result, Value::int(3));
+}
+
+#[test]
+fn test_get_array_out_of_bounds_returns_default() {
+    // (get @[1 2 3] 10) → nil
+    let result = eval_source("(get @[1 2 3] 10)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_array_out_of_bounds_with_default() {
+    // (get @[1 2 3] 10 :missing) → :missing
+    let result = eval_source("(get @[1 2 3] 10 :missing)").unwrap();
+    assert_eq!(result, Value::keyword("missing"));
+}
+
+#[test]
+fn test_get_array_negative_index_returns_default() {
+    // (get @[1 2 3] -1) → nil
+    let result = eval_source("(get @[1 2 3] -1)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_empty_array_returns_default() {
+    // (get @[] 0) → nil
+    let result = eval_source("(get @[] 0)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_array_non_integer_index_error() {
+    // (get @[1 2 3] :key) → error
+    let result = eval_source("(get @[1 2 3] :key)");
+    assert!(result.is_err());
+}
+
+// String (immutable character sequence)
+#[test]
+fn test_get_string_by_char_index() {
+    // (get "hello" 0) → "h"
+    let result = eval_source("(get \"hello\" 0)").unwrap();
+    assert_eq!(result, Value::string("h"));
+}
+
+#[test]
+fn test_get_string_by_char_index_middle() {
+    // (get "hello" 1) → "e"
+    let result = eval_source("(get \"hello\" 1)").unwrap();
+    assert_eq!(result, Value::string("e"));
+}
+
+#[test]
+fn test_get_string_by_char_index_last() {
+    // (get "hello" 4) → "o"
+    let result = eval_source("(get \"hello\" 4)").unwrap();
+    assert_eq!(result, Value::string("o"));
+}
+
+#[test]
+fn test_get_string_out_of_bounds_returns_default() {
+    // (get "hello" 10) → nil
+    let result = eval_source("(get \"hello\" 10)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_string_out_of_bounds_with_default() {
+    // (get "hello" 10 :missing) → :missing
+    let result = eval_source("(get \"hello\" 10 :missing)").unwrap();
+    assert_eq!(result, Value::keyword("missing"));
+}
+
+#[test]
+fn test_get_string_negative_index_returns_default() {
+    // (get "hello" -1) → nil
+    let result = eval_source("(get \"hello\" -1)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_empty_string_returns_default() {
+    // (get "" 0) → nil
+    let result = eval_source("(get \"\" 0)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_string_non_integer_index_error() {
+    // (get "hello" :key) → error
+    let result = eval_source("(get \"hello\" :key)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_string_unicode_char() {
+    // (get "café" 3) → "é" (UTF-8 character)
+    let result = eval_source("(get \"café\" 3)").unwrap();
+    assert_eq!(result, Value::string("é"));
+}
+
+// Struct (immutable keyed collection)
+#[test]
+fn test_get_struct_by_keyword() {
+    // (get {:a 1} :a) → 1
+    let result = eval_source("(get {:a 1} :a)").unwrap();
+    assert_eq!(result, Value::int(1));
+}
+
+#[test]
+fn test_get_struct_by_string_key() {
+    // (get {"x" 10} "x") → 10
+    let result = eval_source("(get {\"x\" 10} \"x\")").unwrap();
+    assert_eq!(result, Value::int(10));
+}
+
+#[test]
+fn test_get_struct_missing_key_returns_default() {
+    // (get {:a 1} :b) → nil
+    let result = eval_source("(get {:a 1} :b)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_struct_missing_key_with_default() {
+    // (get {:a 1} :b :missing) → :missing
+    let result = eval_source("(get {:a 1} :b :missing)").unwrap();
+    assert_eq!(result, Value::keyword("missing"));
+}
+
+#[test]
+fn test_get_empty_struct_returns_default() {
+    // (get {} :a) → nil
+    let result = eval_source("(get {} :a)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+// Table (mutable keyed collection)
+#[test]
+fn test_get_table_by_keyword() {
+    // (get @{:a 1} :a) → 1
+    let result = eval_source("(get @{:a 1} :a)").unwrap();
+    assert_eq!(result, Value::int(1));
+}
+
+#[test]
+fn test_get_table_by_string_key() {
+    // (get @{"x" 10} "x") → 10
+    let result = eval_source("(get @{\"x\" 10} \"x\")").unwrap();
+    assert_eq!(result, Value::int(10));
+}
+
+#[test]
+fn test_get_table_missing_key_returns_default() {
+    // (get @{:a 1} :b) → nil
+    let result = eval_source("(get @{:a 1} :b)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_table_missing_key_with_default() {
+    // (get @{:a 1} :b :missing) → :missing
+    let result = eval_source("(get @{:a 1} :b :missing)").unwrap();
+    assert_eq!(result, Value::keyword("missing"));
+}
+
+#[test]
+fn test_get_empty_table_returns_default() {
+    // (get @{} :a) → nil
+    let result = eval_source("(get @{} :a)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+// Error cases
+#[test]
+fn test_get_wrong_arity_no_args() {
+    // (get) → error
+    let result = eval_source("(get)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_wrong_arity_one_arg() {
+    // (get [1 2 3]) → error
+    let result = eval_source("(get [1 2 3])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_wrong_arity_too_many_args() {
+    // (get [1 2 3] 0 :default :extra) → error
+    let result = eval_source("(get [1 2 3] 0 :default :extra)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_unsupported_type() {
+    // (get 42 0) → error (integers are not collections)
+    let result = eval_source("(get 42 0)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_nil_type() {
+    // (get nil 0) → error
+    let result = eval_source("(get nil 0)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// Tuple (immutable indexed collection) - returns new tuple
+// ============================================================================
+
+#[test]
+fn test_put_tuple_by_index() {
+    // (put [1 2 3] 0 99) → [99 2 3]
+    let result = eval_source("(put [1 2 3] 0 99)").unwrap();
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(99));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_put_tuple_by_index_middle() {
+    // (put [1 2 3] 1 99) → [1 99 3]
+    let result = eval_source("(put [1 2 3] 1 99)").unwrap();
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(99));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_put_tuple_by_index_last() {
+    // (put [1 2 3] 2 99) → [1 2 99]
+    let result = eval_source("(put [1 2 3] 2 99)").unwrap();
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(99));
+}
+
+#[test]
+fn test_put_tuple_out_of_bounds_returns_new_tuple() {
+    // (put [1 2 3] 10 99) → [1 2 3] (out of bounds, no change)
+    let result = eval_source("(put [1 2 3] 10 99)").unwrap();
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_put_tuple_negative_index_returns_new_tuple() {
+    // (put [1 2 3] -1 99) → [1 2 3] (negative index, no change)
+    let result = eval_source("(put [1 2 3] -1 99)").unwrap();
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+}
+
+#[test]
+fn test_put_tuple_immutable_original_unchanged() {
+    // Original tuple should be unchanged
+    let result = eval_source(
+        r#"(let ((t [1 2 3]))
+             (let ((t2 (put t 0 99)))
+               (list t t2)))"#,
+    );
+    let list = result.unwrap().list_to_vec().unwrap();
+    let orig = list[0].as_tuple().unwrap();
+    let modified = list[1].as_tuple().unwrap();
+    assert_eq!(orig[0], Value::int(1)); // Original unchanged
+    assert_eq!(modified[0], Value::int(99)); // New tuple modified
+}
+
+#[test]
+fn test_put_tuple_non_integer_index_error() {
+    // (put [1 2 3] :key 99) → error
+    let result = eval_source("(put [1 2 3] :key 99)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_put_empty_tuple() {
+    // (put [] 0 99) → [] (out of bounds, no change)
+    let result = eval_source("(put [] 0 99)").unwrap();
+    let vec = result.as_tuple().unwrap();
+    assert_eq!(vec.len(), 0);
+}
+
+// ============================================================================
+// Array (mutable indexed collection) - mutates in place, returns array
+// ============================================================================
+
+#[test]
+fn test_put_array_by_index() {
+    // (put @[1 2 3] 0 99) → @[99 2 3] (mutates in place)
+    let result = eval_source("(put @[1 2 3] 0 99)").unwrap();
+    assert!(result.is_array());
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(99));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_put_array_by_index_middle() {
+    // (put @[1 2 3] 1 99) → @[1 99 3]
+    let result = eval_source("(put @[1 2 3] 1 99)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(99));
+    assert_eq!(vec[2], Value::int(3));
+}
+
+#[test]
+fn test_put_array_by_index_last() {
+    // (put @[1 2 3] 2 99) → @[1 2 99]
+    let result = eval_source("(put @[1 2 3] 2 99)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(99));
+}
+
+#[test]
+fn test_put_array_out_of_bounds_returns_array() {
+    // (put @[1 2 3] 10 99) → @[1 2 3] (out of bounds, no change)
+    let result = eval_source("(put @[1 2 3] 10 99)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+}
+
+#[test]
+fn test_put_array_negative_index_returns_array() {
+    // (put @[1 2 3] -1 99) → @[1 2 3] (negative index, no change)
+    let result = eval_source("(put @[1 2 3] -1 99)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0], Value::int(1));
+}
+
+#[test]
+fn test_put_array_mutable_same_reference() {
+    // put returns the same array (mutated in place)
+    let result = eval_source(
+        r#"(let ((a @[1 2 3]))
+             (let ((a2 (put a 0 99)))
+               (eq? a a2)))"#,
+    );
+    assert_eq!(result.unwrap(), Value::bool(true));
+}
+
+#[test]
+fn test_put_array_non_integer_index_error() {
+    // (put @[1 2 3] :key 99) → error
+    let result = eval_source("(put @[1 2 3] :key 99)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_put_empty_array() {
+    // (put @[] 0 99) → @[] (out of bounds, no change)
+    let result = eval_source("(put @[] 0 99)").unwrap();
+    let vec = result.as_array().unwrap().borrow();
+    assert_eq!(vec.len(), 0);
+}
+
+// ============================================================================
+// String (immutable character sequence) - returns new string
+// ============================================================================
+
+#[test]
+fn test_put_string_by_char_index() {
+    // (put "hello" 0 "a") → "aello"
+    let result = eval_source("(put \"hello\" 0 \"a\")").unwrap();
+    assert_eq!(result, Value::string("aello"));
+}
+
+#[test]
+fn test_put_string_by_char_index_middle() {
+    // (put "hello" 1 "a") → "hallo"
+    let result = eval_source("(put \"hello\" 1 \"a\")").unwrap();
+    assert_eq!(result, Value::string("hallo"));
+}
+
+#[test]
+fn test_put_string_by_char_index_last() {
+    // (put "hello" 4 "a") → "hella"
+    let result = eval_source("(put \"hello\" 4 \"a\")").unwrap();
+    assert_eq!(result, Value::string("hella"));
+}
+
+#[test]
+fn test_put_string_out_of_bounds_returns_new_string() {
+    // (put "hello" 10 "a") → "hello" (out of bounds, no change)
+    let result = eval_source("(put \"hello\" 10 \"a\")").unwrap();
+    assert_eq!(result, Value::string("hello"));
+}
+
+#[test]
+fn test_put_string_negative_index_returns_new_string() {
+    // (put "hello" -1 "a") → "hello" (negative index, no change)
+    let result = eval_source("(put \"hello\" -1 \"a\")").unwrap();
+    assert_eq!(result, Value::string("hello"));
+}
+
+#[test]
+fn test_put_string_immutable_original_unchanged() {
+    // Original string should be unchanged
+    let result = eval_source(
+        r#"(let ((s "hello"))
+             (let ((s2 (put s 0 "a")))
+               (list s s2)))"#,
+    );
+    let list = result.unwrap().list_to_vec().unwrap();
+    assert_eq!(list[0], Value::string("hello")); // Original unchanged
+    assert_eq!(list[1], Value::string("aello")); // New string modified
+}
+
+#[test]
+fn test_put_string_non_integer_index_error() {
+    // (put "hello" :key "a") → error
+    let result = eval_source("(put \"hello\" :key \"a\")");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_put_empty_string() {
+    // (put "" 0 "a") → "" (out of bounds, no change)
+    let result = eval_source("(put \"\" 0 \"a\")").unwrap();
+    assert_eq!(result, Value::string(""));
+}
+
+#[test]
+fn test_put_string_unicode_char() {
+    // (put "café" 3 "x") → "cafx" (UTF-8 character replacement, é is at index 3)
+    let result = eval_source("(put \"café\" 3 \"x\")").unwrap();
+    assert_eq!(result, Value::string("cafx"));
+}
+
+// ============================================================================
+// Struct (immutable keyed collection) - returns new struct
+// ============================================================================
+
+#[test]
+fn test_put_struct_by_keyword() {
+    // (put {:a 1} :a 99) → {:a 99}
+    let result = eval_source("(put {:a 1} :a 99)").unwrap();
+    assert!(result.is_struct());
+    let val = eval_source("(get (put {:a 1} :a 99) :a)").unwrap();
+    assert_eq!(val, Value::int(99));
+}
+
+#[test]
+fn test_put_struct_new_key() {
+    // (put {:a 1} :b 2) → {:a 1 :b 2}
+    let result = eval_source("(put {:a 1} :b 2)").unwrap();
+    assert!(result.is_struct());
+    let a_val = eval_source("(get (put {:a 1} :b 2) :a)").unwrap();
+    let b_val = eval_source("(get (put {:a 1} :b 2) :b)").unwrap();
+    assert_eq!(a_val, Value::int(1));
+    assert_eq!(b_val, Value::int(2));
+}
+
+#[test]
+fn test_put_struct_immutable_original_unchanged() {
+    // Original struct should be unchanged
+    let result = eval_source(
+        r#"(let ((s {:a 1}))
+             (let ((s2 (put s :a 99)))
+               (list (get s :a) (get s2 :a))))"#,
+    );
+    let list = result.unwrap().list_to_vec().unwrap();
+    assert_eq!(list[0], Value::int(1)); // Original unchanged
+    assert_eq!(list[1], Value::int(99)); // New struct modified
+}
+
+#[test]
+fn test_put_empty_struct() {
+    // (put {} :a 1) → {:a 1}
+    let result = eval_source("(put {} :a 1)").unwrap();
+    let val = eval_source("(get (put {} :a 1) :a)").unwrap();
+    assert_eq!(val, Value::int(1));
+}
+
+// ============================================================================
+// Table (mutable keyed collection) - mutates in place, returns table
+// ============================================================================
+
+#[test]
+fn test_put_table_by_keyword() {
+    // (put @{:a 1} :a 99) → @{:a 99} (mutates in place)
+    let result = eval_source("(put @{:a 1} :a 99)").unwrap();
+    assert!(result.is_table());
+    let val = eval_source("(get (put @{:a 1} :a 99) :a)").unwrap();
+    assert_eq!(val, Value::int(99));
+}
+
+#[test]
+fn test_put_table_new_key() {
+    // (put @{:a 1} :b 2) → @{:a 1 :b 2}
+    let result = eval_source("(put @{:a 1} :b 2)").unwrap();
+    assert!(result.is_table());
+    let a_val = eval_source("(get (put @{:a 1} :b 2) :a)").unwrap();
+    let b_val = eval_source("(get (put @{:a 1} :b 2) :b)").unwrap();
+    assert_eq!(a_val, Value::int(1));
+    assert_eq!(b_val, Value::int(2));
+}
+
+#[test]
+fn test_put_table_mutable_same_reference() {
+    // put returns the same table (mutated in place)
+    let result = eval_source(
+        r#"(let ((t @{:a 1}))
+             (let ((t2 (put t :a 99)))
+               (eq? t t2)))"#,
+    );
+    assert_eq!(result.unwrap(), Value::bool(true));
+}
+
+#[test]
+fn test_put_empty_table() {
+    // (put @{} :a 1) → @{:a 1}
+    let result = eval_source("(put @{} :a 1)").unwrap();
+    let val = eval_source("(get (put @{} :a 1) :a)").unwrap();
+    assert_eq!(val, Value::int(1));
+}
+
+// ============================================================================
+// Error Cases
+// ============================================================================
+
+#[test]
+fn test_put_wrong_arity_no_args() {
+    // (put) → error
+    let result = eval_source("(put)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_put_wrong_arity_one_arg() {
+    // (put [1 2 3]) → error
+    let result = eval_source("(put [1 2 3])");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_put_wrong_arity_two_args() {
+    // (put [1 2 3] 0) → error
+    let result = eval_source("(put [1 2 3] 0)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_put_wrong_arity_too_many_args() {
+    // (put [1 2 3] 0 99 :extra) → error
+    let result = eval_source("(put [1 2 3] 0 99 :extra)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_put_unsupported_type() {
+    // (put 42 0 99) → error (integers are not collections)
+    let result = eval_source("(put 42 0 99)");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_put_nil_type() {
+    // (put nil 0 99) → error
+    let result = eval_source("(put nil 0 99)");
+    assert!(result.is_err());
+}

@@ -24,10 +24,10 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_get,
         effect: Effect::none(),
         arity: Arity::Range(2, 3),
-        doc: "Get a value from a table or struct by key, with optional default",
+        doc: "Get a value from a collection (tuple, array, string, table, or struct) by index or key, with optional default",
         params: &["collection", "key", "default"],
         category: "table",
-        example: "(get (table :a 1) :a)",
+        example: "(get [1 2 3] 0)",
         aliases: &[],
     },
     PrimitiveDef {
@@ -440,7 +440,7 @@ pub fn prim_table_length(args: &[Value]) -> (SignalBits, Value) {
 
 // ============ POLYMORPHIC FUNCTIONS (work on both tables and structs) ============
 
-/// Polymorphic get - works on both tables and structs
+/// Polymorphic get - works on tuples, arrays, strings, tables, and structs
 /// `(get collection key [default])`
 pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
@@ -455,6 +455,83 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
 
     let default = if args.len() == 3 { args[2] } else { Value::NIL };
 
+    // Array (mutable indexed collection)
+    if let Some(vec_ref) = args[0].as_array() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "get: array index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        let borrowed = vec_ref.borrow();
+        if index < 0 || index as usize >= borrowed.len() {
+            return (SIG_OK, default);
+        }
+        return (SIG_OK, borrowed[index as usize]);
+    }
+
+    // Tuple (immutable indexed collection)
+    if let Some(elems) = args[0].as_tuple() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "get: tuple index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        if index < 0 || index as usize >= elems.len() {
+            return (SIG_OK, default);
+        }
+        return (SIG_OK, elems[index as usize]);
+    }
+
+    // String (immutable character sequence)
+    if let Some(s) = args[0].as_string() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "get: string index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        if index < 0 {
+            return (SIG_OK, default);
+        }
+        match s.chars().nth(index as usize) {
+            Some(ch) => {
+                let ch_str = ch.to_string();
+                return (SIG_OK, Value::string(ch_str.as_str()));
+            }
+            None => return (SIG_OK, default),
+        }
+    }
+
+    // Table (mutable keyed collection)
     if args[0].is_table() {
         let table = match args[0].as_table() {
             Some(t) => t,
@@ -473,8 +550,11 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
             Err(e) => return (SIG_ERROR, e),
         };
         let borrowed = table.borrow();
-        (SIG_OK, borrowed.get(&key).copied().unwrap_or(default))
-    } else if args[0].is_struct() {
+        return (SIG_OK, borrowed.get(&key).copied().unwrap_or(default));
+    }
+
+    // Struct (immutable keyed collection)
+    if args[0].is_struct() {
         let s = match args[0].as_struct() {
             Some(st) => st,
             None => {
@@ -491,16 +571,20 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
             Ok(k) => k,
             Err(e) => return (SIG_ERROR, e),
         };
-        (SIG_OK, s.get(&key).copied().unwrap_or(default))
-    } else {
-        (
-            SIG_ERROR,
-            error_val(
-                "type-error",
-                format!("get: expected table or struct, got {}", args[0].type_name()),
-            ),
-        )
+        return (SIG_OK, s.get(&key).copied().unwrap_or(default));
     }
+
+    // Unsupported type
+    (
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!(
+                "get: expected collection (tuple, array, string, table, or struct), got {}",
+                args[0].type_name()
+            ),
+        ),
+    )
 }
 
 /// Polymorphic keys - works on both tables and structs
@@ -699,7 +783,10 @@ pub fn prim_has_key(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// Polymorphic put - works on both tables and structs
+/// Polymorphic put - works on tuples, arrays, strings, tables, and structs
+/// For arrays: mutates in-place and returns the array
+/// For tuples: returns a new tuple with the updated element (immutable)
+/// For strings: returns a new string with the updated character (immutable)
 /// For tables: mutates in-place and returns the table
 /// For structs: returns a new struct with the updated field (immutable)
 /// `(put collection key value)`
@@ -714,6 +801,106 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
+    // Array (mutable indexed collection) - mutate in place
+    if let Some(vec_ref) = args[0].as_array() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "put: array index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        if index >= 0 && (index as usize) < vec_ref.borrow().len() {
+            vec_ref.borrow_mut()[index as usize] = args[2];
+        }
+        return (SIG_OK, args[0]); // Return the mutated array
+    }
+
+    // Tuple (immutable indexed collection) - return new tuple
+    if let Some(elems) = args[0].as_tuple() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "put: tuple index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        if index >= 0 && (index as usize) < elems.len() {
+            let mut new_elems = elems.to_vec();
+            new_elems[index as usize] = args[2];
+            return (SIG_OK, Value::tuple(new_elems));
+        }
+        // Out of bounds: return unchanged tuple
+        return (SIG_OK, args[0]);
+    }
+
+    // String (immutable character sequence) - return new string
+    if let Some(s) = args[0].as_string() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "put: string index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        if index < 0 {
+            return (SIG_OK, args[0]); // Negative index: return unchanged string
+        }
+        let replacement = match args[2].as_string() {
+            Some(r) => r,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "put: string value must be string, got {}",
+                            args[2].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        let chars: Vec<char> = s.chars().collect();
+        if index as usize >= chars.len() {
+            return (SIG_OK, args[0]); // Out of bounds: return unchanged string
+        }
+        let mut result = String::new();
+        for (i, ch) in chars.iter().enumerate() {
+            if i == index as usize {
+                result.push_str(replacement);
+            } else {
+                result.push(*ch);
+            }
+        }
+        return (SIG_OK, Value::string(result.as_str()));
+    }
+
+    // Table (mutable keyed collection) - mutate in place
     let key = match value_to_table_key(&args[1]) {
         Ok(k) => k,
         Err(e) => return (SIG_ERROR, e),
@@ -734,8 +921,11 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
             }
         };
         table.borrow_mut().insert(key, value);
-        (SIG_OK, args[0]) // Return the mutated table
-    } else if args[0].is_struct() {
+        return (SIG_OK, args[0]); // Return the mutated table
+    }
+
+    // Struct (immutable keyed collection) - return new struct
+    if args[0].is_struct() {
         let s = match args[0].as_struct() {
             Some(st) => st,
             None => {
@@ -750,14 +940,18 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
         };
         let mut new_map = s.clone();
         new_map.insert(key, value);
-        (SIG_OK, Value::struct_from(new_map)) // Return new struct
-    } else {
-        (
-            SIG_ERROR,
-            error_val(
-                "type-error",
-                format!("put: expected table or struct, got {}", args[0].type_name()),
-            ),
-        )
+        return (SIG_OK, Value::struct_from(new_map)); // Return new struct
     }
+
+    // Unsupported type
+    (
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!(
+                "put: expected collection (tuple, array, string, table, or struct), got {}",
+                args[0].type_name()
+            ),
+        ),
+    )
 }
