@@ -148,6 +148,14 @@ impl SyntaxReader {
                     span,
                 ))
             }
+            OwnedToken::Splice => {
+                let len = self.current_length();
+                self.advance();
+                let inner = self.read()?;
+                let start_span = self.source_loc_to_span(loc, loc.col + len);
+                let span = start_span.merge(&inner.span);
+                Ok(Syntax::new(SyntaxKind::Splice(Box::new(inner)), span))
+            }
 
             OwnedToken::Integer(n) => {
                 let span = self.source_loc_to_span(loc, loc.col + self.current_length());

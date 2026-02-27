@@ -6,7 +6,7 @@ use super::token::{SourceLoc, Token, TokenWithLoc};
 fn is_delimiter(c: char) -> bool {
     matches!(
         c,
-        '(' | ')' | '[' | ']' | '{' | '}' | '\'' | '`' | ',' | ':' | '@'
+        '(' | ')' | '[' | ']' | '{' | '}' | '\'' | '`' | ',' | ':' | '@' | ';'
     )
 }
 
@@ -287,6 +287,14 @@ impl<'a> Lexer<'a> {
                         len: self.pos - start_pos,
                     }))
                 }
+            }
+            Some(';') => {
+                self.advance();
+                Ok(Some(TokenWithLoc {
+                    token: Token::Splice,
+                    loc,
+                    len: self.pos - start_pos,
+                }))
             }
             Some('@') => {
                 self.advance();
