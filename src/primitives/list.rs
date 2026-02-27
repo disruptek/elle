@@ -435,6 +435,48 @@ pub fn prim_append(args: &[Value]) -> (SignalBits, Value) {
         }
     }
 
+    // Bytes (immutable) - return new bytes
+    if let Some(b) = args[0].as_bytes() {
+        if let Some(other_b) = args[1].as_bytes() {
+            let mut result = b.to_vec();
+            result.extend(other_b);
+            return (SIG_OK, Value::bytes(result));
+        } else {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "append: both arguments must be same type, got bytes and {}",
+                        args[1].type_name()
+                    ),
+                ),
+            );
+        }
+    }
+
+    // Blob (mutable) - mutate in place
+    if let Some(blob_ref) = args[0].as_blob() {
+        if let Some(other_blob_ref) = args[1].as_blob() {
+            let other_borrowed = other_blob_ref.borrow();
+            let mut borrowed = blob_ref.borrow_mut();
+            borrowed.extend(other_borrowed.iter());
+            drop(borrowed);
+            return (SIG_OK, args[0]);
+        } else {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "append: both arguments must be same type, got blob and {}",
+                        args[1].type_name()
+                    ),
+                ),
+            );
+        }
+    }
+
     // List (or syntax list — used during macro expansion)
     if args[0].is_cons() || args[0].is_empty_list() || args[0].as_syntax().is_some() {
         // list_to_vec handles both cons lists and syntax lists

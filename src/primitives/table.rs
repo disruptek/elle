@@ -761,6 +761,61 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
         return (SIG_OK, args[0]); // Return the mutated buffer
     }
 
+    // Blob (mutable byte sequence) - mutate in place
+    if let Some(blob_ref) = args[0].as_blob() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "put: blob index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        let byte = match args[2].as_int() {
+            Some(n) if (0..=255).contains(&n) => n as u8,
+            Some(n) => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "error",
+                        format!("put: byte value out of range 0-255: {}", n),
+                    ),
+                )
+            }
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "put: blob value must be integer, got {}",
+                            args[2].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        let len = blob_ref.borrow().len();
+        if index < 0 || (index as usize) >= len {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "error",
+                    format!("put: index {} out of bounds (length {})", index, len),
+                ),
+            );
+        }
+        blob_ref.borrow_mut()[index as usize] = byte;
+        return (SIG_OK, args[0]);
+    }
+
     // Array (mutable indexed collection) - mutate in place
     if let Some(vec_ref) = args[0].as_array() {
         let index = match args[1].as_int() {

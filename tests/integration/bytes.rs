@@ -3,7 +3,6 @@
 // Tests for the immutable bytes and mutable blob types.
 
 use crate::common::eval_source;
-use elle::Value;
 
 #[test]
 fn test_bytes_constructor() {
@@ -209,4 +208,77 @@ fn test_sigv4_demo_runs() {
         stdout.contains("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
         "SHA-256 of empty string incorrect"
     );
+}
+
+#[test]
+fn test_blob_push() {
+    let result = eval_source("(let ((b (blob 1 2))) (push b 3) b)").unwrap();
+    assert!(result.is_blob());
+    assert_eq!(&result.as_blob().unwrap().borrow()[..], &[1, 2, 3]);
+}
+
+#[test]
+fn test_blob_pop() {
+    let result = eval_source("(let ((b (blob 1 2 3))) (pop b))").unwrap();
+    assert_eq!(result.as_int().unwrap(), 3);
+}
+
+#[test]
+fn test_blob_put() {
+    let result = eval_source("(let ((b (blob 1 2 3))) (put b 1 99) (get b 1))").unwrap();
+    assert_eq!(result.as_int().unwrap(), 99);
+}
+
+#[test]
+fn test_slice_bytes() {
+    let result = eval_source("(slice (bytes 1 2 3 4 5) 1 3)").unwrap();
+    assert!(result.is_bytes());
+    assert_eq!(result.as_bytes().unwrap(), &[2, 3]);
+}
+
+#[test]
+fn test_slice_blob() {
+    let result = eval_source("(slice (blob 1 2 3 4 5) 1 3)").unwrap();
+    assert!(result.is_blob());
+    assert_eq!(&result.as_blob().unwrap().borrow()[..], &[2, 3]);
+}
+
+#[test]
+fn test_append_bytes() {
+    let result = eval_source("(append (bytes 1 2) (bytes 3 4))").unwrap();
+    assert!(result.is_bytes());
+    assert_eq!(result.as_bytes().unwrap(), &[1, 2, 3, 4]);
+}
+
+#[test]
+fn test_append_blob() {
+    let result = eval_source("(let ((a (blob 1 2)) (b (blob 3 4))) (append a b) a)").unwrap();
+    assert!(result.is_blob());
+    assert_eq!(&result.as_blob().unwrap().borrow()[..], &[1, 2, 3, 4]);
+}
+
+#[test]
+fn test_buffer_to_bytes() {
+    let result = eval_source(r#"(buffer->bytes @"hello")"#).unwrap();
+    assert!(result.is_bytes());
+    assert_eq!(result.as_bytes().unwrap(), b"hello");
+}
+
+#[test]
+fn test_buffer_to_blob() {
+    let result = eval_source(r#"(buffer->blob @"hello")"#).unwrap();
+    assert!(result.is_blob());
+    assert_eq!(&result.as_blob().unwrap().borrow()[..], b"hello");
+}
+
+#[test]
+fn test_bytes_to_buffer() {
+    let result = eval_source("(buffer->string (bytes->buffer (bytes 104 105)))").unwrap();
+    assert_eq!(result.as_string().unwrap(), "hi");
+}
+
+#[test]
+fn test_blob_to_buffer() {
+    let result = eval_source("(buffer->string (blob->buffer (blob 104 105)))").unwrap();
+    assert_eq!(result.as_string().unwrap(), "hi");
 }
