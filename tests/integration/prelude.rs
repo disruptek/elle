@@ -113,10 +113,9 @@ fn test_protect_success() {
     let result = eval_source("(protect 42)");
     assert!(result.is_ok());
     let val = result.unwrap();
-    let arr = val.as_array().unwrap();
-    let borrowed = arr.borrow();
-    assert_eq!(borrowed[0], Value::bool(true));
-    assert_eq!(borrowed[1], Value::int(42));
+    let elems = val.as_tuple().unwrap();
+    assert_eq!(elems[0], Value::bool(true));
+    assert_eq!(elems[1], Value::int(42));
 }
 
 #[test]
@@ -124,11 +123,10 @@ fn test_protect_failure() {
     let result = eval_source("(protect (/ 1 0))");
     assert!(result.is_ok());
     let val = result.unwrap();
-    let arr = val.as_array().unwrap();
-    let borrowed = arr.borrow();
-    assert_eq!(borrowed[0], Value::bool(false));
-    // borrowed[1] is the error value — just check it exists
-    assert!(!borrowed[1].is_nil() || borrowed[1].is_nil()); // always true, just access it
+    let elems = val.as_tuple().unwrap();
+    assert_eq!(elems[0], Value::bool(false));
+    // elems[1] is the error value — just check it exists
+    assert!(!elems[1].is_nil() || elems[1].is_nil()); // always true, just access it
 }
 
 // ============================================================================

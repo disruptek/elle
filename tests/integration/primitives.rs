@@ -143,7 +143,7 @@ fn test_string_from_list() {
 
 #[test]
 fn test_string_from_array() {
-    let result = eval_source("(string [1 2 3])").unwrap();
+    let result = eval_source("(string @[1 2 3])").unwrap();
     let s = result.as_string().expect("should be a string");
     assert_eq!(s, "[1, 2, 3]");
 }

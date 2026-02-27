@@ -437,9 +437,9 @@ proptest! {
     fn array_length_correct(len in 0usize..10) {
         let elements: Vec<String> = (0..len).map(|i| i.to_string()).collect();
         let expr = if elements.is_empty() {
-            "(length [])".to_string()
+            "(length @[])".to_string()
         } else {
-            format!("(length [{}])", elements.join(" "))
+            format!("(length @[{}])", elements.join(" "))
         };
         let result = eval_source(&expr);
 
@@ -449,7 +449,7 @@ proptest! {
 
     #[test]
     fn array_ref_first(a in -100i64..100, b in -100i64..100) {
-        let expr = format!("(array-ref [{} {}] 0)", a, b);
+        let expr = format!("(array-ref @[{} {}] 0)", a, b);
         let result = eval_source(&expr);
 
         prop_assert!(result.is_ok(), "failed: {:?}", result);
