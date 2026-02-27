@@ -264,7 +264,7 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
         return (SIG_OK, elems[index as usize]);
     }
 
-    // Buffer (mutable byte sequence)
+    // Buffer (mutable string — indexed by character position)
     if let Some(buf_ref) = args[0].as_buffer() {
         let index = match args[1].as_int() {
             Some(i) => i,
@@ -281,11 +281,29 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
         };
-        let borrowed = buf_ref.borrow();
-        if index < 0 || index as usize >= borrowed.len() {
+        if index < 0 {
             return (SIG_OK, default);
         }
-        return (SIG_OK, Value::int(borrowed[index as usize] as i64));
+        let borrowed = buf_ref.borrow();
+        let s = match std::str::from_utf8(&borrowed) {
+            Ok(s) => s,
+            Err(e) => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "error",
+                        format!("get: buffer contains invalid UTF-8: {}", e),
+                    ),
+                )
+            }
+        };
+        match s.chars().nth(index as usize) {
+            Some(ch) => {
+                let ch_str = ch.to_string();
+                return (SIG_OK, Value::string(ch_str.as_str()));
+            }
+            None => return (SIG_OK, default),
+        }
     }
 
     // String (immutable character sequence)
@@ -666,9 +684,17 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
         };
-        if index >= 0 && (index as usize) < buf_ref.borrow().len() {
-            buf_ref.borrow_mut()[index as usize] = byte;
+        let len = buf_ref.borrow().len();
+        if index < 0 || (index as usize) >= len {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "error",
+                    format!("put: index {} out of bounds (length {})", index, len),
+                ),
+            );
         }
+        buf_ref.borrow_mut()[index as usize] = byte;
         return (SIG_OK, args[0]); // Return the mutated buffer
     }
 
@@ -689,9 +715,17 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
         };
-        if index >= 0 && (index as usize) < vec_ref.borrow().len() {
-            vec_ref.borrow_mut()[index as usize] = args[2];
+        let len = vec_ref.borrow().len();
+        if index < 0 || (index as usize) >= len {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "error",
+                    format!("put: index {} out of bounds (length {})", index, len),
+                ),
+            );
         }
+        vec_ref.borrow_mut()[index as usize] = args[2];
         return (SIG_OK, args[0]); // Return the mutated array
     }
 
@@ -712,13 +746,22 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
         };
-        if index >= 0 && (index as usize) < elems.len() {
-            let mut new_elems = elems.to_vec();
-            new_elems[index as usize] = args[2];
-            return (SIG_OK, Value::tuple(new_elems));
+        if index < 0 || (index as usize) >= elems.len() {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "error",
+                    format!(
+                        "put: index {} out of bounds (length {})",
+                        index,
+                        elems.len()
+                    ),
+                ),
+            );
         }
-        // Out of bounds: return unchanged tuple
-        return (SIG_OK, args[0]);
+        let mut new_elems = elems.to_vec();
+        new_elems[index as usize] = args[2];
+        return (SIG_OK, Value::tuple(new_elems));
     }
 
     // String (immutable character sequence) - return new string
@@ -738,9 +781,6 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
         };
-        if index < 0 {
-            return (SIG_OK, args[0]); // Negative index: return unchanged string
-        }
         let replacement = match args[2].as_string() {
             Some(r) => r,
             None => {
@@ -757,8 +797,18 @@ pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
             }
         };
         let chars: Vec<char> = s.chars().collect();
-        if index as usize >= chars.len() {
-            return (SIG_OK, args[0]); // Out of bounds: return unchanged string
+        if index < 0 || index as usize >= chars.len() {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "error",
+                    format!(
+                        "put: index {} out of bounds (length {})",
+                        index,
+                        chars.len()
+                    ),
+                ),
+            );
         }
         let mut result = String::new();
         for (i, ch) in chars.iter().enumerate() {

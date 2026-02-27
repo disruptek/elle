@@ -573,13 +573,42 @@ pub fn prim_concat(args: &[Value]) -> (SignalBits, Value) {
         }
     }
 
+    // List (cons-based) - return new list
+    if args[0].is_cons() || args[0].is_empty_list() {
+        let mut first = match args[0].list_to_vec() {
+            Ok(v) => v,
+            Err(e) => return (SIG_ERROR, error_val("type-error", format!("concat: {}", e))),
+        };
+        let second = match args[1].list_to_vec() {
+            Ok(v) => v,
+            Err(_) => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "concat: both arguments must be same type, got list and {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        first.extend(second);
+        let mut result = Value::EMPTY_LIST;
+        for val in first.into_iter().rev() {
+            result = Value::cons(val, result);
+        }
+        return (SIG_OK, result);
+    }
+
     // Unsupported type
     (
         SIG_ERROR,
         error_val(
             "type-error",
             format!(
-                "concat: expected collection (array, tuple, or string), got {}",
+                "concat: expected collection (list, array, tuple, string, or buffer), got {}",
                 args[0].type_name()
             ),
         ),

@@ -731,23 +731,17 @@ fn test_put_tuple_by_index_last() {
 }
 
 #[test]
-fn test_put_tuple_out_of_bounds_returns_new_tuple() {
-    // (put [1 2 3] 10 99) → [1 2 3] (out of bounds, no change)
-    let result = eval_source("(put [1 2 3] 10 99)").unwrap();
-    let vec = result.as_tuple().unwrap();
-    assert_eq!(vec.len(), 3);
-    assert_eq!(vec[0], Value::int(1));
-    assert_eq!(vec[1], Value::int(2));
-    assert_eq!(vec[2], Value::int(3));
+fn test_put_tuple_out_of_bounds_errors() {
+    // (put [1 2 3] 10 99) → error (out of bounds)
+    let result = eval_source("(put [1 2 3] 10 99)");
+    assert!(result.is_err());
 }
 
 #[test]
-fn test_put_tuple_negative_index_returns_new_tuple() {
-    // (put [1 2 3] -1 99) → [1 2 3] (negative index, no change)
-    let result = eval_source("(put [1 2 3] -1 99)").unwrap();
-    let vec = result.as_tuple().unwrap();
-    assert_eq!(vec.len(), 3);
-    assert_eq!(vec[0], Value::int(1));
+fn test_put_tuple_negative_index_errors() {
+    // (put [1 2 3] -1 99) → error (negative index)
+    let result = eval_source("(put [1 2 3] -1 99)");
+    assert!(result.is_err());
 }
 
 #[test]
@@ -773,11 +767,10 @@ fn test_put_tuple_non_integer_index_error() {
 }
 
 #[test]
-fn test_put_empty_tuple() {
-    // (put [] 0 99) → [] (out of bounds, no change)
-    let result = eval_source("(put [] 0 99)").unwrap();
-    let vec = result.as_tuple().unwrap();
-    assert_eq!(vec.len(), 0);
+fn test_put_empty_tuple_errors() {
+    // (put [] 0 99) → error (out of bounds on empty tuple)
+    let result = eval_source("(put [] 0 99)");
+    assert!(result.is_err());
 }
 
 // ============================================================================
@@ -817,21 +810,17 @@ fn test_put_array_by_index_last() {
 }
 
 #[test]
-fn test_put_array_out_of_bounds_returns_array() {
-    // (put @[1 2 3] 10 99) → @[1 2 3] (out of bounds, no change)
-    let result = eval_source("(put @[1 2 3] 10 99)").unwrap();
-    let vec = result.as_array().unwrap().borrow();
-    assert_eq!(vec.len(), 3);
-    assert_eq!(vec[0], Value::int(1));
+fn test_put_array_out_of_bounds_errors() {
+    // (put @[1 2 3] 10 99) → error (out of bounds)
+    let result = eval_source("(put @[1 2 3] 10 99)");
+    assert!(result.is_err());
 }
 
 #[test]
-fn test_put_array_negative_index_returns_array() {
-    // (put @[1 2 3] -1 99) → @[1 2 3] (negative index, no change)
-    let result = eval_source("(put @[1 2 3] -1 99)").unwrap();
-    let vec = result.as_array().unwrap().borrow();
-    assert_eq!(vec.len(), 3);
-    assert_eq!(vec[0], Value::int(1));
+fn test_put_array_negative_index_errors() {
+    // (put @[1 2 3] -1 99) → error (negative index)
+    let result = eval_source("(put @[1 2 3] -1 99)");
+    assert!(result.is_err());
 }
 
 #[test]
@@ -853,11 +842,10 @@ fn test_put_array_non_integer_index_error() {
 }
 
 #[test]
-fn test_put_empty_array() {
-    // (put @[] 0 99) → @[] (out of bounds, no change)
-    let result = eval_source("(put @[] 0 99)").unwrap();
-    let vec = result.as_array().unwrap().borrow();
-    assert_eq!(vec.len(), 0);
+fn test_put_empty_array_errors() {
+    // (put @[] 0 99) → error (out of bounds on empty array)
+    let result = eval_source("(put @[] 0 99)");
+    assert!(result.is_err());
 }
 
 // ============================================================================
@@ -886,17 +874,17 @@ fn test_put_string_by_char_index_last() {
 }
 
 #[test]
-fn test_put_string_out_of_bounds_returns_new_string() {
-    // (put "hello" 10 "a") → "hello" (out of bounds, no change)
-    let result = eval_source("(put \"hello\" 10 \"a\")").unwrap();
-    assert_eq!(result, Value::string("hello"));
+fn test_put_string_out_of_bounds_errors() {
+    // (put "hello" 10 "a") → error (out of bounds)
+    let result = eval_source("(put \"hello\" 10 \"a\")");
+    assert!(result.is_err());
 }
 
 #[test]
-fn test_put_string_negative_index_returns_new_string() {
-    // (put "hello" -1 "a") → "hello" (negative index, no change)
-    let result = eval_source("(put \"hello\" -1 \"a\")").unwrap();
-    assert_eq!(result, Value::string("hello"));
+fn test_put_string_negative_index_errors() {
+    // (put "hello" -1 "a") → error (negative index)
+    let result = eval_source("(put \"hello\" -1 \"a\")");
+    assert!(result.is_err());
 }
 
 #[test]
@@ -920,10 +908,10 @@ fn test_put_string_non_integer_index_error() {
 }
 
 #[test]
-fn test_put_empty_string() {
-    // (put "" 0 "a") → "" (out of bounds, no change)
-    let result = eval_source("(put \"\" 0 \"a\")").unwrap();
-    assert_eq!(result, Value::string(""));
+fn test_put_empty_string_errors() {
+    // (put "" 0 "a") → error (out of bounds on empty string)
+    let result = eval_source("(put \"\" 0 \"a\")");
+    assert!(result.is_err());
 }
 
 #[test]
