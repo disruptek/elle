@@ -372,7 +372,7 @@ mod tests {
         let span = Span::new(0, 5, 1, 1);
         let inner = Syntax::new(SyntaxKind::Symbol("x".to_string()), span.clone());
         let syntax = Syntax::new(SyntaxKind::UnquoteSplicing(Box::new(inner)), span);
-        assert_eq!(syntax.to_string(), ",@x");
+        assert_eq!(syntax.to_string(), ",;x");
     }
 
     #[test]

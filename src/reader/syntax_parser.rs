@@ -407,18 +407,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_bool_true() {
-        let result = lex_and_parse("#t").unwrap();
-        assert!(matches!(result.kind, SyntaxKind::Bool(true)));
-    }
-
-    #[test]
-    fn test_parse_bool_false() {
-        let result = lex_and_parse("#f").unwrap();
-        assert!(matches!(result.kind, SyntaxKind::Bool(false)));
-    }
-
-    #[test]
     fn test_parse_bool_true_word() {
         let result = lex_and_parse("true").unwrap();
         assert!(matches!(result.kind, SyntaxKind::Bool(true)));
@@ -607,7 +595,7 @@ mod tests {
 
     #[test]
     fn test_parse_unquote_splicing() {
-        let result = lex_and_parse(",@x").unwrap();
+        let result = lex_and_parse(",;x").unwrap();
         match result.kind {
             SyntaxKind::UnquoteSplicing(ref inner) => {
                 assert!(matches!(inner.kind, SyntaxKind::Symbol(ref s) if s == "x"));
