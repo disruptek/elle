@@ -141,6 +141,57 @@ fn test_splice_in_table_rejected() {
     assert!(result.is_err(), "splice in table should error");
 }
 
+// ── Tail call with splice ─────────────────────────────────────────
+
+#[test]
+fn test_splice_tail_call() {
+    // Splice in tail position should work
+    let result = eval_source(
+        r#"(begin
+             (defn f (a b c) (+ a b c))
+             (defn g () (f ;@[1 2 3]))
+             (g))"#,
+    );
+    assert_eq!(result.unwrap(), Value::int(6));
+}
+
+#[test]
+fn test_splice_recursive_tail_call() {
+    // Splice in recursive tail call
+    let result = eval_source(
+        r#"(begin
+             (defn sum-to (n acc)
+               (if (= n 0) acc
+                   (sum-to ;@[(- n 1) (+ acc n)])))
+             (sum-to 100 0))"#,
+    );
+    assert_eq!(result.unwrap(), Value::int(5050));
+}
+
+// ── Arity mismatch with splice ───────────────────────────────────
+
+#[test]
+fn test_splice_arity_mismatch_too_few() {
+    // Splicing too few args should error at runtime
+    let result = eval_source(
+        r#"(begin
+             (defn f (a b c) (+ a b c))
+             (f ;@[1 2]))"#,
+    );
+    assert!(result.is_err(), "too few args via splice should error");
+}
+
+#[test]
+fn test_splice_arity_mismatch_too_many() {
+    // Splicing too many args should error at runtime
+    let result = eval_source(
+        r#"(begin
+             (defn f (a b) (+ a b))
+             (f ;@[1 2 3]))"#,
+    );
+    assert!(result.is_err(), "too many args via splice should error");
+}
+
 // ── Reader tests ──────────────────────────────────────────────────
 
 #[test]
