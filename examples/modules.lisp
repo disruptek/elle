@@ -218,7 +218,7 @@
 
 (def initialized-module (fn ()
   (set init-count (+ init-count 1))
-  (display (string-append "Module initialized (count: " (number->string init-count) ")\n"))
+  (display (-> "Module initialized (count: " (append (number->string init-count)) (append ")\n")))
   (fn (x) (+ x 100))))
 
 (display "  Creating first instance:\n")

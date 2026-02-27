@@ -50,7 +50,6 @@ fn init_string_module(vm: &mut VM, symbols: &mut SymbolTable) {
     let mut string_exports = HashMap::new();
 
     let functions = vec![
-        "string/append",
         "string-upcase",
         "string-downcase",
         "substring",

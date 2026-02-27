@@ -161,10 +161,10 @@
 
 (def debug-add (fn (a b)
   (debug-print "Adding two numbers")
-  (debug-print (string-append "a = " (number->string a)))
-  (debug-print (string-append "b = " (number->string b)))
+  (debug-print (append "a = " (number->string a)))
+  (debug-print (append "b = " (number->string b)))
   (let ((result (+ a b)))
-    (debug-print (string-append "result = " (number->string result)))
+    (debug-print (append "result = " (number->string result)))
     result)))
 
 (display "Debug output with values:\n")
@@ -240,7 +240,7 @@
 
 (def list-size-tracker (fn (lst)
   (let ((size (length lst)))
-    (debug-print (string-append "List size: " (number->string size)))
+    (debug-print (append "List size: " (number->string size)))
     size)))
 
 (display "Tracking resource usage:\n")

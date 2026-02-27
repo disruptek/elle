@@ -106,12 +106,12 @@
 (newline)
 (newline)
 
-(display "Example 1b-6: Get nth element (0-indexed)")
+(display "Example 1b-6: Get element by index (0-indexed)")
 (newline)
 (display "List: (a b c d e)")
 (newline)
 (display "Element at index 2: ")
-(display (nth 2 (list 'a 'b 'c 'd 'e)))
+(display (get (list 'a 'b 'c 'd 'e) 2))
 (newline)
 (newline)
 
@@ -596,7 +596,7 @@
 (newline)
 (display "Lists and Arrays in Elle:")
 (newline)
-(display "1. List operations - cons, first/rest, length, reverse, take/drop, nth/last, append")
+(display "1. List operations - cons, first/rest, length, reverse, take/drop, get/last, append")
 (newline)
 (display "2. List construction - Building lists with cons and list function")
 (newline)

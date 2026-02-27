@@ -1891,3 +1891,113 @@ fn test_concat_unsupported_type_error() {
     let result = eval_source("(concat 42 99)");
     assert!(result.is_err());
 }
+
+// ============================================================================
+// get on lists (cons-based)
+// ============================================================================
+
+#[test]
+fn test_get_list_by_index() {
+    // (get (list 10 20 30) 0) → 10
+    let result = eval_source("(get (list 10 20 30) 0)").unwrap();
+    assert_eq!(result, Value::int(10));
+}
+
+#[test]
+fn test_get_list_by_index_middle() {
+    // (get (list 10 20 30) 1) → 20
+    let result = eval_source("(get (list 10 20 30) 1)").unwrap();
+    assert_eq!(result, Value::int(20));
+}
+
+#[test]
+fn test_get_list_by_index_last() {
+    // (get (list 10 20 30) 2) → 30
+    let result = eval_source("(get (list 10 20 30) 2)").unwrap();
+    assert_eq!(result, Value::int(30));
+}
+
+#[test]
+fn test_get_list_out_of_bounds_returns_default() {
+    // (get (list 10 20 30) 10) → nil
+    let result = eval_source("(get (list 10 20 30) 10)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_list_out_of_bounds_with_default() {
+    // (get (list 10 20 30) 10 :missing) → :missing
+    let result = eval_source("(get (list 10 20 30) 10 :missing)").unwrap();
+    assert_eq!(result, Value::keyword("missing"));
+}
+
+#[test]
+fn test_get_list_negative_index_returns_default() {
+    // (get (list 10 20 30) -1) → nil
+    let result = eval_source("(get (list 10 20 30) -1)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_empty_list_returns_default() {
+    // (get (list) 0) → nil
+    let result = eval_source("(get (list) 0)").unwrap();
+    assert_eq!(result, Value::NIL);
+}
+
+#[test]
+fn test_get_list_non_integer_index_error() {
+    // (get (list 1 2 3) :key) → error
+    let result = eval_source("(get (list 1 2 3) :key)");
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// append on lists (cons-based)
+// ============================================================================
+
+#[test]
+fn test_append_lists() {
+    // (append (list 1 2) (list 3 4)) → (1 2 3 4)
+    let result = eval_source("(append (list 1 2) (list 3 4))").unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec.len(), 4);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+    assert_eq!(vec[2], Value::int(3));
+    assert_eq!(vec[3], Value::int(4));
+}
+
+#[test]
+fn test_append_empty_list_to_list() {
+    // (append (list) (list 1 2)) → (1 2)
+    let result = eval_source("(append (list) (list 1 2))").unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+}
+
+#[test]
+fn test_append_list_to_empty_list() {
+    // (append (list 1 2) (list)) → (1 2)
+    let result = eval_source("(append (list 1 2) (list))").unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec[0], Value::int(1));
+    assert_eq!(vec[1], Value::int(2));
+}
+
+#[test]
+fn test_append_empty_lists() {
+    // (append (list) (list)) → ()
+    let result = eval_source("(append (list) (list))").unwrap();
+    assert!(result.is_empty_list());
+}
+
+#[test]
+fn test_append_lists_mismatched_type_error() {
+    // (append (list 1 2) @[3 4]) → error
+    let result = eval_source("(append (list 1 2) @[3 4])");
+    assert!(result.is_err());
+}

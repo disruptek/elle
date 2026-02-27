@@ -5,26 +5,6 @@ use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
-/// Append multiple strings
-pub fn prim_string_append(args: &[Value]) -> (SignalBits, Value) {
-    let mut result = String::new();
-    for arg in args {
-        match arg.as_string() {
-            Some(s) => result.push_str(s),
-            None => {
-                return (
-                    SIG_ERROR,
-                    error_val(
-                        "type-error",
-                        format!("string-append: expected string, got {}", arg.type_name()),
-                    ),
-                )
-            }
-        }
-    }
-    (SIG_OK, Value::string(result))
-}
-
 /// Convert string to uppercase
 pub fn prim_string_upcase(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
@@ -644,17 +624,6 @@ pub fn prim_string_join(args: &[Value]) -> (SignalBits, Value) {
 
 /// Declarative primitive definitions for string module.
 pub const PRIMITIVES: &[PrimitiveDef] = &[
-    PrimitiveDef {
-        name: "string/append",
-        func: prim_string_append,
-        effect: Effect::none(),
-        arity: Arity::AtLeast(0),
-        doc: "Concatenate all string arguments.",
-        params: &["strs"],
-        category: "string",
-        example: "(string/append \"hello\" \" \" \"world\") ;=> \"hello world\"",
-        aliases: &[],
-    },
     PrimitiveDef {
         name: "string/upcase",
         func: prim_string_upcase,
