@@ -578,6 +578,54 @@ pub fn prim_string_join(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::string(strings.join(separator)))
 }
 
+/// Percent-encode a string per RFC 3986.
+/// Unreserved characters (A-Z, a-z, 0-9, '-', '.', '_', '~') pass through.
+/// All others are percent-encoded as %XX with uppercase hex.
+pub fn prim_uri_encode(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("uri-encode: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+    match args[0].as_string() {
+        Some(s) => {
+            let mut encoded = String::with_capacity(s.len());
+            for byte in s.as_bytes() {
+                match byte {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                        encoded.push(*byte as char);
+                    }
+                    _ => {
+                        encoded.push('%');
+                        encoded.push(
+                            char::from_digit((*byte >> 4) as u32, 16)
+                                .unwrap()
+                                .to_ascii_uppercase(),
+                        );
+                        encoded.push(
+                            char::from_digit((*byte & 0x0f) as u32, 16)
+                                .unwrap()
+                                .to_ascii_uppercase(),
+                        );
+                    }
+                }
+            }
+            (SIG_OK, Value::string(encoded.as_str()))
+        }
+        None => (
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!("uri-encode: expected string, got {}", args[0].type_name()),
+            ),
+        ),
+    }
+}
+
 /// Declarative primitive definitions for string module.
 pub const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
@@ -711,5 +759,16 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         category: "string",
         example: "(string/join (list \"a\" \"b\" \"c\") \",\") #=> \"a,b,c\"",
         aliases: &["string-join"],
+    },
+    PrimitiveDef {
+        name: "uri-encode",
+        func: prim_uri_encode,
+        effect: Effect::none(),
+        arity: Arity::Exact(1),
+        doc: "Percent-encode a string per RFC 3986.",
+        params: &["str"],
+        category: "string",
+        example: "(uri-encode \"hello world\") ;=> \"hello%20world\"",
+        aliases: &[],
     },
 ];
