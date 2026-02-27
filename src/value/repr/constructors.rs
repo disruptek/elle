@@ -220,6 +220,21 @@ impl Value {
         alloc(HeapObject::Buffer(RefCell::new(bytes)))
     }
 
+    /// Create an immutable bytes value.
+    #[inline]
+    pub fn bytes(data: Vec<u8>) -> Self {
+        use crate::value::heap::{alloc, HeapObject};
+        alloc(HeapObject::Bytes(data))
+    }
+
+    /// Create a mutable blob value.
+    #[inline]
+    pub fn blob(data: Vec<u8>) -> Self {
+        use crate::value::heap::{alloc, HeapObject};
+        use std::cell::RefCell;
+        alloc(HeapObject::Blob(RefCell::new(data)))
+    }
+
     /// Create a fiber value.
     #[inline]
     pub fn fiber(f: crate::value::fiber::Fiber) -> Self {

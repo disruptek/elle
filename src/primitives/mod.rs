@@ -2,6 +2,7 @@ pub mod arithmetic;
 pub mod array;
 pub mod bitwise;
 pub mod buffer;
+pub mod bytes;
 pub mod cell;
 pub mod comparison;
 pub mod concurrency;

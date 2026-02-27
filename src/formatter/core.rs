@@ -135,6 +135,8 @@ fn format_value(
             HeapObject::FFISignature(_, _) => return "<ffi-signature>".to_string(),
             HeapObject::FFIType(_) => return "<ffi-type>".to_string(),
             HeapObject::Buffer(_) => return "@\"...\"".to_string(),
+            HeapObject::Bytes(_) => return "#bytes[...]".to_string(),
+            HeapObject::Blob(_) => return "#blob[...]".to_string(),
             HeapObject::ManagedPointer(cell) => {
                 return match cell.get() {
                     Some(addr) => format!("<pointer 0x{:x}>", addr),

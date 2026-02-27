@@ -306,6 +306,53 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
         }
     }
 
+    // Bytes (immutable binary data — indexed by byte position)
+    if let Some(b) = args[0].as_bytes() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "get: bytes index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        if index < 0 || index as usize >= b.len() {
+            return (SIG_OK, default);
+        }
+        return (SIG_OK, Value::int(b[index as usize] as i64));
+    }
+
+    // Blob (mutable binary data — indexed by byte position)
+    if let Some(blob_ref) = args[0].as_blob() {
+        let index = match args[1].as_int() {
+            Some(i) => i,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!(
+                            "get: blob index must be integer, got {}",
+                            args[1].type_name()
+                        ),
+                    ),
+                )
+            }
+        };
+        let borrowed = blob_ref.borrow();
+        if index < 0 || index as usize >= borrowed.len() {
+            return (SIG_OK, default);
+        }
+        return (SIG_OK, Value::int(borrowed[index as usize] as i64));
+    }
+
     // String (immutable character sequence)
     if let Some(s) = args[0].as_string() {
         let index = match args[1].as_int() {

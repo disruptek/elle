@@ -163,6 +163,10 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
         }
     } else if let Some(buf_ref) = args[0].as_buffer() {
         (SIG_OK, Value::int(buf_ref.borrow().len() as i64))
+    } else if let Some(b) = args[0].as_bytes() {
+        (SIG_OK, Value::int(b.len() as i64))
+    } else if let Some(blob_ref) = args[0].as_blob() {
+        (SIG_OK, Value::int(blob_ref.borrow().len() as i64))
     } else if let Some(s) = args[0].as_string() {
         (SIG_OK, Value::int(s.chars().count() as i64))
     } else if let Some(elems) = args[0].as_tuple() {

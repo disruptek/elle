@@ -45,6 +45,12 @@ pub enum SendValue {
     /// Deep copy of buffers (mutable byte sequences)
     Buffer(Vec<u8>),
 
+    /// Deep copy of bytes (immutable binary data)
+    Bytes(Vec<u8>),
+
+    /// Deep copy of blobs (mutable binary data)
+    Blob(Vec<u8>),
+
     /// Deep copy of mutable cells (if contents are sendable)
     /// The bool indicates if it's a local cell (auto-unwrapped) or user cell
     Cell(Box<SendValue>, bool),
@@ -176,6 +182,17 @@ impl SendValue {
 
             // FFI type descriptors are pure data — safe to send
             HeapObject::FFIType(desc) => Ok(SendValue::FFIType(desc.clone())),
+
+            // Bytes - immutable and safe to send
+            HeapObject::Bytes(b) => Ok(SendValue::Bytes(b.clone())),
+
+            // Blobs - deep copy the bytes
+            HeapObject::Blob(blob_ref) => {
+                let borrowed = blob_ref
+                    .try_borrow()
+                    .map_err(|_| "Cannot borrow blob for sending".to_string())?;
+                Ok(SendValue::Blob(borrowed.clone()))
+            }
         }
     }
 
@@ -211,6 +228,8 @@ impl SendValue {
                 alloc(HeapObject::Tuple(values))
             }
             SendValue::Buffer(bytes) => alloc(HeapObject::Buffer(std::cell::RefCell::new(bytes))),
+            SendValue::Bytes(bytes) => alloc(HeapObject::Bytes(bytes)),
+            SendValue::Blob(bytes) => alloc(HeapObject::Blob(std::cell::RefCell::new(bytes))),
             SendValue::Cell(contents, is_local) => {
                 let val = contents.into_value();
                 // Preserve the cell type (local vs user) across thread boundary

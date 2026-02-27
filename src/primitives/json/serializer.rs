@@ -130,6 +130,8 @@ pub fn serialize_value(value: &Value) -> Result<String, String> {
             HeapTag::FFIType => Err("Cannot serialize FFI type descriptors to JSON".to_string()),
             HeapTag::ManagedPointer => Err("Cannot serialize pointers to JSON".to_string()),
             HeapTag::Buffer => Err("Cannot serialize buffers to JSON".to_string()),
+            HeapTag::Bytes => Err("Cannot serialize bytes to JSON".to_string()),
+            HeapTag::Blob => Err("Cannot serialize blobs to JSON".to_string()),
         }
     } else {
         Err("Cannot serialize unknown value type to JSON".to_string())
@@ -290,6 +292,8 @@ pub fn serialize_value_pretty(value: &Value, indent_level: usize) -> Result<Stri
             HeapTag::FFIType => Err("Cannot serialize FFI type descriptors to JSON".to_string()),
             HeapTag::ManagedPointer => Err("Cannot serialize pointers to JSON".to_string()),
             HeapTag::Buffer => Err("Cannot serialize buffers to JSON".to_string()),
+            HeapTag::Bytes => Err("Cannot serialize bytes to JSON".to_string()),
+            HeapTag::Blob => Err("Cannot serialize blobs to JSON".to_string()),
         }
     } else {
         Err("Cannot serialize unknown value type to JSON".to_string())

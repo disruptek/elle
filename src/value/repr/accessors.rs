@@ -173,6 +173,20 @@ impl Value {
         self.heap_tag() == Some(HeapTag::Buffer)
     }
 
+    /// Check if this is a bytes value.
+    #[inline]
+    pub fn is_bytes(&self) -> bool {
+        use crate::value::heap::HeapTag;
+        self.heap_tag() == Some(HeapTag::Bytes)
+    }
+
+    /// Check if this is a blob value.
+    #[inline]
+    pub fn is_blob(&self) -> bool {
+        use crate::value::heap::HeapTag;
+        self.heap_tag() == Some(HeapTag::Blob)
+    }
+
     /// Check if this is a syntax object.
     #[inline]
     pub fn is_syntax(&self) -> bool {
@@ -357,6 +371,32 @@ impl Value {
         }
         match unsafe { deref(*self) } {
             HeapObject::Buffer(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    /// Extract as bytes if this is a bytes value.
+    #[inline]
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        use crate::value::heap::{deref, HeapObject};
+        if !self.is_heap() {
+            return None;
+        }
+        match unsafe { deref(*self) } {
+            HeapObject::Bytes(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    /// Extract as blob if this is a blob value.
+    #[inline]
+    pub fn as_blob(&self) -> Option<&std::cell::RefCell<Vec<u8>>> {
+        use crate::value::heap::{deref, HeapObject};
+        if !self.is_heap() {
+            return None;
+        }
+        match unsafe { deref(*self) } {
+            HeapObject::Blob(b) => Some(b),
             _ => None,
         }
     }
