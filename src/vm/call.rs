@@ -589,7 +589,7 @@ impl VM {
     /// Used by splice: the lowerer builds an args array, then CallArray
     /// calls the function with those args.
     ///
-    /// Stack: [func, args_array] → [result]
+    /// Stack: \[func, args_array\] → \[result\]
     pub(super) fn handle_call_array(
         &mut self,
         bytecode: &Rc<Vec<u8>>,
@@ -704,7 +704,7 @@ impl VM {
     /// Handle the TailCallArray instruction.
     ///
     /// Like TailCall, but pops an args array instead of individual args.
-    /// Stack: [func, args_array] → (sets up pending tail call)
+    /// Stack: \[func, args_array\] → (sets up pending tail call)
     pub(super) fn handle_tail_call_array(
         &mut self,
         ip: &mut usize,

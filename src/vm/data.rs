@@ -341,7 +341,7 @@ pub fn handle_table_get_or_nil(vm: &mut VM, bytecode: &[u8], ip: &mut usize, con
 }
 
 /// Extend an array with all elements from an indexed source (array or tuple).
-/// Stack: [array, source] → [extended_array]
+/// Stack: \[array, source\] → \[extended_array\]
 /// Used by splice: builds the args array incrementally.
 pub fn handle_array_extend(vm: &mut VM) {
     let source = vm
@@ -396,7 +396,7 @@ pub fn handle_array_extend(vm: &mut VM) {
 }
 
 /// Push a single value onto an array.
-/// Stack: [array, value] → [extended_array]
+/// Stack: \[array, value\] → \[extended_array\]
 /// Used by splice: adds non-spliced args to the args array.
 pub fn handle_array_push(vm: &mut VM) {
     let value = vm
