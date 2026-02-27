@@ -73,7 +73,7 @@ impl fmt::Display for Value {
         // Array
         if let Some(vec_ref) = self.as_array() {
             let vec = vec_ref.borrow();
-            write!(f, "[")?;
+            write!(f, "@[")?;
             for (i, v) in vec.iter().enumerate() {
                 if i > 0 {
                     write!(f, " ")?;
@@ -86,7 +86,7 @@ impl fmt::Display for Value {
         // Table
         if let Some(table_ref) = self.as_table() {
             let table = table_ref.borrow();
-            write!(f, "{{")?;
+            write!(f, "@{{")?;
             let mut first = true;
             for (k, v) in table.iter() {
                 if !first {
