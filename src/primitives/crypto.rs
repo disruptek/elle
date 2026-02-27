@@ -11,8 +11,8 @@ use crate::value::{error_val, Value};
 /// Extract byte data from a string or bytes value.
 /// Strings are treated as their UTF-8 encoding.
 fn extract_byte_data(val: &Value, name: &str, pos: &str) -> Result<Vec<u8>, (SignalBits, Value)> {
-    if let Some(s) = val.as_string() {
-        Ok(s.as_bytes().to_vec())
+    if let Some(bytes) = val.with_string(|s| s.as_bytes().to_vec()) {
+        Ok(bytes)
     } else if let Some(b) = val.as_bytes() {
         Ok(b.to_vec())
     } else if let Some(blob_ref) = val.as_blob() {

@@ -82,9 +82,10 @@ pub fn prim_string_to_bytes(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    match args[0].as_string() {
-        Some(s) => (SIG_OK, Value::bytes(s.as_bytes().to_vec())),
-        None => (
+    if let Some(bytes) = args[0].with_string(|s| s.as_bytes().to_vec()) {
+        (SIG_OK, Value::bytes(bytes))
+    } else {
+        (
             SIG_ERROR,
             error_val(
                 "type-error",
@@ -93,7 +94,7 @@ pub fn prim_string_to_bytes(args: &[Value]) -> (SignalBits, Value) {
                     args[0].type_name()
                 ),
             ),
-        ),
+        )
     }
 }
 
@@ -108,15 +109,16 @@ pub fn prim_string_to_blob(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    match args[0].as_string() {
-        Some(s) => (SIG_OK, Value::blob(s.as_bytes().to_vec())),
-        None => (
+    if let Some(bytes) = args[0].with_string(|s| s.as_bytes().to_vec()) {
+        (SIG_OK, Value::blob(bytes))
+    } else {
+        (
             SIG_ERROR,
             error_val(
                 "type-error",
                 format!("string->blob: expected string, got {}", args[0].type_name()),
             ),
-        ),
+        )
     }
 }
 

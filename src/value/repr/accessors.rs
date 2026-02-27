@@ -113,11 +113,11 @@ impl Value {
     // Heap Type Predicates
     // =========================================================================
 
-    /// Check if this is a string.
+    /// Check if this is a string (SSO or heap).
     #[inline]
     pub fn is_string(&self) -> bool {
         use crate::value::heap::HeapTag;
-        self.heap_tag() == Some(HeapTag::String)
+        (self.0 & super::TAG_SSO_MASK) == super::TAG_SSO || self.heap_tag() == Some(HeapTag::String)
     }
 
     /// Check if this is a cons cell.
@@ -227,16 +227,30 @@ impl Value {
     // Heap Value Extractors
     // =========================================================================
 
-    /// Extract as string if this is a string.
+    /// Access string contents via closure. Works for both SSO and heap strings.
+    /// Returns None if this is not a string.
     #[inline]
-    pub fn as_string(&self) -> Option<&str> {
-        use crate::value::heap::{deref, HeapObject};
-        if !self.is_heap() {
-            return None;
-        }
-        match unsafe { deref(*self) } {
-            HeapObject::String(s) => Some(s),
-            _ => None,
+    pub fn with_string<R>(&self, f: impl FnOnce(&str) -> R) -> Option<R> {
+        if (self.0 & super::TAG_SSO_MASK) == super::TAG_SSO {
+            let payload = self.0 & super::PAYLOAD_MASK;
+            let mut buf = [0u8; 6];
+            for (i, byte) in buf.iter_mut().enumerate() {
+                *byte = ((payload >> (i * 8)) & 0xFF) as u8;
+            }
+            // Find length: first zero byte, or 6 if all non-zero
+            let len = buf.iter().position(|&b| b == 0).unwrap_or(6);
+            // SAFETY: Value::string() only creates SSO from valid UTF-8
+            let s = unsafe { std::str::from_utf8_unchecked(&buf[..len]) };
+            Some(f(s))
+        } else {
+            use crate::value::heap::{deref, HeapObject};
+            if !self.is_heap() {
+                return None;
+            }
+            match unsafe { deref(*self) } {
+                HeapObject::String(s) => Some(f(s)),
+                _ => None,
+            }
         }
     }
 
@@ -456,6 +470,8 @@ impl Value {
             "integer"
         } else if self.is_float() {
             "float"
+        } else if (self.0 & super::TAG_SSO_MASK) == super::TAG_SSO {
+            "string"
         } else if self.is_symbol() {
             "symbol"
         } else if self.is_keyword() {

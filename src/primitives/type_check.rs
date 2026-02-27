@@ -99,7 +99,7 @@ pub fn prim_is_string(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (SIG_OK, Value::bool(args[0].as_string().is_some()))
+    (SIG_OK, Value::bool(args[0].is_string()))
 }
 
 /// Check if value is a boolean

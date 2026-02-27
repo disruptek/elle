@@ -167,8 +167,9 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
         (SIG_OK, Value::int(b.len() as i64))
     } else if let Some(blob_ref) = args[0].as_blob() {
         (SIG_OK, Value::int(blob_ref.borrow().len() as i64))
-    } else if let Some(s) = args[0].as_string() {
-        (SIG_OK, Value::int(s.chars().count() as i64))
+    } else if let Some(r) = args[0].with_string(|s| (SIG_OK, Value::int(s.chars().count() as i64)))
+    {
+        r
     } else if let Some(elems) = args[0].as_tuple() {
         (SIG_OK, Value::int(elems.len() as i64))
     } else if args[0].is_array() {
@@ -272,8 +273,8 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
         false
     } else if let Some(buf_ref) = args[0].as_buffer() {
         buf_ref.borrow().is_empty()
-    } else if let Some(s) = args[0].as_string() {
-        s.is_empty()
+    } else if let Some(r) = args[0].with_string(|s| s.is_empty()) {
+        r
     } else if args[0].is_array() {
         let vec = match args[0].as_array() {
             Some(v) => v,
@@ -420,10 +421,12 @@ pub fn prim_append(args: &[Value]) -> (SignalBits, Value) {
     }
 
     // String (immutable) - return new string
-    if let Some(s) = args[0].as_string() {
-        if let Some(other_s) = args[1].as_string() {
-            let mut result = s.to_string();
-            result.push_str(other_s);
+    if args[0].is_string() {
+        if args[1].is_string() {
+            let s = args[0].with_string(|s| s.to_string()).unwrap();
+            let other_s = args[1].with_string(|s| s.to_string()).unwrap();
+            let mut result = s;
+            result.push_str(&other_s);
             return (SIG_OK, Value::string(result.as_str()));
         } else {
             return (
@@ -604,10 +607,12 @@ pub fn prim_concat(args: &[Value]) -> (SignalBits, Value) {
     }
 
     // String - return new string
-    if let Some(s) = args[0].as_string() {
-        if let Some(other_s) = args[1].as_string() {
-            let mut result = s.to_string();
-            result.push_str(other_s);
+    if args[0].is_string() {
+        if args[1].is_string() {
+            let s = args[0].with_string(|s| s.to_string()).unwrap();
+            let other_s = args[1].with_string(|s| s.to_string()).unwrap();
+            let mut result = s;
+            result.push_str(&other_s);
             return (SIG_OK, Value::string(result.as_str()));
         } else {
             return (

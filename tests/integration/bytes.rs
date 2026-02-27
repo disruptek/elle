@@ -72,28 +72,28 @@ fn test_string_to_blob() {
 fn test_bytes_to_string() {
     let result = eval_source(r#"(bytes->string (bytes 104 105))"#).unwrap();
     assert!(result.is_string());
-    assert_eq!(result.as_string().unwrap(), "hi");
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "hi");
 }
 
 #[test]
 fn test_blob_to_string() {
     let result = eval_source(r#"(blob->string (blob 104 105))"#).unwrap();
     assert!(result.is_string());
-    assert_eq!(result.as_string().unwrap(), "hi");
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "hi");
 }
 
 #[test]
 fn test_bytes_to_hex() {
     let result = eval_source("(bytes->hex (bytes 72 101 108))").unwrap();
     assert!(result.is_string());
-    assert_eq!(result.as_string().unwrap(), "48656c");
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "48656c");
 }
 
 #[test]
 fn test_blob_to_hex() {
     let result = eval_source("(blob->hex (blob 72 101 108))").unwrap();
     assert!(result.is_string());
-    assert_eq!(result.as_string().unwrap(), "48656c");
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "48656c");
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn test_sha256_empty_string() {
     let result = eval_source(r#"(bytes->hex (crypto/sha256 ""))"#).unwrap();
     assert!(result.is_string());
     assert_eq!(
-        result.as_string().unwrap(),
+        result.with_string(|s| s.to_string()).unwrap(),
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
 }
@@ -153,7 +153,7 @@ fn test_sha256_hello() {
     let result = eval_source(r#"(bytes->hex (crypto/sha256 "hello"))"#).unwrap();
     assert!(result.is_string());
     assert_eq!(
-        result.as_string().unwrap(),
+        result.with_string(|s| s.to_string()).unwrap(),
         "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
     );
 }
@@ -163,7 +163,7 @@ fn test_hmac_sha256() {
     let result = eval_source(r#"(bytes->hex (crypto/hmac-sha256 "key" "message"))"#).unwrap();
     assert!(result.is_string());
     // Just verify it produces a 64-character hex string (32 bytes)
-    let hex = result.as_string().unwrap();
+    let hex = result.with_string(|s| s.to_string()).unwrap();
     assert_eq!(hex.len(), 64);
 }
 
@@ -171,21 +171,24 @@ fn test_hmac_sha256() {
 fn test_uri_encode_simple() {
     let result = eval_source(r#"(uri-encode "hello")"#).unwrap();
     assert!(result.is_string());
-    assert_eq!(result.as_string().unwrap(), "hello");
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "hello");
 }
 
 #[test]
 fn test_uri_encode_space() {
     let result = eval_source(r#"(uri-encode "hello world")"#).unwrap();
     assert!(result.is_string());
-    assert_eq!(result.as_string().unwrap(), "hello%20world");
+    assert_eq!(
+        result.with_string(|s| s.to_string()).unwrap(),
+        "hello%20world"
+    );
 }
 
 #[test]
 fn test_uri_encode_special() {
     let result = eval_source(r#"(uri-encode "a/b")"#).unwrap();
     assert!(result.is_string());
-    assert_eq!(result.as_string().unwrap(), "a%2Fb");
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "a%2Fb");
 }
 
 #[test]
@@ -274,13 +277,13 @@ fn test_buffer_to_blob() {
 #[test]
 fn test_bytes_to_buffer() {
     let result = eval_source("(buffer->string (bytes->buffer (bytes 104 105)))").unwrap();
-    assert_eq!(result.as_string().unwrap(), "hi");
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "hi");
 }
 
 #[test]
 fn test_blob_to_buffer() {
     let result = eval_source("(buffer->string (blob->buffer (blob 104 105)))").unwrap();
-    assert_eq!(result.as_string().unwrap(), "hi");
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "hi");
 }
 
 #[test]

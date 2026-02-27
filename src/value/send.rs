@@ -83,9 +83,9 @@ impl SendValue {
             return Ok(SendValue::Immediate(value));
         }
 
-        // String values
-        if let Some(s) = value.as_string() {
-            return Ok(SendValue::String(s.to_string()));
+        // String values (SSO or heap)
+        if let Some(s) = value.with_string(|s| s.to_string()) {
+            return Ok(SendValue::String(s));
         }
 
         // Heap values need deep copying
@@ -201,11 +201,7 @@ impl SendValue {
         match self {
             SendValue::Immediate(v) => v,
             SendValue::Keyword(name) => Value::keyword(&name),
-            SendValue::String(s) => {
-                // Use alloc directly to avoid thread-local interner issues
-                let boxed: Box<str> = s.into();
-                alloc(HeapObject::String(boxed))
-            }
+            SendValue::String(s) => Value::string_no_intern(s),
             SendValue::Cons(first, rest) => {
                 let first_val = first.into_value();
                 let rest_val = rest.into_value();

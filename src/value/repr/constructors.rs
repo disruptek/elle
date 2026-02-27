@@ -119,12 +119,45 @@ impl Value {
     // =========================================================================
 
     /// Create a string value.
+    /// Strings ≤6 UTF-8 bytes (without NUL) are stored inline (SSO).
+    /// Strings >6 bytes or containing NUL are heap-interned.
     #[inline]
     pub fn string(s: impl Into<Box<str>>) -> Self {
-        use crate::value::intern::intern_string;
         let boxed: Box<str> = s.into();
-        let ptr = intern_string(&boxed) as *const ();
-        Self::from_heap_ptr(ptr)
+        let bytes = boxed.as_bytes();
+        if bytes.len() <= 6 && !bytes.contains(&0) {
+            // Pack into SSO: TAG_SSO | bytes in little-endian order
+            let mut bits: u64 = 0;
+            for (i, &b) in bytes.iter().enumerate() {
+                bits |= (b as u64) << (i * 8);
+            }
+            Value(super::TAG_SSO | bits)
+        } else {
+            use crate::value::intern::intern_string;
+            let ptr = intern_string(&boxed) as *const ();
+            Self::from_heap_ptr(ptr)
+        }
+    }
+
+    /// Create a heap string without interning. Used by `SendValue::into_value()`
+    /// to avoid thread-local interner issues when reconstructing values on
+    /// a different thread.
+    #[inline]
+    pub fn string_no_intern(s: impl Into<Box<str>>) -> Self {
+        let boxed: Box<str> = s.into();
+        let bytes = boxed.as_bytes();
+        if bytes.len() <= 6 && !bytes.contains(&0) {
+            // SSO path — no interning, thread-safe
+            let mut bits: u64 = 0;
+            for (i, &b) in bytes.iter().enumerate() {
+                bits |= (b as u64) << (i * 8);
+            }
+            Value(super::TAG_SSO | bits)
+        } else {
+            // Heap alloc without interning
+            use crate::value::heap::{alloc, HeapObject};
+            alloc(HeapObject::String(boxed))
+        }
     }
 
     /// Create a cons cell.
