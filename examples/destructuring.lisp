@@ -149,9 +149,9 @@
 
 (var (va vb) (list 1 2))
 (assert-eq va 1 "var destructure first")
-(set! va 100)
+(set va 100)
 (assert-eq va 100 "var destructure mutated")
-(display "  (var (va vb) (list 1 2)) then (set! va 100) => va=")
+(display "  (var (va vb) (list 1 2)) then (set va 100) => va=")
 (display va) (display " vb=") (display vb)
 (newline)
 (newline)

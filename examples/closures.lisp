@@ -481,7 +481,7 @@
   (fn ()
     (begin
       (var x 0)
-      (set! x 42)
+      (set x 42)
       x)))
 
 (display "set! mutation: (mutate-test) = ")
@@ -533,7 +533,7 @@
       (var count 0)
       (fn ()
         (begin
-          (set! count (+ count 1))
+          (set count (+ count 1))
           count)))))
 
 (var counter (make-counter))
@@ -599,7 +599,7 @@
       (var total initial)
       (fn (amount)
         (begin
-          (set! total (+ total amount))
+          (set total (+ total amount))
           total)))))
 
 (var acc (make-accumulator 100))
@@ -637,8 +637,8 @@
       (var i 1)
       (while (<= i n)
         (begin
-          (set! result (+ result i))
-          (set! i (+ i 1))))
+          (set result (+ result i))
+          (set i (+ i 1))))
       result)))
 
 (display "Sum 1..10: ")
@@ -666,7 +666,7 @@
       (var value initial)
       (list
         (fn () value)                          ;; getter
-        (fn (new-val) (set! value new-val))))))  ;; setter
+        (fn (new-val) (set value new-val))))))  ;; setter
 
 (var box (make-box 0))
 (var box-get (first box))

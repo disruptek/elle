@@ -136,7 +136,7 @@ fn test_protect_failure() {
 #[test]
 fn test_defer_runs_cleanup() {
     assert_eq!(
-        eval_source("(begin (var cleaned false) (defer (set! cleaned true) 42) cleaned)").unwrap(),
+        eval_source("(begin (var cleaned false) (defer (set cleaned true) 42) cleaned)").unwrap(),
         Value::bool(true)
     );
 }
@@ -144,7 +144,7 @@ fn test_defer_runs_cleanup() {
 #[test]
 fn test_defer_returns_body_value() {
     assert_eq!(
-        eval_source("(begin (var x 0) (defer (set! x 1) 42))").unwrap(),
+        eval_source("(begin (var x 0) (defer (set x 1) 42))").unwrap(),
         Value::int(42)
     );
 }
@@ -154,7 +154,7 @@ fn test_defer_runs_cleanup_on_error() {
     // Cleanup should run even when body errors
     assert_eq!(
         eval_source(
-            "(begin (var cleaned false) (try (defer (set! cleaned true) (/ 1 0)) (catch e cleaned)))"
+            "(begin (var cleaned false) (try (defer (set cleaned true) (/ 1 0)) (catch e cleaned)))"
         )
         .unwrap(),
         Value::bool(true)
@@ -188,7 +188,7 @@ fn test_with_cleanup_runs() {
             r#"(begin
                 (var cleaned false)
                 (defn make () :resource)
-                (defn cleanup (r) (set! cleaned true))
+                (defn cleanup (r) (set cleaned true))
                 (with r (make) cleanup
                   42)
                 cleaned)"#
@@ -251,7 +251,7 @@ fn test_defer_hygiene_no_capture() {
             r#"(begin
                 (var cleaned false)
                 (let ((f 99))
-                  (defer (set! cleaned true) (+ f 1))))"#
+                  (defer (set cleaned true) (+ f 1))))"#
         )
         .unwrap(),
         Value::int(100)

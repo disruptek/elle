@@ -292,7 +292,7 @@ fn test_eval_with_cond() {
 fn test_eval_with_while() {
     // while returns nil
     assert_eq!(
-        eval_source("(eval '(begin (var i 0) (while (< i 3) (set! i (+ i 1))) i))").unwrap(),
+        eval_source("(eval '(begin (var i 0) (while (< i 3) (set i (+ i 1))) i))").unwrap(),
         Value::int(3)
     );
 }

@@ -217,7 +217,7 @@
 (var init-count 0)
 
 (def initialized-module (fn ()
-  (set! init-count (+ init-count 1))
+  (set init-count (+ init-count 1))
   (display (string-append "Module initialized (count: " (number->string init-count) ")\n"))
   (fn (x) (+ x 100))))
 
