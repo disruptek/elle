@@ -918,14 +918,59 @@ fn test_let_destructure_tuple_first() {
 }
 
 #[test]
+fn test_match_tuple_pattern_matches_tuple() {
+    // match [a b] should match tuples (immutable)
+    let result = eval_source("(match [1 2] ([a b] (+ a b)) (_ :no-match))").unwrap();
+    assert_eq!(result.as_int(), Some(3));
+}
+
+#[test]
+fn test_match_tuple_pattern_does_not_match_array() {
+    // match [a b] should NOT match arrays (mutable)
+    let result = eval_source("(match @[1 2] ([a b] (+ a b)) (_ :no-match))").unwrap();
+    assert_eq!(result, Value::keyword("no-match"));
+}
+
+#[test]
+fn test_match_array_pattern_matches_array() {
+    // match @[a b] should match arrays (mutable)
+    let result = eval_source("(match @[1 2] (@[a b] (+ a b)) (_ :no-match))").unwrap();
+    assert_eq!(result.as_int(), Some(3));
+}
+
+#[test]
 fn test_match_array_pattern_does_not_match_tuple() {
-    // match [a b] should NOT match tuples — only arrays
-    let src = format!(
-        "(match {} ([a b] :matched) (_ :fell-through))",
-        make_error_tuple()
-    );
-    let result = eval_source(&src);
-    assert_eq!(result.unwrap(), Value::keyword("fell-through"));
+    // match @[a b] should NOT match tuples (immutable)
+    let result = eval_source("(match [1 2] (@[a b] (+ a b)) (_ :no-match))").unwrap();
+    assert_eq!(result, Value::keyword("no-match"));
+}
+
+#[test]
+fn test_match_struct_pattern_matches_struct() {
+    // match {:a x} should match structs (immutable)
+    let result = eval_source("(match {:a 1} ({:a x} x) (_ :no-match))").unwrap();
+    assert_eq!(result.as_int(), Some(1));
+}
+
+#[test]
+fn test_match_struct_pattern_does_not_match_table() {
+    // match {:a x} should NOT match tables (mutable)
+    let result = eval_source("(match @{:a 1} ({:a x} x) (_ :no-match))").unwrap();
+    assert_eq!(result, Value::keyword("no-match"));
+}
+
+#[test]
+fn test_match_table_pattern_matches_table() {
+    // match @{:a x} should match tables (mutable)
+    let result = eval_source("(match @{:a 1} (@{:a x} x) (_ :no-match))").unwrap();
+    assert_eq!(result.as_int(), Some(1));
+}
+
+#[test]
+fn test_match_table_pattern_does_not_match_struct() {
+    // match @{:a x} should NOT match structs (immutable)
+    let result = eval_source("(match {:a 1} (@{:a x} x) (_ :no-match))").unwrap();
+    assert_eq!(result, Value::keyword("no-match"));
 }
 
 #[test]

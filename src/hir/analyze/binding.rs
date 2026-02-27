@@ -10,7 +10,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let bindings_syntax = items[1].as_list().ok_or_else(|| {
-            if matches!(items[1].kind, SyntaxKind::Array(_)) {
+            if matches!(items[1].kind, SyntaxKind::Tuple(_) | SyntaxKind::Array(_)) {
                 format!(
                     "{}: let bindings must use parentheses ((name value) ...), \
                      not brackets [...]",
@@ -148,7 +148,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let bindings_syntax = items[1].as_list().ok_or_else(|| {
-            if matches!(items[1].kind, SyntaxKind::Array(_)) {
+            if matches!(items[1].kind, SyntaxKind::Tuple(_) | SyntaxKind::Array(_)) {
                 format!(
                     "{}: letrec bindings must use parentheses ((name value) ...), \
                      not brackets [...]",
