@@ -61,6 +61,69 @@ impl VM {
         }
         args.reverse();
 
+        self.call_inner(func, args, bytecode, constants, closure_env, ip)
+    }
+
+    /// Handle the CallArray instruction.
+    ///
+    /// Like Call, but instead of reading arg_count from bytecode and popping
+    /// individual args, pops an args array and uses its elements as arguments.
+    /// Used by splice: the lowerer builds an args array, then CallArray
+    /// calls the function with those args.
+    ///
+    /// Stack: \[func, args_array\] → \[result\]
+    pub(super) fn handle_call_array(
+        &mut self,
+        bytecode: &Rc<Vec<u8>>,
+        constants: &Rc<Vec<Value>>,
+        closure_env: &Rc<Vec<Value>>,
+        ip: &mut usize,
+    ) -> Option<SignalBits> {
+        let args_val = self
+            .fiber
+            .stack
+            .pop()
+            .expect("VM bug: Stack underflow on CallArray");
+        let func = self
+            .fiber
+            .stack
+            .pop()
+            .expect("VM bug: Stack underflow on CallArray");
+
+        // Extract args from the array
+        let args: Vec<Value> = if let Some(arr) = args_val.as_array() {
+            arr.borrow().to_vec()
+        } else if let Some(tup) = args_val.as_tuple() {
+            tup.to_vec()
+        } else {
+            set_error(
+                &mut self.fiber,
+                "type-error",
+                format!(
+                    "splice: expected array or tuple for args, got {}",
+                    args_val.type_name()
+                ),
+            );
+            self.fiber.stack.push(Value::NIL);
+            return None;
+        };
+
+        self.call_inner(func, args, bytecode, constants, closure_env, ip)
+    }
+
+    /// Shared Call/CallArray logic after argument extraction.
+    ///
+    /// Dispatches native functions, executes closures with environment setup,
+    /// handles yield-through-calls and JIT compilation.
+    fn call_inner(
+        &mut self,
+        func: Value,
+        args: Vec<Value>,
+        bytecode: &Rc<Vec<u8>>,
+        constants: &Rc<Vec<Value>>,
+        closure_env: &Rc<Vec<Value>>,
+        ip: &mut usize,
+    ) -> Option<SignalBits> {
         if let Some(f) = func.as_native_fn() {
             let (bits, value) = f(args.as_slice());
             return self.handle_primitive_signal(bits, value, bytecode, constants, closure_env, ip);
@@ -181,6 +244,57 @@ impl VM {
         }
         args.reverse();
 
+        self.tail_call_inner(func, args)
+    }
+
+    /// Handle the TailCallArray instruction.
+    ///
+    /// Like TailCall, but pops an args array instead of individual args.
+    /// Stack: \[func, args_array\] → (sets up pending tail call)
+    pub(super) fn handle_tail_call_array(
+        &mut self,
+        ip: &mut usize,
+        bytecode: &[u8],
+    ) -> Option<SignalBits> {
+        // Suppress unused warnings — these params match the dispatch signature
+        let _ = (ip, bytecode);
+
+        let args_val = self
+            .fiber
+            .stack
+            .pop()
+            .expect("VM bug: Stack underflow on TailCallArray");
+        let func = self
+            .fiber
+            .stack
+            .pop()
+            .expect("VM bug: Stack underflow on TailCallArray");
+
+        // Extract args from the array
+        let args: Vec<Value> = if let Some(arr) = args_val.as_array() {
+            arr.borrow().to_vec()
+        } else if let Some(tup) = args_val.as_tuple() {
+            tup.to_vec()
+        } else {
+            set_error(
+                &mut self.fiber,
+                "type-error",
+                format!(
+                    "splice: expected array or tuple for args, got {}",
+                    args_val.type_name()
+                ),
+            );
+            return Some(SIG_ERROR);
+        };
+
+        self.tail_call_inner(func, args)
+    }
+
+    /// Shared TailCall/TailCallArray logic after argument extraction.
+    ///
+    /// Dispatches native functions via tail signal handler, sets up pending
+    /// tail call for closures with environment building.
+    fn tail_call_inner(&mut self, func: Value, args: Vec<Value>) -> Option<SignalBits> {
         if let Some(f) = func.as_native_fn() {
             let (bits, value) = f(&args);
             return Some(self.handle_primitive_signal_tail(bits, value));
@@ -582,245 +696,6 @@ impl VM {
     }
 
     /// Collect values into an Elle list (cons chain terminated by EMPTY_LIST).
-    /// Handle the CallArray instruction.
-    ///
-    /// Like Call, but instead of reading arg_count from bytecode and popping
-    /// individual args, pops an args array and uses its elements as arguments.
-    /// Used by splice: the lowerer builds an args array, then CallArray
-    /// calls the function with those args.
-    ///
-    /// Stack: \[func, args_array\] → \[result\]
-    pub(super) fn handle_call_array(
-        &mut self,
-        bytecode: &Rc<Vec<u8>>,
-        constants: &Rc<Vec<Value>>,
-        closure_env: &Rc<Vec<Value>>,
-        ip: &mut usize,
-    ) -> Option<SignalBits> {
-        let args_val = self
-            .fiber
-            .stack
-            .pop()
-            .expect("VM bug: Stack underflow on CallArray");
-        let func = self
-            .fiber
-            .stack
-            .pop()
-            .expect("VM bug: Stack underflow on CallArray");
-
-        // Extract args from the array
-        let args: Vec<Value> = if let Some(arr) = args_val.as_array() {
-            arr.borrow().to_vec()
-        } else if let Some(tup) = args_val.as_tuple() {
-            tup.to_vec()
-        } else {
-            set_error(
-                &mut self.fiber,
-                "type-error",
-                format!(
-                    "splice: expected array or tuple for args, got {}",
-                    args_val.type_name()
-                ),
-            );
-            self.fiber.stack.push(Value::NIL);
-            return None;
-        };
-
-        if let Some(f) = func.as_native_fn() {
-            let (bits, value) = f(args.as_slice());
-            return self.handle_primitive_signal(bits, value, bytecode, constants, closure_env, ip);
-        }
-
-        if let Some(closure) = func.as_closure() {
-            self.fiber.call_depth += 1;
-            if self.fiber.call_depth > 1000 {
-                set_error(&mut self.fiber, "error", "Stack overflow");
-                return Some(SIG_ERROR);
-            }
-
-            // Validate argument count
-            if !self.check_arity(&closure.arity, args.len()) {
-                self.fiber.call_depth -= 1;
-                self.fiber.stack.push(Value::NIL);
-                return None;
-            }
-
-            // JIT — only for non-suspending closures
-            if !closure.effect.may_suspend() {
-                if let Some(bits) = self.try_jit_call(closure, &args, func) {
-                    self.fiber.call_depth -= 1;
-                    return bits;
-                }
-            }
-
-            let new_env_rc = self.build_closure_env(closure, &args);
-
-            let (bits, _ip) = self.execute_bytecode_saving_stack(
-                &closure.bytecode,
-                &closure.constants,
-                &new_env_rc,
-            );
-
-            self.fiber.call_depth -= 1;
-
-            match bits {
-                SIG_OK => {
-                    let (_, value) = self.fiber.signal.take().unwrap();
-                    self.fiber.stack.push(value);
-                }
-                SIG_YIELD => {
-                    if let Some(mut frames) = self.fiber.suspended.take() {
-                        let (_, value) = self.fiber.signal.take().unwrap();
-                        let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
-                        let caller_frame = SuspendedFrame {
-                            bytecode: bytecode.clone(),
-                            constants: constants.clone(),
-                            env: closure_env.clone(),
-                            ip: *ip,
-                            stack: caller_stack,
-                        };
-                        frames.push(caller_frame);
-                        self.fiber.signal = Some((SIG_YIELD, value));
-                        self.fiber.suspended = Some(frames);
-                    }
-                    return Some(SIG_YIELD);
-                }
-                _ => {
-                    return Some(bits);
-                }
-            }
-            return None;
-        }
-
-        set_error(
-            &mut self.fiber,
-            "type-error",
-            format!("Cannot call {:?}", func),
-        );
-        self.fiber.stack.push(Value::NIL);
-        None
-    }
-
-    /// Handle the TailCallArray instruction.
-    ///
-    /// Like TailCall, but pops an args array instead of individual args.
-    /// Stack: \[func, args_array\] → (sets up pending tail call)
-    pub(super) fn handle_tail_call_array(
-        &mut self,
-        ip: &mut usize,
-        bytecode: &[u8],
-    ) -> Option<SignalBits> {
-        // Suppress unused warnings — these params match the dispatch signature
-        let _ = (ip, bytecode);
-
-        let args_val = self
-            .fiber
-            .stack
-            .pop()
-            .expect("VM bug: Stack underflow on TailCallArray");
-        let func = self
-            .fiber
-            .stack
-            .pop()
-            .expect("VM bug: Stack underflow on TailCallArray");
-
-        // Extract args from the array
-        let args: Vec<Value> = if let Some(arr) = args_val.as_array() {
-            arr.borrow().to_vec()
-        } else if let Some(tup) = args_val.as_tuple() {
-            tup.to_vec()
-        } else {
-            set_error(
-                &mut self.fiber,
-                "type-error",
-                format!(
-                    "splice: expected array or tuple for args, got {}",
-                    args_val.type_name()
-                ),
-            );
-            return Some(SIG_ERROR);
-        };
-
-        if let Some(f) = func.as_native_fn() {
-            let (bits, value) = f(&args);
-            return Some(self.handle_primitive_signal_tail(bits, value));
-        }
-
-        if let Some(closure) = func.as_closure() {
-            if !self.check_arity(&closure.arity, args.len()) {
-                return Some(SIG_ERROR);
-            }
-
-            // Build environment using cached vector
-            self.tail_call_env_cache.clear();
-            let needed = closure.env_capacity();
-            if self.tail_call_env_cache.capacity() < needed {
-                self.tail_call_env_cache
-                    .reserve(needed - self.tail_call_env_cache.len());
-            }
-            self.tail_call_env_cache
-                .extend((*closure.env).iter().cloned());
-
-            // Add parameters, handling variadic rest collection
-            match closure.arity {
-                crate::value::Arity::AtLeast(n) => {
-                    for (i, arg) in args[..n].iter().enumerate() {
-                        if i < 64 && (closure.cell_params_mask & (1 << i)) != 0 {
-                            self.tail_call_env_cache.push(Value::local_cell(*arg));
-                        } else {
-                            self.tail_call_env_cache.push(*arg);
-                        }
-                    }
-                    let rest = Self::args_to_list(&args[n..]);
-                    let rest_idx = n;
-                    if rest_idx < 64 && (closure.cell_params_mask & (1 << rest_idx)) != 0 {
-                        self.tail_call_env_cache.push(Value::local_cell(rest));
-                    } else {
-                        self.tail_call_env_cache.push(rest);
-                    }
-                }
-                _ => {
-                    for (i, arg) in args.iter().enumerate() {
-                        if i < 64 && (closure.cell_params_mask & (1 << i)) != 0 {
-                            self.tail_call_env_cache.push(Value::local_cell(*arg));
-                        } else {
-                            self.tail_call_env_cache.push(*arg);
-                        }
-                    }
-                }
-            }
-
-            // Calculate and add locally-defined variables
-            let num_param_slots = match closure.arity {
-                crate::value::Arity::Exact(n) => n,
-                crate::value::Arity::AtLeast(n) => n + 1,
-                crate::value::Arity::Range(min, _) => min,
-            };
-            let num_locally_defined = closure.num_locals.saturating_sub(num_param_slots);
-            for _ in 0..num_locally_defined {
-                self.tail_call_env_cache.push(Value::local_cell(Value::NIL));
-            }
-
-            let new_env_rc = Rc::new(self.tail_call_env_cache.clone());
-
-            self.pending_tail_call = Some((
-                closure.bytecode.clone(),
-                closure.constants.clone(),
-                new_env_rc,
-            ));
-
-            self.fiber.signal = Some((SIG_OK, Value::NIL));
-            return Some(SIG_OK);
-        }
-
-        set_error(
-            &mut self.fiber,
-            "type-error",
-            format!("Cannot call {:?}", func),
-        );
-        Some(SIG_ERROR)
-    }
-
     fn args_to_list(args: &[Value]) -> Value {
         let mut list = Value::EMPTY_LIST;
         for arg in args.iter().rev() {

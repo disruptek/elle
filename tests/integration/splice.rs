@@ -207,3 +207,71 @@ fn test_hash_is_comment() {
     let result = eval_source("(+ 1 2) # this is a comment");
     assert_eq!(result.unwrap(), Value::int(3));
 }
+
+// ── Yield through splice ───────────────────────────────────────────
+
+#[test]
+fn test_yield_through_splice() {
+    // A function that yields, called with spliced args via CallArray.
+    // Verify the yield propagates correctly and resume returns the right value.
+    let result = eval_source(
+        r#"(begin
+             (defn yielding-fn (a b c)
+               (yield (+ a b c))
+               (* a b c))
+             (var co (make-coroutine (fn () (yielding-fn ;@[2 3 4]))))
+             (list
+               (coro/resume co)
+               (coro/resume co)))"#,
+    );
+    assert!(result.is_ok(), "yield through splice should work");
+    // First resume yields (+ 2 3 4) = 9
+    // Second resume returns (* 2 3 4) = 24
+    if let Some(cons) = result.unwrap().as_cons() {
+        assert_eq!(cons.first, Value::int(9), "First resume should yield 9");
+        if let Some(cons2) = cons.rest.as_cons() {
+            assert_eq!(
+                cons2.first,
+                Value::int(24),
+                "Second resume should return 24"
+            );
+        }
+    }
+}
+
+// ── Splice with list ──────────────────────────────────────────────
+
+#[test]
+fn test_splice_with_list() {
+    // Splicing a cons list (not array/tuple) should error at runtime.
+    // Lists are not indexed types.
+    let result = eval_source(
+        r#"(begin
+             (def xs (list 1 2 3))
+             (+ ;xs))"#,
+    );
+    assert!(result.is_err(), "splicing a list should error");
+}
+
+// ── Nested splice ──────────────────────────────────────────────────
+
+#[test]
+fn test_nested_splice() {
+    // ;;@[1 2] is splice-of-splice. The inner splice in a non-call context
+    // should error at compile time.
+    let result = eval_source(";;@[1 2]");
+    assert!(result.is_err(), "nested splice should error");
+}
+
+// ── Splice in let binding ──────────────────────────────────────────
+
+#[test]
+fn test_splice_in_let_binding() {
+    // Splice in a let binding pattern position should be rejected.
+    // (let ((;@[a b] @[1 2])) a) should error at compile time.
+    let result = eval_source("(let ((;@[a b] @[1 2])) a)");
+    assert!(
+        result.is_err(),
+        "splice in let binding pattern should error"
+    );
+}
