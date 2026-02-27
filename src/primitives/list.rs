@@ -285,6 +285,10 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             }
         };
         vec.borrow().is_empty()
+    } else if let Some(b) = args[0].as_bytes() {
+        b.is_empty()
+    } else if let Some(blob_ref) = args[0].as_blob() {
+        blob_ref.borrow().is_empty()
     } else if args[0].is_tuple() {
         let elems = match args[0].as_tuple() {
             Some(e) => e,

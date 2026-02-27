@@ -282,3 +282,52 @@ fn test_blob_to_buffer() {
     let result = eval_source("(buffer->string (blob->buffer (blob 104 105)))").unwrap();
     assert_eq!(result.as_string().unwrap(), "hi");
 }
+
+#[test]
+fn test_each_over_bytes() {
+    let result = eval_source(
+        r#"
+        (let ((sum 0))
+          (each b (bytes 1 2 3)
+            (set sum (+ sum b)))
+          sum)
+    "#,
+    )
+    .unwrap();
+    assert_eq!(result.as_int().unwrap(), 6);
+}
+
+#[test]
+fn test_each_over_blob() {
+    let result = eval_source(
+        r#"
+        (let ((sum 0))
+          (each b (blob 10 20 30)
+            (set sum (+ sum b)))
+          sum)
+    "#,
+    )
+    .unwrap();
+    assert_eq!(result.as_int().unwrap(), 60);
+}
+
+#[test]
+fn test_map_over_tuple() {
+    let result = eval_source("(map (fn (x) (+ x 1)) [1 2 3])").unwrap();
+    // map returns a list
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0].as_int().unwrap(), 2);
+    assert_eq!(vec[1].as_int().unwrap(), 3);
+    assert_eq!(vec[2].as_int().unwrap(), 4);
+}
+
+#[test]
+fn test_map_over_bytes() {
+    let result = eval_source("(map (fn (b) (* b 2)) (bytes 1 2 3))").unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec[0].as_int().unwrap(), 2);
+    assert_eq!(vec[1].as_int().unwrap(), 4);
+    assert_eq!(vec[2].as_int().unwrap(), 6);
+}
