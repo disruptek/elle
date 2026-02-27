@@ -227,7 +227,7 @@ impl SyntaxReader {
             match self.current() {
                 None => {
                     return Err(format!(
-                        "{}: unterminated array (missing closing bracket)",
+                        "{}: unterminated tuple (missing closing bracket)",
                         start_loc.position()
                     ));
                 }
@@ -235,7 +235,7 @@ impl SyntaxReader {
                     let end_loc = self.current_location();
                     self.advance();
                     let span = self.merge_spans(start_loc, &end_loc, &elements);
-                    return Ok(Syntax::new(SyntaxKind::Array(elements), span));
+                    return Ok(Syntax::new(SyntaxKind::Tuple(elements), span));
                 }
                 _ => elements.push(self.read()?),
             }
@@ -259,7 +259,7 @@ impl SyntaxReader {
                     self.advance();
 
                     let span = self.merge_spans(start_loc, &end_loc, &elements);
-                    return Ok(Syntax::new(SyntaxKind::Table(elements), span));
+                    return Ok(Syntax::new(SyntaxKind::Struct(elements), span));
                 }
                 _ => elements.push(self.read()?),
             }
@@ -271,7 +271,7 @@ impl SyntaxReader {
 
         match self.current() {
             Some(OwnedToken::LeftBracket) => {
-                // @[...] is sugar for (list ...)
+                // @[...] produces an array literal
                 self.advance(); // skip [
                 let mut elements = Vec::new();
 
@@ -279,7 +279,7 @@ impl SyntaxReader {
                     match self.current() {
                         None => {
                             return Err(format!(
-                                "{}: unterminated list literal",
+                                "{}: unterminated array literal",
                                 start_loc.position()
                             ));
                         }
@@ -287,22 +287,15 @@ impl SyntaxReader {
                             let end_loc = self.current_location();
                             self.advance();
 
-                            // Prepend 'list' symbol
-                            let list_sym = Syntax::new(
-                                SyntaxKind::Symbol("list".to_string()),
-                                self.source_loc_to_span(start_loc, start_loc.col + 1),
-                            );
-                            elements.insert(0, list_sym);
-
                             let span = self.merge_spans(start_loc, &end_loc, &elements);
-                            return Ok(Syntax::new(SyntaxKind::List(elements), span));
+                            return Ok(Syntax::new(SyntaxKind::Array(elements), span));
                         }
                         _ => elements.push(self.read()?),
                     }
                 }
             }
             Some(OwnedToken::LeftBrace) => {
-                // @{...} is sugar for (table ...)
+                // @{...} produces a table literal
                 self.advance(); // skip {
                 let mut elements = Vec::new();
 
@@ -318,15 +311,8 @@ impl SyntaxReader {
                             let end_loc = self.current_location();
                             self.advance();
 
-                            // Prepend 'table' symbol
-                            let table_sym = Syntax::new(
-                                SyntaxKind::Symbol("table".to_string()),
-                                self.source_loc_to_span(start_loc, start_loc.col + 1),
-                            );
-                            elements.insert(0, table_sym);
-
                             let span = self.merge_spans(start_loc, &end_loc, &elements);
-                            return Ok(Syntax::new(SyntaxKind::List(elements), span));
+                            return Ok(Syntax::new(SyntaxKind::Table(elements), span));
                         }
                         _ => elements.push(self.read()?),
                     }
@@ -701,7 +687,7 @@ mod tests {
     fn test_unclosed_bracket() {
         let result = lex_and_parse("[1 2 3");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("unterminated array"));
+        assert!(result.unwrap_err().contains("unterminated tuple"));
     }
 
     #[test]
@@ -790,7 +776,7 @@ mod tests {
         assert!(matches!(result[0].kind, SyntaxKind::Int(42)));
         assert!(matches!(result[1].kind, SyntaxKind::Symbol(_)));
         assert!(matches!(result[2].kind, SyntaxKind::List(_)));
-        assert!(matches!(result[3].kind, SyntaxKind::Array(_)));
+        assert!(matches!(result[3].kind, SyntaxKind::Tuple(_)));
     }
 
     #[test]
