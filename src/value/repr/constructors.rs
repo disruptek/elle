@@ -1,8 +1,8 @@
 //! Value constructors for immediate and heap-allocated types.
 
 use super::{
-    Value, INT_MAX, INT_MIN, PAYLOAD_MASK, QNAN, QNAN_MASK, TAG_CPOINTER, TAG_INT, TAG_KEYWORD,
-    TAG_NAN, TAG_POINTER, TAG_SYMBOL,
+    Value, INT_MAX, INT_MIN, PAYLOAD_MASK, PTRVAL_CPOINTER_BIT, PTRVAL_PAYLOAD_MASK, QNAN,
+    QNAN_MASK, TAG_INT, TAG_NAN, TAG_POINTER, TAG_PTRVAL, TAG_TRUTHY, TRUTHY_SYMBOL_BIT,
 };
 
 impl Value {
@@ -49,7 +49,7 @@ impl Value {
     /// Create a symbol value from a SymbolId.
     #[inline]
     pub fn symbol(id: u32) -> Self {
-        Value(TAG_SYMBOL | (id as u64))
+        Value(TAG_TRUTHY | TRUTHY_SYMBOL_BIT | (id as u64))
     }
 
     /// Create a keyword value from a name string.
@@ -59,11 +59,11 @@ impl Value {
         use crate::value::intern::intern_string;
         let ptr = intern_string(name) as *const ();
         let addr = ptr as u64;
-        debug_assert!(
-            addr & !PAYLOAD_MASK == 0,
-            "Keyword pointer exceeds 48-bit address space"
+        assert!(
+            addr & !PTRVAL_PAYLOAD_MASK == 0,
+            "Keyword pointer exceeds 47-bit address space"
         );
-        Value(TAG_KEYWORD | addr)
+        Value(TAG_PTRVAL | addr)
     }
 
     /// Create a boolean value.
@@ -86,11 +86,11 @@ impl Value {
             return Self::NIL;
         }
         let addr_u64 = addr as u64;
-        debug_assert!(
-            addr_u64 & !PAYLOAD_MASK == 0,
-            "C pointer exceeds 48-bit address space"
+        assert!(
+            addr_u64 & !PTRVAL_PAYLOAD_MASK == 0,
+            "C pointer exceeds 47-bit address space"
         );
-        Value(TAG_CPOINTER | (addr_u64 & PAYLOAD_MASK))
+        Value(TAG_PTRVAL | PTRVAL_CPOINTER_BIT | (addr_u64 & PTRVAL_PAYLOAD_MASK))
     }
 
     /// Create an empty list value.

@@ -1,6 +1,9 @@
 //! Value accessors for extracting typed data from Values.
 
-use super::{Value, PAYLOAD_MASK, TAG_FALSE, TAG_NAN, TAG_NAN_MASK, TAG_TRUE};
+use super::{
+    Value, PAYLOAD_MASK, PTRVAL_PAYLOAD_MASK, SYMBOL_ID_MASK, TAG_FALSE, TAG_NAN, TAG_NAN_MASK,
+    TAG_TRUE,
+};
 
 impl Value {
     // =========================================================================
@@ -66,7 +69,7 @@ impl Value {
     #[inline]
     pub fn as_symbol(&self) -> Option<u32> {
         if self.is_symbol() {
-            Some((self.0 & PAYLOAD_MASK) as u32)
+            Some((self.0 & SYMBOL_ID_MASK) as u32)
         } else {
             None
         }
@@ -76,7 +79,7 @@ impl Value {
     #[inline]
     pub fn as_pointer(&self) -> Option<usize> {
         if self.is_pointer() {
-            Some((self.0 & PAYLOAD_MASK) as usize)
+            Some((self.0 & PTRVAL_PAYLOAD_MASK) as usize)
         } else {
             None
         }
@@ -86,7 +89,7 @@ impl Value {
     #[inline]
     pub fn as_keyword_name(&self) -> Option<&str> {
         if self.is_keyword() {
-            let ptr = (self.0 & PAYLOAD_MASK) as *const crate::value::heap::HeapObject;
+            let ptr = (self.0 & PTRVAL_PAYLOAD_MASK) as *const crate::value::heap::HeapObject;
             match unsafe { &*ptr } {
                 crate::value::heap::HeapObject::String(s) => Some(s),
                 _ => None,
