@@ -119,10 +119,22 @@ fn test_bytes_get() {
 }
 
 #[test]
+fn test_bytes_get_oob() {
+    let result = eval_source("(get (bytes 72 101 108) 10)");
+    assert!(result.is_err(), "get on bytes with OOB index should error");
+}
+
+#[test]
 fn test_blob_get() {
     let result = eval_source("(get (blob 72 101 108) 1)").unwrap();
     assert!(result.is_int());
     assert_eq!(result.as_int().unwrap(), 101);
+}
+
+#[test]
+fn test_blob_get_oob() {
+    let result = eval_source("(get (blob 72 101 108) 10)");
+    assert!(result.is_err(), "get on blob with OOB index should error");
 }
 
 #[test]

@@ -324,7 +324,13 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
             }
         };
         if index < 0 || index as usize >= b.len() {
-            return (SIG_OK, default);
+            return (
+                SIG_ERROR,
+                error_val(
+                    "error",
+                    format!("get: index {} out of bounds (length {})", index, b.len()),
+                ),
+            );
         }
         return (SIG_OK, Value::int(b[index as usize] as i64));
     }
@@ -348,7 +354,17 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
         };
         let borrowed = blob_ref.borrow();
         if index < 0 || index as usize >= borrowed.len() {
-            return (SIG_OK, default);
+            return (
+                SIG_ERROR,
+                error_val(
+                    "error",
+                    format!(
+                        "get: index {} out of bounds (length {})",
+                        index,
+                        borrowed.len()
+                    ),
+                ),
+            );
         }
         return (SIG_OK, Value::int(borrowed[index as usize] as i64));
     }
