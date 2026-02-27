@@ -483,14 +483,34 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_empty_array() {
+    fn test_parse_empty_tuple() {
         let result = lex_and_parse("[]").unwrap();
+        assert!(matches!(result.kind, SyntaxKind::Tuple(ref items) if items.is_empty()));
+    }
+
+    #[test]
+    fn test_parse_simple_tuple() {
+        let result = lex_and_parse("[1 2 3]").unwrap();
+        match result.kind {
+            SyntaxKind::Tuple(ref items) => {
+                assert_eq!(items.len(), 3);
+                assert!(matches!(items[0].kind, SyntaxKind::Int(1)));
+                assert!(matches!(items[1].kind, SyntaxKind::Int(2)));
+                assert!(matches!(items[2].kind, SyntaxKind::Int(3)));
+            }
+            _ => panic!("Expected tuple"),
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_array() {
+        let result = lex_and_parse("@[]").unwrap();
         assert!(matches!(result.kind, SyntaxKind::Array(ref items) if items.is_empty()));
     }
 
     #[test]
     fn test_parse_simple_array() {
-        let result = lex_and_parse("[1 2 3]").unwrap();
+        let result = lex_and_parse("@[1 2 3]").unwrap();
         match result.kind {
             SyntaxKind::Array(ref items) => {
                 assert_eq!(items.len(), 3);
@@ -525,8 +545,22 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_list_with_array() {
+    fn test_parse_list_with_tuple() {
         let result = lex_and_parse("(1 [2 3] 4)").unwrap();
+        match result.kind {
+            SyntaxKind::List(ref items) => {
+                assert_eq!(items.len(), 3);
+                assert!(matches!(items[0].kind, SyntaxKind::Int(1)));
+                assert!(matches!(items[1].kind, SyntaxKind::Tuple(_)));
+                assert!(matches!(items[2].kind, SyntaxKind::Int(4)));
+            }
+            _ => panic!("Expected list"),
+        }
+    }
+
+    #[test]
+    fn test_parse_list_with_array() {
+        let result = lex_and_parse("(1 @[2 3] 4)").unwrap();
         match result.kind {
             SyntaxKind::List(ref items) => {
                 assert_eq!(items.len(), 3);
@@ -594,19 +628,49 @@ mod tests {
         }
     }
 
-    // Sugar forms
+    // Struct/Table forms
     #[test]
-    fn test_parse_list_sugar() {
+    fn test_parse_struct() {
+        let result = lex_and_parse("{:a 1 :b 2}").unwrap();
+        match result.kind {
+            SyntaxKind::Struct(ref items) => {
+                assert_eq!(items.len(), 4); // 2 keyword-value pairs
+                assert!(matches!(items[0].kind, SyntaxKind::Keyword(ref k) if k == "a"));
+                assert!(matches!(items[1].kind, SyntaxKind::Int(1)));
+                assert!(matches!(items[2].kind, SyntaxKind::Keyword(ref k) if k == "b"));
+                assert!(matches!(items[3].kind, SyntaxKind::Int(2)));
+            }
+            _ => panic!("Expected struct"),
+        }
+    }
+
+    #[test]
+    fn test_parse_table() {
+        let result = lex_and_parse("@{:a 1 :b 2}").unwrap();
+        match result.kind {
+            SyntaxKind::Table(ref items) => {
+                assert_eq!(items.len(), 4); // 2 keyword-value pairs
+                assert!(matches!(items[0].kind, SyntaxKind::Keyword(ref k) if k == "a"));
+                assert!(matches!(items[1].kind, SyntaxKind::Int(1)));
+                assert!(matches!(items[2].kind, SyntaxKind::Keyword(ref k) if k == "b"));
+                assert!(matches!(items[3].kind, SyntaxKind::Int(2)));
+            }
+            _ => panic!("Expected table"),
+        }
+    }
+
+    // Old sugar forms tests (for backwards compatibility check)
+    #[test]
+    fn test_parse_array_sugar() {
         let result = lex_and_parse("@[1 2 3]").unwrap();
         match result.kind {
-            SyntaxKind::List(ref items) => {
-                assert_eq!(items.len(), 4); // list symbol + 3 elements
-                assert!(matches!(items[0].kind, SyntaxKind::Symbol(ref s) if s == "list"));
-                assert!(matches!(items[1].kind, SyntaxKind::Int(1)));
-                assert!(matches!(items[2].kind, SyntaxKind::Int(2)));
-                assert!(matches!(items[3].kind, SyntaxKind::Int(3)));
+            SyntaxKind::Array(ref items) => {
+                assert_eq!(items.len(), 3);
+                assert!(matches!(items[0].kind, SyntaxKind::Int(1)));
+                assert!(matches!(items[1].kind, SyntaxKind::Int(2)));
+                assert!(matches!(items[2].kind, SyntaxKind::Int(3)));
             }
-            _ => panic!("Expected list"),
+            _ => panic!("Expected array"),
         }
     }
 
@@ -614,23 +678,14 @@ mod tests {
     fn test_parse_table_sugar() {
         let result = lex_and_parse("@{:a 1 :b 2}").unwrap();
         match result.kind {
-            SyntaxKind::List(ref items) => {
-                assert_eq!(items.len(), 5); // table symbol + 4 elements
-                assert!(matches!(items[0].kind, SyntaxKind::Symbol(ref s) if s == "table"));
-            }
-            _ => panic!("Expected list"),
-        }
-    }
-
-    #[test]
-    fn test_parse_struct() {
-        let result = lex_and_parse("{:a 1 :b 2}").unwrap();
-        match result.kind {
             SyntaxKind::Table(ref items) => {
-                assert_eq!(items.len(), 4); // :a 1 :b 2
-                assert!(matches!(items[0].kind, SyntaxKind::Keyword(ref s) if s == "a"));
+                assert_eq!(items.len(), 4); // 2 keyword-value pairs
+                assert!(matches!(items[0].kind, SyntaxKind::Keyword(ref k) if k == "a"));
+                assert!(matches!(items[1].kind, SyntaxKind::Int(1)));
+                assert!(matches!(items[2].kind, SyntaxKind::Keyword(ref k) if k == "b"));
+                assert!(matches!(items[3].kind, SyntaxKind::Int(2)));
             }
-            _ => panic!("Expected Table, got {:?}", result.kind),
+            _ => panic!("Expected table"),
         }
     }
 
