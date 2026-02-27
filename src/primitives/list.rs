@@ -237,7 +237,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             SIG_ERROR,
             error_val(
                 "type-error",
-                "empty?: expected collection type (list, string, array, table, or struct), got nil"
+                "empty?: expected collection type (list, string, array, table, struct, or tuple), got nil"
                     .to_string(),
             ),
         );
@@ -252,7 +252,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
                 error_val(
                     "type-error",
                     format!(
-                        "empty?: expected collection type (list, string, array, table, or struct), got {}",
+                        "empty?: expected collection type (list, string, array, table, struct, or tuple), got {}",
                         args[0].type_name()
                     ),
                 ),
@@ -275,6 +275,17 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             }
         };
         vec.borrow().is_empty()
+    } else if args[0].is_tuple() {
+        let elems = match args[0].as_tuple() {
+            Some(e) => e,
+            None => {
+                return (
+                    SIG_ERROR,
+                    error_val("error", "empty?: failed to get tuple".to_string()),
+                )
+            }
+        };
+        elems.is_empty()
     } else if args[0].is_table() {
         let table = match args[0].as_table() {
             Some(t) => t,
@@ -303,7 +314,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
             error_val(
                 "type-error",
                 format!(
-                "empty?: expected collection type (list, string, array, table, or struct), got {}",
+                "empty?: expected collection type (list, string, array, table, struct, or tuple), got {}",
                 args[0].type_name()
             ),
             ),
