@@ -36,7 +36,7 @@
 
 ; Keywords in arrays
 (var options [1 :option-a 2 :option-b 3])
-(assert-eq (array-ref options 1) :option-a "second element of options array is :option-a")
+(assert-eq (get options 1) :option-a "second element of options array is :option-a")
 
 ; Building configuration with keywords
 (var settings (list :debug true :host "localhost" :port 8080))
@@ -82,7 +82,7 @@
 
 ; Symbols in arrays
 (var ops (array 'add 'subtract 'multiply))
-(assert-eq (array-ref ops 0) 'add "first element of ops array is 'add")
+(assert-eq (get ops 0) 'add "first element of ops array is 'add")
 
 ; Symbols are distinct from keywords
 (assert-false (eq? 'name :name) "symbol 'name is not eq? to keyword :name")
@@ -133,7 +133,7 @@
 
 ; Numbers in arrays
 (var values [10 20 30 40 50])
-(assert-eq (array-ref values 0) 10 "first element of values array is 10")
+(assert-eq (get values 0) 10 "first element of values array is 10")
 
 ; Arithmetic with numbers
 (assert-eq (+ 10 5) 15 "arithmetic: 10 + 5 = 15")
@@ -180,7 +180,7 @@
 
 ; Strings in arrays
 (var messages ["hello" "world" "!"])
-(assert-eq (array-ref messages 0) "hello" "first element of messages array is \"hello\"")
+(assert-eq (get messages 0) "hello" "first element of messages array is \"hello\"")
 
 ; String concatenation
 (var greeting (append "Hello, " "World!"))
@@ -221,7 +221,7 @@
 
 ; Booleans in arrays
 (var states [true false true false])
-(assert-eq (array-ref states 0) true "first element of states array is #t")
+(assert-eq (get states 0) true "first element of states array is #t")
 
 ; Boolean predicates
 (assert-true (boolean? true) "boolean? returns true for #t")
@@ -255,7 +255,7 @@
 
 ; Nil in arrays
 (var optional [10 nil 30])
-(assert-eq (array-ref optional 1) nil "second element of optional array is nil")
+(assert-eq (get optional 1) nil "second element of optional array is nil")
 
 ; Nil predicates
 (assert-true (nil? nil) "nil? returns true for nil")
@@ -281,9 +281,9 @@
 
 ; Mixed array
 (var mixed-arr (array :id 'user 123 "Alice" true))
-(assert-eq (array-ref mixed-arr 0) :id "first element is keyword")
-(assert-eq (array-ref mixed-arr 1) 'user "second element is symbol")
-(assert-eq (array-ref mixed-arr 2) 123 "third element is number")
+(assert-eq (get mixed-arr 0) :id "first element is keyword")
+(assert-eq (get mixed-arr 1) 'user "second element is symbol")
+(assert-eq (get mixed-arr 2) 123 "third element is number")
 
 (display "✓ Mixed atoms verified\n")
 
