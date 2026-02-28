@@ -167,6 +167,7 @@ impl<'a> Analyzer<'a> {
                 body: Box::new(body),
                 num_locals,
                 inferred_effect,
+                doc: None,
             },
             span,
             Effect::none(),
