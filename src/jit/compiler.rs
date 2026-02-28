@@ -307,7 +307,7 @@ impl JitCompiler {
     pub fn compile(
         mut self,
         lir: &LirFunction,
-        _self_sym: Option<SymbolId>,
+        self_sym: Option<SymbolId>,
     ) -> Result<JitCode, JitError> {
         // JIT can't handle suspension (yield/debug) — only non-suspending functions
         if lir.effect.may_suspend() {
@@ -324,13 +324,20 @@ impl JitCompiler {
             .declare_function(func_name, Linkage::Local, &sig)
             .map_err(|e| JitError::CompilationFailed(e.to_string()))?;
 
+        // Build a one-entry scc_peers map for direct self-calls
+        let scc_peers = self_sym.map(|sym| {
+            let mut map = HashMap::new();
+            map.insert(sym, func_id);
+            map
+        });
+
         // Create function context
         let mut ctx = self.module.make_context();
         ctx.func.signature = sig;
         ctx.func.name = UserFuncName::user(0, func_id.as_u32());
 
         // Translate LIR to Cranelift IR
-        self.translate_function(lir, &mut ctx.func, None)?;
+        self.translate_function(lir, &mut ctx.func, scc_peers.as_ref(), self_sym)?;
 
         // Compile the function
         self.module
@@ -352,7 +359,7 @@ impl JitCompiler {
     pub fn clif_text(
         mut self,
         lir: &LirFunction,
-        _self_sym: Option<SymbolId>,
+        self_sym: Option<SymbolId>,
     ) -> Result<Vec<String>, JitError> {
         if lir.effect.may_suspend() {
             return Err(JitError::NotPure);
@@ -366,11 +373,18 @@ impl JitCompiler {
             .declare_function(func_name, Linkage::Local, &sig)
             .map_err(|e| JitError::CompilationFailed(e.to_string()))?;
 
+        // Build a one-entry scc_peers map for direct self-calls
+        let scc_peers = self_sym.map(|sym| {
+            let mut map = HashMap::new();
+            map.insert(sym, func_id);
+            map
+        });
+
         let mut ctx = self.module.make_context();
         ctx.func.signature = sig;
         ctx.func.name = UserFuncName::user(0, func_id.as_u32());
 
-        self.translate_function(lir, &mut ctx.func, None)?;
+        self.translate_function(lir, &mut ctx.func, scc_peers.as_ref(), self_sym)?;
 
         let text = format!("{}", ctx.func);
         Ok(text.lines().map(String::from).collect())
@@ -420,7 +434,12 @@ impl JitCompiler {
             ctx.func.signature = sig.clone();
             ctx.func.name = UserFuncName::user(0, func_id.as_u32());
 
-            self.translate_function(member.lir, &mut ctx.func, Some(&scc_peers))?;
+            self.translate_function(
+                member.lir,
+                &mut ctx.func,
+                Some(&scc_peers),
+                Some(member.sym),
+            )?;
 
             self.module
                 .define_function(func_id, &mut ctx)
@@ -476,12 +495,16 @@ impl JitCompiler {
         lir: &LirFunction,
         func: &mut Function,
         scc_peers: Option<&HashMap<SymbolId, FuncId>>,
+        self_sym: Option<SymbolId>,
     ) -> Result<(), JitError> {
         let mut builder_ctx = FunctionBuilderContext::new();
         let mut builder = FunctionBuilder::new(func, &mut builder_ctx);
 
         // Create translator context
         let mut translator = FunctionTranslator::new(&mut self.module, &self.helpers, lir);
+
+        // Set self_sym for self-call detection in emit_direct_scc_call
+        translator.self_sym = self_sym;
 
         // Set up SCC peer map for direct calls between mutually recursive functions
         if let Some(peers) = scc_peers {

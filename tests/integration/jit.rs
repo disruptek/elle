@@ -2049,6 +2049,29 @@ fn test_jit_mutual_recursion_three_way() {
 }
 
 #[test]
+fn test_jit_solo_fib_e2e() {
+    // End-to-end test: solo-compiled fib with direct self-calls
+    use elle::pipeline::eval;
+    use elle::primitives::register_primitives;
+    use elle::symbol::SymbolTable;
+    use elle::vm::VM;
+
+    let mut symbols = SymbolTable::new();
+    let mut vm = VM::new();
+    let _effects = register_primitives(&mut vm, &mut symbols);
+
+    let result = eval(
+        r#"(begin
+        (defn fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
+        (fib 20))"#,
+        &mut symbols,
+        &mut vm,
+    );
+    assert!(result.is_ok(), "fib(20) failed: {:?}", result);
+    assert_eq!(result.unwrap().as_int(), Some(6765));
+}
+
+#[test]
 fn test_jit_batch_global_mutation_known_limitation() {
     // Documents a known Phase 1 limitation: after batch JIT compilation,
     // mutating a global (`set!`) does NOT update the direct SCC calls.

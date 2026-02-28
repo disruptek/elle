@@ -50,6 +50,8 @@ pub(crate) struct FunctionTranslator<'a> {
     /// Map from register to the SymbolId it was loaded from (for LoadGlobal).
     /// Used to detect when a Call/TailCall targets an SCC peer.
     pub(crate) global_load_map: HashMap<Reg, SymbolId>,
+    /// SymbolId of the function being compiled (for self-call detection)
+    pub(crate) self_sym: Option<SymbolId>,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -70,6 +72,7 @@ impl<'a> FunctionTranslator<'a> {
             loop_header: None,
             scc_peers: HashMap::new(),
             global_load_map: HashMap::new(),
+            self_sym: None,
         }
     }
 
@@ -370,11 +373,11 @@ impl<'a> FunctionTranslator<'a> {
                     .ok_or_else(|| JitError::InvalidLir("Call without vm pointer".to_string()))?;
 
                 // Check if this is a direct call to an SCC peer
-                if let Some(&peer_func_id) = self
+                let maybe_scc = self
                     .global_load_map
                     .get(func)
-                    .and_then(|sym| self.scc_peers.get(sym))
-                {
+                    .and_then(|&sym| self.scc_peers.get(&sym).map(|&fid| (sym, fid)));
+                if let Some((sym, peer_func_id)) = maybe_scc {
                     // Track call depth (direct SCC calls bypass elle_jit_call)
                     let overflow =
                         self.call_helper_unary(builder, self.helpers.call_depth_enter, vm)?;
@@ -396,7 +399,7 @@ impl<'a> FunctionTranslator<'a> {
                     builder.seal_block(call_block);
 
                     // Direct call to SCC peer — skip elle_jit_call dispatch
-                    let result = self.emit_direct_scc_call(builder, peer_func_id, args, vm)?;
+                    let result = self.emit_direct_scc_call(builder, peer_func_id, sym, args, vm)?;
                     // Decrement call depth
                     self.call_helper_unary(builder, self.helpers.call_depth_exit, vm)?;
                     // Resolve pending tail call if the peer returned TAIL_CALL_SENTINEL
@@ -480,14 +483,14 @@ impl<'a> FunctionTranslator<'a> {
                         builder.switch_to_block(other_call_block);
                         builder.seal_block(other_call_block);
 
-                        if let Some(&peer_func_id) = self
+                        let maybe_scc2 = self
                             .global_load_map
                             .get(func)
-                            .and_then(|sym| self.scc_peers.get(sym))
-                        {
+                            .and_then(|&sym| self.scc_peers.get(&sym).map(|&fid| (sym, fid)));
+                        if let Some((sym2, peer_func_id)) = maybe_scc2 {
                             // Direct call to SCC peer + return
                             let result =
-                                self.emit_direct_scc_call(builder, peer_func_id, args, vm)?;
+                                self.emit_direct_scc_call(builder, peer_func_id, sym2, args, vm)?;
                             builder.ins().return_(&[result]);
                         } else {
                             let result = if args.is_empty() {
@@ -518,12 +521,13 @@ impl<'a> FunctionTranslator<'a> {
 
                 // Fallback: no self-tail-call optimization (arity mismatch or no self_bits)
                 // Check SCC peers before falling back to trampoline
-                if let Some(&peer_func_id) = self
+                let maybe_scc3 = self
                     .global_load_map
                     .get(func)
-                    .and_then(|sym| self.scc_peers.get(sym))
-                {
-                    let result = self.emit_direct_scc_call(builder, peer_func_id, args, vm)?;
+                    .and_then(|&sym| self.scc_peers.get(&sym).map(|&fid| (sym, fid)));
+                if let Some((sym3, peer_func_id)) = maybe_scc3 {
+                    let result =
+                        self.emit_direct_scc_call(builder, peer_func_id, sym3, args, vm)?;
                     builder.ins().return_(&[result]);
                     return Ok(true);
                 }
@@ -859,6 +863,7 @@ impl<'a> FunctionTranslator<'a> {
         &mut self,
         builder: &mut FunctionBuilder,
         peer_func_id: FuncId,
+        target_sym: SymbolId,
         args: &[Reg],
         vm: cranelift_codegen::ir::Value,
     ) -> Result<cranelift_codegen::ir::Value, JitError> {
@@ -884,16 +889,20 @@ impl<'a> FunctionTranslator<'a> {
             (addr, count)
         };
 
-        // Phase 1: null env for capture-free functions
+        // Null env for capture-free functions
         let null_env = builder.ins().iconst(I64, 0);
-        // Use 0 for self_bits — the callee's own self-tail-call detection
-        // won't match against 0, so self-tail-calls within the callee still
-        // go through elle_jit_tail_call. This is safe but suboptimal.
-        let zero_self_bits = builder.ins().iconst(I64, 0);
+        // When calling ourselves, pass our self_bits so the callee can detect
+        // self-tail-calls and jump to loop_header. For other SCC peers, pass 0.
+        let call_self_bits = if self.self_sym == Some(target_sym) {
+            self.self_bits
+                .unwrap_or_else(|| builder.ins().iconst(I64, 0))
+        } else {
+            builder.ins().iconst(I64, 0)
+        };
 
         let call = builder
             .ins()
-            .call(func_ref, &[null_env, args_ptr, nargs, vm, zero_self_bits]);
+            .call(func_ref, &[null_env, args_ptr, nargs, vm, call_self_bits]);
         Ok(builder.inst_results(call)[0])
     }
 

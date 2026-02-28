@@ -178,6 +178,21 @@ Special cases:
   BitNot XORs the payload with `PAYLOAD_MASK` (flips all 48 payload bits),
   re-tags.
 
+## Direct Self-Calls
+
+Solo-compiled functions with a known SymbolId (i.e., bound to a global) get a
+one-entry `scc_peers` map pointing to themselves. This means self-recursive
+calls emit direct Cranelift calls instead of going through `elle_jit_call`.
+
+Benefits:
+- Eliminates hash lookup in `jit_cache` per self-call
+- Eliminates arity checking (known at compile time)
+- Eliminates dispatch overhead (direct call vs. indirect)
+- Passes correct `self_bits` so the callee's self-tail-call optimization works
+
+When `self_sym` is `None` (anonymous closures), behavior is unchanged — calls
+go through `elle_jit_call` as before.
+
 ## Fiber Integration
 
 The effect system ensures fibers and JIT coexist safely:
