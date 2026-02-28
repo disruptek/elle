@@ -29,6 +29,26 @@ pub unsafe extern "C" fn elle_plugin_init(ctx: &mut PluginContext) -> Value {
 }
 
 // ---------------------------------------------------------------------------
+// SVG sanitization
+// ---------------------------------------------------------------------------
+
+/// Fix malformed SVG produced by the mermaid renderer.
+///
+/// The upstream renderer emits `font-family` attributes with unescaped inner
+/// quotes, e.g. `font-family="Inter, -apple-system, "Segoe UI", sans-serif"`.
+/// The inner `"Segoe UI"` breaks XML parsing. We replace the quoted font name
+/// with single quotes, which is valid in both CSS and SVG.
+///
+// NOTE: callers of `mermaid_rs_renderer::render` depend on this sanitization.
+// If you remove it, the SVG output will contain invalid XML.
+fn sanitize_svg(svg: &str) -> String {
+    // The renderer embeds CSS-style quoted font names directly into XML
+    // attributes without escaping. Replace `"FontName"` with `'FontName'`
+    // where they appear inside font-family values.
+    svg.replace(r#""Segoe UI""#, "'Segoe UI'")
+}
+
+// ---------------------------------------------------------------------------
 // Primitives
 // ---------------------------------------------------------------------------
 
@@ -58,7 +78,10 @@ fn prim_mermaid_render(args: &[Value]) -> (SignalBits, Value) {
         }
     };
     match mermaid_rs_renderer::render(&diagram) {
-        Ok(svg) => (SIG_OK, Value::string(&*svg)),
+        Ok(svg) => {
+            let svg = sanitize_svg(&svg);
+            (SIG_OK, Value::string(&*svg))
+        }
         Err(e) => (
             SIG_ERROR,
             error_val("mermaid-error", format!("mermaid/render: {}", e)),
@@ -110,7 +133,7 @@ fn prim_mermaid_render_to_file(args: &[Value]) -> (SignalBits, Value) {
         }
     };
     let svg = match mermaid_rs_renderer::render(&diagram) {
-        Ok(svg) => svg,
+        Ok(svg) => sanitize_svg(&svg),
         Err(e) => {
             return (
                 SIG_ERROR,
