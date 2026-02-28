@@ -705,7 +705,7 @@ impl<'a> FunctionTranslator<'a> {
         builder.ins().iconst(I64, bits as i64)
     }
 
-    /// Call a binary runtime helper
+    /// Call a binary runtime helper with inline integer fast path
     fn call_binary_helper(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -725,7 +725,7 @@ impl<'a> FunctionTranslator<'a> {
             BinOp::Shl => self.helpers.shl,
             BinOp::Shr => self.helpers.shr,
         };
-        self.call_helper_binary(builder, func_id, lhs, rhs)
+        super::fastpath::emit_int_binop_fast_path(self.module, builder, op, lhs, rhs, func_id)
     }
 
     /// Call a unary runtime helper
@@ -743,7 +743,7 @@ impl<'a> FunctionTranslator<'a> {
         self.call_helper_unary(builder, func_id, src)
     }
 
-    /// Call a comparison runtime helper
+    /// Call a comparison runtime helper with inline integer fast path
     fn call_compare_helper(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -759,7 +759,7 @@ impl<'a> FunctionTranslator<'a> {
             CmpOp::Gt => self.helpers.gt,
             CmpOp::Ge => self.helpers.ge,
         };
-        self.call_helper_binary(builder, func_id, lhs, rhs)
+        super::fastpath::emit_int_cmpop_fast_path(self.module, builder, op, lhs, rhs, func_id)
     }
 
     /// Call a binary helper function

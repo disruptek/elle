@@ -34,7 +34,7 @@ fn load_arg(dst: Reg, arg_index: u16) -> SpannedInstr {
 
 fn compile_and_call(lir: &LirFunction, args: &[u64]) -> Result<Value, JitError> {
     let compiler = JitCompiler::new()?;
-    let code = compiler.compile(lir)?;
+    let code = compiler.compile(lir, None)?;
     // self_bits = 0 since we're not testing self-tail-calls in these basic tests
     let result = unsafe {
         code.call(
@@ -683,7 +683,7 @@ fn test_jit_rejects_yielding() {
     func.entry = Label(0);
 
     let compiler = JitCompiler::new().unwrap();
-    let result = compiler.compile(&func);
+    let result = compiler.compile(&func, None);
     assert!(matches!(result, Err(JitError::NotPure)));
 }
 
@@ -710,7 +710,7 @@ fn test_jit_call_compiles() {
     func.entry = Label(0);
 
     let compiler = JitCompiler::new().unwrap();
-    let result = compiler.compile(&func);
+    let result = compiler.compile(&func, None);
     // Call should now compile successfully
     assert!(result.is_ok(), "Call should compile: {:?}", result);
 }
@@ -738,7 +738,7 @@ fn test_jit_rejects_make_closure() {
     func.entry = Label(0);
 
     let compiler = JitCompiler::new().unwrap();
-    let result = compiler.compile(&func);
+    let result = compiler.compile(&func, None);
     assert!(matches!(result, Err(JitError::UnsupportedInstruction(_))));
 }
 
@@ -1372,7 +1372,7 @@ fn test_jit_tail_call_compiles() {
     func.entry = Label(0);
 
     let compiler = JitCompiler::new().unwrap();
-    let result = compiler.compile(&func);
+    let result = compiler.compile(&func, None);
     // TailCall should now compile successfully
     assert!(result.is_ok(), "TailCall should compile: {:?}", result);
 }
@@ -1484,6 +1484,223 @@ fn test_jit_self_tail_call_fibonacci_iterative() {
 }
 
 // =============================================================================
+// Integer Fast Path Tests
+// =============================================================================
+
+#[test]
+fn test_jit_int_add_wrapping() {
+    // Verify INT_MAX + 1 wraps (48-bit integer arithmetic)
+    use elle::value::repr::INT_MAX;
+
+    // fn(x) -> x + 1
+    let mut func = LirFunction::new(Arity::Exact(1));
+    func.num_regs = 3;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::Const {
+            dst: Reg(1),
+            value: LirConst::Int(1),
+        },
+        span(),
+    ));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::BinOp {
+            dst: Reg(2),
+            op: BinOp::Add,
+            lhs: Reg(0),
+            rhs: Reg(1),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(2)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let result = compile_and_call(&func, &[Value::int(INT_MAX).to_bits()]).unwrap();
+    // INT_MAX + 1 should wrap to INT_MIN
+    use elle::value::repr::INT_MIN;
+    assert_eq!(result.as_int(), Some(INT_MIN));
+}
+
+#[test]
+fn test_jit_int_sub_wrapping() {
+    // Verify INT_MIN - 1 wraps
+    use elle::value::repr::{INT_MAX, INT_MIN};
+
+    // fn(x) -> x - 1
+    let mut func = LirFunction::new(Arity::Exact(1));
+    func.num_regs = 3;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::Const {
+            dst: Reg(1),
+            value: LirConst::Int(1),
+        },
+        span(),
+    ));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::BinOp {
+            dst: Reg(2),
+            op: BinOp::Sub,
+            lhs: Reg(0),
+            rhs: Reg(1),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(2)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let result = compile_and_call(&func, &[Value::int(INT_MIN).to_bits()]).unwrap();
+    // INT_MIN - 1 should wrap to INT_MAX
+    assert_eq!(result.as_int(), Some(INT_MAX));
+}
+
+#[test]
+fn test_jit_div_by_zero_integer() {
+    // Division by zero: fast path detects zero divisor, falls to slow path
+    // fn(x, y) -> x / y
+    let mut func = LirFunction::new(Arity::Exact(2));
+    func.num_regs = 3;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(load_arg(Reg(1), 1));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::BinOp {
+            dst: Reg(2),
+            op: BinOp::Div,
+            lhs: Reg(0),
+            rhs: Reg(1),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(2)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let result =
+        compile_and_call(&func, &[Value::int(10).to_bits(), Value::int(0).to_bits()]).unwrap();
+    // Runtime helper returns NIL on division by zero
+    assert!(result.is_nil());
+}
+
+#[test]
+fn test_jit_mixed_int_float_add() {
+    // Mixed int + float: fast path fails (not both int), slow path handles it
+    // fn(x, y) -> x + y
+    let mut func = LirFunction::new(Arity::Exact(2));
+    func.num_regs = 3;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(load_arg(Reg(1), 1));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::BinOp {
+            dst: Reg(2),
+            op: BinOp::Add,
+            lhs: Reg(0),
+            rhs: Reg(1),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(2)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let result = compile_and_call(
+        &func,
+        &[Value::int(1).to_bits(), Value::float(2.0).to_bits()],
+    )
+    .unwrap();
+    assert!((result.as_float().unwrap() - 3.0).abs() < 0.001);
+}
+
+#[test]
+fn test_jit_int_lt_negative() {
+    // Verify sign extension is correct for negative numbers
+    // fn(x, y) -> x < y
+    let mut func = LirFunction::new(Arity::Exact(2));
+    func.num_regs = 3;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(load_arg(Reg(1), 1));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::Compare {
+            dst: Reg(2),
+            op: CmpOp::Lt,
+            lhs: Reg(0),
+            rhs: Reg(1),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(2)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    // -5 < 3 should be true
+    let result =
+        compile_and_call(&func, &[Value::int(-5).to_bits(), Value::int(3).to_bits()]).unwrap();
+    assert_eq!(result.as_bool(), Some(true));
+
+    // 3 < -5 should be false
+    let result2 =
+        compile_and_call(&func, &[Value::int(3).to_bits(), Value::int(-5).to_bits()]).unwrap();
+    assert_eq!(result2.as_bool(), Some(false));
+}
+
+#[test]
+fn test_jit_int_eq_negative() {
+    // Verify equality with negative numbers
+    // fn(x, y) -> x == y
+    let mut func = LirFunction::new(Arity::Exact(2));
+    func.num_regs = 3;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(load_arg(Reg(1), 1));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::Compare {
+            dst: Reg(2),
+            op: CmpOp::Eq,
+            lhs: Reg(0),
+            rhs: Reg(1),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(2)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    // -1 == -1 should be true
+    let result =
+        compile_and_call(&func, &[Value::int(-1).to_bits(), Value::int(-1).to_bits()]).unwrap();
+    assert_eq!(result.as_bool(), Some(true));
+
+    // -1 == 1 should be false
+    let result2 =
+        compile_and_call(&func, &[Value::int(-1).to_bits(), Value::int(1).to_bits()]).unwrap();
+    assert_eq!(result2.as_bool(), Some(false));
+}
+
+// =============================================================================
 // Fiber + JIT Gate Tests
 // =============================================================================
 
@@ -1510,7 +1727,7 @@ fn test_jit_rejects_yields_raises_effect() {
     func.entry = Label(0);
 
     let compiler = JitCompiler::new().unwrap();
-    let result = compiler.compile(&func);
+    let result = compiler.compile(&func, None);
     assert!(
         matches!(result, Err(JitError::NotPure)),
         "JIT should reject yields_raises effect: {:?}",
@@ -1541,7 +1758,7 @@ fn test_jit_accepts_raises_only_effect() {
     func.entry = Label(0);
 
     let compiler = JitCompiler::new().unwrap();
-    let result = compiler.compile(&func);
+    let result = compiler.compile(&func, None);
     assert!(
         result.is_ok(),
         "JIT should accept raises-only effect: {:?}",

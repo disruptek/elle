@@ -304,7 +304,11 @@ impl JitCompiler {
     }
 
     /// Compile a LirFunction to native code
-    pub fn compile(mut self, lir: &LirFunction) -> Result<JitCode, JitError> {
+    pub fn compile(
+        mut self,
+        lir: &LirFunction,
+        _self_sym: Option<SymbolId>,
+    ) -> Result<JitCode, JitError> {
         // JIT can't handle suspension (yield/debug) — only non-suspending functions
         if lir.effect.may_suspend() {
             return Err(JitError::NotPure);
@@ -345,7 +349,11 @@ impl JitCompiler {
 
     /// Build Cranelift IR for a LirFunction and return it as lines of text.
     /// Does NOT compile to native code — this is for diagnostic display only.
-    pub fn clif_text(mut self, lir: &LirFunction) -> Result<Vec<String>, JitError> {
+    pub fn clif_text(
+        mut self,
+        lir: &LirFunction,
+        _self_sym: Option<SymbolId>,
+    ) -> Result<Vec<String>, JitError> {
         if lir.effect.may_suspend() {
             return Err(JitError::NotPure);
         }
@@ -681,7 +689,7 @@ mod tests {
     fn test_compile_identity() {
         let lir = make_simple_lir();
         let compiler = JitCompiler::new().expect("Failed to create compiler");
-        let code = compiler.compile(&lir).expect("Failed to compile");
+        let code = compiler.compile(&lir, None).expect("Failed to compile");
 
         // Call the compiled function
         // self_bits = 0 since we're not testing self-tail-calls here
@@ -696,7 +704,7 @@ mod tests {
     fn test_compile_add() {
         let lir = make_add_lir();
         let compiler = JitCompiler::new().expect("Failed to create compiler");
-        let code = compiler.compile(&lir).expect("Failed to compile");
+        let code = compiler.compile(&lir, None).expect("Failed to compile");
 
         // Call the compiled function
         // self_bits = 0 since we're not testing self-tail-calls here
@@ -716,7 +724,7 @@ mod tests {
         lir.effect = Effect::yields();
 
         let compiler = JitCompiler::new().expect("Failed to create compiler");
-        let result = compiler.compile(&lir);
+        let result = compiler.compile(&lir, None);
         assert!(matches!(result, Err(JitError::NotPure)));
     }
 

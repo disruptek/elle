@@ -367,7 +367,7 @@ impl VM {
 
                 // Solo compilation (original path)
                 match JitCompiler::new() {
-                    Ok(compiler) => match compiler.compile(lir_func) {
+                    Ok(compiler) => match compiler.compile(lir_func, None) {
                         Ok(jit_code) => {
                             let jit_code = Rc::new(jit_code);
                             self.jit_cache.insert(bytecode_ptr, jit_code.clone());

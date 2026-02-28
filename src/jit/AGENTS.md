@@ -61,8 +61,8 @@ The JIT was built incrementally:
 
 Supported instructions:
 - **Constants**: `Const` (Int, Float, Bool, Nil, EmptyList, Symbol, Keyword), `ValueConst`
-- **Arithmetic**: `BinOp` (all via runtime helpers), `UnaryOp` (Neg, Not, BitNot)
-- **Comparison**: `Compare` (all via runtime helpers)
+- **Arithmetic**: `BinOp` (inline integer fast path, extern fallback), `UnaryOp` (Neg, Not, BitNot)
+- **Comparison**: `Compare` (inline integer fast path, extern fallback)
 - **Variables**: `Move`, `Dup`, `LoadLocal`, `StoreLocal`, `LoadCapture`, `LoadCaptureRaw`
 - **Data structures**: `Cons`, `Car`, `Cdr`, `MakeVector`, `IsPair`
 - **Cells**: `MakeCell`, `LoadCell`, `StoreCell`, `StoreCapture`
@@ -84,6 +84,7 @@ Unsupported (returns JitError::UnsupportedInstruction):
 | `runtime.rs` | ~460 | Arithmetic, comparison, type-checking helpers |
 | `dispatch.rs` | ~640 | Data structure, cell, global, function call helpers (incl. JIT-to-JIT) |
 | `code.rs` | ~100 | `JitCode` wrapper type |
+| `fastpath.rs` | ~250 | Inline integer fast paths for arithmetic/comparison |
 | `group.rs` | ~590 | Compilation group discovery for batch JIT (no Cranelift dependency) |
 
 ## Runtime Helpers
@@ -136,6 +137,38 @@ Key implementation details:
   has the same number of arguments as the function's arity.
 - **Arg evaluation order**: New arg values are read before any are updated,
   handling cases like `(f b a)` where args are swapped.
+
+## Inline Integer Fast Paths
+
+For each arithmetic (`BinOp`) and comparison (`Compare`) operation, the JIT
+emits a diamond-shaped CFG that checks if both operands are integers and
+performs the operation inline, falling back to the extern runtime helper for
+non-integer operands:
+
+```
+current_block:
+    tag check: both operands have TAG_INT?
+    brif -> fast_block / slow_block
+
+fast_block:
+    extract payloads, native op, re-tag result
+    jump -> merge_block(fast_result)
+
+slow_block:
+    call extern helper (e.g., elle_jit_add)
+    jump -> merge_block(slow_result)
+
+merge_block(phi):
+    result = phi
+```
+
+Special cases:
+- **Div/Rem**: An extra `int_check_block` checks for zero divisor after the
+  tag check. If divisor is zero, falls to `slow_block` (two predecessors).
+- **Eq/Ne**: Use bit equality on the full NaN-boxed value (both have the same
+  TAG_INT prefix, so bit equality is correct for integers).
+- **Ordered comparisons** (Lt/Le/Gt/Ge) and **shifts** (Shl/Shr): Sign-extend
+  the 48-bit payload to 64 bits before the native operation.
 
 ## Fiber Integration
 
