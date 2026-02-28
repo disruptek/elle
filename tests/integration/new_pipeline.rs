@@ -196,12 +196,14 @@ fn test_while_simple() {
 
 #[test]
 fn test_each_simple() {
-    assert!(compiles("(each x '(1 2 3) x)"));
+    let result = eval_source("(let ((sum 0)) (each x '(1 2 3) (set sum (+ sum x))) sum)");
+    assert_eq!(result.unwrap().as_int().unwrap(), 6);
 }
 
 #[test]
 fn test_each_with_in() {
-    assert!(compiles("(each x in '(1 2 3) x)"));
+    let result = eval_source("(let ((sum 0)) (each x in '(1 2 3) (set sum (+ sum x))) sum)");
+    assert_eq!(result.unwrap().as_int().unwrap(), 6);
 }
 
 // ============ Sequence Tests ============
@@ -276,18 +278,6 @@ fn test_nested_lets_and_lambdas() {
     assert!(compiles(
         "(let ((x 1)) (let ((y 2)) (fn (z) (+ x (+ y z)))))"
     ));
-}
-
-// ============ Module Tests ============
-
-#[test]
-fn test_module_simple() {
-    assert!(compiles("(module foo 42)"));
-}
-
-#[test]
-fn test_import() {
-    assert!(compiles("(import foo)"));
 }
 
 // ============ Macro Tests (if macros defined) ============

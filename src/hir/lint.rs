@@ -166,11 +166,6 @@ impl HirLinter {
                 self.check(body, symbols);
             }
 
-            HirKind::For { iter, body, .. } => {
-                self.check(iter, symbols);
-                self.check(body, symbols);
-            }
-
             HirKind::Match { value, arms } => {
                 self.check(value, symbols);
                 for (_, guard, body) in arms {
@@ -208,12 +203,6 @@ impl HirLinter {
             }
 
             HirKind::Quote(_) => {}
-
-            HirKind::Module { body, .. } => {
-                self.check(body, symbols);
-            }
-
-            HirKind::Import { .. } | HirKind::ModuleRef { .. } => {}
         }
     }
 }

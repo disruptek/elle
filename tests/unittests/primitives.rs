@@ -429,53 +429,6 @@ fn test_gensym_with_prefix() {
     );
 }
 
-#[test]
-fn test_symbol_table_module_support() {
-    use elle::symbol::{ModuleDef, SymbolTable};
-
-    let mut table = SymbolTable::new();
-    let math = table.intern("math");
-    let add = table.intern("add");
-    let sub = table.intern("sub");
-
-    // Define a module
-    let module_def = ModuleDef {
-        name: math,
-        exports: vec![add, sub],
-    };
-
-    table.define_module(module_def);
-
-    // Check module exists
-    assert!(table.is_module(math));
-    assert!(table.get_module(math).is_some());
-
-    // Check exports
-    if let Some(module) = table.get_module(math) {
-        assert_eq!(module.exports.len(), 2);
-        assert!(module.exports.contains(&add));
-        assert!(module.exports.contains(&sub));
-    }
-}
-
-#[test]
-fn test_module_tracking() {
-    use elle::symbol::SymbolTable;
-
-    let mut table = SymbolTable::new();
-    let math = table.intern("math");
-
-    assert_eq!(table.current_module(), None);
-
-    // Set current module
-    table.set_current_module(Some(math));
-    assert_eq!(table.current_module(), Some(math));
-
-    // Clear current module
-    table.set_current_module(None);
-    assert_eq!(table.current_module(), None);
-}
-
 // Standard library tests
 #[test]
 fn test_list_module_functions() {
@@ -520,7 +473,7 @@ fn test_string_module_functions() {
     let str_val = Value::string("hello");
     match call_primitive(&upcase_fn, &[str_val]).unwrap() {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "HELLO")
         }
         _ => panic!("Expected string"),
@@ -531,7 +484,7 @@ fn test_string_module_functions() {
     let str_val = Value::string("HELLO");
     match call_primitive(&downcase_fn, &[str_val]).unwrap() {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "hello")
         }
         _ => panic!("Expected string"),
@@ -584,7 +537,7 @@ fn test_string_replace() {
     .unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "hello elle")
         }
         _ => panic!("Expected string"),
@@ -602,7 +555,7 @@ fn test_string_replace() {
     .unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "bbbbbb")
         }
         _ => panic!("Expected string"),
@@ -618,7 +571,7 @@ fn test_string_trim() {
     let result = call_primitive(&trim_fn, &[Value::string("  hello  ")]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "hello")
         }
         _ => panic!("Expected string"),
@@ -628,7 +581,7 @@ fn test_string_trim() {
     let result = call_primitive(&trim_fn, &[Value::string("hello")]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "hello")
         }
         _ => panic!("Expected string"),
@@ -721,7 +674,7 @@ fn test_string_join() {
     let result = call_primitive(&join_fn, &[list_val, Value::string(",")]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "a,b,c")
         }
         _ => panic!("Expected string"),
@@ -732,7 +685,7 @@ fn test_string_join() {
     let result = call_primitive(&join_fn, &[list_val, Value::string(" ")]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "hello")
         }
         _ => panic!("Expected string"),
@@ -743,7 +696,7 @@ fn test_string_join() {
     let result = call_primitive(&join_fn, &[list_val, Value::string(",")]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "")
         }
         _ => panic!("Expected string"),
@@ -759,7 +712,7 @@ fn test_number_to_string() {
     let result = call_primitive(&num_to_str, &[Value::int(42)]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "42")
         }
         _ => panic!("Expected string"),
@@ -769,7 +722,7 @@ fn test_number_to_string() {
     let result = call_primitive(&num_to_str, &[Value::float(std::f64::consts::PI)]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             // Just check that it starts with "3.14" since float representation may vary
             assert!(s.starts_with("3.14"));
         }
@@ -780,7 +733,7 @@ fn test_number_to_string() {
     let result = call_primitive(&num_to_str, &[Value::int(-42)]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "-42")
         }
         _ => panic!("Expected string"),
@@ -790,7 +743,7 @@ fn test_number_to_string() {
     let result = call_primitive(&num_to_str, &[Value::int(0)]).unwrap();
     match result {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "0")
         }
         _ => panic!("Expected string"),
@@ -1075,7 +1028,7 @@ fn test_package_manager() {
     let version_fn = get_primitive(&vm, &mut symbols, "package-version");
     match call_primitive(&version_fn, &[]).unwrap() {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert_eq!(s, "0.3.0")
         }
         _ => panic!("Expected string"),
@@ -1089,67 +1042,6 @@ fn test_package_manager() {
     // Should be (name version description)
     let vec = result.list_to_vec().unwrap();
     assert_eq!(vec.len(), 3);
-}
-
-#[test]
-fn test_stdlib_initialization() {
-    use elle::init_stdlib;
-
-    let mut vm = VM::new();
-    let mut symbols = SymbolTable::new();
-
-    // Register primitives
-    let _effects = elle::register_primitives(&mut vm, &mut symbols);
-
-    // Initialize stdlib
-    init_stdlib(&mut vm, &mut symbols);
-
-    // Verify modules exist
-    let list_id = symbols.intern("list");
-    let string_id = symbols.intern("string");
-    let math_id = symbols.intern("math");
-
-    assert!(symbols.is_module(list_id));
-    assert!(symbols.is_module(string_id));
-    assert!(symbols.is_module(math_id));
-
-    // Verify some functions are in modules
-    let length_id = symbols.intern("length");
-    assert!(vm.get_module_symbol("list", length_id.0).is_some());
-}
-
-#[test]
-fn test_module_qualified_access() {
-    use elle::init_stdlib;
-
-    let mut vm = VM::new();
-    let mut symbols = SymbolTable::new();
-    let _effects = elle::register_primitives(&mut vm, &mut symbols);
-    init_stdlib(&mut vm, &mut symbols);
-
-    // Test getting functions from modules
-    let add_sym = symbols.intern("+");
-
-    // Should find + in math module
-    let result = vm.get_module_symbol("math", add_sym.0);
-    assert!(result.is_some());
-
-    // Test string module
-    let length_sym = symbols.intern("length");
-    let result = vm.get_module_symbol("list", length_sym.0);
-    assert!(result.is_some());
-}
-#[test]
-fn test_module_import() {
-    let mut vm = VM::new();
-    let mut symbols = SymbolTable::new();
-
-    // Import a module
-    vm.import_module("list".to_string());
-
-    // Module should still be accessible
-    let length_sym = symbols.intern("length");
-    vm.get_module_symbol("list", length_sym.0);
 }
 
 // Phase 5: Advanced Runtime Features Tests
@@ -1371,7 +1263,7 @@ fn test_current_thread_id_primitive() {
     assert!(result.is_ok());
     match result.unwrap() {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert!(!s.is_empty());
         }
         _ => panic!("current-thread-id should return a string"),
@@ -1773,7 +1665,7 @@ fn test_json_serialize_pretty() {
     let serialized = result.unwrap();
     match serialized {
         v if v.is_string() => {
-            let s = v.as_string().unwrap();
+            let s = v.with_string(|s| s.to_string()).unwrap();
             assert!(s.contains('\n'), "Pretty JSON should contain newlines");
             assert!(s.contains("  "), "Pretty JSON should contain indentation");
         }
@@ -1795,8 +1687,8 @@ fn test_json_serialize_roundtrip() {
     ]);
 
     let serialized = call_primitive(&json_serialize, std::slice::from_ref(&original)).unwrap();
-    let json_str = if let Some(s) = serialized.as_string() {
-        s.to_string()
+    let json_str = if let Some(s) = serialized.with_string(|s| s.to_string()) {
+        s
     } else {
         panic!("Expected string");
     };
@@ -1860,10 +1752,7 @@ fn test_disbit_returns_array_of_strings() {
     let vec = vec.borrow();
     assert!(!vec.is_empty(), "disbit should return non-empty array");
     for elem in vec.iter() {
-        assert!(
-            elem.as_string().is_some(),
-            "each element should be a string"
-        );
+        assert!(elem.is_string(), "each element should be a string");
     }
 }
 
@@ -1899,10 +1788,7 @@ fn test_disjit_returns_array_for_pure_closure() {
         let vec = vec.borrow();
         assert!(!vec.is_empty(), "disjit should return non-empty array");
         for elem in vec.iter() {
-            assert!(
-                elem.as_string().is_some(),
-                "each element should be a string"
-            );
+            assert!(elem.is_string(), "each element should be a string");
         }
     }
 }
@@ -2069,7 +1955,9 @@ fn test_fiber_self_identity() {
 #[test]
 fn test_doc_returns_string_for_known_primitive() {
     let result = eval_full(r#"(doc "cons")"#).unwrap();
-    let s = result.as_string().expect("doc should return a string");
+    let s = result
+        .with_string(|s| s.to_string())
+        .expect("doc should return a string");
     assert!(
         s.contains("cons"),
         "doc for cons should contain 'cons', got: {}",
@@ -2080,7 +1968,9 @@ fn test_doc_returns_string_for_known_primitive() {
 #[test]
 fn test_doc_returns_not_found_for_unknown() {
     let result = eval_full(r#"(doc "zzz-nonexistent")"#).unwrap();
-    let s = result.as_string().expect("doc should return a string");
+    let s = result
+        .with_string(|s| s.to_string())
+        .expect("doc should return a string");
     assert!(
         s.contains("No documentation found"),
         "doc for unknown should say not found, got: {}",
@@ -2091,7 +1981,9 @@ fn test_doc_returns_not_found_for_unknown() {
 #[test]
 fn test_doc_accepts_keyword() {
     let result = eval_full(r#"(doc (string->keyword "+"))"#).unwrap();
-    let s = result.as_string().expect("doc should return a string");
+    let s = result
+        .with_string(|s| s.to_string())
+        .expect("doc should return a string");
     assert!(
         s.contains("+"),
         "doc for + via keyword should contain '+', got: {}",
@@ -2108,7 +2000,9 @@ fn test_doc_wrong_arity() {
 #[test]
 fn test_doc_bare_symbol_special_form() {
     let result = eval_full("(doc if)").unwrap();
-    let s = result.as_string().expect("doc should return a string");
+    let s = result
+        .with_string(|s| s.to_string())
+        .expect("doc should return a string");
     assert!(
         s.contains("Conditional"),
         "doc for if should describe conditional, got: {}",
@@ -2119,7 +2013,9 @@ fn test_doc_bare_symbol_special_form() {
 #[test]
 fn test_doc_bare_symbol_primitive() {
     let result = eval_full("(doc +)").unwrap();
-    let s = result.as_string().expect("doc should return a string");
+    let s = result
+        .with_string(|s| s.to_string())
+        .expect("doc should return a string");
     assert!(
         s.contains("+"),
         "doc for + via bare symbol should contain '+', got: {}",
@@ -2130,7 +2026,9 @@ fn test_doc_bare_symbol_primitive() {
 #[test]
 fn test_doc_bare_symbol_macro() {
     let result = eval_full("(doc defn)").unwrap();
-    let s = result.as_string().expect("doc should return a string");
+    let s = result
+        .with_string(|s| s.to_string())
+        .expect("doc should return a string");
     assert!(
         s.contains("defn"),
         "doc for defn should contain 'defn', got: {}",

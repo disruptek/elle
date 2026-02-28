@@ -21,7 +21,7 @@
 //! - Arguments to calls
 //! - Function position of calls
 //! - Value expressions in bindings
-//! - Loop bodies (`while`, `for`)
+//! - Loop bodies (`while`)
 //! - `throw` value, `yield` value
 //! - Match scrutinee and guards
 
@@ -143,12 +143,6 @@ fn mark(hir: &mut Hir, in_tail: bool) {
             mark(body, false);
         }
 
-        // For: loop bodies are never in tail position
-        HirKind::For { iter, body, .. } => {
-            mark(iter, false);
-            mark(body, false);
-        }
-
         // Set: value is not in tail position
         HirKind::Set { value, .. } => {
             mark(value, false);
@@ -175,11 +169,6 @@ fn mark(hir: &mut Hir, in_tail: bool) {
             mark(env, false);
         }
 
-        // Module: body is not in tail position (top-level)
-        HirKind::Module { body, .. } => {
-            mark(body, false);
-        }
-
         // Leaves: nothing to recurse into
         HirKind::Nil
         | HirKind::EmptyList
@@ -189,9 +178,7 @@ fn mark(hir: &mut Hir, in_tail: bool) {
         | HirKind::String(_)
         | HirKind::Keyword(_)
         | HirKind::Var(_)
-        | HirKind::Quote(_)
-        | HirKind::Import { .. }
-        | HirKind::ModuleRef { .. } => {}
+        | HirKind::Quote(_) => {}
     }
 }
 
@@ -286,10 +273,6 @@ mod tests {
                 collect_calls(cond, calls);
                 collect_calls(body, calls);
             }
-            HirKind::For { iter, body, .. } => {
-                collect_calls(iter, calls);
-                collect_calls(body, calls);
-            }
             HirKind::Set { value, .. }
             | HirKind::Define { value, .. }
             | HirKind::Destructure { value, .. }
@@ -308,7 +291,6 @@ mod tests {
             HirKind::Break { value, .. } => {
                 collect_calls(value, calls);
             }
-            HirKind::Module { body, .. } => collect_calls(body, calls),
             _ => {}
         }
     }
