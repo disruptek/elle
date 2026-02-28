@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "plugins/regex", "plugins/mermaid", "plugins/crypto", "plugins/sqlite"]
+members = [".", "plugins/regex", "plugins/mermaid", "plugins/crypto", "plugins/sqlite", "plugins/random"]
 resolver = "2"
 
 [package]

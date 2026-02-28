@@ -466,6 +466,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "elle-random"
+version = "1.0.0"
+dependencies = [
+ "elle",
+ "fastrand",
+]
+
+[[package]]
 name = "elle-regex"
 version = "1.0.0"
 dependencies = [
