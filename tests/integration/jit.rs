@@ -1701,6 +1701,114 @@ fn test_jit_int_eq_negative() {
 }
 
 // =============================================================================
+// Unary Fast Path Tests
+// =============================================================================
+
+#[test]
+fn test_jit_neg_negative() {
+    // fn(x) -> -x with negative input
+    let mut func = LirFunction::new(Arity::Exact(1));
+    func.num_regs = 2;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::UnaryOp {
+            dst: Reg(1),
+            op: UnaryOp::Neg,
+            src: Reg(0),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(1)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let result = compile_and_call(&func, &[Value::int(-42).to_bits()]).unwrap();
+    assert_eq!(result.as_int(), Some(42));
+}
+
+#[test]
+fn test_jit_bit_not_zero() {
+    // fn(x) -> ~x, bitwise NOT of 0 should be -1
+    let mut func = LirFunction::new(Arity::Exact(1));
+    func.num_regs = 2;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::UnaryOp {
+            dst: Reg(1),
+            op: UnaryOp::BitNot,
+            src: Reg(0),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(1)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let result = compile_and_call(&func, &[Value::int(0).to_bits()]).unwrap();
+    assert_eq!(result.as_int(), Some(-1));
+}
+
+#[test]
+fn test_jit_not_integer_zero() {
+    // fn(x) -> not(x), 0 is truthy in Elle so not(0) = false
+    let mut func = LirFunction::new(Arity::Exact(1));
+    func.num_regs = 2;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::UnaryOp {
+            dst: Reg(1),
+            op: UnaryOp::Not,
+            src: Reg(0),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(1)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let result = compile_and_call(&func, &[Value::int(0).to_bits()]).unwrap();
+    assert_eq!(result, Value::FALSE);
+}
+
+#[test]
+fn test_jit_not_empty_list() {
+    // fn(x) -> not(x), empty list is truthy in Elle so not(()) = false
+    let mut func = LirFunction::new(Arity::Exact(1));
+    func.num_regs = 2;
+    func.num_captures = 0;
+    func.effect = Effect::none();
+
+    let mut entry = BasicBlock::new(Label(0));
+    entry.instructions.push(load_arg(Reg(0), 0));
+    entry.instructions.push(SpannedInstr::new(
+        LirInstr::UnaryOp {
+            dst: Reg(1),
+            op: UnaryOp::Not,
+            src: Reg(0),
+        },
+        span(),
+    ));
+    entry.terminator = SpannedTerminator::new(Terminator::Return(Reg(1)), span());
+    func.blocks.push(entry);
+    func.entry = Label(0);
+
+    let result = compile_and_call(&func, &[Value::EMPTY_LIST.to_bits()]).unwrap();
+    assert_eq!(result, Value::FALSE);
+}
+
+// =============================================================================
 // Fiber + JIT Gate Tests
 // =============================================================================
 

@@ -61,7 +61,7 @@ The JIT was built incrementally:
 
 Supported instructions:
 - **Constants**: `Const` (Int, Float, Bool, Nil, EmptyList, Symbol, Keyword), `ValueConst`
-- **Arithmetic**: `BinOp` (inline integer fast path, extern fallback), `UnaryOp` (Neg, Not, BitNot)
+- **Arithmetic**: `BinOp` (inline integer fast path, extern fallback), `UnaryOp` (Not fully inlined, Neg/BitNot inline integer fast path)
 - **Comparison**: `Compare` (inline integer fast path, extern fallback)
 - **Variables**: `Move`, `Dup`, `LoadLocal`, `StoreLocal`, `LoadCapture`, `LoadCaptureRaw`
 - **Data structures**: `Cons`, `Car`, `Cdr`, `MakeVector`, `IsPair`
@@ -169,6 +169,14 @@ Special cases:
   TAG_INT prefix, so bit equality is correct for integers).
 - **Ordered comparisons** (Lt/Le/Gt/Ge) and **shifts** (Shl/Shr): Sign-extend
   the 48-bit payload to 64 bits before the native operation.
+- **Not** (unary): Fully inlined with no slow path. The truthiness check
+  (`ushr 48` then compare against `0x7FF9`) works for all types — only nil and
+  false have the falsy tag. Returns `TAG_TRUE` or `TAG_FALSE` directly.
+- **Neg/BitNot** (unary): Same diamond pattern as binary ops but with a
+  single-operand tag check (`band` with `TAG_INT_MASK`, `icmp eq` against
+  `TAG_INT`). Neg sign-extends the payload, negates, truncates, re-tags.
+  BitNot XORs the payload with `PAYLOAD_MASK` (flips all 48 payload bits),
+  re-tags.
 
 ## Fiber Integration
 

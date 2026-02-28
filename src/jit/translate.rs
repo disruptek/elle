@@ -728,7 +728,7 @@ impl<'a> FunctionTranslator<'a> {
         super::fastpath::emit_int_binop_fast_path(self.module, builder, op, lhs, rhs, func_id)
     }
 
-    /// Call a unary runtime helper
+    /// Call a unary runtime helper with inline fast path
     fn call_unary_helper(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -740,7 +740,7 @@ impl<'a> FunctionTranslator<'a> {
             UnaryOp::Not => self.helpers.not,
             UnaryOp::BitNot => self.helpers.bit_not,
         };
-        self.call_helper_unary(builder, func_id, src)
+        super::fastpath::emit_unary_fast_path(self.module, builder, op, src, func_id)
     }
 
     /// Call a comparison runtime helper with inline integer fast path
