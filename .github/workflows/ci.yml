@@ -259,6 +259,20 @@ jobs:
             | tee output.txt
         env:
           RAYON_NUM_THREADS: 1
+      - name: Post benchmark comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo '## Benchmark Results'
+            echo ''
+            echo '```'
+            cat output.txt
+            echo '```'
+            echo ''
+            echo "_Commit: ${{ github.event.pull_request.head.sha }}_"
+          } > comment.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -267,7 +281,6 @@ jobs:
           output-file-path: output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           alert-threshold: '120%'
-          comment-always: true
           fail-on-alert: true
           auto-push: false
 
