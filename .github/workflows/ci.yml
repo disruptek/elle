@@ -235,7 +235,7 @@ jobs:
   benchmarks:
     name: Benchmarks
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'performance')
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -258,9 +258,9 @@ jobs:
           tool: cargo
           output-file-path: output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          alert-threshold: '150%'
+          alert-threshold: '120%'
           comment-on-alert: true
-          fail-on-alert: false
+          fail-on-alert: true
           auto-push: false
 
   benchmarks-publish:
@@ -338,7 +338,7 @@ jobs:
         if: needs.docs.result != 'success'
         run: exit 1
       - name: Check benchmarks
-        if: needs.benchmarks.result != 'success'
+        if: needs.benchmarks.result == 'failure'
         run: exit 1
       - name: Success
         run: echo "All checks passed"
