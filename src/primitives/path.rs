@@ -58,7 +58,7 @@ fn prim_path_join(args: &[Value]) -> (SignalBits, Value) {
 fn prim_path_parent(args: &[Value]) -> (SignalBits, Value) {
     with_str_arg(&args[0], "path/parent", |s| match crate::path::parent(s) {
         Some(p) if !p.is_empty() => (SIG_OK, Value::string(p.to_string())),
-        Some(_) => (SIG_OK, Value::NIL), // empty parent (e.g., root's parent is "")
+        Some(_) => (SIG_OK, Value::NIL), // empty parent (e.g., parent("foo") is "")
         None => (SIG_OK, Value::NIL),
     })
 }

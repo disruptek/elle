@@ -51,12 +51,6 @@ fn arb_path() -> impl Strategy<Value = String> {
     prop_oneof![arb_relative_path(), arb_absolute_path(),]
 }
 
-// Suppress unused warning — arb_filename is available for future tests.
-#[allow(dead_code)]
-fn _use_arb_filename() -> impl Strategy<Value = String> {
-    arb_filename()
-}
-
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1000))]
 
@@ -237,5 +231,43 @@ proptest! {
                 p, path,
             );
         }
+    }
+
+    // =========================================================================
+    // stem is always Some for filenames
+    // =========================================================================
+
+    #[test]
+    fn stem_always_some_for_filename(name in arb_filename()) {
+        let s = path::stem(&name);
+        prop_assert!(
+            s.is_some(),
+            "stem({:?}) returned None",
+            name,
+        );
+    }
+
+    // =========================================================================
+    // filename extension roundtrip via with_extension
+    // =========================================================================
+
+    #[test]
+    fn filename_extension_roundtrip(name in arb_filename(), ext in arb_extension()) {
+        let stem = path::stem(&name).unwrap();
+        let with_ext = path::with_extension(&name, &ext);
+        let new_stem = path::stem(&with_ext);
+        let new_ext = path::extension(&with_ext);
+        prop_assert_eq!(
+            new_stem,
+            Some(stem),
+            "stem changed: {:?} -> with_extension({:?}) -> stem = {:?}",
+            name, ext, new_stem,
+        );
+        prop_assert_eq!(
+            new_ext,
+            Some(ext.as_str()),
+            "extension not recovered: with_extension({:?}, {:?}) -> extension = {:?}",
+            name, ext, new_ext,
+        );
     }
 }
