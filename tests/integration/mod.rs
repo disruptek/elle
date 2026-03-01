@@ -74,7 +74,7 @@ mod primitives {
 mod ffi {
     include!("ffi.rs");
 }
-mod bracket_errors {
+mod bracket_syntax {
     include!("bracket_errors.rs");
 }
 mod booleans {
