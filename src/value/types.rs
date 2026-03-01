@@ -6,7 +6,6 @@
 //! - `TableKey` - Keys for tables and structs
 //! - `NativeFn` - Unified primitive function type
 
-use crate::error::{LError, LResult};
 use crate::value::Value;
 use std::fmt;
 
@@ -84,22 +83,37 @@ pub enum TableKey {
 }
 
 impl TableKey {
-    /// Convert a Value to a TableKey if possible
-    pub fn from_value(val: &Value) -> LResult<TableKey> {
+    /// Convert a Value to a TableKey if possible.
+    ///
+    /// Returns `None` if the value cannot be used as a key.
+    /// Callers produce their own error messages from the `None` case.
+    pub fn from_value(val: &Value) -> Option<TableKey> {
         if val.is_nil() {
-            Ok(TableKey::Nil)
+            Some(TableKey::Nil)
         } else if let Some(b) = val.as_bool() {
-            Ok(TableKey::Bool(b))
+            Some(TableKey::Bool(b))
         } else if let Some(i) = val.as_int() {
-            Ok(TableKey::Int(i))
+            Some(TableKey::Int(i))
         } else if let Some(id) = val.as_symbol() {
-            Ok(TableKey::Symbol(SymbolId(id)))
+            Some(TableKey::Symbol(SymbolId(id)))
         } else if let Some(name) = val.as_keyword_name() {
-            Ok(TableKey::Keyword(name.to_string()))
-        } else if let Some(s) = val.with_string(|s| s.to_string()) {
-            Ok(TableKey::String(s))
+            Some(TableKey::Keyword(name.to_string()))
         } else {
-            Err(LError::type_mismatch("table key", val.type_name()))
+            val.with_string(|s| s.to_string()).map(TableKey::String)
+        }
+    }
+
+    /// Convert a TableKey back to a Value.
+    ///
+    /// This is the inverse of `from_value()`.
+    pub fn to_value(&self) -> Value {
+        match self {
+            TableKey::Nil => Value::NIL,
+            TableKey::Bool(b) => Value::bool(*b),
+            TableKey::Int(i) => Value::int(*i),
+            TableKey::Symbol(sid) => Value::symbol(sid.0),
+            TableKey::String(s) => Value::string(s.as_str()),
+            TableKey::Keyword(s) => Value::keyword(s.as_str()),
         }
     }
 }
