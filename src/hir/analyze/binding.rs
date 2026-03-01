@@ -76,13 +76,11 @@ impl<'a> Analyzer<'a> {
                     } = &value.kind
                     {
                         self.effect_env.insert(binding, *inferred_effect);
-                        let arity = if rest_param.is_some() {
-                            Arity::AtLeast(*num_required)
-                        } else if *num_required < lambda_params.len() {
-                            Arity::Range(*num_required, lambda_params.len())
-                        } else {
-                            Arity::Exact(lambda_params.len())
-                        };
+                        let arity = Arity::for_lambda(
+                            rest_param.is_some(),
+                            *num_required,
+                            lambda_params.len(),
+                        );
                         self.arity_env.insert(binding, arity);
                     }
                     bindings.push((binding, value));
@@ -200,13 +198,8 @@ impl<'a> Analyzer<'a> {
             } = &value.kind
             {
                 self.effect_env.insert(binding_handles[i], *inferred_effect);
-                let arity = if rest_param.is_some() {
-                    Arity::AtLeast(*num_required)
-                } else if *num_required < lambda_params.len() {
-                    Arity::Range(*num_required, lambda_params.len())
-                } else {
-                    Arity::Exact(lambda_params.len())
-                };
+                let arity =
+                    Arity::for_lambda(rest_param.is_some(), *num_required, lambda_params.len());
                 self.arity_env.insert(binding_handles[i], arity);
             }
             bindings.push((binding_handles[i], value));
@@ -325,13 +318,8 @@ impl<'a> Analyzer<'a> {
             } = &value.kind
             {
                 self.effect_env.insert(binding, *inferred_effect);
-                let arity = if rest_param.is_some() {
-                    Arity::AtLeast(*num_required)
-                } else if *num_required < lambda_params.len() {
-                    Arity::Range(*num_required, lambda_params.len())
-                } else {
-                    Arity::Exact(lambda_params.len())
-                };
+                let arity =
+                    Arity::for_lambda(rest_param.is_some(), *num_required, lambda_params.len());
                 self.arity_env.insert(binding, arity);
             }
 
@@ -382,13 +370,8 @@ impl<'a> Analyzer<'a> {
             {
                 self.effect_env.insert(binding, *inferred_effect);
                 self.defined_global_effects.insert(sym, *inferred_effect);
-                let arity = if rest_param.is_some() {
-                    Arity::AtLeast(*num_required)
-                } else if *num_required < lambda_params.len() {
-                    Arity::Range(*num_required, lambda_params.len())
-                } else {
-                    Arity::Exact(lambda_params.len())
-                };
+                let arity =
+                    Arity::for_lambda(rest_param.is_some(), *num_required, lambda_params.len());
                 self.arity_env.insert(binding, arity);
                 self.defined_global_arities.insert(sym, arity);
             }

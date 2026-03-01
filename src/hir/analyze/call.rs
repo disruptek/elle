@@ -87,15 +87,11 @@ impl<'a> Analyzer<'a> {
                 num_required,
                 rest_param,
                 ..
-            } => {
-                if rest_param.is_some() {
-                    Some(Arity::AtLeast(*num_required))
-                } else if *num_required < params.len() {
-                    Some(Arity::Range(*num_required, params.len()))
-                } else {
-                    Some(Arity::Exact(params.len()))
-                }
-            }
+            } => Some(Arity::for_lambda(
+                rest_param.is_some(),
+                *num_required,
+                params.len(),
+            )),
             HirKind::Var(binding) => {
                 // Check local arity env first
                 if let Some(arity) = self.arity_env.get(binding) {

@@ -1255,3 +1255,78 @@ fn test_named_no_params_error() {
 fn test_named_non_symbol_error() {
     assert!(eval_source("(fn (a &named [x]) 1)").is_err());
 }
+
+// ============================================================
+// Edge case tests
+// ============================================================
+
+#[test]
+fn test_opt_destructuring_pattern() {
+    // &opt with destructuring pattern as optional param
+    assert_eq!(
+        eval_source("((fn (a &opt (b c)) (list a b c)) (list 1 2))").unwrap(),
+        eval_source("(list (list 1 2) nil nil)").unwrap()
+    );
+    assert_eq!(
+        eval_source("((fn (a &opt (b c)) (list a b c)) 1 (list 2 3))").unwrap(),
+        eval_source("(list 1 2 3)").unwrap()
+    );
+}
+
+#[test]
+fn test_keys_mutable_capture() {
+    // &keys param that is set! inside body and captured by nested closure
+    assert_eq!(
+        eval_source(
+            "((fn (&keys opts)
+               (let ((f (fn () opts)))
+                 (f)))
+             :x 10)"
+        )
+        .unwrap(),
+        eval_source("{:x 10}").unwrap()
+    );
+}
+
+#[test]
+fn test_keys_tail_call_error() {
+    // Tail call with bad keyword args should produce error, not crash
+    assert!(eval_source(
+        "(begin
+           (defn f (a &keys opts) opts)
+           (defn g () (f 1 :x))
+           (g))"
+    )
+    .is_err());
+}
+
+#[test]
+fn test_opt_fiber_resume() {
+    // Coroutine with &opt closure — first resume with no args, second with a value
+    // coro/resume passes the value as the result of yield, not the param
+    assert_eq!(
+        eval_source(
+            "(let ((co (coro/new (fn (&opt a) (+ (or a 0) (yield a))))))
+               (coro/resume co)
+               (coro/resume co 42))"
+        )
+        .unwrap(),
+        Value::int(42)
+    );
+    // With an initial arg, the param is bound
+    assert_eq!(
+        eval_source(
+            "(let ((co (coro/new (fn (&opt a) (yield a) a))))
+               (coro/resume co 10)
+               (coro/resume co))"
+        )
+        .unwrap(),
+        Value::int(10)
+    );
+}
+
+#[test]
+fn test_keys_duplicate_keys() {
+    // Duplicate keyword keys → runtime error
+    assert!(eval_source("((fn (a &keys opts) (get opts :x)) 1 :x 10 :x 20)").is_err());
+}

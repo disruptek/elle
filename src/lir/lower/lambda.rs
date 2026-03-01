@@ -131,13 +131,7 @@ impl Lowerer {
         doc: Option<crate::value::Value>,
     ) -> Result<LirFunction, String> {
         // Compute arity
-        let arity = if rest_param.is_some() {
-            Arity::AtLeast(num_required)
-        } else if num_required < params.len() {
-            Arity::Range(num_required, params.len())
-        } else {
-            Arity::Exact(params.len())
-        };
+        let arity = Arity::for_lambda(rest_param.is_some(), num_required, params.len());
 
         // Save state
         let saved_func = std::mem::replace(&mut self.current_func, LirFunction::new(arity));

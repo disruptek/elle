@@ -113,13 +113,7 @@ impl<'a> Analyzer<'a> {
                 let num_optional = parsed.optional.len();
                 let has_collector = parsed.collector.is_some();
 
-                if has_collector {
-                    Arity::AtLeast(num_required)
-                } else if num_optional > 0 {
-                    Arity::Range(num_required, num_required + num_optional)
-                } else {
-                    Arity::Exact(num_required)
-                }
+                Arity::for_lambda(has_collector, num_required, num_required + num_optional)
             }
             Err(_) => {
                 // Fall back to old logic for error cases

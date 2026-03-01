@@ -817,7 +817,16 @@ impl VM {
                 }
             }
 
-            map.insert(TableKey::Keyword(key), args[i + 1]);
+            let table_key = TableKey::Keyword(key.clone());
+            if map.contains_key(&table_key) {
+                set_error(
+                    fiber,
+                    "error",
+                    format!("duplicate keyword argument :{}", key),
+                );
+                return None;
+            }
+            map.insert(table_key, args[i + 1]);
         }
         Some(Value::struct_from(map))
     }
