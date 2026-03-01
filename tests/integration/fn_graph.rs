@@ -84,13 +84,16 @@ fn test_fn_graph_branching_has_edges() {
 
 #[test]
 fn test_fn_save_graph_writes_file() {
-    let result = eval_source(
+    let path = std::env::temp_dir().join(format!("elle-test-graph-{}.dot", std::process::id()));
+    let path = path.to_str().unwrap();
+    let result = eval_source(&format!(
         r#"
         (defn test-fn (x) (+ x 1))
-        (fn/save-graph test-fn "/run/user/1000/elle-test-graph.dot")
-        (string/starts-with? (slurp "/run/user/1000/elle-test-graph.dot") "digraph {")
+        (fn/save-graph test-fn "{path}")
+        (string/starts-with? (slurp "{path}") "digraph {{")
         "#,
-    )
+    ))
     .unwrap();
+    let _ = std::fs::remove_file(path);
     assert_eq!(result, Value::TRUE);
 }
