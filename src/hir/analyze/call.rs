@@ -83,11 +83,15 @@ impl<'a> Analyzer<'a> {
     fn get_callee_arity(&self, callee: &Hir) -> Option<Arity> {
         match &callee.kind {
             HirKind::Lambda {
-                params, rest_param, ..
+                params,
+                num_required,
+                rest_param,
+                ..
             } => {
                 if rest_param.is_some() {
-                    // Variadic: fixed params (excluding rest slot) is AtLeast
-                    Some(Arity::AtLeast(params.len() - 1))
+                    Some(Arity::AtLeast(*num_required))
+                } else if *num_required < params.len() {
+                    Some(Arity::Range(*num_required, params.len()))
                 } else {
                     Some(Arity::Exact(params.len()))
                 }
