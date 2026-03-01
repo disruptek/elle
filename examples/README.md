@@ -34,13 +34,14 @@ expected vs actual on failure and exits with code 1.
 | `functions.lisp` | Functional toolkit | `defn`/`fn`, lexical scope, closures, HOFs, composition, pipelines, variadic, mutual recursion, `block`/`break`, mutable captures |
 | `control.lisp` | Expression evaluator | `if`, `cond`, `case`, `when`/`unless`, `if-let`/`when-let`, `while`, `forever`, `block`/`break`, `match` (full pattern coverage), `each`, `->` / `->>` |
 | `collections.lisp` | Contact book app | Literal syntax, mutability split, polymorphic `get`/`put`, destructuring, `each`, threading, splice, string ops, grapheme clusters |
+| `destructuring.lisp` | Unpacking data | Silent nil semantics, wildcards, `& rest`, nested patterns, `var`+`set`, `let`/`let*`, struct/table by-key, match dispatch on struct tags |
+| `errors.lisp` | Error handling | `error`, `try`/`catch`, `protect`, `defer`, `with`, error propagation, safe wrappers, validation patterns |
+| `coroutines.lisp` | Cooperative sequences | `coro/new`, `yield`, lifecycle tracking, Fibonacci generator, closure captures, interleaving, nesting, `yield*` delegation |
 
 ### Pending refresh
 
 | File | Status |
 |------|--------|
-| `destructuring.lisp` | Needs idiom update |
-| `coroutines.lisp` | Needs trim (601 lines, heavy duplication) |
 | `concurrency.lisp` | Needs idiom update |
 | `processes.lisp` | Needs idiom update |
 | `meta-programming.lisp` | Needs idiom update |

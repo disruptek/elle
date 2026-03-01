@@ -51,6 +51,11 @@
 (defmacro unless (test & body)
   `(if ,test nil (begin ,;body)))
 
+## error - raise a fiber error with a keyword kind and string message
+## (error :kind "message") => (fiber/signal 1 [:kind "message"])
+(defmacro error (kind msg)
+  `(fiber/signal 1 (tuple ,kind ,msg)))
+
 ## try/catch - error handling via fibers
 ## Usage: (try body... (catch e handler...))
 ## The last form must be (catch binding handler-body...)
