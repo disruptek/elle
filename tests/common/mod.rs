@@ -17,11 +17,11 @@ pub fn eval_source(input: &str) -> Result<Value, String> {
     let mut vm = VM::new();
     let mut symbols = SymbolTable::new();
     let _effects = register_primitives(&mut vm, &mut symbols);
-    init_stdlib(&mut vm, &mut symbols);
-    // Thread-local pointers — safe because tests within a thread are sequential.
-    // See src/ffi/primitives/context.rs: VM_CONTEXT and SYMBOL_TABLE are thread_local!.
+    // Set symbol table context before stdlib init so that macros using
+    // gensym (each, ffi/defbind) work during init_stdlib's eval() calls.
     set_vm_context(&mut vm as *mut VM);
     set_symbol_table(&mut symbols as *mut SymbolTable);
+    init_stdlib(&mut vm, &mut symbols);
     let result = eval_all(input, &mut symbols, &mut vm);
     // Clear context to avoid affecting other tests
     set_vm_context(std::ptr::null_mut());
@@ -36,7 +36,7 @@ pub fn setup() -> (SymbolTable, VM) {
     let mut symbols = SymbolTable::new();
     let mut vm = VM::new();
     let _effects = register_primitives(&mut vm, &mut symbols);
-    init_stdlib(&mut vm, &mut symbols);
     set_symbol_table(&mut symbols as *mut SymbolTable);
+    init_stdlib(&mut vm, &mut symbols);
     (symbols, vm)
 }
