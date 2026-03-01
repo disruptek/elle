@@ -16,6 +16,7 @@ pub mod docs;
 pub mod ffi;
 pub mod fibers;
 pub mod file_io;
+pub mod graph_def;
 pub mod higher_order_def;
 pub mod json;
 pub mod list;
