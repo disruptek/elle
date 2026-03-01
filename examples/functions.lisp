@@ -24,12 +24,13 @@
 # 1. fn and defn
 # ========================================
 
-(print "=== fn and defn ===")
+
 
 # fn creates an anonymous function (a "lambda").
 # (fn [params] body) — brackets delimit the parameter list.
 (def average (fn [a b] (/ (+ a b) 2)))  # bind a lambda to 'average'
 (assert-eq (average 80 90) 85 "fn: average")
+(display "  (average 80 90) = ") (print (average 80 90))
 
 # A function body can have multiple expressions.
 # The last expression is the return value.
@@ -53,17 +54,19 @@
 (assert-eq (letter-grade 95) "A" "defn: A")
 (assert-eq (letter-grade 85) "B" "defn: B")
 (assert-eq (letter-grade 55) "F" "defn: F")
+(display "  (letter-grade 95) = ") (print (letter-grade 95))
 
 # (doc name) retrieves the docstring — bare symbol, no quoting needed
 (assert-eq (doc letter-grade) "Convert a numeric score to a letter grade."
   "doc retrieves docstring")
+(display "  (doc letter-grade) = ") (print (doc letter-grade))
 
 
 # ========================================
 # 2. Lexical scope
 # ========================================
 
-(print "=== lexical scope ===")
+
 
 # A name is visible only in the block of code where it's defined.
 # This is "lexical scope" — you can tell where a name is valid by
@@ -104,7 +107,7 @@
 # 3. Closures
 # ========================================
 
-(print "=== closures ===")
+
 
 # A closure captures values from its defining scope.
 # make-curver returns a function that remembers the bonus amount.
@@ -116,6 +119,7 @@
 (def curve10 (make-curver 10))     # remembers bonus=10
 (assert-eq (curve5 80) 85 "closure: curve5")
 (assert-eq (curve10 80) 90 "closure: curve10")
+(display "  (curve5 80) = ") (print (curve5 80))
 
 # Mutable closure — a grader that tracks how many scores it's seen.
 (defn make-grader []
@@ -134,7 +138,7 @@
 # 4. Higher-order functions
 # ========================================
 
-(print "=== higher-order functions ===")
+
 
 # A higher-order function takes or returns a function.
 # my-map applies f to every element of a list.
@@ -179,13 +183,14 @@
 
 (assert-eq (my-fold + 0 scores) 410 "my-fold: sum scores")
 (assert-eq (my-fold max 0 scores) 95 "my-fold: max score")
+(display "  sum of scores = ") (print (my-fold + 0 scores))
 
 
 # ========================================
 # 5. Composition and pipelines
 # ========================================
 
-(print "=== composition and pipelines ===")
+
 
 # compose creates a new function from two existing ones.
 # (compose f g)(x) = f(g(x))
@@ -195,6 +200,7 @@
 
 (def curved-grade (compose letter-grade curve5))  # curve5 → letter-grade
 (assert-eq (curved-grade 78) "B" "compose: curve then grade")
+(display "  (curved-grade 78) = ") (print (curved-grade 78))
 
 # -> thread-first: inserts value as the first argument to each form
 (assert-eq (-> 75 (+ 10) letter-grade) "B"  # (+ 75 10) → (letter-grade 85)
@@ -221,7 +227,7 @@
 # 6. Variadic functions
 # ========================================
 
-(print "=== variadic functions ===")
+
 
 # & collects remaining arguments into a list.
 (defn grade-all [& student-scores]
@@ -240,13 +246,14 @@
 
 (assert-eq (best-of 72 85 90 68) 90 "variadic: best of four")
 (assert-eq (best-of 100) 100 "variadic: single score")
+(display "  (best-of 72 85 90 68) = ") (print (best-of 72 85 90 68))
 
 
 # ========================================
 # 7. Mutual recursion
 # ========================================
 
-(print "=== mutual recursion ===")
+
 
 # letrec lets functions call each other.
 # Here: determine if a score list has an alternating pass/fail pattern.
@@ -275,7 +282,7 @@
 # 8. block and break
 # ========================================
 
-(print "=== block and break ===")
+
 
 # (block :name body...) creates a named scope.
 # (break :name value) exits it early, returning value.
@@ -302,7 +309,7 @@
 # 9. Mutable captures and destructuring
 # ========================================
 
-(print "=== mutable captures ===")
+
 
 # Two closures sharing the same mutable cell — a getter/setter pair.
 (defn make-tracker []
@@ -324,6 +331,7 @@
 (record! 80)
 (record! 70)
 (assert-eq (avg) 80 "mutable capture: running average")
+(display "  running avg after 90,80,70 = ") (print (avg))
 
 # Accumulator — another shared-cell pattern
 (defn make-accumulator [initial]
@@ -349,6 +357,8 @@
   (grade-student {:name "Bob" :score 87}))
 (assert-eq rname "Bob" "param destructure: name")
 (assert-eq rgrade "B" "param destructure: grade")
+(display "  grade-student({Bob, 87}) → ") (display rname) (display " ") (print rgrade)
 
 
-(print "=== All function tests passed ===")
+(print "")
+(print "all functions passed.")

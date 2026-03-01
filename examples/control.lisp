@@ -31,7 +31,7 @@
 # (if test then else) — else is optional (returns nil when omitted).
 # Only nil and false are falsy; everything else is truthy.
 
-(print "=== if ===")
+
 
 (assert-eq (if true :yes :no) :yes "if: true branch")       # test truthy → then
 (assert-eq (if false :yes :no) :no "if: false branch")      # test falsy → else
@@ -53,7 +53,7 @@
 # (cond (test1 expr1) (test2 expr2) ... (true default))
 # Evaluates tests in order, returns the body of the first truthy test.
 
-(print "=== cond ===")
+
 
 (defn classify-number [n]
   "Classify a number as negative, zero, or positive."
@@ -65,6 +65,7 @@
 (assert-eq (classify-number -5) :negative "cond: negative")
 (assert-eq (classify-number 0) :zero "cond: zero")
 (assert-eq (classify-number 42) :positive "cond: positive")
+(display "  classify(-5) = ") (print (classify-number -5))
 
 # cond is cleaner than nested ifs for dispatch
 (defn op-symbol [op]
@@ -89,7 +90,7 @@
 # (case expr val1 body1 val2 body2 ... default)
 # Sugar for chained (if (= g val) ...). Flat pairs, optional default.
 
-(print "=== case ===")
+
 
 (defn binary-op [op a b]
   "Apply a binary arithmetic operator."
@@ -104,6 +105,7 @@
 (assert-eq (binary-op :sub 10 3) 7 "case: sub")
 (assert-eq (binary-op :mul 6 7) 42 "case: mul")
 (assert-eq (binary-op :div 15 3) 5 "case: div")
+(display "  (binary-op :mul 6 7) = ") (print (binary-op :mul 6 7))
 
 
 # ========================================
@@ -114,7 +116,7 @@
 # (unless test body...) — inverse: runs body if test is falsy.
 # Useful for side effects (no else branch).
 
-(print "=== when / unless ===")
+
 
 (var log @[])                      # mutable array for collecting results
 
@@ -145,7 +147,7 @@
 # (if-let ((x expr)) then else)
 # Binds x to expr; if x is falsy, runs else branch instead.
 
-(print "=== if-let / when-let ===")
+
 
 (defn safe-div [a b]
   "Divide a by b, returning nil if b is zero."
@@ -181,8 +183,9 @@
 #
 # (while test body...) — loops while test is truthy.
 # Use (set var val) to mutate bindings within the loop.
+# while always returns nil — use block/break to return a value from a loop.
 
-(print "=== while ===")
+
 
 # Sum integers 1..10
 (var total 0)
@@ -191,6 +194,14 @@
   (set total (+ total i))         # set mutates the binding
   (set i (+ i 1)))
 (assert-eq total 55 "while: sum 1..10")
+(display "  sum 1..10 = ") (print total)
+
+# while itself always returns nil
+(var j 0)
+(def while-result (while (< j 3)  # capture the return value
+  (set j (+ j 1))))
+(assert-eq while-result nil "while: always returns nil")
+(display "  while returns → ") (print while-result)
 
 # Factorial via while
 (defn factorial [n]
@@ -200,22 +211,53 @@
   (while (> k 1)
     (set acc (* acc k))            # acc = acc * k
     (set k (- k 1)))               # k = k - 1
-  acc)                             # return the accumulator
+  acc)                             # return the accumulator (not the while)
 
 (assert-eq (factorial 0) 1 "factorial: 0")
 (assert-eq (factorial 5) 120 "factorial: 5")
 (assert-eq (factorial 10) 3628800 "factorial: 10")
+(display "  (factorial 10) = ") (print (factorial 10))
+
+# while has an implicit block named :while — you can break out of it.
+# break overrides the nil return with the value you provide.
+(var k 0)
+(def found-five
+  (while (< k 100)                # would loop to 100...
+    (set k (+ k 1))
+    (when (= k 5)
+      (break :while k))))          # ...but we break at 5, returning k
+(assert-eq found-five 5 "while: break :while returns a value")
 
 
 # ========================================
-# 7. forever and break
+# 7. forever — infinite loop with break
 # ========================================
 #
-# (forever body...) expands to (while true body...).
-# while wraps an implicit block named :while, so (break :while val) exits.
-# Plain (break) also works inside while/forever.
+# (forever body...) is sugar for (while true body...).
+# Since the test is always true, you MUST use break to exit.
+# The break value becomes the expression's return value.
 
-(print "=== forever / break ===")
+
+
+# Simple countdown — forever + break
+(var countdown 10)
+(def liftoff
+  (forever
+    (set countdown (- countdown 1))
+    (when (= countdown 0)
+      (break :while :liftoff))))   # named break with a value
+(assert-eq liftoff :liftoff "forever: break returns value")
+(assert-eq countdown 0 "forever: side effects happened")
+
+# Bare (break) exits without a value — returns nil
+(var x 0)
+(def bare-result
+  (forever
+    (set x (+ x 1))
+    (when (= x 3)
+      (break))))                   # no name, no value — returns nil
+(assert-eq bare-result nil "forever: bare break returns nil")
+(assert-eq x 3 "forever: ran 3 times before break")
 
 # Collatz sequence: count steps to reach 1
 (defn collatz-steps [n]
@@ -224,7 +266,7 @@
   (var steps 0)
   (forever
     (if (= x 1)
-      (break :while steps))        # done — return step count
+      (break :while steps))        # done — return step count as the value
     (set x (if (= (% x 2) 0)
              (/ x 2)              # even: divide by 2
              (+ (* 3 x) 1)))      # odd: 3n + 1
@@ -233,43 +275,93 @@
 (assert-eq (collatz-steps 1) 0 "collatz: 1 -> 0 steps")
 (assert-eq (collatz-steps 6) 8 "collatz: 6 -> 8 steps")
 (assert-eq (collatz-steps 27) 111 "collatz: 27 -> 111 steps")
+(display "  collatz(27) = ") (display (collatz-steps 27)) (print " steps")
 
 
 # ========================================
-# 8. block and break — named early exit
+# 8. block and break — named scopes with values
 # ========================================
 #
 # (block :name body...) creates a named scope.
-# (break :name value) exits the block, returning value.
+# Without break, block returns the last expression's value.
+# With (break :name value), block returns the break value instead.
 # break is compile-time validated: must be inside the named block,
-# cannot cross function boundaries.
+# and cannot cross function boundaries.
 
-(print "=== block / break ===")
 
-# Find the first element satisfying a predicate
-(defn find-first [arr pred]
-  "Return the first element of arr where (pred elem) is truthy, or nil."
-  (block :search
-    (var idx 0)
-    (while (< idx (length arr))
-      (let ([elem (get arr idx)])  # temporary binding for clarity
-        (when (pred elem)
-          (break :search elem)))   # found it — exit the block
-      (set idx (+ idx 1)))
-    nil))                          # fell through — not found
 
-(assert-eq (find-first @[1 4 9 16 25] (fn [x] (> x 10))) 16
-  "block/break: find first > 10")
-(assert-eq (find-first @[1 2 3] (fn [x] (> x 100))) nil
-  "block/break: not found returns nil")
+# Block without break — returns the last expression
+(def no-break
+  (block :compute
+    (+ 10 20)                      # evaluated but not returned
+    (* 6 7)))                      # last expression → return value
+(assert-eq no-break 42 "block: no break returns last expr")
+(display "  block without break → ") (print no-break)
 
-# Nested blocks — break targets the named block, crossing inner ones
+# Block with break — returns the break value, skips the rest
+(def with-break
+  (block :compute
+    (break :compute :early)        # exit immediately with :early
+    (* 6 7)))                      # never reached
+(assert-eq with-break :early "block: break returns its value")
+
+# Break without a value — returns nil
+(def nil-break
+  (block :test
+    (break :test)                  # no value argument
+    :unreachable))
+(assert-eq nil-break nil "block: break without value returns nil")
+
+# Named break lets you target a specific block — useful for nesting
 (def nested-result
   (block :outer
     (block :inner
-      (break :outer :escaped-both))  # jumps past both blocks
+      (break :outer :escaped))     # skips :inner's remaining body AND :outer's
     :never-reached))
-(assert-eq nested-result :escaped-both "block: break targets outer")
+(assert-eq nested-result :escaped "block: named break targets outer")
+
+# Inner block runs normally if break doesn't target it
+(def inner-runs
+  (block :outer
+    (def inner-val
+      (block :inner
+        (+ 1 2)))                  # :inner completes normally, returns 3
+    (+ inner-val 10)))             # :outer continues with inner-val = 3
+(assert-eq inner-runs 13 "block: inner completes, outer continues")
+
+# Practical: find-first using block + each
+(defn find-first [arr pred]
+  "Return the first element of arr where (pred elem) is truthy, or nil."
+  (block :search
+    (each elem in arr              # iterate — no manual index needed
+      (when (pred elem)
+        (break :search elem)))     # found it — exit the whole block
+    nil))                          # fell through — not found
+
+(assert-eq (find-first @[1 4 9 16 25] (fn [x] (> x 10))) 16
+  "find-first: found 16")
+(assert-eq (find-first @[1 2 3] (fn [x] (> x 100))) nil
+  "find-first: not found returns nil")
+(display "  find-first(>10 in [1 4 9 16 25]) = ") (print (find-first @[1 4 9 16 25] (fn [x] (> x 10))))
+
+# Practical: early return from validation
+(defn validate-score [score]
+  "Return :ok or an error keyword for a score."
+  (block :check
+    (when (not (number? score))
+      (break :check :not-a-number))
+    (when (< score 0)
+      (break :check :too-low))
+    (when (> score 100)
+      (break :check :too-high))
+    :ok))                          # passed all checks
+
+(assert-eq (validate-score 85) :ok "validate: good score")
+(assert-eq (validate-score -1) :too-low "validate: negative")
+(assert-eq (validate-score 101) :too-high "validate: over 100")
+(assert-eq (validate-score "nope") :not-a-number "validate: not a number")
+(display "  validate(85) = ") (display (validate-score 85))
+  (display "  validate(-1) = ") (print (validate-score -1))
 
 
 # ========================================
@@ -291,7 +383,7 @@
 #   @{:key var}               — table pattern
 #   (pattern when guard body) — guarded arm
 
-(print "=== match ===")
+
 
 # --- Literal patterns ---
 (var m-int (match 42 (42 :found) (_ :nope)))    # match on exact value
@@ -413,12 +505,14 @@
   [:mul [:add [:lit 3] [:lit 4]]   # left: 3 + 4 = 7
         [:sub [:lit 10] [:lit 3]]]) # right: 10 - 3 = 7
 (assert-eq (eval-expr complex-expr) 49 "eval: nested expression")
+(display "  (3+4)*(10-3) = ") (print (eval-expr complex-expr))
 
 # Deeper nesting: -(2 * (5 + 3)) = -(2 * 8) = -16
 (def deep-expr
   [:neg [:mul [:lit 2]             # negate the whole product
               [:add [:lit 5] [:lit 3]]]])
 (assert-eq (eval-expr deep-expr) -16 "eval: deep nesting")
+(display "  -(2*(5+3)) = ") (print (eval-expr deep-expr))
 
 # --- Nested match patterns ---
 (def pair-of-pairs (list (list 1 2) (list 3 4)))
@@ -443,7 +537,7 @@
 # (each var in collection body...)
 # Dispatches on type. See collections.lisp for full coverage.
 
-(print "=== each ===")
+
 
 (var squares @[])                  # mutable array to collect results
 (each n in (list 1 2 3 4 5)       # iterate a list
@@ -467,7 +561,7 @@
 # (->> val (f a) (g b)) = (g b (f a val))    — thread-last
 # Bare symbols work too: (-> x f g) = (g (f x))
 
-(print "=== threading ===")
+
 
 # Thread-first: value becomes first argument
 (assert-eq (-> 5 (+ 10) (* 2)) 30       # (+ 5 10)=15 → (* 15 2)=30
@@ -484,6 +578,7 @@
 # Bare symbol threading: (-> x f g) = (g (f x))
 (assert-eq (-> -7 abs-val string) "7"    # abs-val(-7)=7 → string(7)="7"
   "->: bare symbol threading")
+(display "  (-> -7 abs-val string) = ") (print (-> -7 abs-val string))
 
 # Thread-first for nested data access
 (def config {:db {:host "localhost" :port 5432}})
@@ -496,6 +591,8 @@
 # Thread-last for pipeline processing
 (assert-eq (->> "  hello  " string/trim string/upcase) "HELLO"
   "->>: trim then upcase")
+(display "  (->> \"  hello  \" trim upcase) = ") (print (->> "  hello  " string/trim string/upcase))
 
 
-(print "=== All control flow tests passed ===")
+(print "")
+(print "all control flow passed.")

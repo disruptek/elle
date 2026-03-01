@@ -37,7 +37,7 @@
 #   {:a 1}     struct (immutable)     @{:a 1}     table  (mutable)
 #   "hello"    string (immutable)     @"hello"    buffer (mutable)
 
-(print "=== mutability split ===")
+
 
 # A contact is an immutable struct — once created, it never changes.
 (def alice {:name "Alice" :email "alice@example.com" :tags [:dev :lead]})
@@ -67,7 +67,7 @@
 # 2. Polymorphic get — one function, every collection
 # ========================================
 
-(print "=== polymorphic get ===")
+
 
 (assert-eq (get [10 20 30] 1) 20 "get on tuple")        # index by position
 (assert-eq (get @[10 20 30] 2) 30 "get on array")       # same for arrays
@@ -89,13 +89,14 @@
 #
 # Structs destructure by key; tuples/arrays by position.
 
-(print "=== destructuring ===")
+
 
 # Destructure a contact's fields
 (def {:name aname :email aemail :tags atags} (get book "alice"))  # by key
 (assert-eq aname "Alice" "struct destructure: name")
 (assert-eq aemail "alice@example.com" "struct destructure: email")
 (assert-eq (get atags 0) :dev "struct destructure: first tag")
+(display "  alice → name=") (display aname) (display " email=") (print aemail)
 
 # Destructure a tag tuple by position
 (def [first-tag second-tag] atags)   # first element, second element
@@ -123,7 +124,7 @@
 # Lists are built from cons cells.  They're ideal for accumulation
 # and recursive processing, less so for random access.
 
-(print "=== lists ===")
+
 
 # Build a list of all contact names from the book's keys
 (def names (keys book))              # keys returns a list
@@ -147,7 +148,7 @@
 # 5. each — iteration across types
 # ========================================
 
-(print "=== each ===")
+
 
 # Iterate the book's keys, collect contacts into an array
 (var all-contacts @[])
@@ -178,7 +179,7 @@
 # 6. Querying — finding contacts by tag
 # ========================================
 
-(print "=== querying ===")
+
 
 (defn has-tag? [contact tag]
   "Check whether a contact's tag tuple contains the given tag."
@@ -210,7 +211,7 @@
 # 7. Formatting — destructuring and string building
 # ========================================
 
-(print "=== formatting ===")
+
 
 (defn format-tags [tags]
   "Format a tag tuple as a comma-separated string in brackets."
@@ -231,6 +232,7 @@
 (assert-true (string/contains? alice-str "Alice") "formatted: has name")
 (assert-true (string/contains? alice-str "alice@example.com") "formatted: has email")
 (assert-true (string/contains? alice-str "dev") "formatted: has tag")
+(display "  format-contact(alice) = ") (print alice-str)
 
 # Format every contact in the book
 (var formatted @[])
@@ -245,7 +247,7 @@
 # 8. String processing — cleaning imported data
 # ========================================
 
-(print "=== string processing ===")
+
 
 # Imagine importing raw CSV contact names
 (def raw-input "  Alice, Bob , Carol , Dave  ")
@@ -260,6 +262,7 @@
   (push clean (string/trim n)))    # trim leading/trailing whitespace
 (assert-eq (get clean 0) "Alice" "trimmed first name")
 (assert-eq (get clean 3) "Dave" "trimmed last name")
+(display "  trim/split \"  Alice, Bob , ...\" → ") (print (get clean 0))
 
 # Case operations
 (assert-eq (string/upcase "hello") "HELLO" "upcase")
@@ -283,13 +286,14 @@
     domain))
 
 (assert-eq (email-domain "alice@example.com") "example.com" "email-domain")
+(display "  email-domain(\"alice@example.com\") = ") (print (email-domain "alice@example.com"))
 
 
 # ========================================
 # 9. Array mutation — managing an invite list
 # ========================================
 
-(print "=== array mutation ===")
+
 
 # Build an invite list from the leads
 (var invites @[:alice :carol])
@@ -320,12 +324,14 @@
 # clusters — what humans perceive as "characters."  An emoji with a
 # skin-tone modifier is one element, not two codepoints or four bytes.
 
-(print "=== grapheme clusters ===")
+
 
 (assert-eq (length "hello") 5 "ASCII: one grapheme per byte")
 (assert-eq (length "héllo") 5 "precomposed é: one grapheme")
 (assert-eq (length "👋🏽") 1 "wave + skin tone: one grapheme cluster")
 (assert-eq (get "👋🏽" 0) "👋🏽" "get returns the whole cluster")
+(display "  (length \"hello\") = ") (display (length "hello"))
+  (display "  (length \"👋🏽\") = ") (print (length "👋🏽"))
 
 # Iterating a string with each yields grapheme clusters
 (var graphemes @[])
@@ -351,7 +357,7 @@
 # 11. Table mutation — updating and removing contacts
 # ========================================
 
-(print "=== table mutation ===")
+
 
 (assert-true (has-key? book "dave") "dave exists before del")
 (del book "dave")                  # remove a key from the table
@@ -371,7 +377,7 @@
 #
 # Structs support put and del, but always return new structs.
 
-(print "=== struct ops ===")
+
 
 (def point {:x 1 :y 2 :z 3})
 (def point2d (struct/del point :z))   # new struct without :z
@@ -397,7 +403,7 @@
 # concat: always returns a new value.  Neither argument is mutated.
 # append: for mutable types, mutates the first argument in place.
 
-(print "=== concat vs append ===")
+
 
 (def t1 [1 2])
 (def t2 [3 4])
@@ -423,7 +429,7 @@
 #
 # ;expr spreads an array or tuple into a function call's arguments.
 
-(print "=== splice ===")
+
 
 (def nums @[1 2 3])
 (assert-eq (+ ;nums) 6 "splice: spread array into +")  # (+ 1 2 3)
@@ -442,7 +448,7 @@
 # 15. Putting it together — export the book as CSV
 # ========================================
 
-(print "=== CSV export ===")
+
 
 (defn export-csv [the-book]
   "Export the contact book as CSV lines."
@@ -459,6 +465,8 @@
 (def csv (export-csv book))
 (assert-eq (get csv 0) "name,email,tags" "csv: header line")
 (assert-eq (length csv) 4 "csv: header + 3 data lines")
+(display "  csv header: ") (print (get csv 0))
+(display "  csv line 1: ") (print (get csv 1))
 
 # Every data line should contain an @
 (each line in (rest (list ;csv))   # ;csv spreads array into list constructor
@@ -468,4 +476,5 @@
 (assert-true (string/contains? (get csv 1) "Alice") "csv: first data line is alice")
 
 
-(print "=== All collection tests passed ===")
+(print "")
+(print "all collections passed.")

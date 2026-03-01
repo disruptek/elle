@@ -22,8 +22,9 @@ Follow these when writing or editing examples:
 - `each x in coll` for iteration. `->` / `->>` for pipelines.
 - `try`/`catch`/`protect`/`defer` for error handling.
 - `&opt`/`&keys`/`&named` where appropriate.
-- `(print "=== Section Name ===")` for section headers. Let assertions do
-  the work — minimize `display`/`newline` calls.
+- No `(print "=== Section ===")` headers. Use `(display ...)` / `(print ...)`
+  to show computed values — the program should visibly *do things* when run.
+  2-5 display lines per section showing interesting results.
 - Each file starts with a header comment listing what it demonstrates.
 - Each file should be a cohesive "application" or themed demonstration,
   not a bag of unrelated unit tests.
