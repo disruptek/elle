@@ -772,19 +772,8 @@ impl VM {
         let mut map = BTreeMap::new();
         for i in (0..args.len()).step_by(2) {
             let key = match TableKey::from_value(&args[i]) {
-                Ok(TableKey::Keyword(k)) => k,
-                Ok(_) => {
-                    set_error(
-                        fiber,
-                        "error",
-                        format!(
-                            "keyword argument key must be a keyword, got {}",
-                            args[i].type_name()
-                        ),
-                    );
-                    return None;
-                }
-                Err(_) => {
+                Some(TableKey::Keyword(k)) => k,
+                _ => {
                     set_error(
                         fiber,
                         "error",
