@@ -128,6 +128,24 @@ fn test_fn_flow_anonymous_function_name_is_nil() {
 }
 
 #[test]
+fn test_fn_flow_doc_with_docstring() {
+    let result = eval_source(
+        r#"
+        (defn my-add (x y) "Add two numbers." (+ x y))
+        (get (fn/flow my-add) :doc)
+        "#,
+    )
+    .unwrap();
+    assert_eq!(result, Value::string("Add two numbers."));
+}
+
+#[test]
+fn test_fn_flow_doc_without_docstring() {
+    let result = eval_source("(nil? (get (fn/flow (fn (x) x)) :doc))").unwrap();
+    assert_eq!(result, Value::TRUE);
+}
+
+#[test]
 fn test_fn_flow_branching_has_edges() {
     // An if-expression produces Branch terminators with edges
     let result = eval_source(

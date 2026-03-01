@@ -414,6 +414,12 @@ pub fn prim_fn_flow(args: &[Value]) -> (SignalBits, Value) {
             },
         );
 
+        // :doc
+        fields.insert(
+            TableKey::Keyword("doc".to_string()),
+            closure.doc.unwrap_or(Value::NIL),
+        );
+
         // :arity — use Display impl: "2", "1+", "2-4"
         fields.insert(
             TableKey::Keyword("arity".to_string()),

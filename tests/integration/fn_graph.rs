@@ -83,6 +83,18 @@ fn test_fn_graph_branching_has_edges() {
 }
 
 #[test]
+fn test_fn_graph_shows_docstring_in_label() {
+    let result = eval_source(
+        r#"
+        (defn my-fn (x) "Does stuff." (+ x 1))
+        (string/contains? (fn/graph (fn/flow my-fn)) "Does stuff.")
+        "#,
+    )
+    .unwrap();
+    assert_eq!(result, Value::TRUE);
+}
+
+#[test]
 fn test_fn_save_graph_writes_file() {
     let path = std::env::temp_dir().join(format!("elle-test-graph-{}.dot", std::process::id()));
     let path = path.to_str().unwrap();
