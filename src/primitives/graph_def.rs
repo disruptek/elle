@@ -25,23 +25,27 @@ pub fn define_graph_functions(vm: &mut VM, symbols: &mut SymbolTable) {
     let graph_code = r#"
         (def fn/graph (fn (cfg)
           (let ((name (get cfg :name)))
-            (let ((result
-                    (append
-                      (append
+            (let ((doc (get cfg :doc)))
+              (let ((label (if (nil? name)
+                             (if (nil? doc) "anonymous" doc)
+                             name)))
+                (let ((result
                         (append
                           (append
                             (append
                               (append
                                 (append
-                                  (append "digraph {\n  label=\""
-                                    (if (nil? name) "anonymous" name))
-                                  " arity:")
-                                (get cfg :arity))
-                              " regs:")
-                            (string (get cfg :regs)))
-                          " locals:")
-                        (string (get cfg :locals)))
-                      "\";\n  node [shape=record];\n")))
+                                  (append
+                                    (append
+                                      (append "digraph {\n  label=\""
+                                        label)
+                                      " arity:")
+                                    (get cfg :arity))
+                                  " regs:")
+                                (string (get cfg :regs)))
+                              " locals:")
+                            (string (get cfg :locals)))
+                          "\";\n  node [shape=record];\n")))
               (let ((blocks (get cfg :blocks)))
                 (let ((bi 0))
                   (while (< bi (length blocks))
@@ -88,7 +92,7 @@ pub fn define_graph_functions(vm: &mut VM, symbols: &mut SymbolTable) {
                                         ";\n"))
                                     (set ei (+ ei 1)))))))))
                       (set bi (+ bi 1))))))
-              (append result "}\n")))))
+              (append result "}\n")))))))
     "#;
 
     let save_graph_code = r#"
