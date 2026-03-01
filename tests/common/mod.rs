@@ -6,6 +6,26 @@
 use elle::context::{set_symbol_table, set_vm_context};
 use elle::{eval_all, init_stdlib, register_primitives, SymbolTable, Value, VM};
 
+/// Evaluate Elle source code through the pipeline WITHOUT stdlib.
+///
+/// Identical to `eval_source` except it skips `init_stdlib`. Use this
+/// for tests that never call stdlib functions (map, filter, fold, etc.).
+/// Prelude macros (defn, let*, ->, ->>, when, unless, try/catch, etc.)
+/// are still available — they're loaded by `compile_all`'s internal
+/// `Expander::load_prelude`, not by `init_stdlib`.
+#[allow(dead_code)]
+pub fn eval_source_bare(input: &str) -> Result<Value, String> {
+    let mut vm = VM::new();
+    let mut symbols = SymbolTable::new();
+    let _effects = register_primitives(&mut vm, &mut symbols);
+    set_vm_context(&mut vm as *mut VM);
+    set_symbol_table(&mut symbols as *mut SymbolTable);
+    // No init_stdlib — tests using this must not depend on stdlib functions
+    let result = eval_all(input, &mut symbols, &mut vm);
+    set_vm_context(std::ptr::null_mut());
+    result
+}
+
 /// Evaluate Elle source code through the full pipeline.
 ///
 /// Handles both single-form and multi-form input via `eval_all`.
