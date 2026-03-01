@@ -25,32 +25,34 @@
 (print "=== Immediates ===")
 
 # nil — the absence of a value
-(assert-true (nil? nil) "nil? on nil")
-(assert-false (nil? false) "nil? on false")
-(assert-false (nil? 0) "nil? on 0")
+(assert-true (nil? nil) "nil? on nil")         # nil is only equal to itself
+(assert-false (nil? false) "nil? on false")     # false is NOT nil
+(assert-false (nil? 0) "nil? on 0")            # 0 is NOT nil
 
-# Booleans
+# Booleans — true and false, that's it
 (assert-true (boolean? true) "boolean? on true")
 (assert-true (boolean? false) "boolean? on false")
-(assert-false (boolean? 1) "boolean? not on int")
+(assert-false (boolean? 1) "boolean? not on int")  # 1 is not a boolean
 
-# Integers and floats
-(assert-true (number? 42) "number? on int")
-(assert-true (number? 3.14) "number? on float")
-(assert-eq (type 42) :integer "42 is integer")
+# Integers are 48-bit signed: -140,737,488,355,328 to 140,737,488,355,327.
+# Floats are 64-bit IEEE 754 doubles.
+# (Both are NaN-boxed into a single 8-byte Value representation.)
+(assert-true (number? 42) "number? on int")     # integers are numbers
+(assert-true (number? 3.14) "number? on float") # floats are numbers
+(assert-eq (type 42) :integer "42 is integer")  # type returns a keyword
 (assert-eq (type 3.14) :float "3.14 is float")
-(assert-false (number? "42") "number? not on string")
+(assert-false (number? "42") "number? not on string")  # "42" is a string
 
-# Symbols and keywords
-(assert-true (symbol? 'hello) "symbol? on quoted symbol")
-(assert-true (keyword? :hello) "keyword? on keyword")
+# Symbols and keywords — both are interned (fast equality)
+(assert-true (symbol? 'hello) "symbol? on quoted symbol")  # 'x quotes a symbol
+(assert-true (keyword? :hello) "keyword? on keyword")      # :x is a keyword
 (assert-false (= 'name :name) "symbol != keyword with same name")
 
 # Empty list is its own thing — not nil
-(assert-true (empty? (list)) "empty? on empty list")
-(assert-false (nil? (list)) "empty list is NOT nil")
+(assert-true (empty? (list)) "empty? on empty list")    # use empty? for lists
+(assert-false (nil? (list)) "empty list is NOT nil")     # () and nil differ!
 
-# type returns a keyword
+# (type x) returns a keyword describing x's type
 (assert-eq (type 42) :integer "type of int")
 (assert-eq (type 3.14) :float "type of float")
 (assert-eq (type "hi") :string "type of string")
@@ -68,12 +70,15 @@
 
 # Only nil and false are falsy — everything else is truthy.
 # This differs from C/Python/JS where 0, "", [] are falsy.
-(assert-false (if nil true false) "nil is falsy")
-(assert-false (if false true false) "false is falsy")
+#
+# (if test then else) evaluates test; if truthy, returns then, otherwise else.
+# else is optional and defaults to nil. if is an expression — it returns a value.
+(assert-false (if nil true false) "nil is falsy")        # nil → else branch
+(assert-false (if false true false) "false is falsy")    # false → else branch
 
-(assert-true (if 0 true false) "0 is truthy")
+(assert-true (if 0 true false) "0 is truthy")           # unlike C/Python
 (assert-true (if "" true false) "empty string is truthy")
-(assert-true (if (list) true false) "empty list () is truthy")
+(assert-true (if (list) true false) "empty list () is truthy")  # unlike nil!
 (assert-true (if [] true false) "empty tuple is truthy")
 (assert-true (if @[] true false) "empty array is truthy")
 (assert-true (if :keyword true false) "keyword is truthy")
@@ -86,27 +91,27 @@
 
 (print "=== Arithmetic ===")
 
-# Basic ops
-(assert-eq (+ 10 5) 15 "addition")
+# Prefix notation: (op arg1 arg2)
+(assert-eq (+ 10 5) 15 "addition")          # (+ a b) not a + b
 (assert-eq (- 10 3) 7 "subtraction")
 (assert-eq (* 6 7) 42 "multiplication")
 (assert-eq (/ 10 2) 5 "division")
-(assert-eq (mod 10 3) 1 "modulo")
-(assert-eq (% 10 3) 1 "% is mod alias")
+(assert-eq (mod 10 3) 1 "modulo")           # remainder after division
+(assert-eq (% 10 3) 1 "% is mod alias")     # % is shorthand for mod
 
-# Variadic + and *
-(assert-eq (+ 1 2 3 4) 10 "+ is variadic")
-(assert-eq (* 1 2 3 4) 24 "* is variadic")
+# + and * accept any number of arguments
+(assert-eq (+ 1 2 3 4) 10 "+ is variadic")  # (+ 1 2 3 4) = 10
+(assert-eq (* 1 2 3 4) 24 "* is variadic")  # (+ 1 2 3 4) = 24
 
-# Integer vs float
+# Integer division truncates; float division doesn't
 (assert-eq (/ 7 2) 3 "int / int = int (truncates)")
 (assert-eq (/ 7.0 2) 3.5 "float / int = float")
 
-# Utility
-(assert-eq (abs -5) 5 "abs")
+# Utility functions
+(assert-eq (abs -5) 5 "abs")                # absolute value
 (assert-eq (min 3 1 4 1 5) 1 "min is variadic")
 (assert-eq (max 3 1 4 1 5) 5 "max is variadic")
-(assert-true (even? 4) "even?")
+(assert-true (even? 4) "even?")             # predicate: name ends in ?
 (assert-true (odd? 3) "odd?")
 (assert-true (even? 0) "0 is even")
 
@@ -117,13 +122,16 @@
 
 (print "=== Math ===")
 
-(assert-eq (math/sqrt 16) 4.0 "sqrt returns float")
-(assert-eq (math/floor 3.7) 3 "floor returns integer")
-(assert-eq (math/ceil 3.2) 4 "ceil returns integer")
-(assert-eq (math/round 3.5) 4 "round returns integer")
-(assert-eq (math/pow 2 10) 1024 "pow")
+# math/ prefix for transcendental functions
+(assert-eq (math/sqrt 16) 4.0 "sqrt returns float")   # always returns float
+(assert-eq (math/floor 3.7) 3 "floor returns integer") # round down → int
+(assert-eq (math/ceil 3.2) 4 "ceil returns integer")   # round up → int
+(assert-eq (math/round 3.5) 4 "round returns integer") # nearest → int
+(assert-eq (math/pow 2 10) 1024 "pow")                 # 2^10
 (assert-eq (math/sin 0) 0.0 "sin returns float")
 (assert-eq (math/cos 0) 1.0 "cos returns float")
+
+# Constants are functions (call with no args)
 (assert-true (> (math/pi) 3.14) "pi > 3.14")
 (assert-true (< (math/pi) 3.15) "pi < 3.15")
 (assert-true (> (math/e) 2.71) "e > 2.71")
@@ -136,26 +144,27 @@
 
 (print "=== Comparison and logic ===")
 
+# = is structural equality (works on any type)
 (assert-true (= 1 1) "= on equal ints")
 (assert-false (= 1 2) "= on unequal ints")
-(assert-true (< 1 2) "<")
-(assert-true (> 2 1) ">")
-(assert-true (<= 1 1) "<= equal")
+(assert-true (< 1 2) "<")           # less than
+(assert-true (> 2 1) ">")           # greater than
+(assert-true (<= 1 1) "<= equal")   # less or equal
 (assert-true (<= 1 2) "<= less")
-(assert-true (>= 2 2) ">= equal")
+(assert-true (>= 2 2) ">= equal")   # greater or equal
 (assert-true (>= 3 2) ">= greater")
 
-(assert-true (not false) "not false")
+(assert-true (not false) "not false")      # logical negation
 (assert-false (not true) "not true")
-(assert-false (not 0) "not 0 (0 is truthy)")
+(assert-false (not 0) "not 0 (0 is truthy)")  # 0 is truthy, so (not 0) = false
 
-# and/or are short-circuiting and return the deciding value
+# and/or short-circuit and return the deciding value (not always a boolean)
 (assert-eq (and 1 2 3) 3 "and: returns last if all truthy")
-(assert-eq (and 1 false 3) false "and: returns first falsy")
-(assert-eq (and 1 nil 3) nil "and: nil is falsy")
-(assert-eq (or nil false 42) 42 "or: returns first truthy")
+(assert-eq (and 1 false 3) false "and: returns first falsy")  # stops at false
+(assert-eq (and 1 nil 3) nil "and: nil is falsy")             # stops at nil
+(assert-eq (or nil false 42) 42 "or: returns first truthy")   # skips nil, false
 (assert-eq (or nil false) false "or: returns last if all falsy")
-(assert-eq (or 0 1) 0 "or: 0 is truthy, returned first")
+(assert-eq (or 0 1) 0 "or: 0 is truthy, returned first")     # 0 is truthy!
 
 
 # ========================================
@@ -164,12 +173,13 @@
 
 (print "=== Bitwise ===")
 
-(assert-eq (bit/and 12 10) 8 "bit/and")
-(assert-eq (bit/or 12 10) 14 "bit/or")
-(assert-eq (bit/xor 12 10) 6 "bit/xor")
-(assert-eq (bit/not 0) -1 "bit/not 0")
-(assert-eq (bit/shl 1 3) 8 "bit/shl")
-(assert-eq (bit/shr 16 2) 4 "bit/shr")
+# bit/ prefix for bitwise operations on integers
+(assert-eq (bit/and 12 10) 8 "bit/and")   # 1100 & 1010 = 1000
+(assert-eq (bit/or 12 10) 14 "bit/or")    # 1100 | 1010 = 1110
+(assert-eq (bit/xor 12 10) 6 "bit/xor")   # 1100 ^ 1010 = 0110
+(assert-eq (bit/not 0) -1 "bit/not 0")    # ~0 = all ones = -1
+(assert-eq (bit/shl 1 3) 8 "bit/shl")     # 1 << 3 = 8
+(assert-eq (bit/shr 16 2) 4 "bit/shr")    # 16 >> 2 = 4
 
 # Build a byte from nibbles: 0xA5 = (10 << 4) | 5 = 165
 (assert-eq (bit/or (bit/shl 10 4) 5) 165 "nibble assembly")
@@ -183,24 +193,24 @@
 
 # number->string and back
 (assert-eq (number->string 42) "42" "number->string int")
-(assert-eq (string->integer "42") 42 "string->integer")
-(assert-eq (string->float "3.14") 3.14 "string->float")
+(assert-eq (string->integer "42") 42 "string->integer")     # parse string → int
+(assert-eq (string->float "3.14") 3.14 "string->float")     # parse string → float
 
-# Generic converters
-(assert-eq (integer 3.7) 3 "integer truncates float")
-(assert-eq (float 42) 42.0 "float from int")
-(assert-true (string? (string 42)) "string from int")
+# Generic converters — named after the target type
+(assert-eq (integer 3.7) 3 "integer truncates float")  # truncates, doesn't round
+(assert-eq (float 42) 42.0 "float from int")           # widens to float
+(assert-true (string? (string 42)) "string from int")   # any value → string
 (assert-true (string? (string true)) "string from bool")
 
-# Symbol/keyword to string
+# Symbol/keyword → string
 (assert-eq (symbol->string 'hello) "hello" "symbol->string")
 (assert-eq (keyword->string :hello) "hello" "keyword->string (no colon)")
 
-# any->string works on everything
+# any->string works on any value
 (assert-true (string? (any->string (list 1 2))) "any->string on list")
 (assert-true (string? (any->string nil)) "any->string on nil")
 
-# Round-trip
+# Round-trip: int → string → int
 (assert-eq (string->integer (number->string 99)) 99 "round-trip int")
 
 
@@ -215,14 +225,14 @@
 #   {...}  struct (immutable)    @{...}  table  (mutable)
 #   "..."  string (immutable)    @"..."  buffer (mutable)
 
-(assert-eq (type [1 2 3]) :tuple "[] is tuple")
-(assert-eq (type @[1 2 3]) :array "@[] is array")
-(assert-eq (type {:a 1}) :struct "{} is struct")
-(assert-eq (type @{:a 1}) :table "@{} is table")
-(assert-eq (type "hello") :string "\"\" is string")
-(assert-eq (type @"hello") :buffer "@\"\" is buffer")
+(assert-eq (type [1 2 3]) :tuple "[] is tuple")       # immutable indexed
+(assert-eq (type @[1 2 3]) :array "@[] is array")      # mutable indexed
+(assert-eq (type {:a 1}) :struct "{} is struct")       # immutable keyed
+(assert-eq (type @{:a 1}) :table "@{} is table")       # mutable keyed
+(assert-eq (type "hello") :string "\"\" is string")    # immutable text
+(assert-eq (type @"hello") :buffer "@\"\" is buffer")   # mutable text
 
-# Type predicates
+# Predicates match the specific type
 (assert-true (tuple? [1 2]) "tuple?")
 (assert-true (array? @[1 2]) "array?")
 (assert-true (struct? {:a 1}) "struct?")
@@ -230,7 +240,7 @@
 (assert-true (string? "hi") "string?")
 (assert-true (buffer? @"hi") "buffer?")
 
-# Mutable types are not immutable types and vice versa
+# Mutable types are NOT their immutable counterparts
 (assert-false (tuple? @[1 2]) "array is not tuple")
 (assert-false (array? [1 2]) "tuple is not array")
 
@@ -242,42 +252,42 @@
 (print "=== Bytes and blobs ===")
 
 # bytes (immutable) and blob (mutable) — raw binary data
-(def b (bytes 72 101 108 108 111))
+(def b (bytes 72 101 108 108 111))   # "Hello" in ASCII
 (assert-eq (type b) :bytes "bytes type")
 (assert-eq (length b) 5 "bytes length")
-(assert-eq (get b 0) 72 "get returns integer byte value")
+(assert-eq (get b 0) 72 "get returns integer byte value")  # not a char
 (assert-eq (bytes->string b) "Hello" "bytes->string (UTF-8)")
 (assert-eq (bytes->hex b) "48656c6c6f" "bytes->hex")
 
-(def bl (blob 72 101 108))
+(def bl (blob 72 101 108))          # mutable version
 (assert-eq (type bl) :blob "blob type")
 (assert-eq (get bl 0) 72 "get on blob")
 
-# each iterates byte values (integers)
+# each over bytes yields integers (byte values)
 (var byte-sum 0)
 (each v in (bytes 1 2 3)
-  (set byte-sum (+ byte-sum v)))
+  (set byte-sum (+ byte-sum v)))    # 1 + 2 + 3 = 6
 (assert-eq byte-sum 6 "each over bytes sums integers")
 
 # Conversions between bytes, blobs, strings, buffers
-(def b2 (string->bytes "hi"))
+(def b2 (string->bytes "hi"))        # string → bytes
 (assert-eq (type b2) :bytes "string->bytes")
 (assert-eq (bytes->string b2) "hi" "round-trip string->bytes->string")
 
-(def bl2 (bytes->blob b2))
+(def bl2 (bytes->blob b2))          # bytes → blob (mutable copy)
 (assert-eq (type bl2) :blob "bytes->blob")
-(def b3 (blob->bytes bl2))
+(def b3 (blob->bytes bl2))          # blob → bytes (immutable copy)
 (assert-eq (type b3) :bytes "blob->bytes")
 
-(def buf-bytes (buffer->bytes @"world"))
+(def buf-bytes (buffer->bytes @"world"))  # buffer → bytes
 (assert-eq (type buf-bytes) :bytes "buffer->bytes")
 (assert-eq (bytes->string buf-bytes) "world" "buffer->bytes preserves content")
 
-(def buf (bytes->buffer (string->bytes "test")))
+(def buf (bytes->buffer (string->bytes "test")))  # string → bytes → buffer
 (assert-eq (type buf) :buffer "bytes->buffer")
 
-# Slice
-(def sliced (slice (bytes 10 20 30 40 50) 1 3))
+# Slice — half-open range [start, end)
+(def sliced (slice (bytes 10 20 30 40 50) 1 3))  # bytes at index 1,2
 (assert-eq (length sliced) 2 "slice bytes length")
 (assert-eq (get sliced 0) 20 "slice bytes content")
 
@@ -289,12 +299,12 @@
 (print "=== Boxes ===")
 
 # box/unbox/rebox — explicit first-class mutable cells
-(def b (box 0))
+(def b (box 0))                      # create a box holding 0
 (assert-true (box? b) "box? on box")
 (assert-false (box? 42) "box? on non-box")
-(assert-eq (unbox b) 0 "unbox initial value")
+(assert-eq (unbox b) 0 "unbox initial value")   # read the box
 
-(rebox b 42)
+(rebox b 42)                         # write a new value
 (assert-eq (unbox b) 42 "rebox updates value")
 
 # Boxes are different from var/set — they're first-class values.
@@ -322,13 +332,13 @@
 (print "=== Equality ===")
 
 # = does structural equality on data types
-(assert-true (= [1 2 3] [1 2 3]) "= on equal tuples")
+(assert-true (= [1 2 3] [1 2 3]) "= on equal tuples")          # same contents → equal
 (assert-true (= @[1 2 3] @[1 2 3]) "= on equal arrays (structural)")
 (assert-true (= {:a 1 :b 2} {:a 1 :b 2}) "= on equal structs")
 (assert-true (= "hello" "hello") "= on equal strings")
 (assert-true (= (bytes 1 2 3) (bytes 1 2 3)) "= on equal bytes")
 
-# = returns false for different values
+# Different contents → not equal
 (assert-false (= [1 2] [1 3]) "= on different tuples")
 (assert-false (= "hello" "world") "= on different strings")
 
@@ -337,7 +347,7 @@
 (assert-false (= 42 43) "= on different ints")
 
 # Symbols compare by identity (interned)
-(assert-true (= 'foo 'foo) "= on same symbol")
+(assert-true (= 'foo 'foo) "= on same symbol")    # same interned name → equal
 (assert-false (= 'foo 'bar) "= on different symbols")
 
 # Keywords compare by identity (interned)
@@ -345,10 +355,19 @@
 (assert-false (= :foo :bar) "= on different keywords")
 
 # Closures compare by reference — two identical lambdas are NOT equal
-(def f (fn [x] x))
-(def g (fn [x] x))
+(def f (fn [x] x))                  # a function
+(def g (fn [x] x))                  # same code, different object
 (assert-false (= f g) "identical lambdas are different objects")
 (assert-true (= f f) "same closure is equal to itself")
+
+# Destructuring works on any compound type
+(def [a b c] [10 20 30])            # unpack a tuple into bindings
+(assert-eq a 10 "tuple destructure: first")
+(assert-eq c 30 "tuple destructure: third")
+
+(def {:x px :y py} {:x 5 :y 10})    # unpack a struct by key
+(assert-eq px 5 "struct destructure: x")
+(assert-eq py 10 "struct destructure: y")
 
 
 (print "=== All basics tests passed ===")
