@@ -110,6 +110,9 @@ mod docstrings {
 mod fn_flow {
     include!("fn_flow.rs");
 }
+mod fn_graph {
+    include!("fn_graph.rs");
+}
 mod table_keys {
     include!("table_keys.rs");
 }
