@@ -143,7 +143,7 @@
 (defmacro my-swap (a b)
   `(let ((tmp ,a)) (set ,a ,b) (set ,b tmp)))
 
-(let ((tmp 100) (x 1) (y 2))
+(let ([tmp 100] [x 1] [y 2])
   (my-swap x y)
   (assert-eq tmp 100 "swap: caller's tmp is not captured")
   (assert-eq x 2 "swap: x is now 2")
@@ -176,7 +176,7 @@
 # you need a temporary binding that won't collide with anything.
 
 (defmacro with-temp (val body)
-  (let ((g (gensym "tmp")))
+  (let ([g (gensym "tmp")])
     `(let ((,g ,val)) ,body)))
 
 (with-temp 42 (assert-true true "gensym macro expanded without error"))
@@ -217,7 +217,7 @@
 # The macro-introduced `it` correctly shadows an outer `it` because
 # the let binding is closer in scope.
 
-(let ((it 999))
+(let ([it 999])
   (assert-eq (aif 42 it 0) 42
     "aif: macro's `it` shadows outer `it` inside then-branch"))
 

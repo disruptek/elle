@@ -175,20 +175,20 @@
 # ========================================
 
 # Destructuring in let — parallel bindings
-(def let-sum (let (((la lb) (list 10 20))) (+ la lb)))
+(def let-sum (let ([(la lb) (list 10 20)]) (+ la lb)))
 (assert-eq let-sum 30 "let: destructure sum")
 
 # let* — sequential: second binding uses the first
-(def star-seq (let* (((sa sb) (list 1 2))
-                     (sc (+ sa sb)))
+(def star-seq (let* ([(sa sb) (list 1 2)]
+                     [sc (+ sa sb)])
                 sc))
 (assert-eq star-seq 3 "let*: sequential destructure")
 
 # let* — chained destructuring, each level depends on previous
 (def star-chain
-  (let* (((ca cb) (list 3 4))
-         ([cx cy] [ca cb])
-         (total (+ cx cy)))
+  (let* ([(ca cb) (list 3 4)]
+         [[cx cy] [ca cb]]
+         [total (+ cx cy)])
     total))
 (assert-eq star-chain 7 "let*: chained destructure")
 
@@ -229,7 +229,7 @@
 (assert-eq (point-magnitude {:x 3 :y 4}) 7 "fn struct param")
 
 # Table in let
-(def let-tbl (let (({:a la :b lb} {:a 10 :b 20})) (+ la lb)))
+(def let-tbl (let ([{:a la :b lb} {:a 10 :b 20}]) (+ la lb)))
 (assert-eq let-tbl 30 "let: table destructure sum")
 
 (display "  {:name n :age a} → ") (display sk-name) (display ", ") (print sk-age)

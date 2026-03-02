@@ -1,46 +1,38 @@
 # Elle Examples
 
-Each file is a self-verifying program that exits 0 on success, 1 on failure.
-CI runs every `.lisp` file here with a 10-second timeout. These are integration
-tests, not tutorials — they exercise the full compilation pipeline (reader →
-expander → analyzer → lowerer → emitter → VM).
-
-## Running
+Executable programs that demonstrate Elle's features. Each file is a
+self-contained application — run it, read the output, read the source.
 
 ```bash
-cargo run -- examples/basics.lisp     # single file
-cargo test --test '*'                  # all examples as part of the test suite
+cargo run -- examples/hello.lisp         # start here
+cargo run -- examples/basics.lisp        # then explore
+cargo test --test '*'                    # run them all
 ```
-
-## Assertions
-
-`assertions.lisp` defines shared assertion helpers. All other files load it:
-
-```lisp
-(import-file "./examples/assertions.lisp")
-```
-
-Available assertions: `assert-eq`, `assert-true`, `assert-false`,
-`assert-list-eq`, `assert-not-nil`, `assert-string-eq`. Each prints
-expected vs actual on failure and exits with code 1.
 
 ## Files
 
-| File | Theme | Covers |
-|------|-------|--------|
-| `basics.lisp` | Type system tour | Immediates, truthiness, arithmetic, math, comparison, bitwise, conversions, `@` mutability split, bytes/blobs, boxes, equality |
-| `functions.lisp` | Functional toolkit | `defn`/`fn`, lexical scope, closures, HOFs, composition, pipelines, variadic, mutual recursion, `block`/`break`, mutable captures |
-| `control.lisp` | Expression evaluator | `if`, `cond`, `case`, `when`/`unless`, `if-let`/`when-let`, `while`, `forever`, `block`/`break`, `match` (full pattern coverage), `each`, `->` / `->>` |
-| `collections.lisp` | Contact book app | Literal syntax, mutability split, polymorphic `get`/`put`, destructuring, `each`, threading, splice, string ops, grapheme clusters |
-| `destructuring.lisp` | Unpacking data | Silent nil semantics, wildcards, `& rest`, nested patterns, `var`+`set`, `let`/`let*`, struct/table by-key, match dispatch on struct tags |
-| `errors.lisp` | Error handling | `error`, `try`/`catch`, `protect`, `defer`, `with`, error propagation, safe wrappers, validation patterns |
-| `coroutines.lisp` | Cooperative sequences | `coro/new`, `yield`, lifecycle tracking, Fibonacci generator, closure captures, interleaving, nesting, `yield*` delegation |
-| `meta.lisp` | Macros and hygiene | `defmacro`, quasiquote/unquote, macro composition, `gensym`, macro hygiene, `datum->syntax`, `syntax->datum` |
-| `concurrency.lisp` | Parallel threads | `spawn`, `join`, closure captures across threads, `current-thread-id`, parallel computation |
-| `processes.lisp` | Erlang-style actors | Fiber-based scheduler, message passing, `spawn`/`recv`/`!`, links, `trap-exit`, crash propagation |
-| `io.lisp` | Files, JSON, modules | `slurp`/`spit`, paths, directories, `json-parse`/`json-serialize`, `import-file` |
-| `introspection.lisp` | Looking inside | Clock primitives, `time/elapsed`, closure introspection, `disbit`/`disjit`, `debug-print`, `trace`, benchmarking |
-| `ffi.lisp` | C interop | `ffi/native`, `ffi/defbind`, memory management, structs, variadic calls, callbacks (`qsort`) |
+Start with [`hello.lisp`](hello.lisp) and work down:
 
-| `assertions.lisp` | — | Shared assertion library (loaded by all other files) |
-| `hello.lisp` | — | Smoke test (no assertions) |
+| File | What it is |
+|------|------------|
+| [`hello.lisp`](hello.lisp) | Smoke test — one line, proves the toolchain works |
+| [`basics.lisp`](basics.lisp) | Type system tour: immediates, truthiness, arithmetic, the mutable/immutable split, bytes, boxes, equality |
+| [`functions.lisp`](functions.lisp) | A gradebook built with `defn`/`fn`, closures, higher-order functions, composition, pipelines, variadic and mutual recursion |
+| [`control.lisp`](control.lisp) | An expression evaluator grown section by section: `if`, `cond`, `case`, `when`/`unless`, `if-let`/`when-let`, `while`, `forever`, `block`/`break`, full `match` patterns, `->` / `->>` |
+| [`collections.lisp`](collections.lisp) | A contact book app exercising literal syntax, `get`/`put`, destructuring, `each`, threading, splice, string ops, grapheme clusters |
+| [`destructuring.lisp`](destructuring.lisp) | Unpacking data: silent nil semantics, wildcards, `& rest`, nested patterns, struct/table by-key, match dispatch on struct tags |
+| [`errors.lisp`](errors.lisp) | Error handling: `error`, `try`/`catch`, `protect`, `defer`, `with`, propagation, safe wrappers, validation |
+| [`coroutines.lisp`](coroutines.lisp) | Cooperative sequences: `coro/new`, `yield`, lifecycle, Fibonacci generator, interleaving, nesting, `yield*` delegation |
+| [`meta.lisp`](meta.lisp) | Macros and hygiene: `defmacro`, quasiquote/unquote, `gensym`, `datum->syntax`, `syntax->datum` |
+| [`concurrency.lisp`](concurrency.lisp) | Parallel threads: `spawn`, `join`, closure capture across threads, parallel computation |
+| [`processes.lisp`](processes.lisp) | Erlang-style actors: fiber-based scheduler, message passing with `send`/`recv`, links, `trap-exit`, crash propagation |
+| [`io.lisp`](io.lisp) | Files, JSON, modules: `slurp`/`spit`, paths, directories, `json-parse`/`json-serialize`, `import-file` |
+| [`introspection.lisp`](introspection.lisp) | Looking inside: clock primitives, `time/elapsed`, closure introspection, `disbit`/`disjit`, benchmarking |
+| [`ffi.lisp`](ffi.lisp) | C interop: `ffi/native`, `ffi/defbind`, structs, variadic calls, callbacks (`qsort`) |
+
+[`assertions.lisp`](assertions.lisp) is a shared assertion library loaded by
+all other files. It provides `assert-eq`, `assert-true`, `assert-false`,
+`assert-list-eq`, `assert-not-nil`, and `assert-string-eq`.
+
+Every file exits 0 on success, 1 on failure. CI runs each one with a
+10-second timeout.
