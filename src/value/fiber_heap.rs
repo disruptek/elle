@@ -70,6 +70,10 @@ impl FiberHeap {
     }
 
     pub fn alloc(&mut self, obj: HeapObject) -> Value {
+        debug_assert!(
+            !self.active_allocator.is_null(),
+            "FiberHeap::alloc called before init_active_allocator"
+        );
         let needs_drop = needs_drop(obj.tag());
         let ptr: &mut HeapObject = self.bump.alloc(obj);
         let raw = ptr as *mut HeapObject;
@@ -87,15 +91,23 @@ impl FiberHeap {
     /// Run destructors for objects allocated after the mark, then truncate
     /// the destructor list. Does NOT reset the bump (no partial reset).
     pub fn release(&mut self, mark: ArenaMark) {
-        let dtor_len = mark.dtor_len();
-        // Walk in reverse: newest first
-        for i in (dtor_len..self.dtors.len()).rev() {
+        self.run_dtors(mark.dtor_len());
+        self.dtors.truncate(mark.dtor_len());
+        self.alloc_count = mark.position();
+    }
+
+    /// Run destructors in reverse order from `self.dtors[start..]`.
+    ///
+    /// # Safety
+    /// Each pointer in `dtors` must be valid for `drop_in_place`.
+    /// This is guaranteed as long as the bump arena hasn't been reset
+    /// (which would deallocate the memory without calling destructors).
+    fn run_dtors(&self, start: usize) {
+        for i in (start..self.dtors.len()).rev() {
             unsafe {
                 std::ptr::drop_in_place(self.dtors[i]);
             }
         }
-        self.dtors.truncate(dtor_len);
-        self.alloc_count = mark.position();
     }
 
     /// Total number of objects allocated since last clear/release.
@@ -117,11 +129,7 @@ impl FiberHeap {
     /// Package 5 scope bumps were stacked). The pointer remains valid
     /// because `Bump::reset()` doesn't move the Bump struct.
     pub fn clear(&mut self) {
-        for i in (0..self.dtors.len()).rev() {
-            unsafe {
-                std::ptr::drop_in_place(self.dtors[i]);
-            }
-        }
+        self.run_dtors(0);
         self.dtors.clear();
         self.alloc_count = 0;
         self.bump.reset();
@@ -137,11 +145,7 @@ impl Drop for FiberHeap {
         // Run destructors for all tracked objects before the bump deallocates.
         // Without this, inner heap allocations (Vec buffers, Rc refcounts,
         // BTreeMap nodes, etc.) would leak when the bump is dropped.
-        for i in (0..self.dtors.len()).rev() {
-            unsafe {
-                std::ptr::drop_in_place(self.dtors[i]);
-            }
-        }
+        self.run_dtors(0);
     }
 }
 
@@ -204,6 +208,13 @@ pub fn is_fiber_heap_installed() -> bool {
     CURRENT_FIBER_HEAP.with(|cell| !cell.get().is_null())
 }
 
+/// Read the current fiber heap raw pointer (single TLS read).
+/// Returns null if no heap is installed. Used by `heap::alloc()` to avoid
+/// double TLS lookup (checking installed + dispatching are one operation).
+pub fn current_heap_ptr() -> *mut FiberHeap {
+    CURRENT_FIBER_HEAP.with(|cell| cell.get())
+}
+
 pub fn save_current_heap() -> *mut FiberHeap {
     CURRENT_FIBER_HEAP.with(|cell| cell.get())
 }
@@ -261,6 +272,7 @@ mod tests {
     #[test]
     fn test_fiber_heap_alloc() {
         let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
         let v = heap.alloc(HeapObject::String("hello".into()));
         assert_eq!(heap.len(), 1);
         assert!(v.is_heap());
@@ -276,6 +288,7 @@ mod tests {
     #[test]
     fn test_fiber_heap_mark_release() {
         let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
         let mark = heap.mark();
         heap.alloc(HeapObject::String("a".into()));
         heap.alloc(HeapObject::String("b".into()));
@@ -288,6 +301,7 @@ mod tests {
     #[test]
     fn test_fiber_heap_nested_mark_release() {
         let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
         let outer_mark = heap.mark();
         heap.alloc(HeapObject::String("outer".into()));
         let inner_mark = heap.mark();
@@ -302,6 +316,7 @@ mod tests {
     #[test]
     fn test_fiber_heap_clear_runs_destructors() {
         let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
         heap.alloc(HeapObject::String("a".into()));
         heap.alloc(HeapObject::String("b".into()));
         heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
@@ -315,6 +330,7 @@ mod tests {
     #[test]
     fn test_fiber_heap_non_drop_types_not_tracked() {
         let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
         heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
         heap.alloc(HeapObject::Float(42.5));
         heap.alloc(HeapObject::Cell(std::cell::RefCell::new(Value::NIL), false));
@@ -377,6 +393,8 @@ mod tests {
     fn test_save_restore() {
         let mut heap_a = Box::new(FiberHeap::new());
         let mut heap_b = Box::new(FiberHeap::new());
+        heap_a.init_active_allocator();
+        heap_b.init_active_allocator();
         heap_a.alloc(HeapObject::String("a".into()));
         heap_b.alloc(HeapObject::String("b1".into()));
         heap_b.alloc(HeapObject::String("b2".into()));

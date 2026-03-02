@@ -130,11 +130,11 @@ variants directly.
 | `repr/tests.rs` | ~100 | NaN-boxing tests |
 | `types.rs` | ~150 | Arity, SymbolId, NativeFn, etc. |
 | `closure.rs` | ~70 | Closure struct |
-| `fiber.rs` | ~535 | Fiber, FiberHandle, WeakFiberHandle, SuspendedFrame, Frame, SignalBits |
-| `fiber_heap.rs` | ~460 | FiberHeap (bumpalo + destructor tracking + active_allocator), thread-local routing, `needs_drop`, save/restore active_allocator |
+| `fiber.rs` | ~540 | Fiber, FiberHandle, WeakFiberHandle, SuspendedFrame, Frame, SignalBits |
+| `fiber_heap.rs` | ~490 | FiberHeap (bumpalo + destructor tracking + active_allocator), thread-local routing, `needs_drop`, save/restore active_allocator |
 | `error.rs` | ~50 | error_val() and format_error() helpers |
 | `ffi.rs` | ~22 | LibHandle |
-| `heap.rs` | ~330 | HeapObject, Cons, ThreadHandle, BindingInner, BindingScope, `heap_arena_len()`, `heap_arena_capacity()` |
+| `heap.rs` | ~650 | HeapObject, Cons, ThreadHandle, BindingInner, BindingScope, `heap_arena_len()`, `heap_arena_capacity()` |
 | `send.rs` | ~150 | SendValue for thread transfer |
 | `display.rs` | ~100 | Display formatting |
 | `intern.rs` | ~100 | Symbol interning |

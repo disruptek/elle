@@ -405,13 +405,6 @@ pub struct ArenaMark {
 }
 
 impl ArenaMark {
-    pub(crate) fn new(position: usize) -> Self {
-        ArenaMark {
-            position,
-            dtor_len: 0,
-        }
-    }
-
     pub(crate) fn new_with_dtor_len(position: usize, dtor_len: usize) -> Self {
         ArenaMark { position, dtor_len }
     }
@@ -453,7 +446,10 @@ pub fn heap_arena_mark() -> ArenaMark {
     if let Some(mark) = crate::value::fiber_heap::with_current_heap_mut(|heap| heap.mark()) {
         return mark;
     }
-    HEAP_ARENA.with(|arena| ArenaMark::new(arena.borrow().objects.len()))
+    HEAP_ARENA.with(|arena| ArenaMark {
+        position: arena.borrow().objects.len(),
+        dtor_len: 0,
+    })
 }
 
 /// Release all arena allocations back to the mark, dropping freed objects.
@@ -463,8 +459,9 @@ pub fn heap_arena_mark() -> ArenaMark {
 /// RefCell (already held by this truncate) and panic. This constrains
 /// `ExternalObject` — plugin Drop impls must not call `Value::cons()` etc.
 pub fn heap_arena_release(mark: ArenaMark) {
-    if crate::value::fiber_heap::is_fiber_heap_installed() {
-        crate::value::fiber_heap::with_current_heap_mut(|heap| heap.release(mark)).unwrap();
+    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
+    if !heap_ptr.is_null() {
+        unsafe { (*heap_ptr).release(mark) };
         return;
     }
     HEAP_ARENA.with(|arena| arena.borrow_mut().objects.truncate(mark.position()))
@@ -487,9 +484,14 @@ pub fn heap_arena_capacity() -> usize {
 }
 
 /// Allocate a heap object on the thread-local arena and return a Value pointing to it.
+///
+/// Single thread-local read: check the raw pointer once, then dispatch.
+/// `HeapObject` is not `Copy`, so we must not move it into a closure that
+/// might not execute (that would silently drop the object).
 pub fn alloc(obj: HeapObject) -> Value {
-    if crate::value::fiber_heap::is_fiber_heap_installed() {
-        return crate::value::fiber_heap::with_current_heap_mut(|heap| heap.alloc(obj)).unwrap();
+    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
+    if !heap_ptr.is_null() {
+        return unsafe { (*heap_ptr).alloc(obj) };
     }
     HEAP_ARENA.with(|arena| {
         let mut a = arena.borrow_mut();

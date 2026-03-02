@@ -256,12 +256,12 @@ maintain pointer stability (the thread-local stores a raw pointer to the heap).
 | File | Lines | Content |
 |------|-------|---------|
 | `mod.rs` | ~100 | VM struct, VmResult, public interface |
-| `dispatch.rs` | ~334 | Main execution loop, instruction dispatch, returns `(SignalBits, usize)` |
-| `call.rs` | ~662 | Call, TailCall, JIT dispatch (solo + batch), environment building |
+| `dispatch.rs` | ~373 | Main execution loop, instruction dispatch, returns `(SignalBits, usize)` |
+| `call.rs` | ~823 | Call, TailCall, JIT dispatch (solo + batch), environment building |
 | `signal.rs` | ~177 | Primitive signal dispatch (`handle_primitive_signal`), SIG_QUERY dispatch |
-| `fiber.rs` | ~388 | Fiber resume/propagate/cancel, shared swap protocol |
-| `execute.rs` | ~94 | `execute_bytecode_from_ip`, `execute_bytecode_saving_stack` |
-| `core.rs` | ~453 | VM struct, `resume_suspended`, stack trace helpers |
+| `fiber.rs` | ~532 | Fiber resume/propagate/cancel, shared swap protocol |
+| `execute.rs` | ~147 | `execute_bytecode_from_ip`, `execute_bytecode_saving_stack` |
+| `core.rs` | ~456 | VM struct, `resume_suspended`, stack trace helpers |
 | `stack.rs` | ~100 | Stack operations: LoadConst, Pop, Dup |
 | `variables.rs` | ~150 | LoadGlobal, StoreGlobal, LoadUpvalue, etc. |
 | `control.rs` | ~100 | Jump, JumpIfFalse, Return |
