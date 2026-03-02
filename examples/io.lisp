@@ -21,9 +21,9 @@
 (import-file "./examples/assertions.lisp")
 
 
-# All temp files live under a unique directory in /run/user/1000.
+# All temp files live under a unique directory relative to the working dir.
 (def tmp-dir
-  (string/join (list "/run/user/1000/elle-test-"
+  (string/join (list ".elle-test-"
                      (string (integer (* (clock/monotonic) 1000000000)))) ""))
 (create-directory-all tmp-dir)
 
