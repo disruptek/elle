@@ -13,6 +13,7 @@ pub mod heap;
 pub mod intern;
 pub mod repr;
 pub mod send;
+pub mod shared_alloc;
 pub mod types;
 
 // Export the new NaN-boxed Value as the canonical Value type

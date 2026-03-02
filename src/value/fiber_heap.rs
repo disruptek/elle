@@ -33,6 +33,20 @@
 //! - On **Call/Return** via `execute_bytecode_saving_stack` (Rust call stack)
 //! - On **Yield/Resume** via the `SuspendedFrame.active_allocator` field
 //! - On **Fiber swap** implicitly (each fiber owns its own `FiberHeap`)
+//!
+//! ## Shared allocator for inter-fiber exchange
+//!
+//! `FiberHeap` owns zero or more `SharedAllocator`s (in `owned_shared: Vec<Box<SharedAllocator>>`)
+//! and has a `shared_alloc: *mut SharedAllocator` pointer for routing.
+//!
+//! When `shared_alloc` is non-null, `alloc()` routes ALL allocations to the
+//! shared allocator instead of the private bump. This is set by `with_child_fiber`
+//! for yielding child fibers and nulled on swap-back.
+//!
+//! Ownership model: the parent's FiberHeap owns the `Box<SharedAllocator>`;
+//! the child receives a raw pointer. For root→child chains, the child owns it.
+//! `Box` provides pointer stability — the raw pointer remains valid even when
+//! `owned_shared` grows. Teardown happens on `clear()` or `Drop`.
 
 use std::cell::Cell;
 
@@ -58,6 +72,16 @@ pub struct FiberHeap {
     /// `RegionExit` pops the mark and calls `release()` to run destructors
     /// for objects allocated within the scope.
     scope_marks: Vec<ArenaMark>,
+    /// Shared allocators this fiber owns (as parent of yielding children).
+    /// `Box` for pointer stability — descendant fibers hold raw pointers
+    /// to the `SharedAllocator` data, which must not move when the `Vec` grows.
+    #[allow(clippy::vec_box)]
+    owned_shared: Vec<Box<crate::value::shared_alloc::SharedAllocator>>,
+    /// Raw pointer to the shared allocator for inter-fiber value exchange.
+    /// When non-null, `alloc()` routes all allocations to this shared
+    /// allocator instead of the private bump. Set by `with_child_fiber`
+    /// for yielding child fibers; nulled on swap-back.
+    shared_alloc: *mut crate::value::shared_alloc::SharedAllocator,
 }
 
 impl FiberHeap {
@@ -68,6 +92,8 @@ impl FiberHeap {
             alloc_count: 0,
             active_allocator: std::ptr::null(),
             scope_marks: Vec::new(),
+            owned_shared: Vec::new(),
+            shared_alloc: std::ptr::null_mut(),
         }
     }
 
@@ -90,6 +116,14 @@ impl FiberHeap {
             !self.active_allocator.is_null(),
             "FiberHeap::alloc called before init_active_allocator"
         );
+        // When a shared allocator is installed (yielding child fiber),
+        // route ALL allocations to it. This is conservative: some
+        // allocations may not escape the fiber, but sending them to
+        // shared is always safe. The shared allocator handles its own
+        // destructor tracking.
+        if !self.shared_alloc.is_null() {
+            return unsafe { &mut *self.shared_alloc }.alloc(obj);
+        }
         let needs_drop = needs_drop(obj.tag());
         let ptr: &mut HeapObject = self.bump.alloc(obj);
         let raw = ptr as *mut HeapObject;
@@ -164,12 +198,50 @@ impl FiberHeap {
         self.bump.chunk_capacity()
     }
 
+    /// Create a new shared allocator on this fiber's `owned_shared` list.
+    ///
+    /// Returns a raw pointer to the shared allocator. The `Box` in the Vec
+    /// provides pointer stability — the pointer remains valid even if the
+    /// Vec grows (Box stores the data on the heap, Vec stores the Box pointer).
+    pub fn create_shared_allocator(&mut self) -> *mut crate::value::shared_alloc::SharedAllocator {
+        let mut sa = Box::new(crate::value::shared_alloc::SharedAllocator::new());
+        let ptr = &mut *sa as *mut crate::value::shared_alloc::SharedAllocator;
+        self.owned_shared.push(sa);
+        ptr
+    }
+
+    /// Current shared allocator pointer. Returns null if none is set.
+    pub fn shared_alloc(&self) -> *mut crate::value::shared_alloc::SharedAllocator {
+        self.shared_alloc
+    }
+
+    /// Set the shared allocator pointer for this fiber.
+    /// When non-null, `alloc()` routes all allocations to the shared allocator.
+    pub fn set_shared_alloc(&mut self, ptr: *mut crate::value::shared_alloc::SharedAllocator) {
+        self.shared_alloc = ptr;
+    }
+
+    /// Clear the shared allocator pointer (set to null).
+    /// Called on swap-back when the child is no longer executing.
+    pub fn clear_shared_alloc(&mut self) {
+        self.shared_alloc = std::ptr::null_mut();
+    }
+
     /// Drop all tracked objects and reset the bump allocator.
     ///
-    /// Resets `active_allocator` to point to the root bump (in case
-    /// Package 5 scope bumps were stacked). The pointer remains valid
-    /// because `Bump::reset()` doesn't move the Bump struct.
+    /// Also tears down all owned shared allocators and nulls the
+    /// shared_alloc pointer. Resets `active_allocator` to point to the
+    /// root bump. The pointer remains valid because `Bump::reset()`
+    /// doesn't move the Bump struct.
     pub fn clear(&mut self) {
+        // Tear down owned shared allocators first (their dtors may
+        // reference data that is not in our private bump).
+        for sa in &mut self.owned_shared {
+            sa.teardown();
+        }
+        self.owned_shared.clear();
+        self.shared_alloc = std::ptr::null_mut();
+
         self.run_dtors(0);
         self.dtors.clear();
         self.scope_marks.clear();
@@ -184,6 +256,10 @@ impl FiberHeap {
 
 impl Drop for FiberHeap {
     fn drop(&mut self) {
+        // Tear down owned shared allocators before our bump is dropped.
+        for sa in &mut self.owned_shared {
+            sa.teardown();
+        }
         // Run destructors for all tracked objects before the bump deallocates.
         // Without this, inner heap allocations (Vec buffers, Rc refcounts,
         // BTreeMap nodes, etc.) would leak when the bump is dropped.
@@ -200,7 +276,7 @@ impl Default for FiberHeap {
 /// Exhaustive check: does this HeapObject variant have inner heap allocations
 /// that require Drop? No wildcard arm — adding a new HeapObject variant
 /// forces a decision here (compile error).
-fn needs_drop(tag: HeapTag) -> bool {
+pub(crate) fn needs_drop(tag: HeapTag) -> bool {
     match tag {
         // Copy/scalar innards — no heap allocations
         HeapTag::Cons => false,
@@ -625,5 +701,170 @@ mod tests {
         heap.clear();
         assert_eq!(heap.scope_marks.len(), 0);
         assert_eq!(heap.len(), 0);
+    }
+
+    // ── Shared allocator ownership tests ──────────────────────────────
+
+    #[test]
+    fn test_create_shared_allocator() {
+        let mut heap = FiberHeap::new();
+        let ptr = heap.create_shared_allocator();
+        assert!(!ptr.is_null());
+        assert_eq!(heap.owned_shared.len(), 1);
+    }
+
+    #[test]
+    fn test_create_multiple_shared_allocators() {
+        let mut heap = FiberHeap::new();
+        let ptr1 = heap.create_shared_allocator();
+        let ptr2 = heap.create_shared_allocator();
+        assert!(!ptr1.is_null());
+        assert!(!ptr2.is_null());
+        assert_ne!(ptr1, ptr2);
+        assert_eq!(heap.owned_shared.len(), 2);
+    }
+
+    #[test]
+    fn test_shared_alloc_routing() {
+        let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
+        let sa_ptr = heap.create_shared_allocator();
+        heap.set_shared_alloc(sa_ptr);
+
+        // Allocate via FiberHeap — should route to shared
+        heap.alloc(HeapObject::String("routed".into()));
+
+        // Private bump should be untouched
+        assert_eq!(heap.alloc_count, 0);
+        assert_eq!(heap.dtors.len(), 0);
+
+        // Shared allocator should have the allocation
+        let sa = unsafe { &*sa_ptr };
+        assert_eq!(sa.len(), 1);
+    }
+
+    #[test]
+    fn test_private_alloc_when_no_shared() {
+        let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
+        // shared_alloc is null by default
+        assert!(heap.shared_alloc.is_null());
+
+        heap.alloc(HeapObject::String("private".into()));
+        assert_eq!(heap.alloc_count, 1);
+        assert_eq!(heap.dtors.len(), 1);
+    }
+
+    #[test]
+    fn test_clear_tears_down_owned_shared() {
+        let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
+        let sa_ptr = heap.create_shared_allocator();
+        heap.set_shared_alloc(sa_ptr);
+
+        heap.alloc(HeapObject::String("shared-val".into()));
+        assert_eq!(unsafe { &*sa_ptr }.len(), 1);
+
+        heap.clear();
+        assert!(heap.owned_shared.is_empty());
+        assert!(heap.shared_alloc.is_null());
+    }
+
+    #[test]
+    fn test_drop_tears_down_owned_shared() {
+        // Create a FiberHeap with a shared allocator containing allocations,
+        // then drop it. If Drop doesn't teardown, we'd leak inner heap allocs.
+        let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
+        let sa_ptr = heap.create_shared_allocator();
+        heap.set_shared_alloc(sa_ptr);
+        heap.alloc(HeapObject::String("will-be-dropped".into()));
+        // Drop runs here — should not leak or panic.
+        drop(heap);
+    }
+
+    // ── Shared allocator teardown lifecycle ────────────────────────────
+
+    #[test]
+    fn test_clear_tears_down_shared_alloc_dtors() {
+        // Verify that clear() runs destructors in shared allocators.
+        // String's inner Box<str> must be freed (dtors ran), verified
+        // by checking the shared alloc's count goes to zero.
+        let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
+        let sa_ptr = heap.create_shared_allocator();
+        heap.set_shared_alloc(sa_ptr);
+
+        heap.alloc(HeapObject::String("str-a".into()));
+        heap.alloc(HeapObject::String("str-b".into()));
+        heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+        {
+            let sa = unsafe { &*sa_ptr };
+            assert_eq!(sa.len(), 3);
+        }
+
+        // clear() should teardown the shared alloc (runs dtors, resets count)
+        // then remove it from owned_shared.
+        heap.clear();
+        assert!(heap.owned_shared.is_empty());
+        assert_eq!(heap.len(), 0);
+    }
+
+    #[test]
+    fn test_multiple_shared_allocs_all_torn_down() {
+        // Create 3 shared allocators, allocate into each, verify clear()
+        // tears down all three.
+        let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
+
+        // Create 3 shared allocs, allocate strings into each
+        let sa1 = heap.create_shared_allocator();
+        heap.set_shared_alloc(sa1);
+        heap.alloc(HeapObject::String("sa1-val".into()));
+        heap.clear_shared_alloc();
+
+        let sa2 = heap.create_shared_allocator();
+        heap.set_shared_alloc(sa2);
+        heap.alloc(HeapObject::String("sa2-val".into()));
+        heap.clear_shared_alloc();
+
+        let sa3 = heap.create_shared_allocator();
+        heap.set_shared_alloc(sa3);
+        heap.alloc(HeapObject::String("sa3-val".into()));
+        heap.clear_shared_alloc();
+
+        assert_eq!(heap.owned_shared.len(), 3);
+        assert_eq!(unsafe { &*sa1 }.len(), 1);
+        assert_eq!(unsafe { &*sa2 }.len(), 1);
+        assert_eq!(unsafe { &*sa3 }.len(), 1);
+
+        heap.clear();
+        assert!(heap.owned_shared.is_empty());
+        assert!(heap.shared_alloc.is_null());
+    }
+
+    #[test]
+    fn test_shared_alloc_survives_private_clear() {
+        // Shared allocs are NOT affected by private bump operations.
+        // Private alloc_count/dtors are separate from shared.
+        let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
+
+        let sa_ptr = heap.create_shared_allocator();
+        heap.set_shared_alloc(sa_ptr);
+        heap.alloc(HeapObject::String("in-shared".into()));
+        heap.clear_shared_alloc();
+
+        // Allocate privately
+        heap.alloc(HeapObject::String("in-private".into()));
+        assert_eq!(heap.alloc_count, 1); // private count
+        assert_eq!(unsafe { &*sa_ptr }.len(), 1); // shared count
+
+        // Mark/release on private bump does not touch shared
+        let mark = heap.mark();
+        heap.alloc(HeapObject::String("scoped".into()));
+        heap.release(mark);
+        assert_eq!(heap.alloc_count, 1); // back to 1
+        assert_eq!(unsafe { &*sa_ptr }.len(), 1); // shared unchanged
     }
 }

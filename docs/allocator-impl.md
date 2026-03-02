@@ -139,25 +139,35 @@ determines which bindings qualify for scope allocation.
 use-after-free. The ~3,000 existing tests are the safety net. Start
 conservative and tighten.
 
-## Package 6: shared allocators and zero-copy fiber exchange (deferred)
+## Package 6: shared allocators and zero-copy fiber exchange
 
-Shared allocators get their own bumps with allocator-level refcounts
-(one counter per allocator, not per object). Each fiber that references
-values in a shared allocator holds a reference. Fiber death decrements
-the count. When it hits zero, destructors run and the bump resets.
+**Status: COMPLETE.**
 
-This package also introduces fiber-escape analysis: values that might
-cross fiber boundaries (yields, channel sends, storage into shared
-structures) are allocated into shared allocators from the start.
-Receiving fibers get pointers into shared space — zero-copy exchange.
+Parent-owned `SharedAllocator` provides zero-copy inter-fiber value
+exchange. When a yielding child fiber allocates heap objects, those
+allocations route to a shared allocator owned by the parent (or by
+the child itself for root→child chains). The parent reads yielded
+values directly — no deep copy.
 
-This is where Elle diverges from Erlang. Erlang copies O(n) per
-message send because it has no static knowledge of value destinations.
-Elle's escape analysis moves that cost to compile time: conservatively
-shared values are pre-placed, and exchange is O(1).
+Key design decisions:
+- **Parent-owned model**: `Box<SharedAllocator>` on parent's
+  `FiberHeap.owned_shared`. Child gets raw `*mut SharedAllocator`.
+  No Rc, no RefCell, no runtime borrow checks on the allocation path.
+- **Downward propagation**: In A→B→C chains, B propagates its
+  `shared_alloc` pointer down to C. All values end up in A's shared
+  alloc. A outlives B and C via nested `with_child_fiber` on the Rust
+  call stack.
+- **Effect gate**: Only yielding fibers (`Effect::Yields`) get shared
+  allocators. Non-yielding fibers are unaffected.
+- **Conservative routing**: `!shared_alloc.is_null()` → route ALL
+  allocations to shared. Simple, correct, wasteful for temporaries.
+  Tightening is a future change.
+- **No new bytecode**: Uses existing `active_allocator` from Package 4.
+- **Per-resume creation (tech debt)**: Each resume creates a new shared
+  allocator. Old ones accumulate in `owned_shared` until `clear()`.
 
-Deferred until Package 5 is stable and fiber communication patterns
-are exercised enough to validate the analysis.
+**Depends on:** Packages 1-5. **Risk:** low. The routing predicate only
+activates for yielding child fibers. All existing tests pass unchanged.
 
 ## Where the cliffs are
 
@@ -174,19 +184,19 @@ are exercised enough to validate the analysis.
 ## Sequencing
 
 ```
-Package 1  ─── FiberHeap routing              (low risk, no change)
+Package 1  ─── FiberHeap routing              ✅ COMPLETE
     │
-Package 2  ─── Bump + destructors             (medium-low risk, no change)
+Package 2  ─── Bump + destructors             ✅ COMPLETE
     │
-Package 3  ─── Scope bytecodes                (low risk, no change)
+Package 3  ─── Scope bytecodes                ✅ COMPLETE
     │
-Package 4  ─── Allocator inheritance plumbing  (low risk, no change)
+Package 4  ─── Allocator inheritance plumbing  ✅ COMPLETE
     │
-Package 5  ─── Scope allocation               (HIGH risk, first real change)
+Package 5  ─── Scope allocation               ✅ COMPLETE
     │
-Package 6  ─── Shared allocators + zero-copy   (deferred)
+Package 6  ─── Shared allocators + zero-copy   ✅ COMPLETE
 ```
 
-Packages 1-4 are ~60% of the work and ~10% of the risk. Package 5 is
-~20% of the work and ~80% of the risk. Package 6 is where fibers
-become genuinely independent memory domains with zero-copy exchange.
+All six packages are complete. The allocator infrastructure is fully
+operational. Future work: tighten escape analysis to enable scope
+allocation, optimize shared alloc reuse across resume cycles (M2).

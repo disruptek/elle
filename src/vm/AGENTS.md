@@ -197,6 +197,10 @@ Key methods:
   installs the child fiber's `FiberHeap`, executes, then restores the saved
   pointer on swap-back. Root fibers have no heap installed (allocate to the
   global `HEAP_ARENA`); only child fibers get per-fiber heap routing.
+  For yielding fibers (`Effect::Yields`), also provisions a shared allocator
+  via a three-way branch (step 3b): (a) parent has shared_alloc → propagate
+  down, (b) root parent → child creates its own, (c) non-root parent →
+  create on parent's heap. Cleared on swap-back (step 7a).
 
 ## Allocation region instructions
 
@@ -252,6 +256,35 @@ Root fiber allocations go to `HEAP_ARENA` (thread-local, outlives any VM).
 `reset_fiber()` in `core.rs` extracts, clears, and reuses the heap `Box` to
 maintain pointer stability (the thread-local stores a raw pointer to the heap).
 
+## Shared allocator provisioning
+
+When `with_child_fiber` swaps in a yielding child fiber, step 3b provisions
+a `SharedAllocator` for zero-copy value exchange. The child's `FiberHeap`
+receives a raw `*mut SharedAllocator` pointer — all allocations during child
+execution route to this shared allocator instead of the child's private bump.
+
+**Three-way branch** (after swap, `self.fiber` = child, `child_fiber` = parent):
+
+1. **Parent has shared_alloc** (case a): Parent already received a shared_alloc
+   from its own parent (A→B→C chain). Propagate the same pointer down.
+2. **Root parent** (case b, `saved_heap.is_null()`): Root fiber has no FiberHeap.
+   Child creates the shared allocator on its own FiberHeap's `owned_shared`.
+3. **Non-root parent, no shared_alloc** (case c): Create a new shared allocator
+   on the parent's FiberHeap's `owned_shared`.
+
+**Effect gate (M1)**: Only fibers whose closure has `Effect::Yields` (checked
+via `self.fiber.closure.effect.may_yield()`) get shared allocators. Non-yielding
+fibers skip step 3b entirely.
+
+**Per-resume creation (M2 tech debt)**: Each resume of a yielding child creates
+a new shared allocator because `shared_alloc` was nulled on the previous
+swap-back. Old shared allocators accumulate in `owned_shared` until the owner's
+`FiberHeap::clear()`. Optimization (reuse across resumes) is deferred.
+
+**Cleanup (step 7a)**: Before swap-back, `self.fiber.heap.clear_shared_alloc()`
+nulls the child's `shared_alloc` pointer. The shared allocator data remains
+alive in the owner's `owned_shared` Vec.
+
 ## Files
 
 | File | Lines | Content |
@@ -260,7 +293,7 @@ maintain pointer stability (the thread-local stores a raw pointer to the heap).
 | `dispatch.rs` | ~373 | Main execution loop, instruction dispatch, returns `(SignalBits, usize)` |
 | `call.rs` | ~823 | Call, TailCall, JIT dispatch (solo + batch), environment building |
 | `signal.rs` | ~177 | Primitive signal dispatch (`handle_primitive_signal`), SIG_QUERY dispatch |
-| `fiber.rs` | ~532 | Fiber resume/propagate/cancel, shared swap protocol |
+| `fiber.rs` | ~555 | Fiber resume/propagate/cancel, shared swap protocol, shared alloc provisioning |
 | `execute.rs` | ~147 | `execute_bytecode_from_ip`, `execute_bytecode_saving_stack` |
 | `core.rs` | ~456 | VM struct, `resume_suspended`, stack trace helpers |
 | `stack.rs` | ~100 | Stack operations: LoadConst, Pop, Dup |

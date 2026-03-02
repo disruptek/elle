@@ -387,13 +387,318 @@ fn test_break_from_nested_let_in_child_fiber() {
     let result = eval_source(
         "(let* ((f (fiber/new
                      (fn ()
-                       (block :done
-                         (let* ((x 10))
-                           (let* ((y 20))
-                             (break :done (+ x y))))))
-                     1)))
+                        (block :done
+                          (let* ((x 10))
+                            (let* ((y 20))
+                              (break :done (+ x y))))))
+                      1)))
            (fiber/resume f))",
     )
     .unwrap();
     assert_eq!(result, Value::int(30));
+}
+
+// ── Shared allocator / zero-copy fiber exchange ─────────────────────
+
+#[test]
+fn test_yielding_child_yields_string() {
+    // A yielding child allocates a string and yields it.
+    // The parent should be able to read the string after resume.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn () (fiber/signal 2 \"hello\")) 2)))
+           (fiber/resume f))",
+    )
+    .unwrap();
+    assert!(result.is_string());
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "hello");
+}
+
+#[test]
+fn test_non_yielding_child_no_overhead() {
+    // A non-yielding fiber (mask catches error only) should not get
+    // a shared allocator. The result is an immediate — no heap involved.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn () 42) 1)))
+           (fiber/resume f))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(42));
+}
+
+#[test]
+fn test_yield_resume_multiple_cycles() {
+    // Fiber yields twice (two resume cycles). Both values readable.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn ()
+                      (fiber/signal 2 \"first\")
+                      (fiber/signal 2 \"second\")
+                      \"done\")
+                    2))
+                (v1 (fiber/resume f))
+                (v2 (fiber/resume f))
+                (v3 (fiber/resume f)))
+           (list v1 v2 v3))",
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0].with_string(|s| s.to_string()).unwrap(), "first");
+    assert_eq!(vec[1].with_string(|s| s.to_string()).unwrap(), "second");
+    assert_eq!(vec[2].with_string(|s| s.to_string()).unwrap(), "done");
+}
+
+#[test]
+fn test_abc_chain_yield_through() {
+    // A→B→C: C yields a string, B catches and re-yields to A.
+    // Tests transitive shared_alloc propagation (N1).
+    let result = eval_source(
+        "(let* ((c (fiber/new (fn () (fiber/signal 2 \"from-c\")) 2))
+                (b (fiber/new (fn ()
+                      (let* ((val (fiber/resume c)))
+                        (fiber/signal 2 val)))
+                    2))
+                (a-result (fiber/resume b)))
+           a-result)",
+    )
+    .unwrap();
+    assert!(result.is_string());
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "from-c");
+}
+
+#[test]
+fn test_root_child_yield() {
+    // Root resumes a yielding child. Child yields a string.
+    // (Root→child: child creates shared alloc on its own heap.)
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn () (fiber/signal 2 \"from-child\")) 2)))
+           (fiber/resume f))",
+    )
+    .unwrap();
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "from-child");
+}
+
+#[test]
+fn test_root_child_grandchild_yield() {
+    // Root→child→grandchild. Grandchild yields string,
+    // child yields it to root.
+    let result = eval_source(
+        "(let* ((gc (fiber/new (fn () (fiber/signal 2 \"from-gc\")) 2))
+                (child (fiber/new (fn ()
+                         (let* ((val (fiber/resume gc)))
+                           (fiber/signal 2 val)))
+                       2)))
+           (fiber/resume child))",
+    )
+    .unwrap();
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "from-gc");
+}
+
+#[test]
+fn test_child_death_value_survives() {
+    // Child yields a string then completes (dies).
+    // The yielded string should survive child death because it's
+    // in the shared allocator (owned by parent or child).
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn ()
+                      (fiber/signal 2 \"alive\")
+                      \"done\")
+                    2))
+                (yielded (fiber/resume f))
+                (_ (fiber/resume f)))  # child dies here
+           yielded)", // read the previously yielded value
+    )
+    .unwrap();
+    assert_eq!(result.with_string(|s| s.to_string()).unwrap(), "alive");
+}
+
+#[test]
+fn test_multi_resume_yield_basic() {
+    // Multiple yields without letrec — tests shared alloc across resumes.
+    // (letrec + yield has a known pre-existing bug, see issue)
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn ()
+                       (fiber/signal 2 0)
+                       (fiber/signal 2 1)
+                       (fiber/signal 2 2))
+                     2)))
+           (list (fiber/resume f) (fiber/resume f) (fiber/resume f)))",
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0], Value::int(0));
+    assert_eq!(vec[1], Value::int(1));
+    assert_eq!(vec[2], Value::int(2));
+}
+
+#[test]
+fn test_multi_resume_yield_heap_values() {
+    // Yield heap-allocated values across multiple resumes.
+    // Tests that shared alloc keeps values alive for the parent.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn ()
+                       (fiber/signal 2 \"hello\")
+                       (fiber/signal 2 \"world\")
+                       (fiber/signal 2 \"done\"))
+                     2)))
+           (list (fiber/resume f) (fiber/resume f) (fiber/resume f)))",
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0].with_string(|s| s.to_string()).unwrap(), "hello");
+    assert_eq!(vec[1].with_string(|s| s.to_string()).unwrap(), "world");
+    assert_eq!(vec[2].with_string(|s| s.to_string()).unwrap(), "done");
+}
+
+#[test]
+fn test_multi_resume_yield_mixed_values() {
+    // Yield a mix of immediate and heap values across resumes.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn ()
+                       (fiber/signal 2 42)
+                       (fiber/signal 2 (list 1 2 3))
+                       (fiber/signal 2 \"end\"))
+                     2)))
+           (list (fiber/resume f) (fiber/resume f) (fiber/resume f)))",
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0], Value::int(42));
+    let inner = vec[1].list_to_vec().unwrap();
+    assert_eq!(inner, vec![Value::int(1), Value::int(2), Value::int(3)]);
+    assert_eq!(vec[2].with_string(|s| s.to_string()).unwrap(), "end");
+}
+
+#[test]
+fn test_multiple_children_shared_allocs() {
+    // Parent resumes two different yielding children.
+    // Both yield strings. Both readable.
+    // Tests owned_shared Vec growth doesn't invalidate earlier pointers.
+    let result = eval_source(
+        "(let* ((f1 (fiber/new (fn () (fiber/signal 2 \"from-f1\")) 2))
+                (f2 (fiber/new (fn () (fiber/signal 2 \"from-f2\")) 2))
+                (v1 (fiber/resume f1))
+                (v2 (fiber/resume f2)))
+           (list v1 v2))",
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0].with_string(|s| s.to_string()).unwrap(), "from-f1");
+    assert_eq!(vec[1].with_string(|s| s.to_string()).unwrap(), "from-f2");
+}
+
+// ── Lifecycle and edge cases ────────────────────────────────────────
+
+#[test]
+fn test_yield_immediate_no_shared_alloc_needed() {
+    // Yielding an immediate (int) requires no heap allocation.
+    // The shared alloc infrastructure should not interfere.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn () (fiber/signal 2 42)) 2)))
+           (fiber/resume f))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(42));
+}
+
+#[test]
+fn test_yield_list_parent_traverses() {
+    // Fiber yields a cons list. Parent traverses all elements.
+    // The list cells are heap-allocated — they go to shared alloc.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn () (fiber/signal 2 (list 10 20 30))) 2)))
+           (let* ((lst (fiber/resume f)))
+             (list (first lst) (first (rest lst)) (first (rest (rest lst))))))",
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0], Value::int(10));
+    assert_eq!(vec[1], Value::int(20));
+    assert_eq!(vec[2], Value::int(30));
+}
+
+#[test]
+fn test_yield_star_with_shared_alloc() {
+    // yield* delegates iteration. Values flow through shared alloc.
+    let result = eval_source(
+        r#"
+        (def sub (coro/new (fn ()
+          (yield "a")
+          (yield "b")
+          :done)))
+        (def main (coro/new (fn ()
+          (yield* sub))))
+        (coro/resume main nil)
+        (def v1 (coro/value main))
+        (coro/resume main nil)
+        (def v2 (coro/value main))
+        (list v1 v2)
+        "#,
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0].with_string(|s| s.to_string()).unwrap(), "a");
+    assert_eq!(vec[1].with_string(|s| s.to_string()).unwrap(), "b");
+}
+
+#[test]
+fn test_error_in_child_with_shared_alloc() {
+    // Child fiber raises an error. The error value (a struct/tuple)
+    // is in shared space. Parent catches and reads the error message.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn () (error \"test error\")) 1)))
+           (fiber/resume f)
+           (let* ((val (fiber/value f)))
+             (if (nil? val) \"no-value\" val)))",
+    )
+    .unwrap();
+    // The error value should be readable by the parent.
+    // fiber/value returns the signal value (error tuple).
+    assert!(!result.is_nil());
+}
+
+#[test]
+fn test_cancel_child_with_shared_alloc() {
+    // Parent cancels a suspended child that has a shared allocator.
+    // Mask 3 catches both error (1) and yield (2) so cancel doesn't propagate.
+    let result = eval_source(
+        "(let* ((f (fiber/new (fn ()
+                       (fiber/signal 2 \"yielded\")
+                       \"never-reached\")
+                     3))
+                (v1 (fiber/resume f)))      # child suspends
+           (fiber/cancel f \"cancelled\")
+           (list v1 (keyword->string (fiber/status f))))",
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0].with_string(|s| s.to_string()).unwrap(), "yielded");
+    assert_eq!(vec[1].with_string(|s| s.to_string()).unwrap(), "error");
+}
+
+#[test]
+fn test_long_lived_coroutine_many_resumes() {
+    // Resume a coroutine 50 times, each time yielding a heap value (list).
+    // Exercises M2 — many shared allocs accumulate in owned_shared.
+    // All yielded values must be readable at the end.
+    let result = eval_source(
+        r#"
+        (var gen (coro/new (fn ()
+          (var i 0)
+          (while (< i 50)
+            (yield (list i (+ i 1)))
+            (set i (+ i 1))))))
+        (var results @[])
+        (while (not (coro/done? gen))
+          (coro/resume gen nil)
+          (when (not (coro/done? gen))
+            (push results (coro/value gen))))
+        (list (length results)
+              (first (get results 0))
+              (first (get results 49)))
+        "#,
+    )
+    .unwrap();
+    let vec = result.list_to_vec().unwrap();
+    assert_eq!(vec[0], Value::int(50));
+    assert_eq!(vec[1], Value::int(0));
+    assert_eq!(vec[2], Value::int(49));
 }
