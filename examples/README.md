@@ -37,16 +37,12 @@ expected vs actual on failure and exits with code 1.
 | `destructuring.lisp` | Unpacking data | Silent nil semantics, wildcards, `& rest`, nested patterns, `var`+`set`, `let`/`let*`, struct/table by-key, match dispatch on struct tags |
 | `errors.lisp` | Error handling | `error`, `try`/`catch`, `protect`, `defer`, `with`, error propagation, safe wrappers, validation patterns |
 | `coroutines.lisp` | Cooperative sequences | `coro/new`, `yield`, lifecycle tracking, Fibonacci generator, closure captures, interleaving, nesting, `yield*` delegation |
-
-### Pending refresh
-
-| File | Status |
-|------|--------|
-| `concurrency.lisp` | Needs idiom update |
-| `processes.lisp` | Needs idiom update |
-| `meta-programming.lisp` | Needs idiom update |
-| `ffi.lisp` | Needs idiom update |
-| `io.lisp` | Will absorb `json.lisp` and `modules.lisp` |
+| `meta.lisp` | Macros and hygiene | `defmacro`, quasiquote/unquote, macro composition, `gensym`, macro hygiene, `datum->syntax`, `syntax->datum` |
+| `concurrency.lisp` | Parallel threads | `spawn`, `join`, closure captures across threads, `current-thread-id`, parallel computation |
+| `processes.lisp` | Erlang-style actors | Fiber-based scheduler, message passing, `spawn`/`recv`/`!`, links, `trap-exit`, crash propagation |
+| `io.lisp` | Files, JSON, modules | `slurp`/`spit`, paths, directories, `json-parse`/`json-serialize`, `import-file` |
+| `introspection.lisp` | Looking inside | Clock primitives, `time/elapsed`, closure introspection, `disbit`/`disjit`, `debug-print`, `trace`, benchmarking |
+| `ffi.lisp` | C interop | `ffi/native`, `ffi/defbind`, memory management, structs, variadic calls, callbacks (`qsort`) |
 
 ### To be removed (superseded by refreshed files)
 
@@ -55,7 +51,7 @@ expected vs actual on failure and exits with code 1.
 `control-flow.lisp`, `syntax-sugar.lisp`, `lists-and-arrays.lisp`,
 `tables-and-structs.lisp`, `string-operations.lisp`, `json.lisp`,
 `modules.lisp`, `debugging.lisp`, `debugging-profiling.lisp`,
-`benchmarks.lisp`, `time.lisp`
+`benchmarks.lisp`, `time.lisp`, `meta-programming.lisp`
 
 ### Other
 

@@ -1,7 +1,17 @@
-# Process Model - Erlang-style message passing via fibers
+#!/usr/bin/env elle
+
+# Processes — Erlang-style message passing via fibers
 #
-# yield IS receive. The resume value IS the message. A scheduler mediates.
-#
+# Demonstrates:
+#   yield-as-receive    — yield IS receive, resume value IS the message
+#   Scheduler protocol  — [:send], [:recv], [:self], [:spawn], [:link], [:unlink]
+#   trap-exit           — converting exit signals to messages
+#   spawn-link          — atomic spawn + link
+#   Message ring        — chained forwarders incrementing a value
+#   Fan-in              — multiple workers sending to a collector
+#   Link crash cascade  — linked process death propagation
+#   Unlink              — preventing exit notification
+
 # Protocol (process yields a command, scheduler resumes with the result):
 #
 #   (yield [:send pid msg])    → delivers msg, resumes with :ok
@@ -14,8 +24,6 @@
 #   (yield [:spawn-link closure]) → spawn + link in one step, resumes with PID
 
 (import-file "./examples/assertions.lisp")
-
-(display "=== Process Model: Erlang-style Message Passing ===\n")
 
 
 # ========================================
@@ -221,9 +229,8 @@
 
 
 # ========================================
-# Test 1: Ping-pong
+# 1. Ping-pong
 # ========================================
-(display "\n--- Test 1: Ping-Pong ---\n")
 
 (let ((run (make-scheduler)))
   (run (fn ()
@@ -235,17 +242,13 @@
                           (! from :pong))))))))
       (! ponger [me :ping])
       (let ((reply (recv)))
-        (display "  got: ")
-        (display reply)
-        (display "\n")
-        (assert-eq reply :pong "ping-pong reply is :pong")))))
-  (display "✓ Ping-pong works\n"))
+        (display "  ping-pong reply: ") (print reply)
+        (assert-eq reply :pong "ping-pong reply is :pong"))))))
 
 
 # ========================================
-# Test 2: Ring of processes
+# 2. Ring of processes
 # ========================================
-(display "\n--- Test 2: Message Ring ---\n")
 
 (let ((run (make-scheduler)))
   (run (fn ()
@@ -260,17 +263,13 @@
              (p1 (spawn (make-forwarder p2))))
         (! p1 0)
         (let ((result (recv)))
-          (display "  sent 0, received ")
-          (display result)
-          (display " (passed through 3 forwarders)\n")
-          (assert-eq result 3 "ring increments message 3 times"))))))
-  (display "✓ Message ring works\n"))
+          (display "  sent 0 through 3 forwarders, got: ") (print result)
+          (assert-eq result 3 "ring increments message 3 times")))))))
 
 
 # ========================================
-# Test 3: Fan-in
+# 3. Fan-in
 # ========================================
-(display "\n--- Test 3: Fan-in ---\n")
 
 (let ((run (make-scheduler)))
   (run (fn ()
@@ -289,20 +288,16 @@
           (set total (+ total (recv)))
           (set i (+ i 1))))
 
-      (display "  sum of worker ids: ")
-      (display total)
-      (display "\n")
-      (assert-eq total 10 "fan-in: 0+1+2+3+4 = 10"))))
-  (display "✓ Fan-in works\n"))
+      (display "  fan-in sum of 5 worker ids: ") (print total)
+      (assert-eq total 10 "fan-in: 0+1+2+3+4 = 10")))))
 
 
 # ========================================
-# Test 4: Link — crash propagation
+# 4. Link — crash propagation
 # ========================================
-(display "\n--- Test 4: Link Crash Propagation ---\n")
 
-# When a linked process crashes, the linked partner should also die.
-# We test this by having a supervisor (trap_exit) observe the cascade.
+# When a linked process crashes, the linked partner also dies.
+# A supervisor (trap_exit) observes the cascade.
 
 (let ((run (make-scheduler)))
   (run (fn ()
@@ -320,21 +315,16 @@
 
         # We should get an EXIT message because worker-a died (linked to us)
         (let ((msg (recv)))
-          (display "  supervisor received: ")
-          (display msg)
-          (display "\n")
+          (display "  supervisor got EXIT from pid ") (display (get msg 1))
+          (display ", reason: ") (print (get msg 2))
           (match msg
             ([:EXIT pid reason]
-              (assert-eq pid worker-a "EXIT from worker-a")
-              (display "  ✓ got EXIT from linked worker\n"))))))))
-
-  (display "✓ Link crash propagation works\n"))
+              (assert-eq pid worker-a "EXIT from worker-a")))))))))
 
 
 # ========================================
-# Test 5: trap_exit — convert signals to messages
+# 5. trap_exit — convert signals to messages
 # ========================================
-(display "\n--- Test 5: trap_exit ---\n")
 
 (let ((run (make-scheduler)))
   (run (fn ()
@@ -344,46 +334,36 @@
                     (fiber/signal 1 [:intentional "test crash"])))))
 
       (let ((msg (recv)))
-        (display "  trapped: ")
-        (display msg)
-        (display "\n")
+        (display "  trapped exit: ") (print msg)
         (match msg
           ([:EXIT pid reason]
             (assert-eq pid child "EXIT from child")
             (match reason
               ([:error _]
-                (assert-true true "got error reason")))))))))
-
-  (display "✓ trap_exit works\n"))
+                (assert-true true "got error reason"))))))))))
 
 
 # ========================================
-# Test 6: Normal exit delivers [:EXIT pid [:normal val]]
+# 6. Normal exit delivers [:EXIT pid [:normal val]]
 # ========================================
-(display "\n--- Test 6: Normal Exit Notification ---\n")
 
 (let ((run (make-scheduler)))
   (run (fn ()
     (trap-exit true)
     (let ((child (spawn-link (fn () 42))))
       (let ((msg (recv)))
-        (display "  normal exit: ")
-        (display msg)
-        (display "\n")
+        (display "  normal exit: ") (print msg)
         (match msg
           ([:EXIT pid reason]
             (assert-eq pid child "EXIT from child")
             (match reason
               ([:normal val]
-                (assert-eq val 42 "normal exit value is 42")))))))))
-
-  (display "✓ Normal exit notification works\n"))
+                (assert-eq val 42 "normal exit value is 42"))))))))))
 
 
 # ========================================
-# Test 7: Unlink prevents notification
+# 7. Unlink prevents notification
 # ========================================
-(display "\n--- Test 7: Unlink ---\n")
 
 (let ((run (make-scheduler)))
   (run (fn ()
@@ -404,12 +384,9 @@
       (! me :still-alive)
 
       (let ((msg (recv)))
-        (display "  after unlink, got: ")
-        (display msg)
-        (display "\n")
-        (assert-eq msg :still-alive "no EXIT after unlink")))))
-
-  (display "✓ Unlink works\n"))
+        (display "  after unlink, got: ") (print msg)
+        (assert-eq msg :still-alive "no EXIT after unlink"))))))
 
 
-(display "\n=== All process model tests passed ===\n")
+(print "")
+(print "all processes passed.")
