@@ -136,18 +136,24 @@ stored in `Closure.location_map` and used by the VM for error reporting.
 | `IsTable` | value → bool | Type check: is value a table or struct? (for pattern matching) |
 | `ArrayLen` | array → int | Get array length (for pattern matching) |
 | `TableGetOrNil` | table → value | Get key from table/struct, or nil if missing/wrong type (u16 const_idx operand) |
-| `RegionEnter` | (none) | Allocation region entry marker (no-op until Package 5) |
-| `RegionExit` | (none) | Allocation region exit marker (no-op until Package 5) |
+| `RegionEnter` | (none) | Push scope mark on FiberHeap (no-op for root fiber) |
+| `RegionExit` | (none) | Pop scope mark and release scoped objects (no-op for root fiber) |
 
 ## Allocation regions
 
 `RegionEnter` and `RegionExit` are no-register, no-stack-effect instructions
-emitted at `let`/`letrec`/`block` boundaries. They mark scope boundaries for
-the allocator (Package 5 will use them to push/pop arena marks). Function
-bodies do NOT get region instructions.
+that push/pop scope marks on the current FiberHeap. In the VM, they call
+`region_enter()`/`region_exit()` which are no-ops for the root fiber
+(no FiberHeap installed).
 
-**Early-exit debt**: `break`, `return`, and exception unwinding do not yet
-emit compensating `RegionExit`. Harmless while no-ops; Package 5 must fix.
+The lowerer only emits these instructions when escape analysis determines
+the scope's allocations are safe to release at scope exit. Currently the
+escape analysis is maximally conservative (nothing qualifies), so no region
+instructions are emitted. Function bodies never get region instructions.
+
+`break` emits compensating `RegionExit` instructions for each region entered
+between the break site and the target block. The lowerer tracks `region_depth`
+and each `BlockLowerContext` records `region_depth_at_entry`.
 
 ## Yield as terminator
 

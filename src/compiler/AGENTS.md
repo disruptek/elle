@@ -47,14 +47,14 @@ Bytecode instruction definitions and debug formatting.
 ## Allocation region instructions
 
 `RegionEnter` and `RegionExit` are scope boundary markers for the allocator.
-They have no operands (single opcode byte each). Currently no-ops in the VM
-(Package 3). Package 5 will activate them to push/pop arena marks on the
-FiberHeap. Emitted by the lowerer at `let`/`letrec`/`block` boundaries.
-Function bodies do NOT get region instructions.
+They have no operands (single opcode byte each). In the VM, they push/pop
+scope marks on the current FiberHeap (no-op for the root fiber). The lowerer
+conditionally emits them based on escape analysis — currently maximally
+conservative, so no region instructions are emitted. Function bodies never
+get region instructions.
 
-**Early-exit debt**: `break` out of a block, `return` from inside a `let`,
-and exception unwinding do not yet emit compensating `RegionExit` instructions.
-Harmless while they're no-ops; must be addressed in Package 5.
+`break` emits compensating `RegionExit` instructions for each region entered
+between the break site and the target block (`region_depth` tracking).
 
 ## Anti-patterns
 

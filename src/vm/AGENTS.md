@@ -200,14 +200,15 @@ Key methods:
 
 ## Allocation region instructions
 
-`RegionEnter` and `RegionExit` are dispatched as no-ops in the VM (Package 3).
-Package 5 will activate them to push/pop arena marks on the active FiberHeap.
+`RegionEnter` and `RegionExit` push/pop scope marks on the current FiberHeap
+via `region_enter()`/`region_exit()`. No-op for the root fiber (no FiberHeap
+installed). The lowerer gates emission on escape analysis — currently maximally
+conservative, so no region instructions are emitted in normal code.
 
-## Active allocator plumbing (Package 4)
+## Active allocator pointer
 
-`FiberHeap` has an `active_allocator: *const bumpalo::Bump` pointer. In Package 4
-this is write-only plumbing — it always points to the fiber's root bump. In Package 5,
-`RegionEnter`/`RegionExit` will push/pop sub-bumps and redirect this pointer.
+`FiberHeap` has an `active_allocator: *const bumpalo::Bump` pointer that currently
+always points to the fiber's root bump. Supports future scope-level redirection.
 
 **Initialization:** `init_active_allocator()` is called in `with_child_fiber` after
 the child's heap is installed as thread-local (pointer stability requires the heap

@@ -326,8 +326,14 @@ impl VM {
                     }
                 }
 
-                // Allocation region markers (no-ops until Package 5)
-                Instruction::RegionEnter | Instruction::RegionExit => {}
+                // Allocation region markers: push/pop scope marks on FiberHeap.
+                // No-op for root fiber (no FiberHeap installed).
+                Instruction::RegionEnter => {
+                    crate::value::fiber_heap::region_enter();
+                }
+                Instruction::RegionExit => {
+                    crate::value::fiber_heap::region_exit();
+                }
             }
 
             // If an error or halt signal was set by the instruction, propagate.

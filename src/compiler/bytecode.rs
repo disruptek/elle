@@ -194,11 +194,13 @@ pub enum Instruction {
     TailCallArray,
 
     /// Enter an allocation region (scope boundary for allocator).
-    /// No operands. Package 3: emitted as no-op; Package 5: pushes arena mark.
+    /// No operands. Pushes a scope mark on the current FiberHeap.
+    /// No-op for the root fiber (no FiberHeap installed).
     RegionEnter,
 
     /// Exit an allocation region (scope boundary for allocator).
-    /// No operands. Package 3: emitted as no-op; Package 5: releases to mark.
+    /// No operands. Pops scope mark and releases scoped objects.
+    /// No-op for the root fiber (no FiberHeap installed).
     RegionExit,
 }
 

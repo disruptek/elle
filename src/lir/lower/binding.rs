@@ -8,7 +8,10 @@ impl Lowerer {
         bindings: &[(Binding, Hir)],
         body: &Hir,
     ) -> Result<Reg, String> {
-        self.emit(LirInstr::RegionEnter);
+        let scoped = self.can_scope_allocate_let(bindings, body);
+        if scoped {
+            self.emit_region_enter();
+        }
 
         // Allocate slots and lower initializers
         for (binding, init) in bindings {
@@ -59,7 +62,9 @@ impl Lowerer {
             }
         }
         let result = self.lower_expr(body)?;
-        self.emit(LirInstr::RegionExit);
+        if scoped {
+            self.emit_region_exit();
+        }
         Ok(result)
     }
 
@@ -68,7 +73,10 @@ impl Lowerer {
         bindings: &[(Binding, Hir)],
         body: &Hir,
     ) -> Result<Reg, String> {
-        self.emit(LirInstr::RegionEnter);
+        let scoped = self.can_scope_allocate_letrec(bindings, body);
+        if scoped {
+            self.emit_region_enter();
+        }
 
         // First allocate all slots with nil (or cells containing nil)
         for (binding, _) in bindings {
@@ -138,7 +146,9 @@ impl Lowerer {
             }
         }
         let result = self.lower_expr(body)?;
-        self.emit(LirInstr::RegionExit);
+        if scoped {
+            self.emit_region_exit();
+        }
         Ok(result)
     }
 

@@ -22,7 +22,7 @@ Runtime value representation using NaN-boxing.
 | `fiber.rs` | `Fiber`, `FiberHandle`, `WeakFiberHandle`, `SuspendedFrame`, `Frame`, `FiberStatus`, `SignalBits` |
 | `error.rs` | `error_val()` and `format_error()` helpers for error tuples |
 | `ffi.rs` | `LibHandle` for C interop |
-| `fiber_heap.rs` | `FiberHeap` struct, thread-local routing, install/uninstall/save/restore |
+| `fiber_heap.rs` | `FiberHeap` struct (bumpalo + destructor tracking + scope marks + active_allocator), thread-local routing, `region_enter`/`region_exit` |
 | `heap.rs` | `HeapObject` enum, `Cons`, `ThreadHandle`, `BindingInner`, `BindingScope` |
 | `send.rs` | `SendValue` wrapper for thread-safe transfer |
 | `display.rs` | `Display` implementation for values |
@@ -131,7 +131,7 @@ variants directly.
 | `types.rs` | ~150 | Arity, SymbolId, NativeFn, etc. |
 | `closure.rs` | ~70 | Closure struct |
 | `fiber.rs` | ~540 | Fiber, FiberHandle, WeakFiberHandle, SuspendedFrame, Frame, SignalBits |
-| `fiber_heap.rs` | ~490 | FiberHeap (bumpalo + destructor tracking + active_allocator), thread-local routing, `needs_drop`, save/restore active_allocator |
+| `fiber_heap.rs` | ~630 | FiberHeap (bumpalo + destructor tracking + scope marks + active_allocator), thread-local routing, `needs_drop`, `region_enter`/`region_exit` |
 | `error.rs` | ~50 | error_val() and format_error() helpers |
 | `ffi.rs` | ~22 | LibHandle |
 | `heap.rs` | ~650 | HeapObject, Cons, ThreadHandle, BindingInner, BindingScope, `heap_arena_len()`, `heap_arena_capacity()` |

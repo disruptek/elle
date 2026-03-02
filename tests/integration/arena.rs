@@ -297,27 +297,28 @@ fn count_in_bytecode(source: &str, needle: &str) -> usize {
 }
 
 #[test]
-fn test_let_emits_region_instructions() {
-    // let* should emit RegionEnter before bindings and RegionExit after body
-    assert!(bytecode_contains("(let* ((x 1)) x)", "RegionEnter"));
-    assert!(bytecode_contains("(let* ((x 1)) x)", "RegionExit"));
+fn test_let_no_region_instructions_conservative() {
+    // Conservative escape analysis: no scopes qualify for scope allocation.
+    // let* should NOT emit RegionEnter/RegionExit.
+    assert!(!bytecode_contains("(let* ((x 1)) x)", "RegionEnter"));
+    assert!(!bytecode_contains("(let* ((x 1)) x)", "RegionExit"));
 }
 
 #[test]
-fn test_nested_let_balanced_regions() {
-    // Nested lets should produce balanced enter/exit pairs
+fn test_nested_let_no_regions_conservative() {
+    // No region instructions emitted under conservative analysis
     let source = "(let* ((x 1)) (let* ((y 2)) (+ x y)))";
     let enters = count_in_bytecode(source, "RegionEnter");
     let exits = count_in_bytecode(source, "RegionExit");
-    assert_eq!(enters, 2, "nested let should emit 2 RegionEnter");
-    assert_eq!(exits, 2, "nested let should emit 2 RegionExit");
+    assert_eq!(enters, 0, "conservative: no RegionEnter");
+    assert_eq!(exits, 0, "conservative: no RegionExit");
 }
 
 #[test]
-fn test_block_emits_region_instructions() {
-    // block should emit region instructions
-    assert!(bytecode_contains("(block :done 42)", "RegionEnter"));
-    assert!(bytecode_contains("(block :done 42)", "RegionExit"));
+fn test_block_no_region_instructions_conservative() {
+    // Conservative: block should not emit region instructions
+    assert!(!bytecode_contains("(block :done 42)", "RegionEnter"));
+    assert!(!bytecode_contains("(block :done 42)", "RegionExit"));
 }
 
 #[test]
@@ -334,8 +335,9 @@ fn test_fn_body_no_region_instructions() {
 }
 
 #[test]
-fn test_region_instructions_are_noop() {
-    // Verify region instructions don't affect execution results
+fn test_scoped_execution_results_unchanged() {
+    // Verify execution results are unchanged (no region instructions emitted,
+    // so behavior is identical to pre-Package 5)
     let result = eval_source("(let* ((x 10) (y 20)) (+ x y))").unwrap();
     assert_eq!(result, Value::int(30));
 
@@ -350,4 +352,48 @@ fn test_region_instructions_are_noop() {
     )
     .unwrap();
     assert_eq!(result, Value::int(6));
+}
+
+// ── Break compensating exits ────────────────────────────────────────
+
+#[test]
+fn test_break_no_compensating_exits_conservative() {
+    // Under conservative escape analysis, no region instructions are emitted,
+    // so break has no compensating exits to emit either.
+    let source = "(block :done (let* ((x 1)) (break :done 42)))";
+    let exits = count_in_bytecode(source, "RegionExit");
+    assert_eq!(
+        exits, 0,
+        "conservative: no RegionExit emitted, so no compensating exits"
+    );
+}
+
+#[test]
+fn test_break_from_nested_let_correct_result() {
+    // Verify break from inside a nested let actually works correctly
+    let result = eval_source(
+        "(block :done
+           (let* ((x 10))
+             (let* ((y 20))
+               (break :done (+ x y)))))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(30));
+}
+
+#[test]
+fn test_break_from_nested_let_in_child_fiber() {
+    // Same test but inside a child fiber — exercises real scope marks
+    let result = eval_source(
+        "(let* ((f (fiber/new
+                     (fn ()
+                       (block :done
+                         (let* ((x 10))
+                           (let* ((y 20))
+                             (break :done (+ x y))))))
+                     1)))
+           (fiber/resume f))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(30));
 }
