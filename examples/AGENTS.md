@@ -29,21 +29,10 @@ Follow these when writing or editing examples:
 - Each file should be a cohesive "application" or themed demonstration,
   not a bag of unrelated unit tests.
 
-## File status
+## Files
 
-Files are in three states:
-
-1. **Refreshed**: Idiomatic, consolidated, following all style rules above.
-   Currently: `basics.lisp`, `functions.lisp`, `control.lisp`,
-   `collections.lisp`, `destructuring.lisp`, `errors.lisp`,
-   `coroutines.lisp`, `meta.lisp`, `concurrency.lisp`,
-   `processes.lisp`, `io.lisp`, `introspection.lisp`, `ffi.lisp`.
-
-2. **Pending refresh**: Working but use old idioms. Editing these is fine
-   but prefer modernizing them while you're there.
-
-3. **Superseded**: Covered by refreshed files, awaiting deletion. Do not
-   modify these — they will be removed. See `README.md` for the full list.
+All example files follow the style rules above. See `README.md` for the
+complete file inventory with themes and coverage.
 
 ## Assertions
 

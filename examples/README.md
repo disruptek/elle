@@ -26,8 +26,6 @@ expected vs actual on failure and exits with code 1.
 
 ## Files
 
-### Refreshed (idiomatic, consolidated)
-
 | File | Theme | Covers |
 |------|-------|--------|
 | `basics.lisp` | Type system tour | Immediates, truthiness, arithmetic, math, comparison, bitwise, conversions, `@` mutability split, bytes/blobs, boxes, equality |
@@ -44,18 +42,5 @@ expected vs actual on failure and exits with code 1.
 | `introspection.lisp` | Looking inside | Clock primitives, `time/elapsed`, closure introspection, `disbit`/`disjit`, `debug-print`, `trace`, benchmarking |
 | `ffi.lisp` | C interop | `ffi/native`, `ffi/defbind`, memory management, structs, variadic calls, callbacks (`qsort`) |
 
-### To be removed (superseded by refreshed files)
-
-`types.lisp`, `math-and-logic.lisp`, `closures.lisp`,
-`higher-order-functions.lisp`, `scope-and-binding.lisp`,
-`control-flow.lisp`, `syntax-sugar.lisp`, `lists-and-arrays.lisp`,
-`tables-and-structs.lisp`, `string-operations.lisp`, `json.lisp`,
-`modules.lisp`, `debugging.lisp`, `debugging-profiling.lisp`,
-`benchmarks.lisp`, `time.lisp`, `meta-programming.lisp`
-
-### Other
-
-| File | Purpose |
-|------|---------|
-| `assertions.lisp` | Shared assertion library |
-| `hello.lisp` | Smoke test (no assertions) |
+| `assertions.lisp` | — | Shared assertion library (loaded by all other files) |
+| `hello.lisp` | — | Smoke test (no assertions) |
