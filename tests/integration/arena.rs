@@ -1,4 +1,7 @@
 use crate::common::eval_source;
+use elle::compiler::bytecode::disassemble_lines;
+use elle::pipeline::compile;
+use elle::SymbolTable;
 use elle::Value;
 
 // ── vm/arena (struct form) ──────────────────────────────────────────
@@ -275,4 +278,76 @@ fn test_arena_eval_cost_is_constant() {
         Value::TRUE,
         "per-iter allocation cost should be constant"
     );
+}
+
+// ── Region instruction emission ─────────────────────────────────────
+
+fn bytecode_contains(source: &str, needle: &str) -> bool {
+    let mut symbols = SymbolTable::new();
+    let compiled = compile(source, &mut symbols).expect("compilation failed");
+    let lines = disassemble_lines(&compiled.bytecode.instructions);
+    lines.iter().any(|line| line.contains(needle))
+}
+
+fn count_in_bytecode(source: &str, needle: &str) -> usize {
+    let mut symbols = SymbolTable::new();
+    let compiled = compile(source, &mut symbols).expect("compilation failed");
+    let lines = disassemble_lines(&compiled.bytecode.instructions);
+    lines.iter().filter(|line| line.contains(needle)).count()
+}
+
+#[test]
+fn test_let_emits_region_instructions() {
+    // let* should emit RegionEnter before bindings and RegionExit after body
+    assert!(bytecode_contains("(let* ((x 1)) x)", "RegionEnter"));
+    assert!(bytecode_contains("(let* ((x 1)) x)", "RegionExit"));
+}
+
+#[test]
+fn test_nested_let_balanced_regions() {
+    // Nested lets should produce balanced enter/exit pairs
+    let source = "(let* ((x 1)) (let* ((y 2)) (+ x y)))";
+    let enters = count_in_bytecode(source, "RegionEnter");
+    let exits = count_in_bytecode(source, "RegionExit");
+    assert_eq!(enters, 2, "nested let should emit 2 RegionEnter");
+    assert_eq!(exits, 2, "nested let should emit 2 RegionExit");
+}
+
+#[test]
+fn test_block_emits_region_instructions() {
+    // block should emit region instructions
+    assert!(bytecode_contains("(block :done 42)", "RegionEnter"));
+    assert!(bytecode_contains("(block :done 42)", "RegionExit"));
+}
+
+#[test]
+fn test_fn_body_no_region_instructions() {
+    // Function bodies should NOT emit region instructions (per plan)
+    // The function itself is a closure in the constant pool, so we check
+    // that the top-level bytecode does NOT contain RegionEnter
+    // (the fn expression compiles to MakeClosure, not region instructions)
+    let source = "(fn (x) (+ x 1))";
+    assert!(
+        !bytecode_contains(source, "RegionEnter"),
+        "fn body should not emit RegionEnter at top level"
+    );
+}
+
+#[test]
+fn test_region_instructions_are_noop() {
+    // Verify region instructions don't affect execution results
+    let result = eval_source("(let* ((x 10) (y 20)) (+ x y))").unwrap();
+    assert_eq!(result, Value::int(30));
+
+    let result = eval_source("(block :done (let* ((x 5)) (+ x x)))").unwrap();
+    assert_eq!(result, Value::int(10));
+
+    let result = eval_source(
+        "(let* ((a 1))
+           (let* ((b 2))
+             (let* ((c 3))
+               (+ a (+ b c)))))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(6));
 }

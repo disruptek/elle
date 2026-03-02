@@ -248,6 +248,8 @@ impl Lowerer {
             exit_label,
         });
 
+        self.emit(LirInstr::RegionEnter);
+
         // Lower body (same as lower_begin but simpler — body is typically a single Begin node)
         if body.is_empty() {
             let nil_reg = self.emit_const(LirConst::Nil)?;
@@ -268,6 +270,8 @@ impl Lowerer {
         }
 
         self.block_lower_contexts.pop();
+
+        self.emit(LirInstr::RegionExit);
 
         // Normal exit: jump to the exit label
         self.terminate(Terminator::Jump(exit_label));

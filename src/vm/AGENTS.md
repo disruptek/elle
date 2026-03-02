@@ -198,6 +198,11 @@ Key methods:
   pointer on swap-back. Root fibers have no heap installed (allocate to the
   global `HEAP_ARENA`); only child fibers get per-fiber heap routing.
 
+## Allocation region instructions
+
+`RegionEnter` and `RegionExit` are dispatched as no-ops in the VM (Package 3).
+Package 5 will activate them to push/pop arena marks on the active FiberHeap.
+
 ## Fiber heap routing
 
 Child fibers each own a `Box<FiberHeap>` (on the `Fiber` struct). When the

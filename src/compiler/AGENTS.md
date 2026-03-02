@@ -44,6 +44,18 @@ Bytecode instruction definitions and debug formatting.
 | `bytecode.rs` | ~200 | Instruction enum, Bytecode struct |
 | `bytecode_debug.rs` | ~150 | Debug formatting |
 
+## Allocation region instructions
+
+`RegionEnter` and `RegionExit` are scope boundary markers for the allocator.
+They have no operands (single opcode byte each). Currently no-ops in the VM
+(Package 3). Package 5 will activate them to push/pop arena marks on the
+FiberHeap. Emitted by the lowerer at `let`/`letrec`/`block` boundaries.
+Function bodies do NOT get region instructions.
+
+**Early-exit debt**: `break` out of a block, `return` from inside a `let`,
+and exception unwinding do not yet emit compensating `RegionExit` instructions.
+Harmless while they're no-ops; must be addressed in Package 5.
+
 ## Anti-patterns
 
 - Modifying `Instruction` byte values (breaks compatibility)

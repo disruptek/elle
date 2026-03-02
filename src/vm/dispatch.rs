@@ -325,6 +325,9 @@ impl VM {
                         return (bits, ip);
                     }
                 }
+
+                // Allocation region markers (no-ops until Package 5)
+                Instruction::RegionEnter | Instruction::RegionExit => {}
             }
 
             // If an error or halt signal was set by the instruction, propagate.

@@ -136,6 +136,18 @@ stored in `Closure.location_map` and used by the VM for error reporting.
 | `IsTable` | value → bool | Type check: is value a table or struct? (for pattern matching) |
 | `ArrayLen` | array → int | Get array length (for pattern matching) |
 | `TableGetOrNil` | table → value | Get key from table/struct, or nil if missing/wrong type (u16 const_idx operand) |
+| `RegionEnter` | (none) | Allocation region entry marker (no-op until Package 5) |
+| `RegionExit` | (none) | Allocation region exit marker (no-op until Package 5) |
+
+## Allocation regions
+
+`RegionEnter` and `RegionExit` are no-register, no-stack-effect instructions
+emitted at `let`/`letrec`/`block` boundaries. They mark scope boundaries for
+the allocator (Package 5 will use them to push/pop arena marks). Function
+bodies do NOT get region instructions.
+
+**Early-exit debt**: `break`, `return`, and exception unwinding do not yet
+emit compensating `RegionExit`. Harmless while no-ops; Package 5 must fix.
 
 ## Yield as terminator
 
