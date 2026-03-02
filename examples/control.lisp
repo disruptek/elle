@@ -99,7 +99,7 @@
     :sub (- a b)
     :mul (* a b)
     :div (/ a b)
-    (error :unknown-op (string/join (list "unknown op: " (string op)) ""))))
+    (error [:unknown-op (string/join (list "unknown op: " (string op)) "")])))
 
 (assert-eq (binary-op :add 3 4) 7 "case: add")
 (assert-eq (binary-op :sub 10 3) 7 "case: sub")

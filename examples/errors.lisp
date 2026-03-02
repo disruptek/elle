@@ -14,9 +14,9 @@
 (import-file "./examples/assertions.lisp")
 
 
-# Errors in Elle are tuples: [:keyword "message"]. They propagate via
-# the fiber signal mechanism. (error kind msg) is a prelude macro that
-# expands to (fiber/signal 1 (tuple kind msg)).
+# Errors in Elle are values signaled via fibers. By convention, a tuple
+# [:keyword "message"] is used, but any value works. (error val) is a
+# prelude macro that expands to (fiber/signal 1 val).
 
 
 # ========================================
@@ -27,13 +27,13 @@
 # with the error bound to the catch variable.
 
 (def result (try
-  (error :demo "something went wrong")
+  (error [:demo "something went wrong"])
   (catch e :caught)))
 (assert-eq result :caught "try/catch: error triggers catch")
 
 # The catch binding holds the error tuple [:kind "message"]
 (def err (try
-  (error :bad-input "expected a number")
+  (error [:bad-input "expected a number"])
   (catch e e)))
 (display "  caught error: ") (print err)
 (assert-eq (get err 0) :bad-input "error kind is a keyword")
@@ -62,10 +62,10 @@
 (def outer-result
   (try
     (try
-      (error :inner "from inside")
+      (error [:inner "from inside"])
       (catch e
         # Caught the inner error, now raise a new one
-        (error :wrapped (string/join (list "wrapped: " (get e 1)) ""))))
+        (error [:wrapped (string/join (list "wrapped: " (get e 1)) "")])))
     (catch e e)))
 (display "  nested re-raise: ") (print outer-result)
 (assert-eq (get outer-result 0) :wrapped "nested: outer catches re-raised error")
@@ -88,7 +88,7 @@
 (assert-eq val1 300 "protect: success value")
 
 # Error case:
-(def [ok2? val2] (protect (error :boom "exploded")))
+(def [ok2? val2] (protect (error [:boom "exploded"])))
 (display "  protect err: [") (display ok2?) (display " ") (display val2) (print "]")
 (assert-false ok2? "protect: error returns false")
 (assert-eq (get val2 0) :boom "protect: error kind preserved")
@@ -124,7 +124,7 @@
 (def defer-err (try
   (defer (push err-log :cleanup)
     (push err-log :body)
-    (error :fail "oops")
+    (error [:fail "oops"])
     (push err-log :unreachable))
   (catch e (push err-log :caught) e)))
 (assert-eq err-log @[:body :cleanup :caught] "defer: cleanup before catch")
@@ -172,7 +172,7 @@
 (def with-err (try
   (with f (open-file) close-file
     (push err-res-log :used)
-    (error :io "write failed"))
+    (error [:io "write failed"]))
   (catch e :recovered)))
 
 (assert-eq with-err :recovered "with: error caught after cleanup")
@@ -189,11 +189,11 @@
 (defn validate-age [age]
   "Ensure age is a positive integer."
   (when (not (= (type age) :integer))
-    (error :type-error "age must be an integer"))
+    (error [:type-error "age must be an integer"]))
   (when (< age 0)
-    (error :value-error "age must be non-negative"))
+    (error [:value-error "age must be non-negative"]))
   (when (> age 150)
-    (error :value-error "age is unreasonably large"))
+    (error [:value-error "age is unreasonably large"]))
   age)
 
 (defn create-person [name age]

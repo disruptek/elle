@@ -178,7 +178,7 @@
           (push ready pid))
 
         (_
-          (error :protocol-error "unknown scheduler command")))))
+          (error [:protocol-error "unknown scheduler command"])))))
 
     # Run one process: resume it, handle the result
     (var run-one (fn (pid)
@@ -203,7 +203,7 @@
                 (handle-cmd pid (fiber/value f)))
 
               (true
-                (error :scheduler-error "unexpected signal bits"))))))))
+                (error [:scheduler-error "unexpected signal bits"]))))))))
 
     # ---- main loop ----
 
@@ -218,7 +218,7 @@
           (wake-waiting)
 
           (if (and (empty? ready) (not (empty? waiting)))
-            (error :deadlock "all processes waiting, no messages pending"))
+            (error [:deadlock "all processes waiting, no messages pending"]))
 
           (let ((batch ready))
             (set ready @[])
