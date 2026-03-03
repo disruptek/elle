@@ -29,3 +29,4 @@ Produces SVG files in the current directory:
 | `factorial.svg` | Recursive factorial | Branch + self-call |
 | `fizzbuzz.svg` | Nested cond | Multiple branch paths |
 | `make-adder.svg` | Returns closure | Captured variable handling |
+| `eval-expr.svg` | 6-way match expression evaluator | Complex: match dispatch, recursion, let-binding, conditional error, many blocks with cross-edges |

@@ -7,7 +7,8 @@
 #   cargo build --release -p elle-selkie
 #   cargo run --release -- demos/cfgviz/cfgviz.lisp
 #
-# Produces: identity.svg, factorial.svg, fizzbuzz.svg, make-adder.svg
+# Produces: identity.svg, factorial.svg, fizzbuzz.svg, make-adder.svg,
+#           eval-expr.svg
 
 (import-file "target/release/libelle_selkie.so")
 
@@ -35,6 +36,23 @@
   "Returns a closure — shows captured variable in LIR."
   (fn [y] (+ x y)))
 
+(defn eval-expr [expr]
+  "Evaluate an arithmetic expression tree.
+   Match dispatch, recursion, let-binding, conditional error —
+   produces a complex CFG with many blocks and cross-edges."
+  (match expr
+    ([:lit n]   n)
+    ([:neg a]   (- 0 (eval-expr a)))
+    ([:add a b] (+ (eval-expr a) (eval-expr b)))
+    ([:sub a b] (- (eval-expr a) (eval-expr b)))
+    ([:mul a b] (* (eval-expr a) (eval-expr b)))
+    ([:div a b]
+      (let* ([divisor (eval-expr b)]
+             [dividend (eval-expr a)])
+        (if (= divisor 0)
+          (error [:division-by-zero "division by zero in expression"])
+          (/ dividend divisor))))))
+
 # ── Render each function to SVG ─────────────────────────────────────
 
 (defn render-cfg [f name]
@@ -52,4 +70,5 @@
 (render-cfg factorial "factorial")
 (render-cfg fizzbuzz "fizzbuzz")
 (render-cfg make-adder "make-adder")
+(render-cfg eval-expr "eval-expr")
 (display "Done.\n")
