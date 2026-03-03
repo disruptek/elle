@@ -351,13 +351,28 @@ pub fn handle_array_extend(vm: &mut VM) {
         arr.borrow().to_vec()
     } else if let Some(tup) = source.as_tuple() {
         tup.to_vec()
+    } else if source.as_cons().is_some() || source.is_empty_list() {
+        match source.list_to_vec() {
+            Ok(v) => v,
+            Err(_) => {
+                vm.fiber.signal = Some((
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        "splice: list is not a proper list (dotted pair)",
+                    ),
+                ));
+                vm.fiber.stack.push(Value::NIL);
+                return;
+            }
+        }
     } else {
         vm.fiber.signal = Some((
             SIG_ERROR,
             error_val(
                 "type-error",
                 format!(
-                    "splice: expected array or tuple, got {}",
+                    "splice: expected array, tuple, or list, got {}",
                     source.type_name()
                 ),
             ),
