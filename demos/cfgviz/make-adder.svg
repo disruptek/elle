@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="316" height="216" viewBox="-8 -8 316 216" class="mermaid">
+<svg xmlns="http://www.w3.org/2000/svg" width="316" height="252.79999999999998" viewBox="-8 -8 316 252.79999999999998" class="mermaid">
   <style>
 
 .mermaid {
@@ -90,7 +90,7 @@ marker path {
       <path d="M 1 1 L 10 10 M 10 1 L 1 10" stroke-width="2" fill="none"/>
     </marker>
     <marker id="arrow_cross_start" viewBox="0 0 11 11" refX="-1" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M 1 1 L 10 10 M 10 1 L 1 10" stroke-width="2" fill="none"/>
+      <path d="M 1 1 L 10 10 M 10 1 L 1 10" fill="none" stroke-width="2"/>
     </marker>
     <marker id="arrow_circle" viewBox="0 0 10 10" refX="11" refY="5" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
       <circle cx="5" cy="5" r="5"/>
@@ -111,8 +111,8 @@ marker path {
     </g>
     <g class="nodes">
       <g class="node" id="node-block0">
-        <rect x="0" y="0" width="300" height="200"/>
-        <text x="150" y="100" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="150" y="100" dy="-2.4em">block0</tspan><tspan x="150" dy="1.2em">LoadCapture { dst: Reg(0), index: 0 }</tspan><tspan x="150" dy="1.2em">MakeClosure { dst: Reg(1), func: LirFunction { name: None, arity: Exact(1), blocks: [BasicBlock { label: Label(0), instructions: [SpannedInstr { instr: LoadCapture { dst: Reg(0), index: 0 }, span: Span { start: 0, end: 15, line: 37, col: 14, file: None } }, SpannedInstr { instr: LoadCapture { dst: Reg(1), index: 1 }, span: Span { start: 0, end: 17, line: 37, col: 16, file: None } }, SpannedInstr { instr: BinOp { dst: Reg(2), op: Add, lhs: Reg(0), rhs: Reg(1) }, span: Span { start: 0, end: 17, line: 37, col: 16, file: None } }], terminator: SpannedTerminator { terminator: Return(Reg(2)), span: Span { start: 0, end: 17, line: 37, col: 16, file: None } } }], entry: Label(0), constants: [], num_regs: 3, num_locals: 1, num_captures: 1, cell_params_mask: 0, cell_locals_mask: 0, effect: Effect { bits: 0, propagates: 0 }, doc: None, vararg_kind: List, num_params: 1 }, captures: [Reg(0)] }</tspan><tspan x="150" dy="1.2em">---</tspan><tspan x="150" dy="1.2em">Return(Reg(1))</tspan></text>
+        <path d="M 118.39999999999999 0 H 181.60000000000002 A 118.39999999999999 118.39999999999999 0 0 1 181.60000000000002 236.79999999999998 H 118.39999999999999 A 118.39999999999999 118.39999999999999 0 0 1 118.39999999999999 0 Z" style="fill:#d4edda !important;stroke:#28a745 !important;stroke-width:2px !important"/>
+        <text x="150" y="118.39999999999999" class="label" dominant-baseline="central" text-anchor="middle" style="fill: #000000"><tspan x="150" y="118.39999999999999" dy="-3em">block0</tspan><tspan x="150" dy="1.2em"></tspan><tspan x="150" dy="1.2em">r0 ← cap[0]</tspan><tspan x="150" dy="1.2em">r1 ← closure(r0)</tspan><tspan x="150" dy="1.2em">---</tspan><tspan x="150" dy="1.2em">return r1</tspan></text>
       </g>
     </g>
   </g>

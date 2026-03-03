@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1468.5" height="1834" viewBox="-8 -8 1468.5 1834" class="mermaid">
+<svg xmlns="http://www.w3.org/2000/svg" width="1140.8000000000002" height="3093.2" viewBox="-8 -8 1140.8000000000002 3093.2" class="mermaid">
   <style>
 
 .mermaid {
@@ -87,10 +87,10 @@ marker path {
       <path d="M 0 5 L 10 10 L 10 0 z"/>
     </marker>
     <marker id="arrow_cross" viewBox="0 0 11 11" refX="12" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M 1 1 L 10 10 M 10 1 L 1 10" fill="none" stroke-width="2"/>
+      <path d="M 1 1 L 10 10 M 10 1 L 1 10" stroke-width="2" fill="none"/>
     </marker>
     <marker id="arrow_cross_start" viewBox="0 0 11 11" refX="-1" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M 1 1 L 10 10 M 10 1 L 1 10" stroke-width="2" fill="none"/>
+      <path d="M 1 1 L 10 10 M 10 1 L 1 10" fill="none" stroke-width="2"/>
     </marker>
     <marker id="arrow_circle" viewBox="0 0 10 10" refX="11" refY="5" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
       <circle cx="5" cy="5" r="5"/>
@@ -105,43 +105,43 @@ marker path {
     </g>
     <g class="edgePaths">
       <g class="edge" id="edge-L-block0-block2-0">
-        <path d="M 452.50 239.43 C 351.67 283.69, 250.83 327.94, 200.42 366.51 C 150.00 405.07, 150.00 437.93, 150.00 470.80" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+        <path d="M 354.02 430.12 C 281.35 509.48, 208.67 588.84, 172.34 667.35 C 136.00 745.87, 136.00 823.53, 136.00 901.20" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
       </g>
       <g class="edge" id="edge-L-block0-block5-0">
-        <path d="M 752.50 343.83 L 777.50 397.20" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+        <path d="M 529.84 479.31 L 621.40 693.20" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
       </g>
       <g class="edge" id="edge-L-block2-block1-0">
-        <path d="M 150.00 670.80 C 150.00 1002.73, 150.00 1334.67, 225.30 1513.05 C 300.60 1691.43, 451.20 1716.26, 601.80 1741.08" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+        <path d="M 136.00 1138.00 C 136.00 1721.67, 136.00 2305.33, 191.53 2609.66 C 247.07 2913.98, 358.13 2938.96, 469.20 2963.93" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
       </g>
       <g class="edge" id="edge-L-block5-block4-0">
-        <path d="M 627.50 653.55 C 557.50 692.17, 487.50 730.78, 452.50 766.52 C 417.50 802.27, 417.50 835.13, 417.50 868.00" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+        <path d="M 531.87 1151.18 C 482.01 1224.45, 432.16 1297.73, 407.23 1373.20 C 382.30 1448.67, 382.30 1526.33, 382.30 1604.00" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
       </g>
       <g class="edge" id="edge-L-block5-block7-0">
-        <path d="M 927.50 741.03 L 952.50 794.40" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+        <path d="M 696.24 1183.15 L 782.20 1396.00" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
       </g>
       <g class="edge" id="edge-L-block4-block1-0">
-        <path d="M 417.50 1068.00 C 417.50 1267.53, 417.50 1467.07, 448.22 1576.96 C 478.93 1686.86, 540.37 1707.11, 601.80 1727.37" class="edge-path" marker-end="url(#arrow_point)" stroke-width="1" fill="none"/>
+        <path d="M 382.30 1840.80 C 382.30 2190.20, 382.30 2539.60, 396.78 2721.08 C 411.27 2902.56, 440.23 2916.12, 469.20 2929.68" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
       </g>
       <g class="edge" id="edge-L-block7-block6-0">
-        <path d="M 802.50 1079.36 L 685.00 1191.60" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+        <path d="M 707.36 1885.95 C 678.71 1948.57, 650.05 2011.18, 635.73 2066.79 C 621.40 2122.40, 621.40 2171.00, 621.40 2219.60" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
       </g>
       <g class="edge" id="edge-L-block7-block9-0">
-        <path d="M 1102.50 1138.23 L 1127.50 1210.00" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+        <path d="M 857.04 1885.95 L 943.00 2098.80" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
       </g>
       <g class="edge" id="edge-L-block6-block1-0">
-        <path d="M 685.00 1391.60 C 685.00 1399.93, 685.00 1408.27, 685.00 1433.27 C 685.00 1458.27, 685.00 1499.93, 685.00 1541.60 C 685.00 1583.27, 685.00 1624.93, 685.00 1649.93 C 685.00 1683.27, 685.00 1691.60, 685.00 1691.60" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+        <path d="M 621.40 2456.40 C 621.40 2505.00, 621.40 2553.60, 621.40 2601.80 C 621.40 2650.00, 621.40 2697.80, 621.40 2745.60 C 621.40 2793.40, 621.40 2841.20, 620.95 2869.27 C 619.62 2905.67, 618.73 2914.00, 618.73 2914.00" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
       </g>
       <g class="edge" id="edge-L-block9-block8-0">
-        <path d="M 1013.26 1373.20 L 952.50 1441.60" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+        <path d="M 885.12 2484.90 L 838.90 2627.20" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
       </g>
       <g class="edge" id="edge-L-block9-block10-0">
-        <path d="M 1241.74 1373.20 L 1302.50 1441.60" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+        <path d="M 1000.64 2485.28 L 1046.40 2627.20" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
       </g>
       <g class="edge" id="edge-L-block8-block1-0">
-        <path d="M 952.50 1641.60 C 952.50 1649.93, 952.50 1658.27, 921.78 1672.56 C 891.07 1686.86, 829.63 1707.11, 768.20 1727.37" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+        <path d="M 838.90 2864.00 C 838.90 2872.33, 838.90 2880.67, 824.22 2891.67 C 809.53 2902.68, 780.17 2916.35, 750.80 2930.03" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
       </g>
       <g class="edge" id="edge-L-block10-block1-0">
-        <path d="M 1302.50 1641.60 C 1302.50 1649.93, 1302.50 1658.27, 1213.45 1675.15 C 1124.40 1692.04, 946.30 1717.48, 768.20 1742.92" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+        <path d="M 1046.40 2864.00 C 1046.40 2872.33, 1046.40 2880.67, 997.13 2896.87 C 947.87 2913.07, 849.33 2937.14, 750.80 2961.21" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
       </g>
     </g>
     <g class="edgeLabels">
@@ -149,44 +149,44 @@ marker path {
     </g>
     <g class="nodes">
       <g class="node" id="node-block0">
-        <rect x="452.5" y="0" width="300" height="347.2"/>
-        <text x="602.5" y="173.6" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="602.5" y="173.6" dy="-4.8em">block0</tspan><tspan x="602.5" dy="1.2em">LoadCapture { dst: Reg(1), index: 0 }</tspan><tspan x="602.5" dy="1.2em">Const { dst: Reg(2), value: Int(15) }</tspan><tspan x="602.5" dy="1.2em">LoadGlobal { dst: Reg(3), sym: SymbolId(4) }</tspan><tspan x="602.5" dy="1.2em">Call { dst: Reg(4), func: Reg(3), args: [Reg(1), Reg(2)] }</tspan><tspan x="602.5" dy="1.2em">Const { dst: Reg(5), value: Int(0) }</tspan><tspan x="602.5" dy="1.2em">Compare { dst: Reg(6), op: Eq, lhs: Reg(4), rhs: Reg(5) }</tspan><tspan x="602.5" dy="1.2em">---</tspan><tspan x="602.5" dy="1.2em">Branch { cond: Reg(6), then_label: Label(2), else_label: Label(5) }</tspan></text>
+        <polygon points="453.40000000000003,0 603.4000000000001,321.6 453.40000000000003,643.2 303.40000000000003,321.6" style="fill:#d4edda !important;stroke:#28a745 !important;stroke-width:2px !important"/>
+        <text x="453.40000000000003" y="321.6" class="label" style="fill: #000000" text-anchor="middle" dominant-baseline="central"><tspan x="453.40000000000003" y="321.6" dy="-5.3999999999999995em">block0</tspan><tspan x="453.40000000000003" dy="1.2em"></tspan><tspan x="453.40000000000003" dy="1.2em">r1 ← cap[0]</tspan><tspan x="453.40000000000003" dy="1.2em">r2 ← 15</tspan><tspan x="453.40000000000003" dy="1.2em">r3 ← global(4)</tspan><tspan x="453.40000000000003" dy="1.2em">r4 ← r3(r1, r2)</tspan><tspan x="453.40000000000003" dy="1.2em">r5 ← 0</tspan><tspan x="453.40000000000003" dy="1.2em">r6 ← r4 = r5</tspan><tspan x="453.40000000000003" dy="1.2em">---</tspan><tspan x="453.40000000000003" dy="1.2em">branch r6 → block2 / block5</tspan></text>
       </g>
       <g class="node" id="node-block1">
-        <rect x="601.8" y="1691.6" width="166.4" height="126.39999999999999"/>
-        <text x="685" y="1754.8" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="685" y="1754.8" dy="-1.2em">block1</tspan><tspan x="685" dy="1.2em">---</tspan><tspan x="685" dy="1.2em">Return(Reg(0))</tspan></text>
+        <path d="M 550.8000000000001 2914 H 669.1999999999999 A 81.6 81.6 0 0 1 669.1999999999999 3077.2 H 550.8000000000001 A 81.6 81.6 0 0 1 550.8000000000001 2914 Z" style="fill:#cce5ff !important;stroke:#004085 !important;stroke-width:2px !important"/>
+        <text x="610" y="2995.6" class="label" style="fill: #000000" dominant-baseline="central" text-anchor="middle"><tspan x="610" y="2995.6" dy="-1.7999999999999998em">block1</tspan><tspan x="610" dy="1.2em"></tspan><tspan x="610" dy="1.2em">---</tspan><tspan x="610" dy="1.2em">return r0</tspan></text>
       </g>
       <g class="node" id="node-block10">
-        <rect x="1152.5" y="1441.6" width="300" height="200"/>
-        <text x="1302.5" y="1541.6" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="1302.5" y="1541.6" dy="-2.4em">block10</tspan><tspan x="1302.5" dy="1.2em">Const { dst: Reg(24), value: Nil }</tspan><tspan x="1302.5" dy="1.2em">Move { dst: Reg(0), src: Reg(24) }</tspan><tspan x="1302.5" dy="1.2em">---</tspan><tspan x="1302.5" dy="1.2em">Jump(Label(1))</tspan></text>
+        <rect x="968.0000000000001" y="2627.2000000000003" width="156.8" height="236.79999999999998" style="fill:#f8f9fa !important;stroke:#6c757d !important"/>
+        <text x="1046.4" y="2745.6000000000004" class="label" style="fill: #000000" text-anchor="middle" dominant-baseline="central"><tspan x="1046.4" y="2745.6000000000004" dy="-3em">block10</tspan><tspan x="1046.4" dy="1.2em"></tspan><tspan x="1046.4" dy="1.2em">r24 ← nil</tspan><tspan x="1046.4" dy="1.2em">r0 ← r24</tspan><tspan x="1046.4" dy="1.2em">---</tspan><tspan x="1046.4" dy="1.2em">jump → block1</tspan></text>
       </g>
       <g class="node" id="node-block2">
-        <rect x="0" y="470.79999999999995" width="300" height="200"/>
-        <text x="150" y="570.8" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="150" y="570.8" dy="-2.4em">block2</tspan><tspan x="150" dy="1.2em">Const { dst: Reg(7), value: String(&amp;quot;fizzbuzz&amp;quot;) }</tspan><tspan x="150" dy="1.2em">Move { dst: Reg(0), src: Reg(7) }</tspan><tspan x="150" dy="1.2em">---</tspan><tspan x="150" dy="1.2em">Jump(Label(1))</tspan></text>
+        <rect x="0" y="901.2" width="272" height="236.79999999999998" style="fill:#f8f9fa !important;stroke:#6c757d !important"/>
+        <text x="136" y="1019.6" class="label" dominant-baseline="central" style="fill: #000000" text-anchor="middle"><tspan x="136" y="1019.6" dy="-3em">block2</tspan><tspan x="136" dy="1.2em"></tspan><tspan x="136" dy="1.2em">r7 ← &amp;quot;fizzbuzz&amp;quot;</tspan><tspan x="136" dy="1.2em">r0 ← r7</tspan><tspan x="136" dy="1.2em">---</tspan><tspan x="136" dy="1.2em">jump → block1</tspan></text>
       </g>
       <g class="node" id="node-block4">
-        <rect x="267.5" y="868" width="300" height="200"/>
-        <text x="417.5" y="968" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="417.5" y="968" dy="-2.4em">block4</tspan><tspan x="417.5" dy="1.2em">Const { dst: Reg(14), value: String(&amp;quot;fizz&amp;quot;) }</tspan><tspan x="417.5" dy="1.2em">Move { dst: Reg(0), src: Reg(14) }</tspan><tspan x="417.5" dy="1.2em">---</tspan><tspan x="417.5" dy="1.2em">Jump(Label(1))</tspan></text>
+        <rect x="260.70000000000005" y="1604" width="243.2" height="236.79999999999998" style="fill:#f8f9fa !important;stroke:#6c757d !important"/>
+        <text x="382.30000000000007" y="1722.4" class="label" style="fill: #000000" dominant-baseline="central" text-anchor="middle"><tspan x="382.30000000000007" y="1722.4" dy="-3em">block4</tspan><tspan x="382.30000000000007" dy="1.2em"></tspan><tspan x="382.30000000000007" dy="1.2em">r14 ← &amp;quot;fizz&amp;quot;</tspan><tspan x="382.30000000000007" dy="1.2em">r0 ← r14</tspan><tspan x="382.30000000000007" dy="1.2em">---</tspan><tspan x="382.30000000000007" dy="1.2em">jump → block1</tspan></text>
       </g>
       <g class="node" id="node-block5">
-        <rect x="627.5" y="397.19999999999993" width="300" height="347.2"/>
-        <text x="777.5" y="570.8" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="777.5" y="570.8" dy="-4.8em">block5</tspan><tspan x="777.5" dy="1.2em">LoadCapture { dst: Reg(8), index: 0 }</tspan><tspan x="777.5" dy="1.2em">Const { dst: Reg(9), value: Int(3) }</tspan><tspan x="777.5" dy="1.2em">LoadGlobal { dst: Reg(10), sym: SymbolId(4) }</tspan><tspan x="777.5" dy="1.2em">Call { dst: Reg(11), func: Reg(10), args: [Reg(8), Reg(9)] }</tspan><tspan x="777.5" dy="1.2em">Const { dst: Reg(12), value: Int(0) }</tspan><tspan x="777.5" dy="1.2em">Compare { dst: Reg(13), op: Eq, lhs: Reg(11), rhs: Reg(12) }</tspan><tspan x="777.5" dy="1.2em">---</tspan><tspan x="777.5" dy="1.2em">Branch { cond: Reg(13), then_label: Label(4), else_label: Label(7) }</tspan></text>
+        <polygon points="621.4000000000001,693.2 771.4000000000001,1019.6 621.4000000000001,1346 471.4000000000001,1019.6" style="fill:#fff3cd !important;stroke:#856404 !important;stroke-width:2px !important"/>
+        <text x="621.4000000000001" y="1019.6" class="label" text-anchor="middle" dominant-baseline="central" style="fill: #000000"><tspan x="621.4000000000001" y="1019.6" dy="-5.3999999999999995em">block5</tspan><tspan x="621.4000000000001" dy="1.2em"></tspan><tspan x="621.4000000000001" dy="1.2em">r8 ← cap[0]</tspan><tspan x="621.4000000000001" dy="1.2em">r9 ← 3</tspan><tspan x="621.4000000000001" dy="1.2em">r10 ← global(4)</tspan><tspan x="621.4000000000001" dy="1.2em">r11 ← r10(r8, r9)</tspan><tspan x="621.4000000000001" dy="1.2em">r12 ← 0</tspan><tspan x="621.4000000000001" dy="1.2em">r13 ← r11 = r12</tspan><tspan x="621.4000000000001" dy="1.2em">---</tspan><tspan x="621.4000000000001" dy="1.2em">branch r13 → block4 / block7</tspan></text>
       </g>
       <g class="node" id="node-block6">
-        <rect x="535" y="1191.6" width="300" height="200"/>
-        <text x="685" y="1291.6" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="685" y="1291.6" dy="-2.4em">block6</tspan><tspan x="685" dy="1.2em">Const { dst: Reg(21), value: String(&amp;quot;buzz&amp;quot;) }</tspan><tspan x="685" dy="1.2em">Move { dst: Reg(0), src: Reg(21) }</tspan><tspan x="685" dy="1.2em">---</tspan><tspan x="685" dy="1.2em">Jump(Label(1))</tspan></text>
+        <rect x="499.80000000000007" y="2219.6" width="243.2" height="236.79999999999998" style="fill:#f8f9fa !important;stroke:#6c757d !important"/>
+        <text x="621.4000000000001" y="2338" class="label" dominant-baseline="central" style="fill: #000000" text-anchor="middle"><tspan x="621.4000000000001" y="2338" dy="-3em">block6</tspan><tspan x="621.4000000000001" dy="1.2em"></tspan><tspan x="621.4000000000001" dy="1.2em">r21 ← &amp;quot;buzz&amp;quot;</tspan><tspan x="621.4000000000001" dy="1.2em">r0 ← r21</tspan><tspan x="621.4000000000001" dy="1.2em">---</tspan><tspan x="621.4000000000001" dy="1.2em">jump → block1</tspan></text>
       </g>
       <g class="node" id="node-block7">
-        <rect x="802.5" y="794.4" width="300" height="347.2"/>
-        <text x="952.5" y="968" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="952.5" y="968" dy="-4.8em">block7</tspan><tspan x="952.5" dy="1.2em">LoadCapture { dst: Reg(15), index: 0 }</tspan><tspan x="952.5" dy="1.2em">Const { dst: Reg(16), value: Int(5) }</tspan><tspan x="952.5" dy="1.2em">LoadGlobal { dst: Reg(17), sym: SymbolId(4) }</tspan><tspan x="952.5" dy="1.2em">Call { dst: Reg(18), func: Reg(17), args: [Reg(15), Reg(16)] }</tspan><tspan x="952.5" dy="1.2em">Const { dst: Reg(19), value: Int(0) }</tspan><tspan x="952.5" dy="1.2em">Compare { dst: Reg(20), op: Eq, lhs: Reg(18), rhs: Reg(19) }</tspan><tspan x="952.5" dy="1.2em">---</tspan><tspan x="952.5" dy="1.2em">Branch { cond: Reg(20), then_label: Label(6), else_label: Label(9) }</tspan></text>
+        <polygon points="782.2,1396 932.2,1722.4 782.2,2048.8 632.2,1722.4" style="fill:#fff3cd !important;stroke:#856404 !important;stroke-width:2px !important"/>
+        <text x="782.2" y="1722.4" class="label" style="fill: #000000" text-anchor="middle" dominant-baseline="central"><tspan x="782.2" y="1722.4" dy="-5.3999999999999995em">block7</tspan><tspan x="782.2" dy="1.2em"></tspan><tspan x="782.2" dy="1.2em">r15 ← cap[0]</tspan><tspan x="782.2" dy="1.2em">r16 ← 5</tspan><tspan x="782.2" dy="1.2em">r17 ← global(4)</tspan><tspan x="782.2" dy="1.2em">r18 ← r17(r15, r16)</tspan><tspan x="782.2" dy="1.2em">r19 ← 0</tspan><tspan x="782.2" dy="1.2em">r20 ← r18 = r19</tspan><tspan x="782.2" dy="1.2em">---</tspan><tspan x="782.2" dy="1.2em">branch r20 → block6 / block9</tspan></text>
       </g>
       <g class="node" id="node-block8">
-        <rect x="802.5" y="1441.6" width="300" height="200"/>
-        <text x="952.5" y="1541.6" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="952.5" y="1541.6" dy="-2.4em">block8</tspan><tspan x="952.5" dy="1.2em">LoadCapture { dst: Reg(23), index: 0 }</tspan><tspan x="952.5" dy="1.2em">Move { dst: Reg(0), src: Reg(23) }</tspan><tspan x="952.5" dy="1.2em">---</tspan><tspan x="952.5" dy="1.2em">Jump(Label(1))</tspan></text>
+        <rect x="760.5000000000001" y="2627.2000000000003" width="156.8" height="236.79999999999998" style="fill:#f8f9fa !important;stroke:#6c757d !important"/>
+        <text x="838.9000000000001" y="2745.6000000000004" class="label" text-anchor="middle" dominant-baseline="central" style="fill: #000000"><tspan x="838.9000000000001" y="2745.6000000000004" dy="-3em">block8</tspan><tspan x="838.9000000000001" dy="1.2em"></tspan><tspan x="838.9000000000001" dy="1.2em">r23 ← cap[0]</tspan><tspan x="838.9000000000001" dy="1.2em">r0 ← r23</tspan><tspan x="838.9000000000001" dy="1.2em">---</tspan><tspan x="838.9000000000001" dy="1.2em">jump → block1</tspan></text>
       </g>
       <g class="node" id="node-block9">
-        <rect x="977.5" y="1210" width="300" height="163.2"/>
-        <text x="1127.5" y="1291.6" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="1127.5" y="1291.6" dy="-1.7999999999999998em">block9</tspan><tspan x="1127.5" dy="1.2em">Const { dst: Reg(22), value: Bool(true) }</tspan><tspan x="1127.5" dy="1.2em">---</tspan><tspan x="1127.5" dy="1.2em">Branch { cond: Reg(22), then_label: Label(8), else_label: Label(10) }</tspan></text>
+        <polygon points="943,2098.8 1093,2338 943,2577.2000000000003 793,2338" style="fill:#fff3cd !important;stroke:#856404 !important;stroke-width:2px !important"/>
+        <text x="943" y="2338" class="label" text-anchor="middle" dominant-baseline="central" style="fill: #000000"><tspan x="943" y="2338" dy="-2.4em">block9</tspan><tspan x="943" dy="1.2em"></tspan><tspan x="943" dy="1.2em">r22 ← true</tspan><tspan x="943" dy="1.2em">---</tspan><tspan x="943" dy="1.2em">branch r22 → block8 / block10</tspan></text>
       </g>
     </g>
   </g>

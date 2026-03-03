@@ -7,7 +7,7 @@
 //! - Debug print, trace, memory usage
 
 use crate::effects::Effect;
-use crate::lir::Terminator;
+use crate::lir::{terminator_kind, Terminator};
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK, SIG_QUERY};
 use crate::value::heap::TableKey;
@@ -480,10 +480,33 @@ fn flow_from_closure(closure: &std::rc::Rc<crate::value::heap::Closure>) -> (Sig
                 Value::tuple(instrs),
             );
 
+            // :display — tuple of compact human-readable instruction strings
+            let display: Vec<Value> = block
+                .instructions
+                .iter()
+                .map(|si| Value::string(format!("{}", si.instr)))
+                .collect();
+            block_fields.insert(
+                TableKey::Keyword("display".to_string()),
+                Value::tuple(display),
+            );
+
             // :term — Debug-formatted terminator string
             block_fields.insert(
                 TableKey::Keyword("term".to_string()),
                 Value::string(format!("{:?}", block.terminator.terminator)),
+            );
+
+            // :term-display — compact terminator string
+            block_fields.insert(
+                TableKey::Keyword("term-display".to_string()),
+                Value::string(format!("{}", block.terminator.terminator)),
+            );
+
+            // :term-kind — keyword identifying the terminator type
+            block_fields.insert(
+                TableKey::Keyword("term-kind".to_string()),
+                Value::keyword(terminator_kind(&block.terminator.terminator)),
             );
 
             // :edges — tuple of successor label ints
@@ -529,7 +552,10 @@ fn flow_from_closure(closure: &std::rc::Rc<crate::value::heap::Closure>) -> (Sig
 /// - :blocks — tuple of block structs, each with:
 ///   - :label — block label (int)
 ///   - :instrs — tuple of instruction strings (Debug format)
+///   - :display — tuple of compact instruction strings (Display format)
 ///   - :term — terminator string (Debug format)
+///   - :term-display — compact terminator string (Display format)
+///   - :term-kind — keyword: :return, :jump, :branch, :yield, or :unreachable
 ///   - :edges — tuple of successor label ints
 ///
 /// Returns nil if the closure has no LIR (e.g., native function or LIR discarded).

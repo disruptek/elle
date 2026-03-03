@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="316" height="179.2" viewBox="-8 -8 316 179.2" class="mermaid">
+<svg xmlns="http://www.w3.org/2000/svg" width="316" height="216" viewBox="-8 -8 316 216" class="mermaid">
   <style>
 
 .mermaid {
@@ -111,8 +111,8 @@ marker path {
     </g>
     <g class="nodes">
       <g class="node" id="node-block0">
-        <rect x="0" y="0" width="300" height="163.2"/>
-        <text x="150" y="81.6" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="150" y="81.6" dy="-1.7999999999999998em">block0</tspan><tspan x="150" dy="1.2em">LoadCapture { dst: Reg(0), index: 0 }</tspan><tspan x="150" dy="1.2em">---</tspan><tspan x="150" dy="1.2em">Return(Reg(0))</tspan></text>
+        <path d="M 100 0 H 200 A 100 100 0 0 1 200 200 H 100 A 100 100 0 0 1 100 0 Z" style="fill:#d4edda !important;stroke:#28a745 !important;stroke-width:2px !important"/>
+        <text x="150" y="100" class="label" dominant-baseline="central" text-anchor="middle" style="fill: #000000"><tspan x="150" y="100" dy="-2.4em">block0</tspan><tspan x="150" dy="1.2em"></tspan><tspan x="150" dy="1.2em">r0 ← cap[0]</tspan><tspan x="150" dy="1.2em">---</tspan><tspan x="150" dy="1.2em">return r0</tspan></text>
       </g>
     </g>
   </g>
