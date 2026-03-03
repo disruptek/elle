@@ -49,3 +49,13 @@ fn destructuring() {
 fn core() {
     run_elle_script("core");
 }
+
+#[test]
+fn splice() {
+    run_elle_script("splice");
+}
+
+#[test]
+fn blocks() {
+    run_elle_script("blocks");
+}
