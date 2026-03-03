@@ -28,6 +28,7 @@ Does NOT:
 | `Reg` | Virtual register |
 | `Label` | Basic block identifier |
 | `Lowerer` | HIR → LIR |
+| `ScopeStats` | Compile-time scope allocation statistics |
 | `Emitter` | LIR → Bytecode + LocationMap |
 
 ## Data flow
@@ -189,6 +190,13 @@ detect this. Requires interprocedural analysis. Accepted for Tier 0.
 `break` emits compensating `RegionExit` instructions for each region entered
 between the break site and the target block. The lowerer tracks `region_depth`
 and each `BlockLowerContext` records `region_depth_at_entry`.
+
+**Compile-time scope stats** (`ScopeStats`): The lowerer counts how many
+scopes were analyzed, how many qualified for scope allocation, and the
+first-failing condition for each rejected scope (captured, suspends,
+unsafe-result, outward-set, break). Access via `lowerer.scope_stats()`
+after `lower()` completes. Set `ELLE_SCOPE_STATS=1` to print stats to
+stderr during compilation.
 
 ## Yield as terminator
 

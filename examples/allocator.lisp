@@ -10,6 +10,9 @@
 # for fiber death. It works on non-yielding child fibers where
 # allocations go to the private FiberHeap bump. The escape analysis
 # in the lowerer decides which scopes qualify.
+#
+# For compile-time rejection breakdown, run with:
+#   ELLE_SCOPE_STATS=1 elle examples/allocator.lisp
 
 (import-file "./examples/assertions.lisp")
 
