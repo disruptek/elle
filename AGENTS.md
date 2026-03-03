@@ -200,7 +200,9 @@ Things that look wrong but aren't:
   See `src/value/fiber.rs` lines 138-165 for the constants and partitioning
   comment.
 - Destructuring uses **silent nil semantics**: missing values become `nil`,
-  wrong types produce `nil`, no runtime errors. This is separate from `match`
+  except `CdrOrNil` which returns `EMPTY_LIST` for non-cons inputs (the rest
+  of an exhausted list is an empty list, not absence).
+  Wrong types produce `nil`, no runtime errors. This is separate from `match`
   pattern matching which is conditional. `CarOrNil`/`CdrOrNil`/`ArrayRefOrNil`/
   `ArraySliceFrom`/`TableGetOrNil` are dedicated bytecode instructions for
   this — they never signal errors. `ArrayRefOrNil` and `ArraySliceFrom` handle

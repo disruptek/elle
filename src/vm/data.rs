@@ -228,8 +228,8 @@ pub fn handle_car_or_nil(vm: &mut VM) {
     }
 }
 
-/// Cdr with silent nil: returns nil if not a cons cell.
-/// Used by destructuring — missing values become nil, no errors.
+/// Cdr with silent empty-list: returns EMPTY_LIST if not a cons cell.
+/// Used by destructuring — rest of an exhausted list is empty list, not nil.
 pub fn handle_cdr_or_nil(vm: &mut VM) {
     let val = vm
         .fiber
@@ -238,7 +238,7 @@ pub fn handle_cdr_or_nil(vm: &mut VM) {
         .expect("VM bug: Stack underflow on CdrOrNil");
     match val.as_cons() {
         Some(cons) => vm.fiber.stack.push(cons.rest),
-        None => vm.fiber.stack.push(Value::NIL),
+        None => vm.fiber.stack.push(Value::EMPTY_LIST),
     }
 }
 
