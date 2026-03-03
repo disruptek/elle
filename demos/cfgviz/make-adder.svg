@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="316" height="216" viewBox="-8 -8 316 216" class="mermaid">
+  <style>
+
+.mermaid {
+  font-family: trebuchet ms, verdana, arial, sans-serif;
+  font-size: 16px;
+}
+
+.node rect,
+.node polygon,
+.node circle,
+.node ellipse,
+.node path {
+  fill: #ECECFF;
+  stroke: #9370DB;
+  stroke-width: 1px;
+}
+
+.node line {
+  stroke: #9370DB;
+  stroke-width: 1px;
+}
+
+.node .label {
+  fill: #333333;
+}
+
+.node text {
+  fill: #333333;
+  font-family: trebuchet ms, verdana, arial, sans-serif;
+  font-size: 16px;
+}
+
+.edge-path {
+  fill: none;
+  stroke: #333333;
+  stroke-width: 1px;
+}
+
+.edge-label {
+  fill: #333333;
+  font-family: trebuchet ms, verdana, arial, sans-serif;
+}
+
+.edge-label-bg {
+  fill: rgba(232, 232, 232, 0.8);
+}
+
+.subgraph {
+  fill: #ffffde;
+  stroke: #aaaa33;
+  stroke-width: 1px;
+}
+
+.subgraph-title {
+  fill: #333333;
+  font-weight: bold;
+}
+
+.cluster rect {
+  fill: #ffffde;
+  stroke: #aaaa33;
+  stroke-width: 1px;
+  rx: 5px;
+  ry: 5px;
+}
+
+.cluster-label {
+  fill: #333333;
+  font-family: trebuchet ms, verdana, arial, sans-serif;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+marker path {
+  fill: #333333;
+  stroke: #333333;
+}
+
+  </style>
+  <defs>
+    <marker id="arrow_point" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 z"/>
+    </marker>
+    <marker id="arrow_point_start" viewBox="0 0 10 10" refX="4.5" refY="5" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 5 L 10 10 L 10 0 z"/>
+    </marker>
+    <marker id="arrow_cross" viewBox="0 0 11 11" refX="12" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 1 1 L 10 10 M 10 1 L 1 10" stroke-width="2" fill="none"/>
+    </marker>
+    <marker id="arrow_cross_start" viewBox="0 0 11 11" refX="-1" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 1 1 L 10 10 M 10 1 L 1 10" stroke-width="2" fill="none"/>
+    </marker>
+    <marker id="arrow_circle" viewBox="0 0 10 10" refX="11" refY="5" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="5"/>
+    </marker>
+    <marker id="arrow_circle_start" viewBox="0 0 10 10" refX="-1" refY="5" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="5"/>
+    </marker>
+  </defs>
+  <g class="root">
+    <g class="clusters">
+
+    </g>
+    <g class="edgePaths">
+
+    </g>
+    <g class="edgeLabels">
+
+    </g>
+    <g class="nodes">
+      <g class="node" id="node-block0">
+        <rect x="0" y="0" width="300" height="200"/>
+        <text x="150" y="100" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="150" y="100" dy="-2.4em">block0</tspan><tspan x="150" dy="1.2em">LoadCapture { dst: Reg(0), index: 0 }</tspan><tspan x="150" dy="1.2em">MakeClosure { dst: Reg(1), func: LirFunction { name: None, arity: Exact(1), blocks: [BasicBlock { label: Label(0), instructions: [SpannedInstr { instr: LoadCapture { dst: Reg(0), index: 0 }, span: Span { start: 0, end: 15, line: 37, col: 14, file: None } }, SpannedInstr { instr: LoadCapture { dst: Reg(1), index: 1 }, span: Span { start: 0, end: 17, line: 37, col: 16, file: None } }, SpannedInstr { instr: BinOp { dst: Reg(2), op: Add, lhs: Reg(0), rhs: Reg(1) }, span: Span { start: 0, end: 17, line: 37, col: 16, file: None } }], terminator: SpannedTerminator { terminator: Return(Reg(2)), span: Span { start: 0, end: 17, line: 37, col: 16, file: None } } }], entry: Label(0), constants: [], num_regs: 3, num_locals: 1, num_captures: 1, cell_params_mask: 0, cell_locals_mask: 0, effect: Effect { bits: 0, propagates: 0 }, doc: None, vararg_kind: List, num_params: 1 }, captures: [Reg(0)] }</tspan><tspan x="150" dy="1.2em">---</tspan><tspan x="150" dy="1.2em">Return(Reg(1))</tspan></text>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2898.5" height="4056" viewBox="-8 -8 2898.5 4056" class="mermaid">
+  <style>
+
+.mermaid {
+  font-family: trebuchet ms, verdana, arial, sans-serif;
+  font-size: 16px;
+}
+
+.node rect,
+.node polygon,
+.node circle,
+.node ellipse,
+.node path {
+  fill: #ECECFF;
+  stroke: #9370DB;
+  stroke-width: 1px;
+}
+
+.node line {
+  stroke: #9370DB;
+  stroke-width: 1px;
+}
+
+.node .label {
+  fill: #333333;
+}
+
+.node text {
+  fill: #333333;
+  font-family: trebuchet ms, verdana, arial, sans-serif;
+  font-size: 16px;
+}
+
+.edge-path {
+  fill: none;
+  stroke: #333333;
+  stroke-width: 1px;
+}
+
+.edge-label {
+  fill: #333333;
+  font-family: trebuchet ms, verdana, arial, sans-serif;
+}
+
+.edge-label-bg {
+  fill: rgba(232, 232, 232, 0.8);
+}
+
+.subgraph {
+  fill: #ffffde;
+  stroke: #aaaa33;
+  stroke-width: 1px;
+}
+
+.subgraph-title {
+  fill: #333333;
+  font-weight: bold;
+}
+
+.cluster rect {
+  fill: #ffffde;
+  stroke: #aaaa33;
+  stroke-width: 1px;
+  rx: 5px;
+  ry: 5px;
+}
+
+.cluster-label {
+  fill: #333333;
+  font-family: trebuchet ms, verdana, arial, sans-serif;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+marker path {
+  fill: #333333;
+  stroke: #333333;
+}
+
+  </style>
+  <defs>
+    <marker id="arrow_point" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 z"/>
+    </marker>
+    <marker id="arrow_point_start" viewBox="0 0 10 10" refX="4.5" refY="5" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 5 L 10 10 L 10 0 z"/>
+    </marker>
+    <marker id="arrow_cross" viewBox="0 0 11 11" refX="12" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 1 1 L 10 10 M 10 1 L 1 10" fill="none" stroke-width="2"/>
+    </marker>
+    <marker id="arrow_cross_start" viewBox="0 0 11 11" refX="-1" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 1 1 L 10 10 M 10 1 L 1 10" fill="none" stroke-width="2"/>
+    </marker>
+    <marker id="arrow_circle" viewBox="0 0 10 10" refX="11" refY="5" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="5"/>
+    </marker>
+    <marker id="arrow_circle_start" viewBox="0 0 10 10" refX="-1" refY="5" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="5"/>
+    </marker>
+  </defs>
+  <g class="root">
+    <g class="clusters">
+
+    </g>
+    <g class="edgePaths">
+      <g class="edge" id="edge-L-block0-block9-0">
+        <path d="M 608.89 310.40 C 608.42 318.73, 607.96 327.07, 607.73 335.40 C 607.50 343.73, 607.50 352.07, 607.50 360.40" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block0-block3-0">
+        <path d="M 767.50 230.28 C 837.50 265.32, 907.50 300.36, 942.50 371.81 C 977.50 443.27, 977.50 551.13, 983.36 615.37 C 1000.94 700.20, 1012.65 720.80, 1012.65 720.80" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block9-block10-0">
+        <path d="M 757.5 497.19999999999993 L 725 497.19999999999993" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block9-block3-0">
+        <path d="M 607.50 634.00 C 607.50 642.33, 607.50 650.67, 661.25 675.33 C 715.00 700.00, 822.50 741.00, 930.00 781.99" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block10-block11-0">
+        <path d="M 805.25 634.00 L 325.00 795.43" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block10-block3-0">
+        <path d="M 944.75 634.00 C 949.00 642.33, 953.25 650.67, 962.38 665.13 C 971.50 679.60, 985.51 700.20, 999.51 720.80" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block11-block1-0">
+        <path d="M 175.00 994.40 C 116.67 1087.33, 58.33 1180.27, 29.17 1662.63 C 0.00 2145.00, 0.00 3016.80, 178.22 3466.34 C 712.87 3943.16, 1069.30 3970.43, 1069.30 3970.43" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block3-block12-0">
+        <path d="M 930 839.2 L 880 839.2" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block3-block4-0">
+        <path d="M 1080.00 957.60 C 1080.00 978.20, 1080.00 998.80, 1027.92 1037.68 C 975.83 1076.56, 871.67 1133.72, 767.50 1190.89" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block12-block13-0">
+        <path d="M 880 839.2 L 1640 839.2" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block12-block4-0">
+        <path d="M 730.00 976.00 L 669.98 1154.80" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block13-block14-0">
+        <path d="M 1930.44 976.00 L 1981.16 1044.40" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block13-block4-0">
+        <path d="M 1640.00 944.17 C 1604.17 969.25, 1568.33 994.32, 1422.92 1042.23 C 1277.50 1090.13, 1022.50 1160.86, 767.50 1231.59" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block14-block1-0">
+        <path d="M 2037.50 1502.00 C 2037.50 2297.53, 2037.50 3093.07, 1903.87 3504.15 C 1770.23 3915.24, 1502.97 3941.87, 1235.70 3968.51" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block4-block15-0">
+        <path d="M 467.5 1273.2 L 592.5 1273.2" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block4-block5-0">
+        <path d="M 540.53 1391.60 L 449.82 1570.40" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block15-block16-0">
+        <path d="M 303.71 1410.00 C 264.14 1449.00, 224.57 1488.00, 204.78 1723.80 C 185.00 1959.60, 185.00 2392.20, 185.00 2824.80" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block15-block5-0">
+        <path d="M 398.03 1410.00 C 385.35 1449.00, 372.68 1488.00, 370.03 1514.73 C 367.38 1541.47, 374.75 1555.93, 382.13 1570.40" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block16-block17-0">
+        <path d="M 185.00 3098.40 C 185.00 3131.27, 185.00 3164.13, 185.00 3184.73 C 185.00 3205.33, 185.00 3213.67, 185.00 3222.00" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block16-block5-0">
+        <path d="M 212.6759899434319 2824.7999999999997 L 418.54651162790697 1807.2" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block17-block1-0">
+        <path d="M 185.00 3863.60 C 185.00 3871.93, 185.00 3880.27, 332.38 3897.87 C 479.77 3915.47, 774.53 3942.34, 1069.30 3969.22" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block5-block18-0">
+        <path d="M 592.5 1688.8 L 1095 1688.8" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block5-block6-0">
+        <path d="M 442.50 1807.20 C 442.50 1821.67, 442.50 1836.13, 566.67 1904.10 C 690.83 1972.08, 939.17 2093.55, 1187.50 2215.03" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block18-block19-0">
+        <path d="M 1166.79 1825.60 L 1152.50 2824.80" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block18-block6-0">
+        <path d="M 1395.00 1758.14 C 1461.67 1788.96, 1528.33 1819.78, 1530.36 1888.42 C 1532.38 1957.07, 1469.76 2063.53, 1407.14 2170.00" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block19-block20-0">
+        <path d="M 1152.50 3098.40 C 1152.50 3131.27, 1152.50 3164.13, 1152.50 3184.73 C 1152.50 3205.33, 1152.50 3213.67, 1152.50 3222.00" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block19-block6-0">
+        <path d="M 1190.0935828877004 2824.7999999999997 L 1304.9628639334521 2406.7999999999997" class="edge-path" marker-end="url(#arrow_point)" stroke-width="1" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block20-block1-0">
+        <path d="M 1152.50 3863.60 C 1152.50 3871.93, 1152.50 3880.27, 1152.50 3888.60 C 1152.50 3896.93, 1152.50 3905.27, 1152.50 3913.60" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block6-block21-0">
+        <path d="M 1487.5 2288.3999999999996 L 1620 2288.3999999999996" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block6-block7-0">
+        <path d="M 1337.50 2406.80 C 1337.50 2513.27, 1337.50 2619.73, 1398.33 2700.77 C 1459.17 2781.81, 1580.83 2837.42, 1702.50 2893.04" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block21-block22-0">
+        <path d="M 1715.32 2425.20 C 1675.21 2525.53, 1635.11 2625.87, 1608.60 2692.47 C 1582.09 2759.07, 1569.17 2791.93, 1556.26 2824.80" class="edge-path" marker-end="url(#arrow_point)" stroke-width="1" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block21-block7-0">
+        <path d="M 1821.56 2425.20 C 1859.37 2525.53, 1897.19 2625.87, 1909.26 2695.53 C 1921.33 2765.20, 1907.66 2804.20, 1894.00 2843.20" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block22-block23-0">
+        <path d="M 1502.50 3098.40 C 1502.50 3131.27, 1502.50 3164.13, 1502.50 3184.73 C 1502.50 3205.33, 1502.50 3213.67, 1502.50 3222.00" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block22-block7-0">
+        <path d="M 1652.5 2961.6 L 1702.5 2961.6" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block23-block1-0">
+        <path d="M 1502.50 3863.60 C 1502.50 3871.93, 1502.50 3880.27, 1458.03 3895.64 C 1413.57 3911.01, 1324.63 3933.42, 1235.70 3955.83" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block7-block24-0">
+        <path d="M 1890.7184316512676 2843.2 L 2353.3422174840084 1410" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block7-block8-0">
+        <path d="M 1894.00 3080.00 C 1907.66 3119.00, 1921.33 3158.00, 2040.25 3224.62 C 2159.17 3291.25, 2383.33 3385.49, 2607.50 3479.74" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block24-block25-0">
+        <path d="M 2397.50 1410.00 C 2397.50 1449.00, 2397.50 1488.00, 2397.50 1511.67 C 2397.50 1535.33, 2397.50 1543.67, 2397.50 1552.00" class="edge-path" marker-end="url(#arrow_point)" stroke-width="1" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block24-block8-0">
+        <path d="M 2547.50 1376.09 C 2620.83 1426.39, 2694.17 1476.70, 2729.65 1821.15 C 2765.13 2165.60, 2762.76 2804.20, 2760.39 3442.80" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block25-block26-0">
+        <path d="M 2319.29 1825.60 L 2305.00 1875.60" class="edge-path" fill="none" marker-end="url(#arrow_point)" stroke-width="1"/>
+      </g>
+      <g class="edge" id="edge-L-block25-block8-0">
+        <path d="M 2547.50 1779.53 C 2586.67 1803.22, 2625.83 1826.91, 2645.42 2063.15 C 2665.00 2299.40, 2665.00 2748.20, 2675.96 3013.57 C 2708.83 3360.87, 2730.75 3442.80, 2730.75 3442.80" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block26-block27-0">
+        <path d="M 2155.00 2663.66 L 2130.00 2751.20" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block26-block28-0">
+        <path d="M 2455.00 2663.66 L 2480.00 2824.80" class="edge-path" marker-end="url(#arrow_point)" stroke-width="1" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block27-block29-0">
+        <path d="M 2130.00 3172.00 L 2263.70 3461.20" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
+      </g>
+      <g class="edge" id="edge-L-block28-block29-0">
+        <path d="M 2480.00 3098.40 C 2480.00 3131.27, 2480.00 3164.13, 2457.72 3224.60 C 2435.43 3285.07, 2390.86 3373.13, 2346.30 3461.20" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block29-block1-0">
+        <path d="M 2305.00 3624.40 C 2305.00 3712.47, 2305.00 3800.53, 2126.78 3858.21 C 1948.57 3915.88, 1592.13 3943.16, 1235.70 3970.43" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
+      </g>
+      <g class="edge" id="edge-L-block8-block1-0">
+        <path d="M 2757.50 3642.80 C 2757.50 3724.73, 2757.50 3806.67, 2503.87 3861.57 C 2250.23 3916.48, 1742.97 3944.35, 1235.70 3972.23" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
+      </g>
+    </g>
+    <g class="edgeLabels">
+
+    </g>
+    <g class="nodes">
+      <g class="node" id="node-block0">
+        <rect x="467.5" y="0" width="300" height="310.4"/>
+        <text x="617.5" y="155.2" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="617.5" y="155.2" dy="-4.2em">block0</tspan><tspan x="617.5" dy="1.2em">LoadCapture { dst: Reg(0), index: 0 }</tspan><tspan x="617.5" dy="1.2em">StoreLocal { slot: 1, src: Reg(0) }</tspan><tspan x="617.5" dy="1.2em">LoadLocal { dst: Reg(2), slot: 1 }</tspan><tspan x="617.5" dy="1.2em">StoreCapture { index: 2, src: Reg(2) }</tspan><tspan x="617.5" dy="1.2em">IsTuple { dst: Reg(3), src: Reg(2) }</tspan><tspan x="617.5" dy="1.2em">---</tspan><tspan x="617.5" dy="1.2em">Branch { cond: Reg(3), then_label: Label(9), else_label: Label(3) }</tspan></text>
+      </g>
+      <g class="node" id="node-block1">
+        <rect x="1069.3" y="3913.6" width="166.4" height="126.39999999999999"/>
+        <text x="1152.5" y="3976.7999999999997" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="1152.5" y="3976.7999999999997" dy="-1.2em">block1</tspan><tspan x="1152.5" dy="1.2em">---</tspan><tspan x="1152.5" dy="1.2em">Return(Reg(1))</tspan></text>
+      </g>
+      <g class="node" id="node-block10">
+        <rect x="725" y="360.4" width="300" height="273.59999999999997"/>
+        <text x="875" y="497.19999999999993" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="875" y="497.19999999999993" dy="-3.5999999999999996em">block10</tspan><tspan x="875" dy="1.2em">LoadCapture { dst: Reg(8), index: 2 }</tspan><tspan x="875" dy="1.2em">ArrayRefOrNil { dst: Reg(9), src: Reg(8), index: 0 }</tspan><tspan x="875" dy="1.2em">Const { dst: Reg(10), value: Keyword(&amp;quot;lit&amp;quot;) }</tspan><tspan x="875" dy="1.2em">Compare { dst: Reg(11), op: Eq, lhs: Reg(9), rhs: Reg(10) }</tspan><tspan x="875" dy="1.2em">---</tspan><tspan x="875" dy="1.2em">Branch { cond: Reg(11), then_label: Label(11), else_label: Label(3) }</tspan></text>
+      </g>
+      <g class="node" id="node-block11">
+        <rect x="25" y="684" width="300" height="310.4"/>
+        <text x="175" y="839.2" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="175" y="839.2" dy="-4.2em">block11</tspan><tspan x="175" dy="1.2em">LoadCapture { dst: Reg(12), index: 2 }</tspan><tspan x="175" dy="1.2em">ArrayRefOrNil { dst: Reg(13), src: Reg(12), index: 1 }</tspan><tspan x="175" dy="1.2em">StoreCapture { index: 3, src: Reg(13) }</tspan><tspan x="175" dy="1.2em">LoadCapture { dst: Reg(14), index: 3 }</tspan><tspan x="175" dy="1.2em">Move { dst: Reg(1), src: Reg(14) }</tspan><tspan x="175" dy="1.2em">---</tspan><tspan x="175" dy="1.2em">Jump(Label(1))</tspan></text>
+      </g>
+      <g class="node" id="node-block12">
+        <rect x="580" y="702.4000000000001" width="300" height="273.59999999999997"/>
+        <text x="730" y="839.2" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="730" y="839.2" dy="-3.5999999999999996em">block12</tspan><tspan x="730" dy="1.2em">LoadCapture { dst: Reg(17), index: 4 }</tspan><tspan x="730" dy="1.2em">ArrayLen { dst: Reg(18), src: Reg(17) }</tspan><tspan x="730" dy="1.2em">Const { dst: Reg(19), value: Int(2) }</tspan><tspan x="730" dy="1.2em">Compare { dst: Reg(20), op: Eq, lhs: Reg(18), rhs: Reg(19) }</tspan><tspan x="730" dy="1.2em">---</tspan><tspan x="730" dy="1.2em">Branch { cond: Reg(20), then_label: Label(13), else_label: Label(4) }</tspan></text>
+      </g>
+      <g class="node" id="node-block13">
+        <rect x="1640" y="702.4000000000001" width="300" height="273.59999999999997"/>
+        <text x="1790" y="839.2" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="1790" y="839.2" dy="-3.5999999999999996em">block13</tspan><tspan x="1790" dy="1.2em">LoadCapture { dst: Reg(21), index: 4 }</tspan><tspan x="1790" dy="1.2em">ArrayRefOrNil { dst: Reg(22), src: Reg(21), index: 0 }</tspan><tspan x="1790" dy="1.2em">Const { dst: Reg(23), value: Keyword(&amp;quot;neg&amp;quot;) }</tspan><tspan x="1790" dy="1.2em">Compare { dst: Reg(24), op: Eq, lhs: Reg(22), rhs: Reg(23) }</tspan><tspan x="1790" dy="1.2em">---</tspan><tspan x="1790" dy="1.2em">Branch { cond: Reg(24), then_label: Label(14), else_label: Label(4) }</tspan></text>
+      </g>
+      <g class="node" id="node-block14">
+        <rect x="1887.5" y="1044.4" width="300" height="457.59999999999997"/>
+        <text x="2037.5" y="1273.2" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="2037.5" y="1273.2" dy="-6.6em">block14</tspan><tspan x="2037.5" dy="1.2em">LoadCapture { dst: Reg(25), index: 4 }</tspan><tspan x="2037.5" dy="1.2em">ArrayRefOrNil { dst: Reg(26), src: Reg(25), index: 1 }</tspan><tspan x="2037.5" dy="1.2em">StoreCapture { index: 5, src: Reg(26) }</tspan><tspan x="2037.5" dy="1.2em">Const { dst: Reg(27), value: Int(0) }</tspan><tspan x="2037.5" dy="1.2em">LoadCapture { dst: Reg(28), index: 5 }</tspan><tspan x="2037.5" dy="1.2em">LoadGlobal { dst: Reg(29), sym: SymbolId(456) }</tspan><tspan x="2037.5" dy="1.2em">Call { dst: Reg(30), func: Reg(29), args: [Reg(28)] }</tspan><tspan x="2037.5" dy="1.2em">BinOp { dst: Reg(31), op: Sub, lhs: Reg(27), rhs: Reg(30) }</tspan><tspan x="2037.5" dy="1.2em">Move { dst: Reg(1), src: Reg(31) }</tspan><tspan x="2037.5" dy="1.2em">---</tspan><tspan x="2037.5" dy="1.2em">Jump(Label(1))</tspan></text>
+      </g>
+      <g class="node" id="node-block15">
+        <rect x="292.5" y="1136.4" width="300" height="273.59999999999997"/>
+        <text x="442.5" y="1273.2" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="442.5" y="1273.2" dy="-3.5999999999999996em">block15</tspan><tspan x="442.5" dy="1.2em">LoadCapture { dst: Reg(34), index: 6 }</tspan><tspan x="442.5" dy="1.2em">ArrayLen { dst: Reg(35), src: Reg(34) }</tspan><tspan x="442.5" dy="1.2em">Const { dst: Reg(36), value: Int(3) }</tspan><tspan x="442.5" dy="1.2em">Compare { dst: Reg(37), op: Eq, lhs: Reg(35), rhs: Reg(36) }</tspan><tspan x="442.5" dy="1.2em">---</tspan><tspan x="442.5" dy="1.2em">Branch { cond: Reg(37), then_label: Label(16), else_label: Label(5) }</tspan></text>
+      </g>
+      <g class="node" id="node-block16">
+        <rect x="35" y="2824.7999999999997" width="300" height="273.59999999999997"/>
+        <text x="185" y="2961.6" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="185" y="2961.6" dy="-3.5999999999999996em">block16</tspan><tspan x="185" dy="1.2em">LoadCapture { dst: Reg(38), index: 6 }</tspan><tspan x="185" dy="1.2em">ArrayRefOrNil { dst: Reg(39), src: Reg(38), index: 0 }</tspan><tspan x="185" dy="1.2em">Const { dst: Reg(40), value: Keyword(&amp;quot;add&amp;quot;) }</tspan><tspan x="185" dy="1.2em">Compare { dst: Reg(41), op: Eq, lhs: Reg(39), rhs: Reg(40) }</tspan><tspan x="185" dy="1.2em">---</tspan><tspan x="185" dy="1.2em">Branch { cond: Reg(41), then_label: Label(17), else_label: Label(5) }</tspan></text>
+      </g>
+      <g class="node" id="node-block17">
+        <rect x="35" y="3222" width="300" height="641.5999999999999"/>
+        <text x="185" y="3542.8" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="185" y="3542.8" dy="-9.6em">block17</tspan><tspan x="185" dy="1.2em">LoadCapture { dst: Reg(42), index: 6 }</tspan><tspan x="185" dy="1.2em">ArrayRefOrNil { dst: Reg(43), src: Reg(42), index: 1 }</tspan><tspan x="185" dy="1.2em">StoreCapture { index: 7, src: Reg(43) }</tspan><tspan x="185" dy="1.2em">LoadCapture { dst: Reg(44), index: 6 }</tspan><tspan x="185" dy="1.2em">ArrayRefOrNil { dst: Reg(45), src: Reg(44), index: 2 }</tspan><tspan x="185" dy="1.2em">StoreCapture { index: 8, src: Reg(45) }</tspan><tspan x="185" dy="1.2em">LoadCapture { dst: Reg(46), index: 7 }</tspan><tspan x="185" dy="1.2em">LoadGlobal { dst: Reg(47), sym: SymbolId(456) }</tspan><tspan x="185" dy="1.2em">Call { dst: Reg(48), func: Reg(47), args: [Reg(46)] }</tspan><tspan x="185" dy="1.2em">LoadCapture { dst: Reg(49), index: 8 }</tspan><tspan x="185" dy="1.2em">LoadGlobal { dst: Reg(50), sym: SymbolId(456) }</tspan><tspan x="185" dy="1.2em">Call { dst: Reg(51), func: Reg(50), args: [Reg(49)] }</tspan><tspan x="185" dy="1.2em">BinOp { dst: Reg(52), op: Add, lhs: Reg(48), rhs: Reg(51) }</tspan><tspan x="185" dy="1.2em">Move { dst: Reg(1), src: Reg(52) }</tspan><tspan x="185" dy="1.2em">---</tspan><tspan x="185" dy="1.2em">Jump(Label(1))</tspan></text>
+      </g>
+      <g class="node" id="node-block18">
+        <rect x="1095" y="1552" width="300" height="273.59999999999997"/>
+        <text x="1245" y="1688.8" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="1245" y="1688.8" dy="-3.5999999999999996em">block18</tspan><tspan x="1245" dy="1.2em">LoadCapture { dst: Reg(55), index: 9 }</tspan><tspan x="1245" dy="1.2em">ArrayLen { dst: Reg(56), src: Reg(55) }</tspan><tspan x="1245" dy="1.2em">Const { dst: Reg(57), value: Int(3) }</tspan><tspan x="1245" dy="1.2em">Compare { dst: Reg(58), op: Eq, lhs: Reg(56), rhs: Reg(57) }</tspan><tspan x="1245" dy="1.2em">---</tspan><tspan x="1245" dy="1.2em">Branch { cond: Reg(58), then_label: Label(19), else_label: Label(6) }</tspan></text>
+      </g>
+      <g class="node" id="node-block19">
+        <rect x="1002.5" y="2824.7999999999997" width="300" height="273.59999999999997"/>
+        <text x="1152.5" y="2961.6" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="1152.5" y="2961.6" dy="-3.5999999999999996em">block19</tspan><tspan x="1152.5" dy="1.2em">LoadCapture { dst: Reg(59), index: 9 }</tspan><tspan x="1152.5" dy="1.2em">ArrayRefOrNil { dst: Reg(60), src: Reg(59), index: 0 }</tspan><tspan x="1152.5" dy="1.2em">Const { dst: Reg(61), value: Keyword(&amp;quot;sub&amp;quot;) }</tspan><tspan x="1152.5" dy="1.2em">Compare { dst: Reg(62), op: Eq, lhs: Reg(60), rhs: Reg(61) }</tspan><tspan x="1152.5" dy="1.2em">---</tspan><tspan x="1152.5" dy="1.2em">Branch { cond: Reg(62), then_label: Label(20), else_label: Label(6) }</tspan></text>
+      </g>
+      <g class="node" id="node-block20">
+        <rect x="1002.5" y="3222" width="300" height="641.5999999999999"/>
+        <text x="1152.5" y="3542.8" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="1152.5" y="3542.8" dy="-9.6em">block20</tspan><tspan x="1152.5" dy="1.2em">LoadCapture { dst: Reg(63), index: 9 }</tspan><tspan x="1152.5" dy="1.2em">ArrayRefOrNil { dst: Reg(64), src: Reg(63), index: 1 }</tspan><tspan x="1152.5" dy="1.2em">StoreCapture { index: 10, src: Reg(64) }</tspan><tspan x="1152.5" dy="1.2em">LoadCapture { dst: Reg(65), index: 9 }</tspan><tspan x="1152.5" dy="1.2em">ArrayRefOrNil { dst: Reg(66), src: Reg(65), index: 2 }</tspan><tspan x="1152.5" dy="1.2em">StoreCapture { index: 11, src: Reg(66) }</tspan><tspan x="1152.5" dy="1.2em">LoadCapture { dst: Reg(67), index: 10 }</tspan><tspan x="1152.5" dy="1.2em">LoadGlobal { dst: Reg(68), sym: SymbolId(456) }</tspan><tspan x="1152.5" dy="1.2em">Call { dst: Reg(69), func: Reg(68), args: [Reg(67)] }</tspan><tspan x="1152.5" dy="1.2em">LoadCapture { dst: Reg(70), index: 11 }</tspan><tspan x="1152.5" dy="1.2em">LoadGlobal { dst: Reg(71), sym: SymbolId(456) }</tspan><tspan x="1152.5" dy="1.2em">Call { dst: Reg(72), func: Reg(71), args: [Reg(70)] }</tspan><tspan x="1152.5" dy="1.2em">BinOp { dst: Reg(73), op: Sub, lhs: Reg(69), rhs: Reg(72) }</tspan><tspan x="1152.5" dy="1.2em">Move { dst: Reg(1), src: Reg(73) }</tspan><tspan x="1152.5" dy="1.2em">---</tspan><tspan x="1152.5" dy="1.2em">Jump(Label(1))</tspan></text>
+      </g>
+      <g class="node" id="node-block21">
+        <rect x="1620" y="2151.5999999999995" width="300" height="273.59999999999997"/>
+        <text x="1770" y="2288.3999999999996" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="1770" y="2288.3999999999996" dy="-3.5999999999999996em">block21</tspan><tspan x="1770" dy="1.2em">LoadCapture { dst: Reg(76), index: 12 }</tspan><tspan x="1770" dy="1.2em">ArrayLen { dst: Reg(77), src: Reg(76) }</tspan><tspan x="1770" dy="1.2em">Const { dst: Reg(78), value: Int(3) }</tspan><tspan x="1770" dy="1.2em">Compare { dst: Reg(79), op: Eq, lhs: Reg(77), rhs: Reg(78) }</tspan><tspan x="1770" dy="1.2em">---</tspan><tspan x="1770" dy="1.2em">Branch { cond: Reg(79), then_label: Label(22), else_label: Label(7) }</tspan></text>
+      </g>
+      <g class="node" id="node-block22">
+        <rect x="1352.5" y="2824.7999999999997" width="300" height="273.59999999999997"/>
+        <text x="1502.5" y="2961.6" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="1502.5" y="2961.6" dy="-3.5999999999999996em">block22</tspan><tspan x="1502.5" dy="1.2em">LoadCapture { dst: Reg(80), index: 12 }</tspan><tspan x="1502.5" dy="1.2em">ArrayRefOrNil { dst: Reg(81), src: Reg(80), index: 0 }</tspan><tspan x="1502.5" dy="1.2em">Const { dst: Reg(82), value: Keyword(&amp;quot;mul&amp;quot;) }</tspan><tspan x="1502.5" dy="1.2em">Compare { dst: Reg(83), op: Eq, lhs: Reg(81), rhs: Reg(82) }</tspan><tspan x="1502.5" dy="1.2em">---</tspan><tspan x="1502.5" dy="1.2em">Branch { cond: Reg(83), then_label: Label(23), else_label: Label(7) }</tspan></text>
+      </g>
+      <g class="node" id="node-block23">
+        <rect x="1352.5" y="3222" width="300" height="641.5999999999999"/>
+        <text x="1502.5" y="3542.8" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="1502.5" y="3542.8" dy="-9.6em">block23</tspan><tspan x="1502.5" dy="1.2em">LoadCapture { dst: Reg(84), index: 12 }</tspan><tspan x="1502.5" dy="1.2em">ArrayRefOrNil { dst: Reg(85), src: Reg(84), index: 1 }</tspan><tspan x="1502.5" dy="1.2em">StoreCapture { index: 13, src: Reg(85) }</tspan><tspan x="1502.5" dy="1.2em">LoadCapture { dst: Reg(86), index: 12 }</tspan><tspan x="1502.5" dy="1.2em">ArrayRefOrNil { dst: Reg(87), src: Reg(86), index: 2 }</tspan><tspan x="1502.5" dy="1.2em">StoreCapture { index: 14, src: Reg(87) }</tspan><tspan x="1502.5" dy="1.2em">LoadCapture { dst: Reg(88), index: 13 }</tspan><tspan x="1502.5" dy="1.2em">LoadGlobal { dst: Reg(89), sym: SymbolId(456) }</tspan><tspan x="1502.5" dy="1.2em">Call { dst: Reg(90), func: Reg(89), args: [Reg(88)] }</tspan><tspan x="1502.5" dy="1.2em">LoadCapture { dst: Reg(91), index: 14 }</tspan><tspan x="1502.5" dy="1.2em">LoadGlobal { dst: Reg(92), sym: SymbolId(456) }</tspan><tspan x="1502.5" dy="1.2em">Call { dst: Reg(93), func: Reg(92), args: [Reg(91)] }</tspan><tspan x="1502.5" dy="1.2em">BinOp { dst: Reg(94), op: Mul, lhs: Reg(90), rhs: Reg(93) }</tspan><tspan x="1502.5" dy="1.2em">Move { dst: Reg(1), src: Reg(94) }</tspan><tspan x="1502.5" dy="1.2em">---</tspan><tspan x="1502.5" dy="1.2em">Jump(Label(1))</tspan></text>
+      </g>
+      <g class="node" id="node-block24">
+        <rect x="2247.5" y="1136.4" width="300" height="273.59999999999997"/>
+        <text x="2397.5" y="1273.2" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="2397.5" y="1273.2" dy="-3.5999999999999996em">block24</tspan><tspan x="2397.5" dy="1.2em">LoadCapture { dst: Reg(97), index: 15 }</tspan><tspan x="2397.5" dy="1.2em">ArrayLen { dst: Reg(98), src: Reg(97) }</tspan><tspan x="2397.5" dy="1.2em">Const { dst: Reg(99), value: Int(3) }</tspan><tspan x="2397.5" dy="1.2em">Compare { dst: Reg(100), op: Eq, lhs: Reg(98), rhs: Reg(99) }</tspan><tspan x="2397.5" dy="1.2em">---</tspan><tspan x="2397.5" dy="1.2em">Branch { cond: Reg(100), then_label: Label(25), else_label: Label(8) }</tspan></text>
+      </g>
+      <g class="node" id="node-block25">
+        <rect x="2247.5" y="1552" width="300" height="273.59999999999997"/>
+        <text x="2397.5" y="1688.8" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="2397.5" y="1688.8" dy="-3.5999999999999996em">block25</tspan><tspan x="2397.5" dy="1.2em">LoadCapture { dst: Reg(101), index: 15 }</tspan><tspan x="2397.5" dy="1.2em">ArrayRefOrNil { dst: Reg(102), src: Reg(101), index: 0 }</tspan><tspan x="2397.5" dy="1.2em">Const { dst: Reg(103), value: Keyword(&amp;quot;div&amp;quot;) }</tspan><tspan x="2397.5" dy="1.2em">Compare { dst: Reg(104), op: Eq, lhs: Reg(102), rhs: Reg(103) }</tspan><tspan x="2397.5" dy="1.2em">---</tspan><tspan x="2397.5" dy="1.2em">Branch { cond: Reg(104), then_label: Label(26), else_label: Label(8) }</tspan></text>
+      </g>
+      <g class="node" id="node-block26">
+        <rect x="2155" y="1875.5999999999997" width="300" height="825.5999999999999"/>
+        <text x="2305" y="2288.3999999999996" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="2305" y="2288.3999999999996" dy="-12.6em">block26</tspan><tspan x="2305" dy="1.2em">LoadCapture { dst: Reg(105), index: 15 }</tspan><tspan x="2305" dy="1.2em">ArrayRefOrNil { dst: Reg(106), src: Reg(105), index: 1 }</tspan><tspan x="2305" dy="1.2em">StoreCapture { index: 16, src: Reg(106) }</tspan><tspan x="2305" dy="1.2em">LoadCapture { dst: Reg(107), index: 15 }</tspan><tspan x="2305" dy="1.2em">ArrayRefOrNil { dst: Reg(108), src: Reg(107), index: 2 }</tspan><tspan x="2305" dy="1.2em">StoreCapture { index: 17, src: Reg(108) }</tspan><tspan x="2305" dy="1.2em">LoadCapture { dst: Reg(109), index: 17 }</tspan><tspan x="2305" dy="1.2em">LoadGlobal { dst: Reg(110), sym: SymbolId(456) }</tspan><tspan x="2305" dy="1.2em">Call { dst: Reg(111), func: Reg(110), args: [Reg(109)] }</tspan><tspan x="2305" dy="1.2em">StoreCapture { index: 18, src: Reg(111) }</tspan><tspan x="2305" dy="1.2em">Pop { src: Reg(111) }</tspan><tspan x="2305" dy="1.2em">LoadCapture { dst: Reg(112), index: 16 }</tspan><tspan x="2305" dy="1.2em">LoadGlobal { dst: Reg(113), sym: SymbolId(456) }</tspan><tspan x="2305" dy="1.2em">Call { dst: Reg(114), func: Reg(113), args: [Reg(112)] }</tspan><tspan x="2305" dy="1.2em">StoreCapture { index: 19, src: Reg(114) }</tspan><tspan x="2305" dy="1.2em">Pop { src: Reg(114) }</tspan><tspan x="2305" dy="1.2em">LoadCapture { dst: Reg(115), index: 18 }</tspan><tspan x="2305" dy="1.2em">Const { dst: Reg(116), value: Int(0) }</tspan><tspan x="2305" dy="1.2em">Compare { dst: Reg(117), op: Eq, lhs: Reg(115), rhs: Reg(116) }</tspan><tspan x="2305" dy="1.2em">---</tspan><tspan x="2305" dy="1.2em">Branch { cond: Reg(117), then_label: Label(27), else_label: Label(28) }</tspan></text>
+      </g>
+      <g class="node" id="node-block27">
+        <rect x="1980" y="2751.2" width="300" height="420.79999999999995"/>
+        <text x="2130" y="2961.6" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="2130" y="2961.6" dy="-6em">block27</tspan><tspan x="2130" dy="1.2em">Const { dst: Reg(119), value: Int(1) }</tspan><tspan x="2130" dy="1.2em">Const { dst: Reg(120), value: Keyword(&amp;quot;division-by-zero&amp;quot;) }</tspan><tspan x="2130" dy="1.2em">Const { dst: Reg(121), value: String(&amp;quot;division by zero in expression&amp;quot;) }</tspan><tspan x="2130" dy="1.2em">LoadGlobal { dst: Reg(122), sym: SymbolId(12) }</tspan><tspan x="2130" dy="1.2em">Call { dst: Reg(123), func: Reg(122), args: [Reg(120), Reg(121)] }</tspan><tspan x="2130" dy="1.2em">LoadGlobal { dst: Reg(124), sym: SymbolId(143) }</tspan><tspan x="2130" dy="1.2em">TailCall { func: Reg(124), args: [Reg(119), Reg(123)] }</tspan><tspan x="2130" dy="1.2em">Move { dst: Reg(118), src: Reg(125) }</tspan><tspan x="2130" dy="1.2em">---</tspan><tspan x="2130" dy="1.2em">Jump(Label(29))</tspan></text>
+      </g>
+      <g class="node" id="node-block28">
+        <rect x="2330" y="2824.7999999999997" width="300" height="273.59999999999997"/>
+        <text x="2480" y="2961.6" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="2480" y="2961.6" dy="-3.5999999999999996em">block28</tspan><tspan x="2480" dy="1.2em">LoadCapture { dst: Reg(126), index: 19 }</tspan><tspan x="2480" dy="1.2em">LoadCapture { dst: Reg(127), index: 18 }</tspan><tspan x="2480" dy="1.2em">BinOp { dst: Reg(128), op: Div, lhs: Reg(126), rhs: Reg(127) }</tspan><tspan x="2480" dy="1.2em">Move { dst: Reg(118), src: Reg(128) }</tspan><tspan x="2480" dy="1.2em">---</tspan><tspan x="2480" dy="1.2em">Jump(Label(29))</tspan></text>
+      </g>
+      <g class="node" id="node-block29">
+        <rect x="2155" y="3461.2000000000003" width="300" height="163.2"/>
+        <text x="2305" y="3542.8" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="2305" y="3542.8" dy="-1.7999999999999998em">block29</tspan><tspan x="2305" dy="1.2em">Move { dst: Reg(1), src: Reg(118) }</tspan><tspan x="2305" dy="1.2em">---</tspan><tspan x="2305" dy="1.2em">Jump(Label(1))</tspan></text>
+      </g>
+      <g class="node" id="node-block3">
+        <rect x="930" y="720.8000000000001" width="300" height="236.79999999999998"/>
+        <text x="1080" y="839.2" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="1080" y="839.2" dy="-3em">block3</tspan><tspan x="1080" dy="1.2em">LoadLocal { dst: Reg(15), slot: 1 }</tspan><tspan x="1080" dy="1.2em">StoreCapture { index: 4, src: Reg(15) }</tspan><tspan x="1080" dy="1.2em">IsTuple { dst: Reg(16), src: Reg(15) }</tspan><tspan x="1080" dy="1.2em">---</tspan><tspan x="1080" dy="1.2em">Branch { cond: Reg(16), then_label: Label(12), else_label: Label(4) }</tspan></text>
+      </g>
+      <g class="node" id="node-block4">
+        <rect x="467.5" y="1154.8" width="300" height="236.79999999999998"/>
+        <text x="617.5" y="1273.2" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="617.5" y="1273.2" dy="-3em">block4</tspan><tspan x="617.5" dy="1.2em">LoadLocal { dst: Reg(32), slot: 1 }</tspan><tspan x="617.5" dy="1.2em">StoreCapture { index: 6, src: Reg(32) }</tspan><tspan x="617.5" dy="1.2em">IsTuple { dst: Reg(33), src: Reg(32) }</tspan><tspan x="617.5" dy="1.2em">---</tspan><tspan x="617.5" dy="1.2em">Branch { cond: Reg(33), then_label: Label(15), else_label: Label(5) }</tspan></text>
+      </g>
+      <g class="node" id="node-block5">
+        <rect x="292.5" y="1570.3999999999999" width="300" height="236.79999999999998"/>
+        <text x="442.5" y="1688.8" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="442.5" y="1688.8" dy="-3em">block5</tspan><tspan x="442.5" dy="1.2em">LoadLocal { dst: Reg(53), slot: 1 }</tspan><tspan x="442.5" dy="1.2em">StoreCapture { index: 9, src: Reg(53) }</tspan><tspan x="442.5" dy="1.2em">IsTuple { dst: Reg(54), src: Reg(53) }</tspan><tspan x="442.5" dy="1.2em">---</tspan><tspan x="442.5" dy="1.2em">Branch { cond: Reg(54), then_label: Label(18), else_label: Label(6) }</tspan></text>
+      </g>
+      <g class="node" id="node-block6">
+        <rect x="1187.5" y="2169.9999999999995" width="300" height="236.79999999999998"/>
+        <text x="1337.5" y="2288.3999999999996" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="1337.5" y="2288.3999999999996" dy="-3em">block6</tspan><tspan x="1337.5" dy="1.2em">LoadLocal { dst: Reg(74), slot: 1 }</tspan><tspan x="1337.5" dy="1.2em">StoreCapture { index: 12, src: Reg(74) }</tspan><tspan x="1337.5" dy="1.2em">IsTuple { dst: Reg(75), src: Reg(74) }</tspan><tspan x="1337.5" dy="1.2em">---</tspan><tspan x="1337.5" dy="1.2em">Branch { cond: Reg(75), then_label: Label(21), else_label: Label(7) }</tspan></text>
+      </g>
+      <g class="node" id="node-block7">
+        <rect x="1702.5" y="2843.2" width="300" height="236.79999999999998"/>
+        <text x="1852.5" y="2961.6" class="label" text-anchor="middle" dominant-baseline="central"><tspan x="1852.5" y="2961.6" dy="-3em">block7</tspan><tspan x="1852.5" dy="1.2em">LoadLocal { dst: Reg(95), slot: 1 }</tspan><tspan x="1852.5" dy="1.2em">StoreCapture { index: 15, src: Reg(95) }</tspan><tspan x="1852.5" dy="1.2em">IsTuple { dst: Reg(96), src: Reg(95) }</tspan><tspan x="1852.5" dy="1.2em">---</tspan><tspan x="1852.5" dy="1.2em">Branch { cond: Reg(96), then_label: Label(24), else_label: Label(8) }</tspan></text>
+      </g>
+      <g class="node" id="node-block8">
+        <rect x="2607.5" y="3442.8" width="300" height="200"/>
+        <text x="2757.5" y="3542.8" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="2757.5" y="3542.8" dy="-2.4em">block8</tspan><tspan x="2757.5" dy="1.2em">Const { dst: Reg(129), value: Nil }</tspan><tspan x="2757.5" dy="1.2em">Move { dst: Reg(1), src: Reg(129) }</tspan><tspan x="2757.5" dy="1.2em">---</tspan><tspan x="2757.5" dy="1.2em">Jump(Label(1))</tspan></text>
+      </g>
+      <g class="node" id="node-block9">
+        <rect x="457.5" y="360.4" width="300" height="273.59999999999997"/>
+        <text x="607.5" y="497.19999999999993" class="label" dominant-baseline="central" text-anchor="middle"><tspan x="607.5" y="497.19999999999993" dy="-3.5999999999999996em">block9</tspan><tspan x="607.5" dy="1.2em">LoadCapture { dst: Reg(4), index: 2 }</tspan><tspan x="607.5" dy="1.2em">ArrayLen { dst: Reg(5), src: Reg(4) }</tspan><tspan x="607.5" dy="1.2em">Const { dst: Reg(6), value: Int(2) }</tspan><tspan x="607.5" dy="1.2em">Compare { dst: Reg(7), op: Eq, lhs: Reg(5), rhs: Reg(6) }</tspan><tspan x="607.5" dy="1.2em">---</tspan><tspan x="607.5" dy="1.2em">Branch { cond: Reg(7), then_label: Label(10), else_label: Label(3) }</tspan></text>
+      </g>
+    </g>
+  </g>
+</svg>

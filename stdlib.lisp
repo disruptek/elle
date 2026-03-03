@@ -152,7 +152,7 @@
                (string/replace "\"" "&quot;")))))
     (let ((result (-> "flowchart TD\n"
                     (append "  %% ")
-                    (append (fn/cfg-label cfg))
+                    (append (string/replace (fn/cfg-label cfg) "\n" " "))
                     (append " arity:")
                     (append (get cfg :arity))
                     (append " regs:")
