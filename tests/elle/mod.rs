@@ -39,3 +39,13 @@ fn eval() {
 fn prelude() {
     run_elle_script("prelude");
 }
+
+#[test]
+fn destructuring() {
+    run_elle_script("destructuring");
+}
+
+#[test]
+fn core() {
+    run_elle_script("core");
+}
