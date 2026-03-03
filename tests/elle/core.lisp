@@ -295,7 +295,7 @@
 (assert-true (keyword? type-cons) "type-of cons cell is keyword")
 (assert-eq type-empty type-proper "empty list and proper list same type")
 (assert-eq type-proper type-cons "proper list and cons cell same type")
-(assert-true (eq? (type-of ()) :list) "type-of () is :list")
+(assert-eq (type-of ()) :list "type-of () is :list")
 
 # ============================================================================
 # Math: floor, ceil, round
