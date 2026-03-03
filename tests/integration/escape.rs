@@ -160,6 +160,14 @@ fn region_emitted_for_eq_alias() {
     assert!(has_region("(let ((x 1)) (eq? x 1))"));
 }
 
+#[test]
+fn region_emitted_for_unary_minus() {
+    // (- x) with 1 arg is negation (UnaryOp::Neg), returns int or float.
+    // `-` maps to Binary(BinOp::Sub) in intrinsics, but try_lower_intrinsic
+    // special-cases 1-arg as negation. result_is_safe must match.
+    assert!(has_region("(let ((x 42)) (- x))"));
+}
+
 // ── Negative: scopes that must NOT emit RegionEnter/RegionExit ──────
 
 #[test]
@@ -443,6 +451,14 @@ fn correct_eq_alias_in_scope() {
     assert_eq!(
         eval_source("(let ((x 42)) (eq? x 42))").unwrap(),
         Value::TRUE
+    );
+}
+
+#[test]
+fn correct_unary_minus_in_scope() {
+    assert_eq!(
+        eval_source("(let ((x 42)) (- x))").unwrap(),
+        Value::int(-42)
     );
 }
 
