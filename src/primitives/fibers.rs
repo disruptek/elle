@@ -435,7 +435,7 @@ pub fn prim_fiber_propagate(args: &[Value]) -> (SignalBits, Value) {
     (SIG_PROPAGATE, args[0])
 }
 
-/// (fiber/cancel fiber [value]) → value
+/// (fiber/cancel fiber \[value\]) → value
 ///
 /// Inject an error into a suspended fiber. The error is injected directly
 /// into the target fiber (does not walk the child chain).
