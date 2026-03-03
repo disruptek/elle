@@ -102,6 +102,7 @@
   "Render a CFG struct as a DOT digraph string with compact instructions."
   (letrec ((dot-escape (fn (s)
              (-> s
+               (string/replace "\"" "\\\"")
                (string/replace "{" "\\{")
                (string/replace "}" "\\}")
                (string/replace "|" "\\|")
@@ -118,7 +119,7 @@
                     (append "\";\n  node [shape=record fontname=\"monospace\" fontsize=10];\n"))))
       (each block (get cfg :blocks)
         (let* ((lbl (string (get block :label)))
-               (display (get block :display))
+               (display (get block :annotated))
                (term-display (get block :term-display))
                (term-kind (get block :term-kind))
                (edges (get block :edges))

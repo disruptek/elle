@@ -491,6 +491,38 @@ fn flow_from_closure(closure: &std::rc::Rc<crate::value::heap::Closure>) -> (Sig
                 Value::tuple(display),
             );
 
+            // :spans — tuple of "line:col" strings (nil for synthetic spans)
+            let spans: Vec<Value> = block
+                .instructions
+                .iter()
+                .map(|si| {
+                    if si.span.line == 0 {
+                        Value::NIL
+                    } else {
+                        Value::string(format!("{}:{}", si.span.line, si.span.col))
+                    }
+                })
+                .collect();
+            block_fields.insert(TableKey::Keyword("spans".to_string()), Value::tuple(spans));
+
+            // :annotated — display strings with span annotations for CFG rendering
+            let annotated: Vec<Value> = block
+                .instructions
+                .iter()
+                .map(|si| {
+                    let base = format!("{}", si.instr);
+                    if si.span.line == 0 {
+                        Value::string(base)
+                    } else {
+                        Value::string(format!("{} @{}:{}", base, si.span.line, si.span.col))
+                    }
+                })
+                .collect();
+            block_fields.insert(
+                TableKey::Keyword("annotated".to_string()),
+                Value::tuple(annotated),
+            );
+
             // :term — Debug-formatted terminator string
             block_fields.insert(
                 TableKey::Keyword("term".to_string()),
@@ -502,6 +534,17 @@ fn flow_from_closure(closure: &std::rc::Rc<crate::value::heap::Closure>) -> (Sig
                 TableKey::Keyword("term-display".to_string()),
                 Value::string(format!("{}", block.terminator.terminator)),
             );
+
+            // :term-span — "line:col" string for the terminator (nil for synthetic)
+            let term_span = if block.terminator.span.line == 0 {
+                Value::NIL
+            } else {
+                Value::string(format!(
+                    "{}:{}",
+                    block.terminator.span.line, block.terminator.span.col
+                ))
+            };
+            block_fields.insert(TableKey::Keyword("term-span".to_string()), term_span);
 
             // :term-kind — keyword identifying the terminator type
             block_fields.insert(
@@ -553,8 +596,11 @@ fn flow_from_closure(closure: &std::rc::Rc<crate::value::heap::Closure>) -> (Sig
 ///   - :label — block label (int)
 ///   - :instrs — tuple of instruction strings (Debug format)
 ///   - :display — tuple of compact instruction strings (Display format)
+///   - :spans — tuple of "line:col" strings, same length as :display (nil for synthetic spans)
+///   - :annotated — tuple of display strings with " @line:col" suffix (for CFG rendering)
 ///   - :term — terminator string (Debug format)
 ///   - :term-display — compact terminator string (Display format)
+///   - :term-span — "line:col" string for the terminator (nil for synthetic)
 ///   - :term-kind — keyword: :return, :jump, :branch, :yield, or :unreachable
 ///   - :edges — tuple of successor label ints
 ///

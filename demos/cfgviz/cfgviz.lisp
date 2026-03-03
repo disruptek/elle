@@ -1,30 +1,24 @@
 # CFG Visualizer Demo
 #
-# Renders control flow graphs of Elle functions to SVG using
-# fn/cfg (Mermaid output) and selkie (Mermaid-to-SVG rendering).
+# Renders control flow graphs of Elle functions to DOT format.
+# Use the Makefile to convert DOT files to SVG via graphviz.
 #
 # Usage:
-#   cargo build --release -p elle-selkie
-#   cargo run --release -- demos/cfgviz/cfgviz.lisp
-#
-# Produces: identity.svg, factorial.svg, fizzbuzz.svg, make-adder.svg,
-#           eval-expr.svg
-
-(import-file "target/release/libelle_selkie.so")
+#   make -C demos/cfgviz
 
 # ── Functions to visualize ───────────────────────────────────────────
 
-(defn identity [x]
+(defn identity (x)
   "The simplest function — one block, one return."
   x)
 
-(defn factorial [n]
+(defn factorial (n)
   "Recursive factorial — branching and self-call."
   (if (< n 2)
     1
     (* n (factorial (- n 1)))))
 
-(defn fizzbuzz [n]
+(defn fizzbuzz (n)
   "Classic fizzbuzz — nested branching."
   (cond
     ((= (mod n 15) 0) "fizzbuzz")
@@ -32,11 +26,11 @@
     ((= (mod n 5) 0)  "buzz")
     (true              n)))
 
-(defn make-adder [x]
+(defn make-adder (x)
   "Returns a closure — shows captured variable in LIR."
-  (fn [y] (+ x y)))
+  (fn (y) (+ x y)))
 
-(defn eval-expr [expr]
+(defn eval-expr (expr)
   "Evaluate an arithmetic expression tree.
    Match dispatch, recursion, let-binding, conditional error —
    produces a complex CFG with many blocks and cross-edges."
@@ -53,22 +47,19 @@
           (error [:division-by-zero "division by zero in expression"])
           (/ dividend divisor))))))
 
-# ── Render each function to SVG ─────────────────────────────────────
+# ── Render each function to DOT ─────────────────────────────────────
 
-(defn render-cfg [f name]
-  "Render a function's CFG to an SVG file."
-  (let* ((mmd (fn/cfg f :mermaid))
-         (svg (selkie/render mmd))
-         (path (append name ".svg")))
-    (file/write path svg)
-    (display "  wrote ")
-    (display path)
-    (display "\n")))
+(defn render-cfg (f name)
+  "Render a function's CFG to a DOT file."
+  (let* ((dot (fn/cfg f :dot))
+         (path (append "demos/cfgviz/" (append name ".dot"))))
+    (file/write path dot)
+    (display (append "  wrote " (append path "\n")))))
 
-(display "Rendering control flow graphs...\n")
+(display "Rendering control flow graphs to DOT...\n")
 (render-cfg identity "identity")
 (render-cfg factorial "factorial")
 (render-cfg fizzbuzz "fizzbuzz")
 (render-cfg make-adder "make-adder")
 (render-cfg eval-expr "eval-expr")
-(display "Done.\n")
+(display "Done. Run 'make -C demos/cfgviz' to generate SVGs.\n")

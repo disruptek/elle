@@ -1,52 +1,38 @@
-# CFG Visualizer
+# CFG Visualizer Demo
 
-Renders control flow graphs of Elle functions to SVG files.
-
-Uses `fn/cfg` to produce Mermaid flowchart text from a closure's LIR,
-then the selkie plugin to render Mermaid to SVG.
+Renders control flow graphs of Elle functions to SVG via DOT/graphviz.
 
 ## Prerequisites
 
-Build the selkie plugin:
+- Elle (built with `cargo build --release`)
+- [Graphviz](https://graphviz.org/) (`dot` command)
+
+## Usage
 
 ```bash
-cargo build --release -p elle-selkie
+make -C demos/cfgviz
 ```
 
-## Running
+This runs `cfgviz.lisp` to generate DOT files, then renders them to SVG.
+
+## Functions visualized
+
+| Function | Blocks | Demonstrates |
+|----------|--------|-------------|
+| `identity` | 1 | Single return block |
+| `factorial` | 4 | Branch + recursive call |
+| `fizzbuzz` | ~10 | Nested cond branches |
+| `make-adder` | 1 | Closure creation with capture |
+| `eval-expr` | ~30 | Match dispatch, recursion, error handling |
+
+## Visual conventions
+
+- **Colors**: blue = return, orange = branch, green = yield, grey = linear
+- **Record shape**: header \| instructions \| terminator
+- **Annotations**: `@line:col` shows source location for each instruction
+
+## Cleaning up
 
 ```bash
-cargo run --release -- demos/cfgviz/cfgviz.lisp
+make -C demos/cfgviz clean
 ```
-
-## Output
-
-### identity
-
-`(defn identity [x] x)` — single block, no branching.
-
-![identity](identity.svg)
-
-### factorial
-
-Recursive factorial — branch + self-call.
-
-![factorial](factorial.svg)
-
-### fizzbuzz
-
-Nested `cond` — multiple branch paths.
-
-![fizzbuzz](fizzbuzz.svg)
-
-### make-adder
-
-Returns a closure — shows captured variable handling.
-
-![make-adder](make-adder.svg)
-
-### eval-expr
-
-6-way `match` expression evaluator — match dispatch, recursion, `let*` binding, conditional error. Many blocks with cross-edges.
-
-![eval-expr](eval-expr.svg)

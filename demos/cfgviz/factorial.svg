@@ -1,142 +1,87 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="408.4" height="1269.6" viewBox="-8 -8 408.4 1269.6" class="mermaid">
-  <style>
-
-.mermaid {
-  font-family: trebuchet ms, verdana, arial, sans-serif;
-  font-size: 16px;
-}
-
-.node rect,
-.node polygon,
-.node circle,
-.node ellipse,
-.node path {
-  fill: #ECECFF;
-  stroke: #9370DB;
-  stroke-width: 1px;
-}
-
-.node line {
-  stroke: #9370DB;
-  stroke-width: 1px;
-}
-
-.node .label {
-  fill: #333333;
-}
-
-.node text {
-  fill: #333333;
-  font-family: trebuchet ms, verdana, arial, sans-serif;
-  font-size: 16px;
-}
-
-.edge-path {
-  fill: none;
-  stroke: #333333;
-  stroke-width: 1px;
-}
-
-.edge-label {
-  fill: #333333;
-  font-family: trebuchet ms, verdana, arial, sans-serif;
-}
-
-.edge-label-bg {
-  fill: rgba(232, 232, 232, 0.8);
-}
-
-.subgraph {
-  fill: #ffffde;
-  stroke: #aaaa33;
-  stroke-width: 1px;
-}
-
-.subgraph-title {
-  fill: #333333;
-  font-weight: bold;
-}
-
-.cluster rect {
-  fill: #ffffde;
-  stroke: #aaaa33;
-  stroke-width: 1px;
-  rx: 5px;
-  ry: 5px;
-}
-
-.cluster-label {
-  fill: #333333;
-  font-family: trebuchet ms, verdana, arial, sans-serif;
-  font-size: 16px;
-  font-weight: bold;
-}
-
-marker path {
-  fill: #333333;
-  stroke: #333333;
-}
-
-  </style>
-  <defs>
-    <marker id="arrow_point" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M 0 0 L 10 5 L 0 10 z"/>
-    </marker>
-    <marker id="arrow_point_start" viewBox="0 0 10 10" refX="4.5" refY="5" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M 0 5 L 10 10 L 10 0 z"/>
-    </marker>
-    <marker id="arrow_cross" viewBox="0 0 11 11" refX="12" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M 1 1 L 10 10 M 10 1 L 1 10" fill="none" stroke-width="2"/>
-    </marker>
-    <marker id="arrow_cross_start" viewBox="0 0 11 11" refX="-1" refY="5.2" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M 1 1 L 10 10 M 10 1 L 1 10" stroke-width="2" fill="none"/>
-    </marker>
-    <marker id="arrow_circle" viewBox="0 0 10 10" refX="11" refY="5" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
-      <circle cx="5" cy="5" r="5"/>
-    </marker>
-    <marker id="arrow_circle_start" viewBox="0 0 10 10" refX="-1" refY="5" markerWidth="11" markerHeight="11" orient="auto" markerUnits="userSpaceOnUse">
-      <circle cx="5" cy="5" r="5"/>
-    </marker>
-  </defs>
-  <g class="root">
-    <g class="clusters">
-
-    </g>
-    <g class="edgePaths">
-      <g class="edge" id="edge-L-block0-block1-0">
-        <path d="M 128.60 425.53 C 111.87 469.62, 95.13 513.71, 86.77 558.32 C 78.40 602.93, 78.40 648.07, 78.40 693.20" class="edge-path" fill="none" stroke-width="1" marker-end="url(#arrow_point)"/>
-      </g>
-      <g class="edge" id="edge-L-block0-block2-0">
-        <path d="M 249.40 425.53 L 299.60 582.80" class="edge-path" stroke-width="1" marker-end="url(#arrow_point)" fill="none"/>
-      </g>
-      <g class="edge" id="edge-L-block1-block3-0">
-        <path d="M 78.40 930.00 C 78.40 975.13, 78.40 1020.27, 82.72 1047.00 C 87.05 1073.73, 95.69 1082.07, 104.34 1090.40" class="edge-path" stroke-width="1" fill="none" marker-end="url(#arrow_point)"/>
-      </g>
-      <g class="edge" id="edge-L-block2-block3-0">
-        <path d="M 299.60 1040.40 L 273.66 1090.40" class="edge-path" marker-end="url(#arrow_point)" fill="none" stroke-width="1"/>
-      </g>
-    </g>
-    <g class="edgeLabels">
-
-    </g>
-    <g class="nodes">
-      <g class="node" id="node-block0">
-        <polygon points="189.00000000000003,0 339,266.4 189.00000000000003,532.8 39.00000000000003,266.4" style="fill:#d4edda !important;stroke:#28a745 !important;stroke-width:2px !important"/>
-        <text x="189.00000000000003" y="266.4" class="label" dominant-baseline="central" style="fill: #000000" text-anchor="middle"><tspan x="189.00000000000003" y="266.4" dy="-3.5999999999999996em">block0</tspan><tspan x="189.00000000000003" dy="1.2em"></tspan><tspan x="189.00000000000003" dy="1.2em">r0 ← cap[0]</tspan><tspan x="189.00000000000003" dy="1.2em">r1 ← 2</tspan><tspan x="189.00000000000003" dy="1.2em">r2 ← r0 &lt; r1</tspan><tspan x="189.00000000000003" dy="1.2em">---</tspan><tspan x="189.00000000000003" dy="1.2em">branch r2 → block1 / block2</tspan></text>
-      </g>
-      <g class="node" id="node-block1">
-        <rect x="0.00000000000002842170943040401" y="693.1999999999999" width="156.8" height="236.79999999999998" style="fill:#f8f9fa !important;stroke:#6c757d !important"/>
-        <text x="78.40000000000003" y="811.5999999999999" class="label" text-anchor="middle" dominant-baseline="central" style="fill: #000000"><tspan x="78.40000000000003" y="811.5999999999999" dy="-3em">block1</tspan><tspan x="78.40000000000003" dy="1.2em"></tspan><tspan x="78.40000000000003" dy="1.2em">r4 ← 1</tspan><tspan x="78.40000000000003" dy="1.2em">r3 ← r4</tspan><tspan x="78.40000000000003" dy="1.2em">---</tspan><tspan x="78.40000000000003" dy="1.2em">jump → block3</tspan></text>
-      </g>
-      <g class="node" id="node-block2">
-        <rect x="206.8" y="582.8" width="185.6" height="457.59999999999997" style="fill:#f8f9fa !important;stroke:#6c757d !important"/>
-        <text x="299.6" y="811.5999999999999" class="label" style="fill: #000000" text-anchor="middle" dominant-baseline="central"><tspan x="299.6" y="811.5999999999999" dy="-6.6em">block2</tspan><tspan x="299.6" dy="1.2em"></tspan><tspan x="299.6" dy="1.2em">r5 ← cap[0]</tspan><tspan x="299.6" dy="1.2em">r6 ← cap[0]</tspan><tspan x="299.6" dy="1.2em">r7 ← 1</tspan><tspan x="299.6" dy="1.2em">r8 ← r6 - r7</tspan><tspan x="299.6" dy="1.2em">r9 ← global(458)</tspan><tspan x="299.6" dy="1.2em">r10 ← r9(r8)</tspan><tspan x="299.6" dy="1.2em">r11 ← r5 * r10</tspan><tspan x="299.6" dy="1.2em">r3 ← r11</tspan><tspan x="299.6" dy="1.2em">---</tspan><tspan x="299.6" dy="1.2em">jump → block3</tspan></text>
-      </g>
-      <g class="node" id="node-block3">
-        <path d="M 129.80000000000004 1090.3999999999999 H 248.20000000000002 A 81.6 81.6 0 0 1 248.20000000000002 1253.6 H 129.80000000000004 A 81.6 81.6 0 0 1 129.80000000000004 1090.3999999999999 Z" style="fill:#cce5ff !important;stroke:#004085 !important;stroke-width:2px !important"/>
-        <text x="189.00000000000003" y="1171.9999999999998" class="label" style="fill: #000000" text-anchor="middle" dominant-baseline="central"><tspan x="189.00000000000003" y="1171.9999999999998" dy="-1.7999999999999998em">block3</tspan><tspan x="189.00000000000003" dy="1.2em"></tspan><tspan x="189.00000000000003" dy="1.2em">---</tspan><tspan x="189.00000000000003" dy="1.2em">return r3</tspan></text>
-      </g>
-    </g>
-  </g>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 12.2.1 (20241206.2353)
+ -->
+<!-- Pages: 1 -->
+<svg width="405pt" height="409pt"
+ viewBox="0.00 0.00 405.00 409.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 405)">
+<polygon fill="white" stroke="none" points="-4,4 -4,-405 401,-405 401,4 -4,4"/>
+<text text-anchor="middle" x="198.5" y="-7.2" font-family="Times,serif" font-size="14.00">Recursive factorial — branching and self&#45;call. arity:1 regs:12 locals:1</text>
+<!-- block0 -->
+<g id="node1" class="node">
+<title>block0</title>
+<polygon fill="none" stroke="#cc8800" points="94.5,-312.75 94.5,-400.5 272.5,-400.5 272.5,-312.75 94.5,-312.75"/>
+<text text-anchor="middle" x="183.5" y="-387" font-family="monospace" font-size="10.00">block0</text>
+<polyline fill="none" stroke="#cc8800" points="94.5,-379.75 272.5,-379.75"/>
+<text text-anchor="start" x="102.5" y="-366.25" font-family="monospace" font-size="10.00">r0 ← cap[0] @17:10</text>
+<text text-anchor="start" x="102.5" y="-353.5" font-family="monospace" font-size="10.00">r1 ← 2 @17:12</text>
+<text text-anchor="start" x="102.5" y="-340.75" font-family="monospace" font-size="10.00">r2 ← r0 &lt; r1 @17:12</text>
+<polyline fill="none" stroke="#cc8800" points="94.5,-333.5 272.5,-333.5"/>
+<text text-anchor="middle" x="183.5" y="-320" font-family="monospace" font-size="10.00">branch r2 → block1 / block2</text>
+</g>
+<!-- block1 -->
+<g id="node2" class="node">
+<title>block1</title>
+<polygon fill="none" stroke="#444444" points="65.5,-162.5 65.5,-237.5 159.5,-237.5 159.5,-162.5 65.5,-162.5"/>
+<text text-anchor="middle" x="112.5" y="-224" font-family="monospace" font-size="10.00">block1</text>
+<polyline fill="none" stroke="#444444" points="65.5,-216.75 159.5,-216.75"/>
+<text text-anchor="start" x="73.5" y="-203.25" font-family="monospace" font-size="10.00">r4 ← 1 @18:5</text>
+<text text-anchor="start" x="73.5" y="-190.5" font-family="monospace" font-size="10.00">r3 ← r4 @18:5</text>
+<polyline fill="none" stroke="#444444" points="65.5,-183.25 159.5,-183.25"/>
+<text text-anchor="middle" x="112.5" y="-169.75" font-family="monospace" font-size="10.00">jump → block3</text>
+</g>
+<!-- block0&#45;&gt;block1 -->
+<g id="edge1" class="edge">
+<title>block0&#45;&gt;block1</title>
+<path fill="none" stroke="black" d="M163.72,-312.55C154.53,-292.54 143.58,-268.69 134.17,-248.19"/>
+<polygon fill="black" stroke="black" points="137.39,-246.82 130.04,-239.19 131.03,-249.74 137.39,-246.82"/>
+</g>
+<!-- block2 -->
+<g id="node3" class="node">
+<title>block2</title>
+<polygon fill="none" stroke="#444444" points="177.5,-124.25 177.5,-275.75 331.5,-275.75 331.5,-124.25 177.5,-124.25"/>
+<text text-anchor="middle" x="254.5" y="-262.25" font-family="monospace" font-size="10.00">block2</text>
+<polyline fill="none" stroke="#444444" points="177.5,-255 331.5,-255"/>
+<text text-anchor="start" x="185.5" y="-241.5" font-family="monospace" font-size="10.00">r5 ← cap[0] @19:8</text>
+<text text-anchor="start" x="185.5" y="-228.75" font-family="monospace" font-size="10.00">r6 ← cap[0] @19:24</text>
+<text text-anchor="start" x="185.5" y="-216" font-family="monospace" font-size="10.00">r7 ← 1 @19:26</text>
+<text text-anchor="start" x="185.5" y="-203.25" font-family="monospace" font-size="10.00">r8 ← r6 &#45; r7 @19:26</text>
+<text text-anchor="start" x="185.5" y="-190.5" font-family="monospace" font-size="10.00">r9 ← global(459) @19:11</text>
+<text text-anchor="start" x="185.5" y="-177.75" font-family="monospace" font-size="10.00">r10 ← r9(r8) @19:11</text>
+<text text-anchor="start" x="185.5" y="-165" font-family="monospace" font-size="10.00">r11 ← r5 * r10 @19:11</text>
+<text text-anchor="start" x="185.5" y="-152.25" font-family="monospace" font-size="10.00">r3 ← r11 @19:11</text>
+<polyline fill="none" stroke="#444444" points="177.5,-145 331.5,-145"/>
+<text text-anchor="middle" x="254.5" y="-131.5" font-family="monospace" font-size="10.00">jump → block3</text>
+</g>
+<!-- block0&#45;&gt;block2 -->
+<g id="edge2" class="edge">
+<title>block0&#45;&gt;block2</title>
+<path fill="none" stroke="black" d="M203.28,-312.55C207.06,-304.31 211.15,-295.41 215.3,-286.37"/>
+<polygon fill="black" stroke="black" points="218.38,-288.04 219.38,-277.49 212.02,-285.12 218.38,-288.04"/>
+</g>
+<!-- block3 -->
+<g id="node4" class="node">
+<title>block3</title>
+<polygon fill="none" stroke="#4444cc" points="148.5,-25 148.5,-87.25 218.5,-87.25 218.5,-25 148.5,-25"/>
+<text text-anchor="middle" x="183.5" y="-73.75" font-family="monospace" font-size="10.00">block3</text>
+<polyline fill="none" stroke="#4444cc" points="148.5,-66.5 218.5,-66.5"/>
+<text text-anchor="middle" x="183.5" y="-53" font-family="monospace" font-size="10.00"> </text>
+<polyline fill="none" stroke="#4444cc" points="148.5,-45.75 218.5,-45.75"/>
+<text text-anchor="middle" x="183.5" y="-32.25" font-family="monospace" font-size="10.00">return r3</text>
+</g>
+<!-- block1&#45;&gt;block3 -->
+<g id="edge3" class="edge">
+<title>block1&#45;&gt;block3</title>
+<path fill="none" stroke="black" d="M130.97,-162.09C140.84,-142.38 153,-118.06 163.14,-97.8"/>
+<polygon fill="black" stroke="black" points="166.21,-99.49 167.56,-88.98 159.95,-96.35 166.21,-99.49"/>
+</g>
+<!-- block2&#45;&gt;block3 -->
+<g id="edge4" class="edge">
+<title>block2&#45;&gt;block3</title>
+<path fill="none" stroke="black" d="M216.92,-123.91C212.38,-114.84 207.89,-105.87 203.74,-97.58"/>
+<polygon fill="black" stroke="black" points="206.98,-96.22 199.37,-88.84 200.72,-99.35 206.98,-96.22"/>
+</g>
+</g>
 </svg>
