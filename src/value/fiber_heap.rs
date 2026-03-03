@@ -486,6 +486,22 @@ mod tests {
     }
 
     #[test]
+    fn test_clear_resets_scope_counters() {
+        let mut heap = FiberHeap::new();
+        heap.init_active_allocator();
+        // Simulate a scope region with an allocation
+        heap.push_scope_mark();
+        heap.alloc(HeapObject::String("scoped".into()));
+        heap.pop_scope_mark_and_release();
+        assert_eq!(heap.scope_enters(), 1);
+        assert_eq!(heap.scope_dtors_run(), 1);
+        // clear() must zero both counters
+        heap.clear();
+        assert_eq!(heap.scope_enters(), 0);
+        assert_eq!(heap.scope_dtors_run(), 0);
+    }
+
+    #[test]
     fn test_fiber_heap_non_drop_types_not_tracked() {
         let mut heap = FiberHeap::new();
         heap.init_active_allocator();

@@ -141,8 +141,11 @@ impl Lowerer {
             // While always returns nil (an immediate).
             HirKind::While { .. } => true,
 
+            // Destructure always returns nil (an immediate).
+            HirKind::Destructure { .. } => true,
+
             // Everything else: conservatively unsafe
-            // String, Lambda, Yield, Quote, Eval, Set, Define, Destructure, Break
+            // String, Lambda, Yield, Quote, Eval, Set, Define, Break
             _ => false,
         }
     }

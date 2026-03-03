@@ -110,6 +110,8 @@ const IMMEDIATE_PRIMITIVES: &[&str] = &[
     "string/ends-with?",
     "string-ends-with?",
     // Numeric predicates → bool
+    "integer?",
+    "float?",
     "even?",
     "odd?",
     // Closure introspection predicates → bool (canonical + aliases)

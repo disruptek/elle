@@ -354,21 +354,21 @@ impl Lowerer {
     /// Determine if a `block` scope's allocations can be safely released.
     ///
     /// Blocks don't introduce bindings but bracket a scope of allocations.
-    /// Conditions:
-    /// 1. No expression in body can suspend
-    /// 2. Body result is provably immediate
-    /// 3. No `break` in body (conservative — break values hard to check)
-    /// 4. No `set!` to non-local bindings (blocks have no own bindings)
+    /// Four conditions (independent of the let/letrec conditions):
+    /// B1. No expression in body can suspend
+    /// B2. Body result is provably immediate
+    /// B3. No escaping break (breaks targeting inner blocks are safe)
+    /// B4. No dangerous outward mutation (value must be immediate)
     fn can_scope_allocate_block(&mut self, body: &[Hir]) -> bool {
         self.scope_stats.scopes_analyzed += 1;
 
-        // Condition 1: no suspension
+        // B1: no suspension
         if body.iter().any(|e| e.effect.may_suspend()) {
             self.scope_stats.rejected_suspends += 1;
             return false;
         }
 
-        // Condition 2: result is immediate (empty body → nil → safe)
+        // B2: result is immediate (empty body → nil → safe)
         // Blocks have no bindings, so scope_bindings is empty — any Var
         // references something from outside and is safe to return.
         if let Some(last) = body.last() {
@@ -378,14 +378,14 @@ impl Lowerer {
             }
         }
 
-        // Condition 3: no escaping breaks (breaks targeting inner blocks are safe)
+        // B3: no escaping breaks (breaks targeting inner blocks are safe)
         if Self::body_contains_escaping_break(body) {
             self.scope_stats.rejected_break += 1;
             return false;
         }
 
-        // Condition 4: no dangerous outward mutation (blocks have no own
-        // bindings, so any set! is outward — but harmless if value is immediate)
+        // B4: no dangerous outward mutation (blocks have no own bindings,
+        // so any set is outward — but harmless if value is immediate)
         if body
             .iter()
             .any(|e| self.body_contains_dangerous_outward_set(e, &[]))
