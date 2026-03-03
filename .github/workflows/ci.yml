@@ -5,6 +5,7 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+  merge_group:
   schedule:
     # Weekly toolchain check: Sunday 06:00 UTC
     - cron: '0 6 * * 0'
@@ -21,7 +22,7 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -34,7 +35,7 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -45,7 +46,7 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -58,7 +59,7 @@ jobs:
   audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +73,7 @@ jobs:
   examples:
     name: Examples
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -137,6 +138,7 @@ jobs:
   docs:
     name: Build Documentation
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -318,7 +320,7 @@ jobs:
     name: All Checks Passed
     needs: [test, fmt, clippy, examples, docs, benchmarks]
     runs-on: ubuntu-latest
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     steps:
       - name: Check test
         if: needs.test.result != 'success'
@@ -333,7 +335,7 @@ jobs:
         if: needs.examples.result != 'success'
         run: exit 1
       - name: Check docs
-        if: needs.docs.result != 'success'
+        if: needs.docs.result == 'failure'
         run: exit 1
       - name: Check benchmarks
         if: needs.benchmarks.result == 'failure'
