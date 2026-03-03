@@ -167,8 +167,14 @@ scope set), `Var` referencing a scope binding whose init is provably
 immediate (Tier 3), `if`/`begin`/`cond`/`and`/`or` where all result
 positions are recursively safe, calls to intrinsics (`BinOp`, `CmpOp`,
 `UnaryOp`) with correct arity (including unary `-` as `Neg`, Tier 2),
-and calls to whitelisted immediate-returning primitives (Tier 1).
-For blocks, `scope_bindings` is empty — any Var is outer and safe.
+calls to whitelisted immediate-returning primitives (Tier 1),
+nested `Let`/`Letrec`/`Block` where the inner result is recursively
+safe (Tier 4), `Match` where all arm bodies are recursively safe
+(Tier 5), and `While` which always returns nil (Tier 6). For nested
+let/letrec, scope_bindings is extended with the inner let's bindings
+before recursing (inner bindings are allocated within the outer
+scope's region). For blocks, `scope_bindings` is unchanged (blocks
+introduce no bindings).
 
 **Tier 1 primitive whitelist** (in `intrinsics.rs`): `length`, `empty?`,
 `abs`, `floor`, `ceil`, `round`, `type`, `type-of`, and all type

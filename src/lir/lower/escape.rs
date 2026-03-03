@@ -111,9 +111,35 @@ impl Lowerer {
             // Intrinsic calls that return immediates
             HirKind::Call { func, args, .. } => self.call_result_is_safe(func, args),
 
+            // Nested let/letrec: the result is the body's result.
+            // Extend scope_bindings with the inner let's bindings so that
+            // Var references to inner bindings are correctly checked against
+            // their init expressions (they're allocated inside the outer
+            // scope's region and would be freed by RegionExit).
+            HirKind::Let { bindings, body } | HirKind::Letrec { bindings, body } => {
+                let mut extended: Vec<(Binding, &Hir)> = scope_bindings.to_vec();
+                extended.extend(bindings.iter().map(|(b, init)| (*b, init)));
+                self.result_is_safe(body, &extended)
+            }
+
+            // Nested block: the result is the last expression.
+            // Blocks introduce no bindings, so scope_bindings is unchanged.
+            HirKind::Block { body, .. } => match body.last() {
+                Some(last) => self.result_is_safe(last, scope_bindings),
+                None => true, // empty block → nil → safe
+            },
+
+            // Match: all arm bodies must produce safe results.
+            // Exactly one arm executes, analogous to If/Cond.
+            HirKind::Match { arms, .. } => arms
+                .iter()
+                .all(|(_, _, body)| self.result_is_safe(body, scope_bindings)),
+
+            // While always returns nil (an immediate).
+            HirKind::While { .. } => true,
+
             // Everything else: conservatively unsafe
-            // String, Lambda, Let, Letrec, Block, While, Match,
-            // Yield, Quote, Eval, Set, Define, Destructure, Break
+            // String, Lambda, Yield, Quote, Eval, Set, Define, Destructure, Break
             _ => false,
         }
     }

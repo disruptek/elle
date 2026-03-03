@@ -322,13 +322,13 @@ fn test_let_no_region_when_result_is_var_with_heap_init() {
 fn test_nested_let_regions_for_safe_body() {
     // Inner let: body is (+ x y) — intrinsic call, result is immediate.
     // No captures, pure body → inner let qualifies for scope allocation.
-    // Outer let: body is the inner let — result_is_safe returns false
-    // for Let nodes (wildcard), so outer let does NOT scope-allocate.
+    // Outer let: body is the inner let — Tier 4 recurses into its body,
+    // finds (+ x y) is safe, so outer let ALSO scope-allocates.
     let source = "(let* ((x 1)) (let* ((y 2)) (+ x y)))";
     let enters = count_in_bytecode(source, "RegionEnter");
     let exits = count_in_bytecode(source, "RegionExit");
-    assert_eq!(enters, 1, "inner let should emit RegionEnter");
-    assert_eq!(exits, 1, "inner let should emit RegionExit");
+    assert_eq!(enters, 2, "both lets should emit RegionEnter");
+    assert_eq!(exits, 2, "both lets should emit RegionExit");
 }
 
 #[test]

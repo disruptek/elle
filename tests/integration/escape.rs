@@ -197,6 +197,124 @@ fn region_emitted_for_block_returning_any_var() {
     assert!(has_region("(let ((x 1)) (block (list 1 2 3) x))"));
 }
 
+// ── Positive: nested let/letrec/block in result position (Tier 4) ──
+
+#[test]
+fn region_emitted_for_nested_let_with_immediate_result() {
+    // Inner let's result is (length x) — immediate.
+    // Outer let can scope-allocate.
+    assert!(has_region(
+        "(let ((x (list 1 2 3))) (let ((y (length x))) y))"
+    ));
+}
+
+#[test]
+fn region_emitted_for_nested_let_intrinsic_result() {
+    // Inner let's result is (+ x y) — intrinsic → immediate.
+    assert!(has_region("(let ((x 1)) (let ((y 2)) (+ x y)))"));
+}
+
+#[test]
+fn region_emitted_for_nested_block_with_immediate_result() {
+    // Block's last expression is (length x) — immediate.
+    assert!(has_region("(let ((x (list 1 2 3))) (block (length x)))"));
+}
+
+#[test]
+fn region_emitted_for_deeply_nested_lets() {
+    // Three levels deep, final result is a literal.
+    assert!(has_region(
+        "(let ((x 1)) (let ((y 2)) (let ((z 3)) (+ x (+ y z)))))"
+    ));
+}
+
+// ── Positive: match in result position (Tier 5) ────────────────────
+
+#[test]
+fn region_emitted_for_match_with_keyword_arms() {
+    // All match arms return keywords (immediates) → safe
+    assert!(has_region(
+        "(let ((x 1)) (match x (0 :zero) (1 :one) (_ :other)))"
+    ));
+}
+
+#[test]
+fn region_emitted_for_match_with_int_arms() {
+    // All match arms return ints → safe
+    assert!(has_region("(let ((x 1)) (match x (0 0) (1 10) (_ -1)))"));
+}
+
+#[test]
+fn region_emitted_for_match_with_bool_arms() {
+    // All match arms return bools → safe
+    assert!(has_region("(let ((x 1)) (match x (0 false) (_ true)))"));
+}
+
+#[test]
+fn region_emitted_for_match_with_intrinsic_arms() {
+    // Match arms return intrinsic calls → safe
+    assert!(has_region(
+        "(let ((x 1) (y 2)) (match x (0 (+ y 1)) (_ (- y 1))))"
+    ));
+}
+
+#[test]
+fn no_region_when_match_arm_returns_string() {
+    // One match arm returns a string (heap) → unsafe
+    assert!(!has_region(r#"(let ((x 1)) (match x (0 :ok) (_ "bad")))"#));
+}
+
+#[test]
+fn no_region_when_match_arm_returns_list() {
+    // One match arm returns a list (heap) → unsafe
+    assert!(!has_region(
+        "(let ((x 1)) (match x (0 42) (_ (list 1 2 3))))"
+    ));
+}
+
+// ── Positive: while in result position (Tier 6) ────────────────────
+
+#[test]
+fn region_emitted_for_while_in_result_position() {
+    // while always returns nil (immediate) → safe
+    assert!(has_region("(let ((x 1)) (while false 42))"));
+}
+
+// ── Correctness: Tier 5 match produces correct results ─────────────
+
+#[test]
+fn correct_match_in_scope_keyword_result() {
+    assert_eq!(
+        eval_source("(let ((x 1)) (match x (0 :zero) (1 :one) (_ :other)))").unwrap(),
+        Value::keyword("one")
+    );
+}
+
+#[test]
+fn correct_match_in_scope_int_result() {
+    assert_eq!(
+        eval_source("(let ((x 2)) (match x (0 0) (1 10) (_ -1)))").unwrap(),
+        Value::int(-1)
+    );
+}
+
+#[test]
+fn correct_match_in_scope_with_intrinsic() {
+    assert_eq!(
+        eval_source("(let ((x 0) (y 5)) (match x (0 (+ y 10)) (_ (- y 1))))").unwrap(),
+        Value::int(15)
+    );
+}
+
+// ── Correctness: Tier 6 while produces correct results ─────────────
+
+#[test]
+fn correct_while_in_scope_returns_nil() {
+    assert!(eval_source("(let ((x 1)) (while false 42))")
+        .unwrap()
+        .is_nil());
+}
+
 // ── Negative: scopes that must NOT emit RegionEnter/RegionExit ──────
 
 #[test]
@@ -205,6 +323,21 @@ fn no_region_when_result_is_scope_var_with_heap_init() {
     // The init is not provably immediate, so returning the scope binding
     // is unsafe (RegionExit would free the list).
     assert!(!has_region("(let ((x (list 1 2 3))) x)"));
+}
+
+#[test]
+fn no_region_when_inner_let_returns_heap_binding() {
+    // Inner let's binding y holds a list (heap). Returning y from the
+    // inner let means the outer scope returns a heap value allocated
+    // within the outer scope's region — RegionExit would free it.
+    // scope_bindings must include inner let's bindings to catch this.
+    assert!(!has_region("(let ((x 1)) (let ((y (list 1 2 3))) y))"));
+}
+
+#[test]
+fn no_region_when_nested_block_returns_string() {
+    // Block's last expression is a string literal — heap.
+    assert!(!has_region(r#"(let ((x 1)) (block "heap"))"#));
 }
 
 #[test]
@@ -350,10 +483,14 @@ fn region_emitted_for_cond_without_else() {
 }
 
 #[test]
-fn no_region_when_set_to_outer_local() {
-    // set to a local binding from an enclosing let (not a global).
-    // The inner let's scope-allocated objects would dangle in the outer binding.
-    assert!(!has_region(
+fn no_region_for_inner_let_with_outward_set() {
+    // The inner let sets an outer binding — condition 4 rejects the inner let.
+    // But the outer let can scope-allocate (Tier 4): its result is the inner
+    // let whose result is 42 (safe), holder doesn't escape (no captures,
+    // result is immediate), and (set holder x) is a set to holder which IS
+    // in the outer let's scope (not outward for the outer let).
+    // So has_region returns true (the outer let emits RegionEnter/Exit).
+    assert!(has_region(
         "(let ((holder nil)) (let ((x (list 1 2 3))) (set holder x) 42))"
     ));
 }
@@ -535,6 +672,32 @@ fn correct_outer_heap_binding_survives_scope() {
         )
         .unwrap(),
         Value::int(3)
+    );
+}
+
+// ── Correctness: Tier 4 nested let/block returns correct values ─────
+
+#[test]
+fn correct_nested_let_with_length() {
+    assert_eq!(
+        eval_source("(let ((x (list 1 2 3))) (let ((y (length x))) y))").unwrap(),
+        Value::int(3)
+    );
+}
+
+#[test]
+fn correct_nested_block_with_arithmetic() {
+    assert_eq!(
+        eval_source("(let ((x 10)) (block (+ x 5)))").unwrap(),
+        Value::int(15)
+    );
+}
+
+#[test]
+fn correct_deeply_nested_let() {
+    assert_eq!(
+        eval_source("(let ((x 1)) (let ((y 2)) (let ((z 3)) (+ x (+ y z)))))").unwrap(),
+        Value::int(6)
     );
 }
 
