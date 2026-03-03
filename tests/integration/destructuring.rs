@@ -3,6 +3,7 @@
 // These tests check error messages or compile-time errors that require
 // Rust-side string inspection. Behavioral tests are in tests/elle/destructuring.lisp.
 use crate::common::eval_source;
+use elle::Value;
 
 #[test]
 fn test_def_destructured_bindings_are_immutable() {
