@@ -291,7 +291,7 @@ impl Lowerer {
     // ── Escape analysis ────────────────────────────────────────────
     //
     // See `escape.rs` for helper functions (`result_is_safe`,
-    // `body_contains_dangerous_outward_set`, `body_contains_break`).
+    // `body_contains_dangerous_outward_set`, `body_contains_escaping_break`).
 
     /// Determine if a `let` scope's allocations can be safely released
     /// at scope exit via `RegionEnter`/`RegionExit`.
@@ -334,8 +334,8 @@ impl Lowerer {
             return false;
         }
 
-        // Condition 5: no break (break value escapes via compensating RegionExit)
-        if Self::hir_contains_break(body) {
+        // Condition 5: no escaping break (breaks targeting inner blocks are safe)
+        if Self::hir_contains_escaping_break(body) {
             self.scope_stats.rejected_break += 1;
             return false;
         }
@@ -378,8 +378,8 @@ impl Lowerer {
             }
         }
 
-        // Condition 3: no breaks
-        if Self::body_contains_break(body) {
+        // Condition 3: no escaping breaks (breaks targeting inner blocks are safe)
+        if Self::body_contains_escaping_break(body) {
             self.scope_stats.rejected_break += 1;
             return false;
         }

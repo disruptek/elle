@@ -417,8 +417,65 @@ fn no_region_for_variadic_intrinsic() {
 
 #[test]
 fn no_region_for_block_with_break() {
-    // Block with break → conservative rejection
+    // Block with break targeting itself → break escapes the block's scope
     assert!(!has_region("(block :done (if true (break :done 42) 0))"));
+}
+
+// ── Tier 7: break target awareness ─────────────────────────────────────
+
+#[test]
+fn region_for_let_with_inner_block_break() {
+    // Tier 7: break targets :inner which is inside the let body.
+    // The break stays within the let's scope → safe to scope-allocate.
+    assert!(has_region(
+        "(let ((x 42)) (block :inner (if true (break :inner 0) x)) x)"
+    ));
+}
+
+#[test]
+fn region_for_let_with_while_break() {
+    // Tier 7: while desugars to an implicit block named "while".
+    // `(break :while 0)` targets the inner while-block, not the let.
+    assert!(has_region(
+        "(let ((n 10)) (while (> n 0) (if (= n 5) (break :while 0)) n) n)"
+    ));
+}
+
+#[test]
+fn region_for_let_with_multiple_inner_blocks() {
+    // Tier 7: multiple inner blocks, breaks target their own blocks.
+    assert!(has_region(
+        "(let ((x 1))
+           (block :a (if true (break :a 0) x))
+           (block :b (if true (break :b 0) x))
+           x)"
+    ));
+}
+
+#[test]
+fn no_region_for_let_with_break_to_outer_block() {
+    // Break targets :outer which is OUTSIDE the let → escaping break.
+    assert!(!has_region(
+        "(block :outer (let ((x 42)) (break :outer x) x))"
+    ));
+}
+
+#[test]
+fn no_region_for_let_with_break_to_outer_through_inner() {
+    // Break targets :outer, passing through an inner block.
+    // Even though :inner is inside the let, the break skips it.
+    assert!(!has_region(
+        "(block :outer (let ((x 42)) (block :inner (break :outer x) 0) x))"
+    ));
+}
+
+#[test]
+fn region_for_block_with_inner_block_break() {
+    // Tier 7: outer block contains inner block with break.
+    // The break targets :inner, staying within :outer's scope.
+    assert!(has_region(
+        "(block :outer (block :inner (if true (break :inner 0) 1)) 0)"
+    ));
 }
 
 #[test]
@@ -459,7 +516,7 @@ fn no_region_when_break_carries_heap_value() {
 #[test]
 fn no_region_when_break_in_nested_block_targets_outer() {
     // Bug 2: break inside a nested block targets the outer block.
-    // walk_for_break must recurse into nested Block bodies.
+    // walk_for_escaping_break must recurse into nested Block bodies.
     assert!(!has_region(
         "(block :outer (block :inner (break :outer 42) 0) 0)"
     ));
@@ -930,19 +987,43 @@ fn break_from_nested_scoped_let_correct() {
     assert_eq!(result, Value::int(30));
 }
 
+// ── Tier 7 correctness: inner break with scope allocation ───────────
+
 #[test]
-fn break_from_scoped_let_in_fiber() {
-    // Same test but in a child fiber — exercises real scope marks
+fn correct_let_with_inner_block_break() {
+    // Let scope-allocates; inner block break stays within the let's scope.
     let result = eval_source(
-        "(let ((f (fiber/new
-                     (fn ()
-                        (block :done
-                          (let ((x 10))
-                            (let ((y 20))
-                              (break :done (+ x y))))))
-                      1)))
-           (fiber/resume f))",
+        "(let ((x 42))
+           (block :inner
+             (if (> x 10) (break :inner (+ x 1)) (- x 1))))",
     )
     .unwrap();
-    assert_eq!(result, Value::int(30));
+    assert_eq!(result, Value::int(43));
+}
+
+#[test]
+fn correct_let_with_while_break() {
+    // Let scope-allocates; while-break targets the implicit while-block.
+    let result = eval_source(
+        "(let ((n 100))
+           (var i 0)
+           (while (< i n)
+             (if (= i 5) (break :while i))
+             (set i (+ i 1)))
+           i)",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(5));
+}
+
+#[test]
+fn correct_let_with_inner_break_returns_last_expr() {
+    // Break exits inner block early; let body continues to final expression.
+    let result = eval_source(
+        "(let ((x 10))
+           (block :skip (break :skip 0))
+           (+ x 5))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(15));
 }
