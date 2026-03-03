@@ -67,61 +67,122 @@
          (after (arena-count)))
     (list result (- after before 1)))))
 
-## ── Graph visualization ─────────────────────────────────────────────
+## ── Control flow graph rendering ────────────────────────────────────
 
-(defn fn/dot-escape (s)
-  "Escape special DOT record-label characters."
-  (-> s
-    (string/replace "{" "\\{")
-    (string/replace "}" "\\}")
-    (string/replace "|" "\\|")
-    (string/replace "<" "\\<")
-    (string/replace ">" "\\>")))
+(defn fn/cfg (target & opts)
+  "Render a closure or fiber's control flow graph as text.
+   Optional format keyword: :mermaid (default) or :dot.
+   (fn/cfg my-fn)          => Mermaid flowchart string
+   (fn/cfg my-fn :dot)     => DOT digraph string
+   (fn/cfg my-fn :mermaid) => Mermaid flowchart string"
+  (let* ((fmt (if (empty? opts)
+                :mermaid
+                (if (> (length opts) 1)
+                  (error [:arity-error "fn/cfg: expected at most 1 format keyword"])
+                  (first opts))))
+         (cfg (fn/flow target)))
+    (when (nil? cfg)
+      (error [:type-error "fn/cfg: target has no LIR"]))
+    (cond
+      ((= fmt :mermaid) (fn/cfg-mermaid cfg))
+      ((= fmt :dot)     (fn/cfg-dot cfg))
+      (true (error [:type-error (-> "fn/cfg: unknown format "
+                                  (append (string fmt))
+                                  (append ", expected :mermaid or :dot"))])))))
 
-(defn fn/graph (cfg)
-  "Convert a fn/flow CFG struct to DOT format string."
+(defn fn/cfg-label (cfg)
+  "Build the label string from a CFG struct's metadata."
   (let* ((name (get cfg :name))
-         (doc (get cfg :doc))
-         (label (if (nil? name)
-                  (if (nil? doc) "anonymous" doc)
-                  name))
-         (result (-> "digraph {\n  label=\""
-                   (append label)
-                   (append " arity:")
-                   (append (get cfg :arity))
-                   (append " regs:")
-                   (append (string (get cfg :regs)))
-                   (append " locals:")
-                   (append (string (get cfg :locals)))
-                   (append "\";\n  node [shape=record];\n"))))
-    (each block (get cfg :blocks)
-      (let* ((lbl (string (get block :label)))
-             (instrs (get block :instrs))
-             (term (get block :term))
-             (edges (get block :edges)))
-        (set result (-> result
-                      (append "  block")
-                      (append lbl)
-                      (append " [label=\"{block")
-                      (append lbl)))
-        (set result (append result "|"))
-        (each instr instrs
-          (set result (-> result
-                        (append (fn/dot-escape instr))
-                        (append "\\l"))))
-        (set result (-> result
-                      (append "|")
-                      (append (fn/dot-escape term))
-                      (append "}\"];\n")))
-        (each edge edges
+         (doc (get cfg :doc)))
+    (if (nil? name)
+      (if (nil? doc) "anonymous" doc)
+      name)))
+
+(defn fn/cfg-dot (cfg)
+  "Render a CFG struct as a DOT digraph string."
+  (letrec ((dot-escape (fn (s)
+             (-> s
+               (string/replace "{" "\\{")
+               (string/replace "}" "\\}")
+               (string/replace "|" "\\|")
+               (string/replace "<" "\\<")
+               (string/replace ">" "\\>")))))
+    (let ((result (-> "digraph {\n  label=\""
+                    (append (fn/cfg-label cfg))
+                    (append " arity:")
+                    (append (get cfg :arity))
+                    (append " regs:")
+                    (append (string (get cfg :regs)))
+                    (append " locals:")
+                    (append (string (get cfg :locals)))
+                    (append "\";\n  node [shape=record];\n"))))
+      (each block (get cfg :blocks)
+        (let* ((lbl (string (get block :label)))
+               (instrs (get block :instrs))
+               (term (get block :term))
+               (edges (get block :edges)))
           (set result (-> result
                         (append "  block")
                         (append lbl)
-                        (append " -> block")
-                        (append (string edge))
-                        (append ";\n"))))))
-    (append result "}\n")))
+                        (append " [label=\"{block")
+                        (append lbl)))
+          (set result (append result "|"))
+          (each instr instrs
+            (set result (-> result
+                          (append (dot-escape instr))
+                          (append "\\l"))))
+          (set result (-> result
+                        (append "|")
+                        (append (dot-escape term))
+                        (append "}\"];\n")))
+          (each edge edges
+            (set result (-> result
+                          (append "  block")
+                          (append lbl)
+                          (append " -> block")
+                          (append (string edge))
+                          (append ";\n"))))))
+      (append result "}\n"))))
 
-(defn fn/save-graph (closure path)
-  "Save the LIR control flow graph of a closure as a DOT file."
-  (file/write path (fn/graph (fn/flow closure))))
+(defn fn/cfg-mermaid (cfg)
+  "Render a CFG struct as a Mermaid flowchart string."
+  (letrec ((mmd-escape (fn (s)
+             (-> s
+               (string/replace "&" "&amp;")
+               (string/replace "\"" "&quot;")))))
+    (let ((result (-> "flowchart TD\n"
+                    (append "  %% ")
+                    (append (fn/cfg-label cfg))
+                    (append " arity:")
+                    (append (get cfg :arity))
+                    (append " regs:")
+                    (append (string (get cfg :regs)))
+                    (append " locals:")
+                    (append (string (get cfg :locals)))
+                    (append "\n"))))
+      (each block (get cfg :blocks)
+        (let* ((lbl (string (get block :label)))
+               (instrs (get block :instrs))
+               (term (get block :term))
+               (edges (get block :edges)))
+          (set result (-> result
+                        (append "  block")
+                        (append lbl)
+                        (append "[\"block")
+                        (append lbl)))
+          (each instr instrs
+            (set result (-> result
+                          (append "<br/>")
+                          (append (mmd-escape instr)))))
+          (set result (-> result
+                        (append "<br/>---<br/>")
+                        (append (mmd-escape term))
+                        (append "\"]\n")))
+          (each edge edges
+            (set result (-> result
+                          (append "  block")
+                          (append lbl)
+                          (append " --> block")
+                          (append (string edge))
+                          (append "\n"))))))
+      result)))

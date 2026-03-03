@@ -407,7 +407,118 @@ pub fn prim_disjit(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// (fn/flow closure) — return LIR control flow graph as structured data
+/// Build the CFG struct from a closure's LIR.
+fn flow_from_closure(closure: &std::rc::Rc<crate::value::heap::Closure>) -> (SignalBits, Value) {
+    let lir = match &closure.lir_function {
+        Some(lir) => lir,
+        None => return (SIG_OK, Value::NIL),
+    };
+
+    // Build top-level struct
+    let mut fields = BTreeMap::new();
+
+    // :name
+    fields.insert(
+        TableKey::Keyword("name".to_string()),
+        match &lir.name {
+            Some(n) => Value::string(n.as_str()),
+            None => Value::NIL,
+        },
+    );
+
+    // :doc
+    fields.insert(
+        TableKey::Keyword("doc".to_string()),
+        closure.doc.unwrap_or(Value::NIL),
+    );
+
+    // :arity — use Display impl: "2", "1+", "2-4"
+    fields.insert(
+        TableKey::Keyword("arity".to_string()),
+        Value::string(format!("{}", lir.arity)),
+    );
+
+    // :regs
+    fields.insert(
+        TableKey::Keyword("regs".to_string()),
+        Value::int(lir.num_regs as i64),
+    );
+
+    // :locals
+    fields.insert(
+        TableKey::Keyword("locals".to_string()),
+        Value::int(lir.num_locals as i64),
+    );
+
+    // :entry
+    fields.insert(
+        TableKey::Keyword("entry".to_string()),
+        Value::int(lir.entry.0 as i64),
+    );
+
+    // :blocks — tuple of block structs
+    let blocks: Vec<Value> = lir
+        .blocks
+        .iter()
+        .map(|block| {
+            let mut block_fields = BTreeMap::new();
+
+            // :label
+            block_fields.insert(
+                TableKey::Keyword("label".to_string()),
+                Value::int(block.label.0 as i64),
+            );
+
+            // :instrs — tuple of Debug-formatted instruction strings
+            let instrs: Vec<Value> = block
+                .instructions
+                .iter()
+                .map(|si| Value::string(format!("{:?}", si.instr)))
+                .collect();
+            block_fields.insert(
+                TableKey::Keyword("instrs".to_string()),
+                Value::tuple(instrs),
+            );
+
+            // :term — Debug-formatted terminator string
+            block_fields.insert(
+                TableKey::Keyword("term".to_string()),
+                Value::string(format!("{:?}", block.terminator.terminator)),
+            );
+
+            // :edges — tuple of successor label ints
+            let edges: Vec<Value> = match &block.terminator.terminator {
+                Terminator::Return(_) | Terminator::Unreachable => vec![],
+                Terminator::Jump(label) => vec![Value::int(label.0 as i64)],
+                Terminator::Branch {
+                    then_label,
+                    else_label,
+                    ..
+                } => {
+                    vec![
+                        Value::int(then_label.0 as i64),
+                        Value::int(else_label.0 as i64),
+                    ]
+                }
+                Terminator::Yield { resume_label, .. } => {
+                    vec![Value::int(resume_label.0 as i64)]
+                }
+            };
+            block_fields.insert(TableKey::Keyword("edges".to_string()), Value::tuple(edges));
+
+            Value::struct_from(block_fields)
+        })
+        .collect();
+
+    fields.insert(
+        TableKey::Keyword("blocks".to_string()),
+        Value::tuple(blocks),
+    );
+
+    (SIG_OK, Value::struct_from(fields))
+}
+
+/// (fn/flow target) — return LIR control flow graph as structured data
 ///
 /// Returns a struct with keys:
 /// - :name — function name (string or nil)
@@ -422,7 +533,7 @@ pub fn prim_disjit(args: &[Value]) -> (SignalBits, Value) {
 ///   - :edges — tuple of successor label ints
 ///
 /// Returns nil if the closure has no LIR (e.g., native function or LIR discarded).
-/// Errors if argument is not a closure.
+/// Errors if argument is not a closure or fiber, or if the fiber is currently executing.
 pub fn prim_fn_flow(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -434,119 +545,24 @@ pub fn prim_fn_flow(args: &[Value]) -> (SignalBits, Value) {
         );
     }
     if let Some(closure) = args[0].as_closure() {
-        let lir = match &closure.lir_function {
-            Some(lir) => lir,
-            None => return (SIG_OK, Value::NIL),
-        };
-
-        // Build top-level struct
-        let mut fields = BTreeMap::new();
-
-        // :name
-        fields.insert(
-            TableKey::Keyword("name".to_string()),
-            match &lir.name {
-                Some(n) => Value::string(n.as_str()),
-                None => Value::NIL,
-            },
-        );
-
-        // :doc
-        fields.insert(
-            TableKey::Keyword("doc".to_string()),
-            closure.doc.unwrap_or(Value::NIL),
-        );
-
-        // :arity — use Display impl: "2", "1+", "2-4"
-        fields.insert(
-            TableKey::Keyword("arity".to_string()),
-            Value::string(format!("{}", lir.arity)),
-        );
-
-        // :regs
-        fields.insert(
-            TableKey::Keyword("regs".to_string()),
-            Value::int(lir.num_regs as i64),
-        );
-
-        // :locals
-        fields.insert(
-            TableKey::Keyword("locals".to_string()),
-            Value::int(lir.num_locals as i64),
-        );
-
-        // :entry
-        fields.insert(
-            TableKey::Keyword("entry".to_string()),
-            Value::int(lir.entry.0 as i64),
-        );
-
-        // :blocks — tuple of block structs
-        let blocks: Vec<Value> = lir
-            .blocks
-            .iter()
-            .map(|block| {
-                let mut block_fields = BTreeMap::new();
-
-                // :label
-                block_fields.insert(
-                    TableKey::Keyword("label".to_string()),
-                    Value::int(block.label.0 as i64),
-                );
-
-                // :instrs — tuple of Debug-formatted instruction strings
-                let instrs: Vec<Value> = block
-                    .instructions
-                    .iter()
-                    .map(|si| Value::string(format!("{:?}", si.instr)))
-                    .collect();
-                block_fields.insert(
-                    TableKey::Keyword("instrs".to_string()),
-                    Value::tuple(instrs),
-                );
-
-                // :term — Debug-formatted terminator string
-                block_fields.insert(
-                    TableKey::Keyword("term".to_string()),
-                    Value::string(format!("{:?}", block.terminator.terminator)),
-                );
-
-                // :edges — tuple of successor label ints
-                let edges: Vec<Value> = match &block.terminator.terminator {
-                    Terminator::Return(_) | Terminator::Unreachable => vec![],
-                    Terminator::Jump(label) => vec![Value::int(label.0 as i64)],
-                    Terminator::Branch {
-                        then_label,
-                        else_label,
-                        ..
-                    } => {
-                        vec![
-                            Value::int(then_label.0 as i64),
-                            Value::int(else_label.0 as i64),
-                        ]
-                    }
-                    Terminator::Yield { resume_label, .. } => {
-                        vec![Value::int(resume_label.0 as i64)]
-                    }
-                };
-                block_fields.insert(TableKey::Keyword("edges".to_string()), Value::tuple(edges));
-
-                Value::struct_from(block_fields)
-            })
-            .collect();
-
-        fields.insert(
-            TableKey::Keyword("blocks".to_string()),
-            Value::tuple(blocks),
-        );
-
-        (SIG_OK, Value::struct_from(fields))
+        flow_from_closure(closure)
+    } else if let Some(handle) = args[0].as_fiber() {
+        match handle.try_with(|fiber| flow_from_closure(&fiber.closure)) {
+            Some(result) => result,
+            None => (
+                SIG_ERROR,
+                error_val(
+                    "state-error",
+                    "fn/flow: fiber is currently executing".to_string(),
+                ),
+            ),
+        }
     } else {
         (
             SIG_ERROR,
             error_val(
                 "type-error",
-                "fn/flow: argument must be a closure".to_string(),
+                "fn/flow: argument must be a closure or fiber".to_string(),
             ),
         )
     }
@@ -894,8 +910,8 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_fn_flow,
         effect: Effect::none(),
         arity: Arity::Exact(1),
-        doc: "Return the LIR control flow graph of a closure as structured data.",
-        params: &["closure"],
+        doc: "Return the LIR control flow graph of a closure or fiber as structured data.",
+        params: &["closure-or-fiber"],
         category: "fn",
         example: "(fn/flow (fn (x y) (+ x y)))",
         aliases: &[],
