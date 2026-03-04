@@ -56,7 +56,7 @@ pub enum HirPattern {
 }
 
 /// Literal values that can appear in patterns
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PatternLiteral {
     Bool(bool),
     Int(i64),

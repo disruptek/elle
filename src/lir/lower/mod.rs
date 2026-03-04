@@ -2,6 +2,7 @@
 
 mod binding;
 mod control;
+pub(crate) mod decision;
 mod escape;
 mod expr;
 mod lambda;
