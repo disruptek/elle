@@ -122,9 +122,6 @@ mod escape {
 mod elle_scripts {
     include!("elle_scripts.rs");
 }
-mod functional {
-    include!("functional.rs");
-}
 
 // Temporarily disabled while sorting out compilation caching.
 // mod fn_flow {
