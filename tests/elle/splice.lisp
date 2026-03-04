@@ -97,10 +97,22 @@
   (assert-eq second-resume 24 "yield through splice: second resume returns 24"))
 
 # ============================================================================
-# Splice with list (runtime error — lists are not indexed)
+# Splice with list
 # ============================================================================
+
+(assert-eq (+ ;(list 1 2 3)) 6 "splice list into arithmetic")
+(assert-eq (+ 10 ;(list 1 2 3)) 16 "splice list into arithmetic with leading arg")
+(assert-eq (+ ;(list 1 2) ;(list 3 4)) 10 "splice multiple lists")
+
+(let ([result (list 0 ;(list 1 2 3) 4)])
+  (assert-eq result (list 0 1 2 3 4) "splice list into list constructor"))
 
 (begin
   (def xs (list 1 2 3))
-  (let ([result (protect (+ ;xs))])
-    (assert-eq (get result 0) false "splice with list errors")))
+  (assert-eq (+ ;xs) 6 "splice list variable into call"))
+
+(begin
+  (defn add3 [a b c] (+ a b c))
+  (assert-eq (add3 ;(list 10 20 30)) 60 "splice list into closure call"))
+
+(assert-eq (+ ;(list)) 0 "splice empty list")
