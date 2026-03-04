@@ -86,6 +86,22 @@ pub struct PatternRow {
     pub guard: Option<Hir>,
     /// Index into the original arms vec (for body lookup).
     pub arm_index: usize,
+    /// Bindings accumulated from `Var` patterns in columns that were
+    /// removed during specialization or default-matrix construction.
+    /// These are carried forward so the Leaf node includes them.
+    pub bindings: Vec<(Binding, AccessPath)>,
+}
+
+impl PatternRow {
+    /// Create a new row with no accumulated bindings.
+    pub fn new(patterns: Vec<HirPattern>, guard: Option<Hir>, arm_index: usize) -> Self {
+        PatternRow {
+            patterns,
+            guard,
+            arm_index,
+            bindings: Vec::new(),
+        }
+    }
 }
 
 /// The pattern matrix used by Maranget's algorithm.
@@ -141,11 +157,7 @@ impl PatternMatrix {
         let mut rows = Vec::new();
         for (i, (pattern, guard, _body)) in arms.iter().enumerate() {
             for expanded in expand_or_pattern(pattern) {
-                rows.push(PatternRow {
-                    patterns: vec![expanded],
-                    guard: guard.clone(),
-                    arm_index: i,
-                });
+                rows.push(PatternRow::new(vec![expanded], guard.clone(), i));
             }
         }
         PatternMatrix { rows }
@@ -487,11 +499,21 @@ fn constructor_compatible(pat_ctor: &Constructor, target: &Constructor) -> bool 
 ///   replaced by `arity` wildcards.
 /// - Rows whose pattern in `col` is a different constructor: dropped.
 /// - Or-patterns: each matching alternative becomes a separate row.
-fn specialize(matrix: &PatternMatrix, col: usize, ctor: &Constructor) -> PatternMatrix {
+fn specialize(
+    matrix: &PatternMatrix,
+    col: usize,
+    ctor: &Constructor,
+    col_access: &AccessPath,
+) -> PatternMatrix {
     let mut rows = Vec::new();
     for row in &matrix.rows {
         let pat = &row.patterns[col];
         if is_wildcard(pat) {
+            // Carry forward any binding from a Var pattern in this column.
+            let mut new_bindings = row.bindings.clone();
+            if let HirPattern::Var(binding) = pat {
+                new_bindings.push((*binding, col_access.clone()));
+            }
             let arity = ctor.arity();
             let mut new_patterns = row.patterns[..col].to_vec();
             for _ in 0..arity {
@@ -502,6 +524,7 @@ fn specialize(matrix: &PatternMatrix, col: usize, ctor: &Constructor) -> Pattern
                 patterns: new_patterns,
                 guard: row.guard.clone(),
                 arm_index: row.arm_index,
+                bindings: new_bindings,
             });
         } else if let HirPattern::Or(alts) = pat {
             for alt in alts {
@@ -510,6 +533,10 @@ fn specialize(matrix: &PatternMatrix, col: usize, ctor: &Constructor) -> Pattern
                         .as_ref()
                         .is_some_and(|c| constructor_compatible(c, ctor))
                 {
+                    let mut new_bindings = row.bindings.clone();
+                    if let HirPattern::Var(binding) = alt {
+                        new_bindings.push((*binding, col_access.clone()));
+                    }
                     let sub_patterns = extract_sub_patterns(alt, ctor);
                     let mut new_patterns = row.patterns[..col].to_vec();
                     new_patterns.extend(sub_patterns);
@@ -518,6 +545,7 @@ fn specialize(matrix: &PatternMatrix, col: usize, ctor: &Constructor) -> Pattern
                         patterns: new_patterns,
                         guard: row.guard.clone(),
                         arm_index: row.arm_index,
+                        bindings: new_bindings,
                     });
                 }
             }
@@ -533,6 +561,7 @@ fn specialize(matrix: &PatternMatrix, col: usize, ctor: &Constructor) -> Pattern
                 patterns: new_patterns,
                 guard: row.guard.clone(),
                 arm_index: row.arm_index,
+                bindings: row.bindings.clone(),
             });
         }
         // else: different constructor → row is dropped
@@ -541,17 +570,23 @@ fn specialize(matrix: &PatternMatrix, col: usize, ctor: &Constructor) -> Pattern
 }
 
 /// Default matrix: rows where the column is a wildcard/variable,
-/// with that column removed.
-fn default_matrix(matrix: &PatternMatrix, col: usize) -> PatternMatrix {
+/// with that column removed. Variable bindings from the removed
+/// column are accumulated in the row's `bindings` field.
+fn default_matrix(matrix: &PatternMatrix, col: usize, col_access: &AccessPath) -> PatternMatrix {
     let mut rows = Vec::new();
     for row in &matrix.rows {
         if is_wildcard(&row.patterns[col]) {
+            let mut new_bindings = row.bindings.clone();
+            if let HirPattern::Var(binding) = &row.patterns[col] {
+                new_bindings.push((*binding, col_access.clone()));
+            }
             let mut new_patterns = row.patterns[..col].to_vec();
             new_patterns.extend_from_slice(&row.patterns[col + 1..]);
             rows.push(PatternRow {
                 patterns: new_patterns,
                 guard: row.guard.clone(),
                 arm_index: row.arm_index,
+                bindings: new_bindings,
             });
         }
     }
@@ -616,7 +651,9 @@ fn compile_matrix(matrix: PatternMatrix, col_access: Vec<AccessPath>) -> Decisio
     // Base case 2: first row is all wildcards/variables — it matches.
     let first_row = &matrix.rows[0];
     if first_row.patterns.iter().all(is_wildcard) {
-        let mut bindings = Vec::new();
+        // Start with bindings accumulated from previously removed columns.
+        let mut bindings = first_row.bindings.clone();
+        // Add bindings from the remaining patterns.
         for (pat, access) in first_row.patterns.iter().zip(col_access.iter()) {
             collect_pattern_bindings(pat, access, &mut bindings);
         }
@@ -644,12 +681,12 @@ fn compile_matrix(matrix: PatternMatrix, col_access: Vec<AccessPath>) -> Decisio
 
     let mut cases = Vec::new();
     for ctor in &constructors {
-        let specialized = specialize(&matrix, col, ctor);
+        let specialized = specialize(&matrix, col, ctor, &col_access[col]);
         let new_access = expand_access(&col_access, col, ctor);
         cases.push((ctor.clone(), compile_matrix(specialized, new_access)));
     }
 
-    let def_matrix = default_matrix(&matrix, col);
+    let def_matrix = default_matrix(&matrix, col, &col_access[col]);
     let def_access = remove_column(&col_access, col);
     let default = if def_matrix.rows.is_empty() {
         None
@@ -719,11 +756,7 @@ mod tests {
     fn test_single_wildcard() {
         // Single arm: (_ body) → Leaf { arm_index: 0 }
         let matrix = PatternMatrix {
-            rows: vec![PatternRow {
-                patterns: vec![HirPattern::Wildcard],
-                guard: None,
-                arm_index: 0,
-            }],
+            rows: vec![PatternRow::new(vec![HirPattern::Wildcard], None, 0)],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
         match tree {
@@ -743,21 +776,9 @@ mod tests {
         // (match x (1 ...) (2 ...) (_ ...))
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![lit_int(1)],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![lit_int(2)],
-                    guard: None,
-                    arm_index: 1,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 2,
-                },
+                PatternRow::new(vec![lit_int(1)], None, 0),
+                PatternRow::new(vec![lit_int(2)], None, 1),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 2),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -782,19 +803,15 @@ mod tests {
         // (match x ((h . t) ...) (_ ...))
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Cons {
+                PatternRow::new(
+                    vec![HirPattern::Cons {
                         head: Box::new(HirPattern::Wildcard),
                         tail: Box::new(HirPattern::Wildcard),
                     }],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                    None,
+                    0,
+                ),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -825,16 +842,8 @@ mod tests {
 
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: Some(dummy_guard),
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                PatternRow::new(vec![HirPattern::Wildcard], Some(dummy_guard), 0),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -859,21 +868,9 @@ mod tests {
         // Two distinct literals + wildcard → all 3 arms reachable
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![lit_int(1)],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![lit_int(2)],
-                    guard: None,
-                    arm_index: 1,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 2,
-                },
+                PatternRow::new(vec![lit_int(1)], None, 0),
+                PatternRow::new(vec![lit_int(2)], None, 1),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 2),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -889,16 +886,8 @@ mod tests {
         // Wildcard before literal → literal is unreachable
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![lit_int(1)],
-                    guard: None,
-                    arm_index: 1,
-                },
+                PatternRow::new(vec![HirPattern::Wildcard], None, 0),
+                PatternRow::new(vec![lit_int(1)], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -914,27 +903,23 @@ mod tests {
         // case, a Switch on Car(Root) for the literal values.
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Cons {
+                PatternRow::new(
+                    vec![HirPattern::Cons {
                         head: Box::new(lit_int(1)),
                         tail: Box::new(HirPattern::Wildcard),
                     }],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Cons {
+                    None,
+                    0,
+                ),
+                PatternRow::new(
+                    vec![HirPattern::Cons {
                         head: Box::new(lit_int(2)),
                         tail: Box::new(HirPattern::Wildcard),
                     }],
-                    guard: None,
-                    arm_index: 1,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 2,
-                },
+                    None,
+                    1,
+                ),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 2),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -981,16 +966,8 @@ mod tests {
         // (match x (nil ...) (_ ...))
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Nil],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                PatternRow::new(vec![HirPattern::Nil], None, 0),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -1008,19 +985,15 @@ mod tests {
         // (match x (() ...) (_ ...))
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::List {
+                PatternRow::new(
+                    vec![HirPattern::List {
                         elements: vec![],
                         rest: None,
                     }],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                    None,
+                    0,
+                ),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -1046,19 +1019,15 @@ mod tests {
 
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::List {
+                PatternRow::new(
+                    vec![HirPattern::List {
                         elements: vec![HirPattern::Var(binding_a), HirPattern::Var(binding_b)],
                         rest: None,
                     }],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                    None,
+                    0,
+                ),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -1077,19 +1046,15 @@ mod tests {
         // (match x ([1 2] ...) (_ ...))
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Tuple {
+                PatternRow::new(
+                    vec![HirPattern::Tuple {
                         elements: vec![lit_int(1), lit_int(2)],
                         rest: None,
                     }],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                    None,
+                    0,
+                ),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -1107,21 +1072,17 @@ mod tests {
         // (match x ({:x _ :y _} ...) (_ ...))
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Struct {
+                PatternRow::new(
+                    vec![HirPattern::Struct {
                         entries: vec![
                             ("x".to_string(), HirPattern::Wildcard),
                             ("y".to_string(), HirPattern::Wildcard),
                         ],
                     }],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                    None,
+                    0,
+                ),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -1145,16 +1106,8 @@ mod tests {
 
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: Some(dummy_guard),
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                PatternRow::new(vec![HirPattern::Wildcard], Some(dummy_guard), 0),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -1187,21 +1140,9 @@ mod tests {
         // (match x (:a ...) (:b ...) (_ ...))
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![lit_kw("a")],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![lit_kw("b")],
-                    guard: None,
-                    arm_index: 1,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 2,
-                },
+                PatternRow::new(vec![lit_kw("a")], None, 0),
+                PatternRow::new(vec![lit_kw("b")], None, 1),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 2),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -1228,16 +1169,8 @@ mod tests {
         // an or-pattern that was NOT expanded (to test specialize).
         let matrix = PatternMatrix {
             rows: vec![
-                PatternRow {
-                    patterns: vec![HirPattern::Or(vec![lit_int(1), lit_int(2)])],
-                    guard: None,
-                    arm_index: 0,
-                },
-                PatternRow {
-                    patterns: vec![HirPattern::Wildcard],
-                    guard: None,
-                    arm_index: 1,
-                },
+                PatternRow::new(vec![HirPattern::Or(vec![lit_int(1), lit_int(2)])], None, 0),
+                PatternRow::new(vec![HirPattern::Wildcard], None, 1),
             ],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
@@ -1257,11 +1190,7 @@ mod tests {
 
         let binding = Binding::new(SymbolId(42), BindingScope::Local);
         let matrix = PatternMatrix {
-            rows: vec![PatternRow {
-                patterns: vec![HirPattern::Var(binding)],
-                guard: None,
-                arm_index: 0,
-            }],
+            rows: vec![PatternRow::new(vec![HirPattern::Var(binding)], None, 0)],
         };
         let tree = matrix.compile(vec![AccessPath::Root]);
         match &tree {
