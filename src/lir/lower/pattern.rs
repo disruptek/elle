@@ -12,6 +12,11 @@ impl Lowerer {
     /// Walks the tree recursively, emitting constructor tests, bindings,
     /// guard checks, and arm bodies. Each tree node becomes one or more
     /// basic blocks.
+    ///
+    /// The scrutinee and result live in local slots (not on the operand
+    /// stack).  The emitter pre-allocates space for all locals at the
+    /// start of the entry block, so StoreLocal never clobbers operand
+    /// values from enclosing expressions.
     pub(super) fn lower_decision_tree(
         &mut self,
         tree: &DecisionTree,
@@ -29,6 +34,7 @@ impl Lowerer {
                     slot: result_slot,
                     src: nil_reg,
                 });
+                self.emit(LirInstr::Pop { src: nil_reg });
                 self.terminate(Terminator::Jump(done_label));
                 self.finish_block();
                 Ok(())
@@ -37,11 +43,11 @@ impl Lowerer {
                 arm_index,
                 bindings,
             } => {
-                // Establish bindings by loading values at their access paths
+                // Establish bindings by loading values at their access paths.
+                // Pop after each store — the value lives in the slot/capture
+                // and keeping it on the operand stack would leak intermediates.
                 for (binding, access) in bindings {
                     let val_reg = self.load_access_path(access, scrutinee_slot)?;
-                    // Reuse existing slot if the binding was already allocated
-                    // (e.g., from a previous or-pattern alternative).
                     let slot = if let Some(&existing) = self.binding_to_slot.get(binding) {
                         existing
                     } else {
@@ -56,6 +62,7 @@ impl Lowerer {
                     } else {
                         self.emit(LirInstr::StoreLocal { slot, src: val_reg });
                     }
+                    self.emit(LirInstr::Pop { src: val_reg });
                 }
                 // Lower body
                 let body = &arms[*arm_index].2;
@@ -64,6 +71,7 @@ impl Lowerer {
                     slot: result_slot,
                     src: body_reg,
                 });
+                self.emit(LirInstr::Pop { src: body_reg });
                 self.terminate(Terminator::Jump(done_label));
                 self.finish_block();
                 Ok(())
@@ -73,7 +81,7 @@ impl Lowerer {
                 bindings,
                 otherwise,
             } => {
-                // Establish bindings
+                // Establish bindings — pop after each store (same as Leaf).
                 for (binding, access) in bindings {
                     let val_reg = self.load_access_path(access, scrutinee_slot)?;
                     let slot = if let Some(&existing) = self.binding_to_slot.get(binding) {
@@ -90,6 +98,7 @@ impl Lowerer {
                     } else {
                         self.emit(LirInstr::StoreLocal { slot, src: val_reg });
                     }
+                    self.emit(LirInstr::Pop { src: val_reg });
                 }
                 // Evaluate guard
                 let guard_expr = arms[*arm_index]
@@ -115,6 +124,7 @@ impl Lowerer {
                     slot: result_slot,
                     src: body_reg,
                 });
+                self.emit(LirInstr::Pop { src: body_reg });
                 self.terminate(Terminator::Jump(done_label));
                 self.finish_block();
 
@@ -127,7 +137,10 @@ impl Lowerer {
                 cases,
                 default,
             } => {
-                // Load value at access path and store to temp for reloading
+                // Load value at access path, store to temp slot, then pop
+                // from the operand stack.  The value lives in the local
+                // slot and is reloaded via LoadLocal for each constructor
+                // test.
                 let value_reg = self.load_access_path(access, scrutinee_slot)?;
                 let temp_slot = self.current_func.num_locals;
                 self.current_func.num_locals += 1;
@@ -135,6 +148,7 @@ impl Lowerer {
                     slot: temp_slot,
                     src: value_reg,
                 });
+                self.emit(LirInstr::Pop { src: value_reg });
 
                 let default_label = self.fresh_label();
 
@@ -190,6 +204,7 @@ impl Lowerer {
                         slot: result_slot,
                         src: nil_reg,
                     });
+                    self.emit(LirInstr::Pop { src: nil_reg });
                     self.terminate(Terminator::Jump(done_label));
                     self.finish_block();
                 }
@@ -424,6 +439,7 @@ impl Lowerer {
             slot: merge_slot,
             src: false_reg,
         });
+        self.emit(LirInstr::Pop { src: false_reg });
         self.terminate(Terminator::Jump(result_label));
         self.finish_block();
 
@@ -434,6 +450,7 @@ impl Lowerer {
             slot: merge_slot,
             src: true_reg,
         });
+        self.emit(LirInstr::Pop { src: true_reg });
         self.terminate(Terminator::Jump(result_label));
         self.finish_block();
 

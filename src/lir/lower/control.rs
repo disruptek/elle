@@ -371,7 +371,10 @@ impl Lowerer {
         value: &Hir,
         arms: &[(HirPattern, Option<Hir>, Hir)],
     ) -> Result<Reg, String> {
-        // Evaluate the scrutinee and store to a local slot
+        // Evaluate the scrutinee and store to a local slot.
+        // The emitter pre-allocates space for all locals at the start of
+        // the entry block, so StoreLocal never clobbers operand values
+        // from enclosing expressions.
         let value_reg = self.lower_expr(value)?;
         let scrutinee_slot = self.current_func.num_locals;
         self.current_func.num_locals += 1;
@@ -379,6 +382,10 @@ impl Lowerer {
             slot: scrutinee_slot,
             src: value_reg,
         });
+        // Pop the pushed-back value — the scrutinee lives in the local
+        // slot and is reloaded via LoadLocal.  Leaving it on the operand
+        // stack would leak an intermediate between enclosing operands.
+        self.emit(LirInstr::Pop { src: value_reg });
 
         // Allocate result register and result slot
         let result_reg = self.fresh_reg();
