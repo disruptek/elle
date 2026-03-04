@@ -315,7 +315,7 @@
   (let ((counts @{}))
     (each x in coll
       (put counts x (+ 1 (if (has-key? counts x) (get counts x) 0))))
-    counts)))
+    (freeze counts))))
 
 (def mapcat (fn (f coll)
   (cond

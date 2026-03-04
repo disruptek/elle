@@ -199,15 +199,15 @@
 
 ## ── frequencies ─────────────────────────────────────────────────────
 (let ((freq (frequencies (list :a :b :a :c :b :a))))
-  (assert-true (table? freq) "frequencies: returns table")
+  (assert-true (struct? freq) "frequencies: returns struct")
   (assert-eq (get freq :a) 3 "frequencies: a=3")
   (assert-eq (get freq :b) 2 "frequencies: b=2")
   (assert-eq (get freq :c) 1 "frequencies: c=1"))
 (let ((freq (frequencies @[:a :b :a])))
-  (assert-true (table? freq) "frequencies: array input")
+  (assert-true (struct? freq) "frequencies: array input")
   (assert-eq (get freq :a) 2 "frequencies: array a=2"))
 (let ((freq (frequencies ())))
-  (assert-true (table? freq) "frequencies: empty"))
+  (assert-true (struct? freq) "frequencies: empty"))
 
 ## ── mapcat ──────────────────────────────────────────────────────────
 (assert-list-eq (mapcat (fn (x) (list x (* x 10))) (list 1 2 3))
@@ -288,3 +288,17 @@
   (assert-eq (get result 2) -3 "sort-by: array third"))
 (let ((result (sort-by abs [3 1 2])))
   (assert-true (tuple? result) "sort-by: tuple returns tuple"))
+
+## ── freeze / thaw ────────────────────────────────────────────────────
+(let ((t @{:a 1 :b 2}))
+  (let ((s (freeze t)))
+    (assert-true (struct? s) "freeze: returns struct")
+    (assert-eq (get s :a) 1 "freeze: preserves values")
+    (assert-eq (get s :b) 2 "freeze: preserves all keys")))
+
+(let ((s {:a 1 :b 2}))
+  (let ((t (thaw s)))
+    (assert-true (table? t) "thaw: returns table")
+    (assert-eq (get t :a) 1 "thaw: preserves values")
+    (put t :c 3)
+    (assert-eq (get t :c) 3 "thaw: result is mutable")))
