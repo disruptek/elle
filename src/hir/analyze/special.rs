@@ -4,6 +4,11 @@ use super::*;
 use crate::hir::pattern::{HirPattern, PatternLiteral};
 use crate::syntax::{Syntax, SyntaxKind};
 
+/// Callback type for resolving variable patterns.
+/// In normal mode, creates new bindings. In or-pattern reuse mode, looks up existing bindings.
+type ResolveVar<'a> =
+    dyn Fn(&mut Analyzer<'_>, &str, &[ScopeId], &Span) -> Result<HirPattern, String> + 'a;
+
 impl<'a> Analyzer<'a> {
     pub(crate) fn analyze_yield(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
         if items.len() != 2 {
@@ -82,13 +87,38 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
+    /// Analyze a pattern, creating new bindings for variables.
     pub(crate) fn analyze_pattern(&mut self, syntax: &Syntax) -> Result<HirPattern, String> {
+        self.analyze_pattern_inner(syntax, &|analyzer, name, scopes, _span| {
+            let binding = analyzer.bind(name, scopes, BindingScope::Local);
+            Ok(HirPattern::Var(binding))
+        })
+    }
+
+    /// Analyze a pattern, reusing existing bindings (for or-pattern subsequent alternatives).
+    fn analyze_pattern_reuse(&mut self, syntax: &Syntax) -> Result<HirPattern, String> {
+        self.analyze_pattern_inner(syntax, &|analyzer, name, scopes, span| {
+            let binding = analyzer.lookup(name, scopes).ok_or_else(|| {
+                format!(
+                    "{}: variable '{}' in or-pattern alternative not bound in first alternative",
+                    span, name
+                )
+            })?;
+            Ok(HirPattern::Var(binding))
+        })
+    }
+
+    /// Core pattern analysis with a callback for variable resolution.
+    fn analyze_pattern_inner(
+        &mut self,
+        syntax: &Syntax,
+        resolve_var: &ResolveVar<'_>,
+    ) -> Result<HirPattern, String> {
         match &syntax.kind {
             SyntaxKind::Symbol(name) if name == "_" => Ok(HirPattern::Wildcard),
             SyntaxKind::Symbol(name) if name == "nil" => Ok(HirPattern::Nil),
             SyntaxKind::Symbol(name) => {
-                let binding = self.bind(name, syntax.scopes.as_slice(), BindingScope::Local);
-                Ok(HirPattern::Var(binding))
+                resolve_var(self, name, syntax.scopes.as_slice(), &syntax.span)
             }
             SyntaxKind::Nil => Ok(HirPattern::Nil),
             SyntaxKind::Bool(b) => Ok(HirPattern::Literal(PatternLiteral::Bool(*b))),
@@ -97,6 +127,10 @@ impl<'a> Analyzer<'a> {
             SyntaxKind::String(s) => Ok(HirPattern::Literal(PatternLiteral::String(s.clone()))),
             SyntaxKind::Keyword(k) => Ok(HirPattern::Literal(PatternLiteral::Keyword(k.clone()))),
             SyntaxKind::List(items) => {
+                // Or-pattern check FIRST — before any other list pattern logic
+                if items.iter().any(|s| s.as_symbol() == Some("|")) {
+                    return self.analyze_or_pattern(items, &syntax.span, resolve_var);
+                }
                 if items.is_empty() {
                     return Ok(HirPattern::List {
                         elements: vec![],
@@ -105,8 +139,8 @@ impl<'a> Analyzer<'a> {
                 }
                 // Check for cons pattern (head . tail)
                 if items.len() == 3 && items[1].as_symbol() == Some(".") {
-                    let head = self.analyze_pattern(&items[0])?;
-                    let tail = self.analyze_pattern(&items[2])?;
+                    let head = self.analyze_pattern_inner(&items[0], resolve_var)?;
+                    let tail = self.analyze_pattern_inner(&items[2], resolve_var)?;
                     return Ok(HirPattern::Cons {
                         head: Box::new(head),
                         tail: Box::new(tail),
@@ -126,9 +160,11 @@ impl<'a> Analyzer<'a> {
                         }
                         let fixed = &items[..dot_pos];
                         let rest_syntax = &items[dot_pos + 1];
-                        let elements: Result<Vec<_>, _> =
-                            fixed.iter().map(|p| self.analyze_pattern(p)).collect();
-                        let rest = self.analyze_pattern(rest_syntax)?;
+                        let elements: Result<Vec<_>, _> = fixed
+                            .iter()
+                            .map(|p| self.analyze_pattern_inner(p, resolve_var))
+                            .collect();
+                        let rest = self.analyze_pattern_inner(rest_syntax, resolve_var)?;
                         return Ok(HirPattern::List {
                             elements: elements?,
                             rest: Some(Box::new(rest)),
@@ -137,10 +173,12 @@ impl<'a> Analyzer<'a> {
                 }
                 // List pattern with optional & rest
                 let (fixed, rest_syntax) = Self::split_rest_pattern(items, &syntax.span)?;
-                let elements: Result<Vec<_>, _> =
-                    fixed.iter().map(|p| self.analyze_pattern(p)).collect();
+                let elements: Result<Vec<_>, _> = fixed
+                    .iter()
+                    .map(|p| self.analyze_pattern_inner(p, resolve_var))
+                    .collect();
                 let rest = match rest_syntax {
-                    Some(r) => Some(Box::new(self.analyze_pattern(r)?)),
+                    Some(r) => Some(Box::new(self.analyze_pattern_inner(r, resolve_var)?)),
                     None => None,
                 };
                 Ok(HirPattern::List {
@@ -151,10 +189,12 @@ impl<'a> Analyzer<'a> {
             SyntaxKind::Tuple(items) => {
                 // Tuple pattern [...] - matches tuples (immutable)
                 let (fixed, rest_syntax) = Self::split_rest_pattern(items, &syntax.span)?;
-                let elements: Result<Vec<_>, _> =
-                    fixed.iter().map(|p| self.analyze_pattern(p)).collect();
+                let elements: Result<Vec<_>, _> = fixed
+                    .iter()
+                    .map(|p| self.analyze_pattern_inner(p, resolve_var))
+                    .collect();
                 let rest = match rest_syntax {
-                    Some(r) => Some(Box::new(self.analyze_pattern(r)?)),
+                    Some(r) => Some(Box::new(self.analyze_pattern_inner(r, resolve_var)?)),
                     None => None,
                 };
                 Ok(HirPattern::Tuple {
@@ -165,10 +205,12 @@ impl<'a> Analyzer<'a> {
             SyntaxKind::Array(items) => {
                 // Array pattern @[...] - matches arrays (mutable)
                 let (fixed, rest_syntax) = Self::split_rest_pattern(items, &syntax.span)?;
-                let elements: Result<Vec<_>, _> =
-                    fixed.iter().map(|p| self.analyze_pattern(p)).collect();
+                let elements: Result<Vec<_>, _> = fixed
+                    .iter()
+                    .map(|p| self.analyze_pattern_inner(p, resolve_var))
+                    .collect();
                 let rest = match rest_syntax {
-                    Some(r) => Some(Box::new(self.analyze_pattern(r)?)),
+                    Some(r) => Some(Box::new(self.analyze_pattern_inner(r, resolve_var)?)),
                     None => None,
                 };
                 Ok(HirPattern::Array {
@@ -195,7 +237,7 @@ impl<'a> Analyzer<'a> {
                             ))
                         }
                     };
-                    let pattern = self.analyze_pattern(&pair[1])?;
+                    let pattern = self.analyze_pattern_inner(&pair[1], resolve_var)?;
                     entries.push((key_name, pattern));
                 }
                 Ok(HirPattern::Struct { entries })
@@ -219,12 +261,57 @@ impl<'a> Analyzer<'a> {
                             ))
                         }
                     };
-                    let pattern = self.analyze_pattern(&pair[1])?;
+                    let pattern = self.analyze_pattern_inner(&pair[1], resolve_var)?;
                     entries.push((key_name, pattern));
                 }
                 Ok(HirPattern::Table { entries })
             }
             _ => Err(format!("{}: invalid pattern", syntax.span)),
         }
+    }
+
+    /// Analyze an or-pattern: `(p1 | p2 | p3)`.
+    fn analyze_or_pattern(
+        &mut self,
+        items: &[Syntax],
+        span: &Span,
+        resolve_var: &ResolveVar<'_>,
+    ) -> Result<HirPattern, String> {
+        use crate::hir::pattern::validate_or_pattern_bindings;
+
+        let groups: Vec<&[Syntax]> = items.split(|s| s.as_symbol() == Some("|")).collect();
+
+        if groups.len() < 2 {
+            return Err(format!(
+                "{}: or-pattern requires at least two alternatives",
+                span
+            ));
+        }
+
+        for group in &groups {
+            if group.is_empty() {
+                return Err(format!("{}: empty alternative in or-pattern", span));
+            }
+            if group.len() != 1 {
+                return Err(format!(
+                    "{}: each alternative in an or-pattern must be a single pattern",
+                    span
+                ));
+            }
+        }
+
+        let mut patterns = Vec::new();
+
+        // First alternative: use the provided resolve_var (creates bindings in normal mode)
+        patterns.push(self.analyze_pattern_inner(&groups[0][0], resolve_var)?);
+
+        // Subsequent alternatives: resolve to existing bindings
+        for group in &groups[1..] {
+            patterns.push(self.analyze_pattern_reuse(&group[0])?);
+        }
+
+        validate_or_pattern_bindings(&patterns, span)?;
+
+        Ok(HirPattern::Or(patterns))
     }
 }

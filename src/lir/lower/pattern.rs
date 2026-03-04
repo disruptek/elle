@@ -72,8 +72,14 @@ impl Lowerer {
                 Ok(())
             }
             HirPattern::Var(binding) => {
-                // Bind the value to the variable
-                let slot = self.allocate_slot(*binding);
+                // Bind the value to the variable.
+                // If the binding already has a slot (e.g., from a previous
+                // or-pattern alternative), reuse it instead of allocating a new one.
+                let slot = if let Some(&existing) = self.binding_to_slot.get(binding) {
+                    existing
+                } else {
+                    self.allocate_slot(*binding)
+                };
                 // Inside lambdas, pattern-bound variables are part of the closure environment
                 if self.in_lambda {
                     self.upvalue_bindings.insert(*binding);
@@ -128,6 +134,13 @@ impl Lowerer {
                 self.finish_block();
                 self.current_block = BasicBlock::new(continue_label);
 
+                // Extract car, match head pattern, THEN extract cdr and match tail.
+                // This ordering is critical: the head pattern match may create
+                // block boundaries (e.g., nested cons, or-patterns), which
+                // invalidate registers from the current block. By extracting
+                // cdr AFTER the head match, we reload from the temp slot in
+                // whatever block the head match left us in.
+
                 // Reload for car
                 let reloaded_for_car = self.fresh_reg();
                 if self.in_lambda {
@@ -148,7 +161,10 @@ impl Lowerer {
                     pair: reloaded_for_car,
                 });
 
-                // Reload for cdr
+                // Match head pattern first (may create block boundaries)
+                self.lower_pattern_match(head, head_reg, fail_label)?;
+
+                // Now reload for cdr — in whatever block the head match left us in
                 let reloaded_for_cdr = self.fresh_reg();
                 if self.in_lambda {
                     self.emit(LirInstr::LoadCapture {
@@ -168,8 +184,7 @@ impl Lowerer {
                     pair: reloaded_for_cdr,
                 });
 
-                // Recursively match head and tail
-                self.lower_pattern_match(head, head_reg, fail_label)?;
+                // Match tail pattern
                 self.lower_pattern_match(tail, tail_reg, fail_label)?;
 
                 Ok(())
@@ -710,6 +725,65 @@ impl Lowerer {
                     self.lower_pattern_match(sub_pattern, elem_reg, fail_label)?;
                 }
 
+                Ok(())
+            }
+            HirPattern::Or(alternatives) => {
+                // Or-pattern: try each alternative sequentially.
+                // Store value to temp slot so we can reload for each alternative.
+                let temp_slot = if self.in_lambda {
+                    self.num_captures + self.current_func.num_locals
+                } else {
+                    self.current_func.num_locals
+                };
+                self.current_func.num_locals += 1;
+
+                if self.in_lambda {
+                    self.emit(LirInstr::StoreCapture {
+                        index: temp_slot,
+                        src: value_reg,
+                    });
+                } else {
+                    self.emit(LirInstr::StoreLocal {
+                        slot: temp_slot,
+                        src: value_reg,
+                    });
+                }
+
+                let success_label = self.fresh_label();
+
+                for (i, alt) in alternatives.iter().enumerate() {
+                    let next_alt_label = if i + 1 < alternatives.len() {
+                        self.fresh_label()
+                    } else {
+                        fail_label
+                    };
+
+                    // Reload value for this alternative
+                    let reloaded = self.fresh_reg();
+                    if self.in_lambda {
+                        self.emit(LirInstr::LoadCapture {
+                            dst: reloaded,
+                            index: temp_slot,
+                        });
+                    } else {
+                        self.emit(LirInstr::LoadLocal {
+                            dst: reloaded,
+                            slot: temp_slot,
+                        });
+                    }
+
+                    self.lower_pattern_match(alt, reloaded, next_alt_label)?;
+
+                    // This alternative matched — jump to success
+                    self.terminate(Terminator::Jump(success_label));
+                    self.finish_block();
+
+                    if i + 1 < alternatives.len() {
+                        self.current_block = BasicBlock::new(next_alt_label);
+                    }
+                }
+
+                self.current_block = BasicBlock::new(success_label);
                 Ok(())
             }
         }

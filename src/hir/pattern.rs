@@ -1,6 +1,7 @@
 //! Pattern matching in HIR
 
 use super::binding::Binding;
+use crate::value::SymbolId;
 
 /// HIR pattern for match expressions
 #[derive(Debug, Clone)]
@@ -48,6 +49,10 @@ pub enum HirPattern {
     /// Match a table @{...} by keyword keys (emits IsTable guard)
     /// Each entry is (keyword_name, pattern_for_value)
     Table { entries: Vec<(String, HirPattern)> },
+
+    /// Match any of the alternative patterns.
+    /// All alternatives must bind the same set of variable names.
+    Or(Vec<HirPattern>),
 }
 
 /// Literal values that can appear in patterns
@@ -112,7 +117,75 @@ impl HirPattern {
                     pattern.collect_bindings(out);
                 }
             }
+            HirPattern::Or(alternatives) => {
+                // All alternatives bind the same variables; collect from the first
+                if let Some(first) = alternatives.first() {
+                    first.collect_bindings(out);
+                }
+            }
             HirPattern::Wildcard | HirPattern::Nil | HirPattern::Literal(_) => {}
         }
     }
+
+    /// Return the set of SymbolIds bound by this pattern.
+    pub fn binding_names(&self) -> std::collections::BTreeSet<SymbolId> {
+        let mut names = std::collections::BTreeSet::new();
+        self.collect_binding_names(&mut names);
+        names
+    }
+
+    fn collect_binding_names(&self, out: &mut std::collections::BTreeSet<SymbolId>) {
+        match self {
+            HirPattern::Var(binding) => {
+                out.insert(binding.name());
+            }
+            HirPattern::Cons { head, tail } => {
+                head.collect_binding_names(out);
+                tail.collect_binding_names(out);
+            }
+            HirPattern::List { elements, rest }
+            | HirPattern::Tuple { elements, rest }
+            | HirPattern::Array { elements, rest } => {
+                for p in elements {
+                    p.collect_binding_names(out);
+                }
+                if let Some(r) = rest {
+                    r.collect_binding_names(out);
+                }
+            }
+            HirPattern::Struct { entries } | HirPattern::Table { entries } => {
+                for (_, pattern) in entries {
+                    pattern.collect_binding_names(out);
+                }
+            }
+            HirPattern::Or(alts) => {
+                if let Some(first) = alts.first() {
+                    first.collect_binding_names(out);
+                }
+            }
+            HirPattern::Wildcard | HirPattern::Nil | HirPattern::Literal(_) => {}
+        }
+    }
+}
+
+/// Validate that all alternatives in an or-pattern bind the same set of variables.
+pub(crate) fn validate_or_pattern_bindings(
+    alternatives: &[HirPattern],
+    span: &crate::syntax::Span,
+) -> Result<(), String> {
+    if alternatives.len() < 2 {
+        return Ok(());
+    }
+    let reference_names = alternatives[0].binding_names();
+    for (i, alt) in alternatives.iter().enumerate().skip(1) {
+        let alt_names = alt.binding_names();
+        if alt_names != reference_names {
+            return Err(format!(
+                "{}: or-pattern alternative {} binds different variables than alternative 1",
+                span,
+                i + 1
+            ));
+        }
+    }
+    Ok(())
 }

@@ -644,3 +644,99 @@ fn test_match_improper_list_pattern_too_short() {
     let result = eval_source("(match (list 1) ((a b . c) :matched) (_ :no))").unwrap();
     assert_eq!(result, Value::keyword("no"));
 }
+
+// === match: or-patterns (1 | 2 | 3) ===
+
+#[test]
+fn test_or_pattern_basic() {
+    assert_eq!(
+        eval_source("(match 2 ((1 | 2 | 3) :small) (_ :big))").unwrap(),
+        Value::keyword("small")
+    );
+}
+
+#[test]
+fn test_or_pattern_no_match() {
+    assert_eq!(
+        eval_source("(match 5 ((1 | 2 | 3) :small) (_ :big))").unwrap(),
+        Value::keyword("big")
+    );
+}
+
+#[test]
+fn test_or_pattern_keywords() {
+    assert_eq!(
+        eval_source("(match :b ((:a | :b | :c) :found) (_ :not))").unwrap(),
+        Value::keyword("found")
+    );
+}
+
+#[test]
+fn test_or_pattern_with_binding() {
+    assert_eq!(
+        eval_source("(match (cons 1 2) (((x . _) | (_ . x)) x) (_ 0))").unwrap(),
+        Value::int(1)
+    );
+}
+
+#[test]
+fn test_or_pattern_with_binding_second() {
+    assert_eq!(
+        eval_source("(match 99 (((x . _) | x) x) (_ 0))").unwrap(),
+        Value::int(99)
+    );
+}
+
+#[test]
+fn test_or_pattern_different_bindings_error() {
+    let result = eval_source("(match 1 (((x . y) | (x . _)) :ok) (_ :no))");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("different variables"));
+}
+
+#[test]
+fn test_or_pattern_with_guard() {
+    assert_eq!(
+        eval_source("(match 2 ((1 | 2 | 3) when true :yes) (_ :no))").unwrap(),
+        Value::keyword("yes")
+    );
+}
+
+#[test]
+fn test_or_pattern_nested_in_cons() {
+    assert_eq!(
+        eval_source("(match (cons 2 :x) (((1 | 2) . t) t) (_ :fail))").unwrap(),
+        Value::keyword("x")
+    );
+}
+
+#[test]
+fn test_or_pattern_multi_item_error() {
+    let result = eval_source("(match 1 ((a b | c d) :ok) (_ :no))");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("single pattern"));
+}
+
+#[test]
+fn test_or_pattern_two_alternatives() {
+    assert_eq!(
+        eval_source("(match :y ((:x | :y) :found) (_ :not))").unwrap(),
+        Value::keyword("found")
+    );
+}
+
+#[test]
+fn test_or_pattern_with_nil() {
+    assert_eq!(
+        eval_source("(match nil ((nil | 0) :empty) (_ :other))").unwrap(),
+        Value::keyword("empty")
+    );
+}
+
+#[test]
+fn test_or_pattern_in_tuple() {
+    assert_eq!(
+        eval_source("(match [2 :x] ([(1 | 2) y] y) (_ :fail))").unwrap(),
+        Value::keyword("x")
+    );
+}

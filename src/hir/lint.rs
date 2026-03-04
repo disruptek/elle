@@ -215,7 +215,7 @@ impl HirLinter {
 fn is_exhaustive_match(arms: &[(HirPattern, Option<Hir>, Hir)]) -> bool {
     // Check if last arm is a catch-all (wildcard or variable without guard)
     if let Some((pat, guard, _)) = arms.last() {
-        if guard.is_none() && matches!(pat, HirPattern::Wildcard | HirPattern::Var(_)) {
+        if guard.is_none() && is_catch_all(pat) {
             return true;
         }
     }
@@ -225,13 +225,7 @@ fn is_exhaustive_match(arms: &[(HirPattern, Option<Hir>, Hir)]) -> bool {
     let mut has_false = false;
     for (pat, guard, _) in arms {
         if guard.is_none() {
-            if let HirPattern::Literal(PatternLiteral::Bool(b)) = pat {
-                if *b {
-                    has_true = true;
-                } else {
-                    has_false = true;
-                }
-            }
+            collect_bool_coverage(pat, &mut has_true, &mut has_false);
         }
     }
     if has_true && has_false {
@@ -239,6 +233,34 @@ fn is_exhaustive_match(arms: &[(HirPattern, Option<Hir>, Hir)]) -> bool {
     }
 
     false
+}
+
+/// Check if a pattern is a catch-all (always matches).
+fn is_catch_all(pat: &HirPattern) -> bool {
+    match pat {
+        HirPattern::Wildcard | HirPattern::Var(_) => true,
+        HirPattern::Or(alts) => alts.iter().any(is_catch_all),
+        _ => false,
+    }
+}
+
+/// Collect boolean literal coverage from a pattern, including or-pattern alternatives.
+fn collect_bool_coverage(pat: &HirPattern, has_true: &mut bool, has_false: &mut bool) {
+    match pat {
+        HirPattern::Literal(PatternLiteral::Bool(b)) => {
+            if *b {
+                *has_true = true;
+            } else {
+                *has_false = true;
+            }
+        }
+        HirPattern::Or(alts) => {
+            for alt in alts {
+                collect_bool_coverage(alt, has_true, has_false);
+            }
+        }
+        _ => {}
+    }
 }
 
 impl Default for HirLinter {
