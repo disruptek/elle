@@ -39,6 +39,9 @@
     init
     (fold f (f init (first lst)) (rest lst)))))
 
+(def reduce fold)
+(def keep filter)
+
 ## ── Time utilities ──────────────────────────────────────────────────
 
 (def time/stopwatch (fn ()

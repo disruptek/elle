@@ -43,3 +43,22 @@
   (assert-eq (length r) 0 "range: zero is empty"))
 (let ((r (range 5 5)))
   (assert-eq (length r) 0 "range: start=end is empty"))
+
+## ── apply ───────────────────────────────────────────────────────────
+(assert-eq (apply + (list 1 2 3)) 6 "apply: spread list into +")
+(assert-eq (apply + 10 (list 1 2 3)) 16 "apply: leading arg + spread")
+(assert-eq (apply + 10 20 (list 1 2)) 33 "apply: two leading args + spread")
+(assert-list-eq (apply list ()) () "apply: empty spread")
+(assert-list-eq (apply list 1 (list 2 3)) (list 1 2 3) "apply: mixed args")
+(assert-eq (apply + @[1 2 3]) 6 "apply: spread array")
+(assert-eq (apply + [1 2 3]) 6 "apply: spread tuple")
+
+## ── reduce ──────────────────────────────────────────────────────────
+(assert-eq (reduce + 0 (list 1 2 3)) 6 "reduce: sum")
+(assert-eq (reduce * 1 (list 2 3 4)) 24 "reduce: product")
+(assert-eq (reduce + 0 ()) 0 "reduce: empty returns init")
+
+## ── keep ────────────────────────────────────────────────────────────
+(assert-list-eq (keep odd? (list 1 2 3 4 5)) (list 1 3 5) "keep: odd")
+(assert-list-eq (keep even? (list 1 2 3 4 5)) (list 2 4) "keep: even")
+(assert-list-eq (keep odd? ()) () "keep: empty")
