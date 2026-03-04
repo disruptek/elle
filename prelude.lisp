@@ -240,3 +240,14 @@
         `(,f (splice ,last-arg))
         `(,f ,;init-args (splice ,last-arg))))))
 
+## with-allocator - route heap allocations through a custom allocator
+## (with-allocator alloc body...) => installs alloc, runs body in defer, uninstalls
+## Values allocated within the body use the provided allocator.
+## When the form exits, all custom-allocated objects are freed.
+## Do not retain references to these objects beyond the form's dynamic extent.
+(defmacro with-allocator (allocator & body)
+  `(begin
+     (%install-allocator ,allocator)
+     (defer (%uninstall-allocator)
+       ,;body)))
+
