@@ -1,7 +1,7 @@
 //! Destructuring: pattern analysis and helpers for binding forms.
 
 use super::*;
-use crate::hir::pattern::HirPattern;
+use crate::hir::pattern::{HirPattern, PatternKey};
 use crate::syntax::{ScopeId, Syntax, SyntaxKind};
 
 /// Parsed parameter list structure for lambda/fn parameter lists.
@@ -380,18 +380,29 @@ impl<'a> Analyzer<'a> {
                 }
                 let mut entries = Vec::new();
                 for pair in items.chunks(2) {
-                    let key_name = match &pair[0].kind {
-                        SyntaxKind::Keyword(k) => k.clone(),
+                    let key = match &pair[0].kind {
+                        SyntaxKind::Keyword(k) => PatternKey::Keyword(k.clone()),
+                        SyntaxKind::Quote(inner) => match &inner.kind {
+                            SyntaxKind::Symbol(name) => {
+                                PatternKey::Symbol(self.symbols.intern(name))
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "{}: struct/table destructuring key must be a keyword or quoted symbol, got {}",
+                                    span, pair[0]
+                                ))
+                            }
+                        },
                         _ => {
                             return Err(format!(
-                                "{}: struct/table destructuring key must be a keyword, got {}",
+                                "{}: struct/table destructuring key must be a keyword or quoted symbol, got {}",
                                 span, pair[0]
                             ))
                         }
                     };
                     let pattern =
                         self.analyze_destructure_pattern(&pair[1], scope, immutable, span)?;
-                    entries.push((key_name, pattern));
+                    entries.push((key, pattern));
                 }
                 Ok(HirPattern::Struct { entries })
             }

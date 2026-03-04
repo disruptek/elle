@@ -115,3 +115,13 @@ fn test_match_three_args() {
         eval_source("(def f (fn [a b c] a)) (f (match 42 (42 :found) (_ :nope)) :b :c)").unwrap();
     assert_eq!(result, Value::keyword("found"));
 }
+
+#[test]
+fn test_struct_destructure_rejects_non_key() {
+    // Neither keyword nor quoted symbol — should error
+    let result = eval_source("(def {42 v} {:x 1})");
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .contains("key must be a keyword or quoted symbol"));
+}

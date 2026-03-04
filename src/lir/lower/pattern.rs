@@ -1097,7 +1097,7 @@ impl Lowerer {
                 self.finish_block();
                 self.current_block = BasicBlock::new(continue_label);
 
-                for (key_name, sub_pattern) in entries {
+                for (key, sub_pattern) in entries {
                     let reloaded = self.fresh_reg();
                     if self.in_lambda {
                         self.emit(LirInstr::LoadCapture {
@@ -1112,10 +1112,14 @@ impl Lowerer {
                     }
 
                     let elem_reg = self.fresh_reg();
+                    let lir_key = match key {
+                        PatternKey::Keyword(k) => LirConst::Keyword(k.clone()),
+                        PatternKey::Symbol(sid) => LirConst::Symbol(*sid),
+                    };
                     self.emit(LirInstr::TableGetOrNil {
                         dst: elem_reg,
                         src: reloaded,
-                        key: LirConst::Keyword(key_name.clone()),
+                        key: lir_key,
                     });
 
                     self.lower_pattern_match(sub_pattern, elem_reg, fail_label)?;
@@ -1161,7 +1165,7 @@ impl Lowerer {
                 self.finish_block();
                 self.current_block = BasicBlock::new(continue_label);
 
-                for (key_name, sub_pattern) in entries {
+                for (key, sub_pattern) in entries {
                     let reloaded = self.fresh_reg();
                     if self.in_lambda {
                         self.emit(LirInstr::LoadCapture {
@@ -1176,10 +1180,14 @@ impl Lowerer {
                     }
 
                     let elem_reg = self.fresh_reg();
+                    let lir_key = match key {
+                        PatternKey::Keyword(k) => LirConst::Keyword(k.clone()),
+                        PatternKey::Symbol(sid) => LirConst::Symbol(*sid),
+                    };
                     self.emit(LirInstr::TableGetOrNil {
                         dst: elem_reg,
                         src: reloaded,
-                        key: LirConst::Keyword(key_name.clone()),
+                        key: lir_key,
                     });
 
                     self.lower_pattern_match(sub_pattern, elem_reg, fail_label)?;
