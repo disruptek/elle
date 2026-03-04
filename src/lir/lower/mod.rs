@@ -356,7 +356,11 @@ impl Lowerer {
             return false;
         }
 
-        // Condition 6: no escaping break (breaks targeting inner blocks are safe)
+        // Condition 6: no escaping break. A break targeting a block outside
+        // this let jumps past the let's RegionExit. While compensating exits
+        // handle cleanup, the conservative approach avoids scope allocation
+        // entirely when breaks escape. Breaks targeting blocks defined inside
+        // the let body are safe — they stay within the scope's region.
         if Self::hir_contains_escaping_break(body) {
             self.scope_stats.rejected_break += 1;
             return false;
@@ -381,7 +385,7 @@ impl Lowerer {
     /// 2. Body result is provably immediate
     /// 3. All break values targeting this block are safe immediates
     /// 4. No `set!` to non-local bindings (blocks have no own bindings)
-    fn can_scope_allocate_block(&self, block_id: &BlockId, body: &[Hir]) -> bool {
+    fn can_scope_allocate_block(&mut self, block_id: &BlockId, body: &[Hir]) -> bool {
         // Condition 1: no suspension
         if body.iter().any(|e| e.effect.may_suspend()) {
             self.scope_stats.rejected_suspends += 1;

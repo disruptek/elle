@@ -150,6 +150,8 @@ fn region_emitted_for_string_contains() {
     // string/contains? returns bool → immediate
     assert!(has_region(
         r#"(let ((s "hello world")) (string/contains? s "world"))"#
+    ));
+}
 
 #[test]
 fn region_emitted_for_while_in_let() {
@@ -206,7 +208,10 @@ fn region_emitted_when_returning_outer_in_branches() {
     // Both branches of if return safe values (outer binding or intrinsic)
     assert!(has_region(
         "(let ((x 1)) (let ((y (list 1 2 3))) (if (empty? y) x (+ x 1))))"
+    ));
+}
 
+#[test]
 fn region_emitted_for_block_with_keyword_break() {
     // Break carrying a keyword (NaN-boxed immediate)
     assert!(has_region(
@@ -234,7 +239,10 @@ fn region_emitted_for_nested_let_with_immediate_result() {
     // Outer let can scope-allocate.
     assert!(has_region(
         "(let ((x (list 1 2 3))) (let ((y (length x))) y))"
+    ));
+}
 
+#[test]
 fn region_emitted_for_let_with_break_to_inner_block() {
     // Break targets a block INSIDE the let. Break value is immediate → safe.
     assert!(has_region(
@@ -347,7 +355,9 @@ fn correct_while_in_scope_returns_nil() {
     assert!(eval_source("(let ((x 1)) (while false 42))")
         .unwrap()
         .is_nil());
+}
 
+#[test]
 fn region_emitted_for_block_containing_while() {
     // Block body is a while → while returns nil → block result safe, no breaks
     assert!(has_region("(block :b (while false 42))"));
@@ -614,10 +624,6 @@ fn no_region_when_break_carries_heap_value() {
 fn no_region_when_break_in_nested_block_targets_outer() {
     // Bug 2: break inside a nested block targets the outer block.
     // walk_for_escaping_break must recurse into nested Block bodies.
-    assert!(!has_region(
-
-    // Break inside nested block targets outer block, but value is immediate → safe.
-    // walk_for_break recursion still works; we just check values now, not mere presence.
     assert!(has_region(
         "(block :outer (block :inner (break :outer 42) 0) 0)"
     ));
