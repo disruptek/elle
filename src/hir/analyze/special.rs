@@ -77,6 +77,14 @@ impl<'a> Analyzer<'a> {
             arms.push((pattern, guard, body));
         }
 
+        // Exhaustiveness check: non-exhaustive match is a compile-time error
+        if !arms.is_empty() && !crate::hir::pattern::is_exhaustive_match(&arms) {
+            return Err(format!(
+                "{}: non-exhaustive match: add a wildcard (_) or variable pattern as the last arm",
+                span
+            ));
+        }
+
         Ok(Hir::new(
             HirKind::Match {
                 value: Box::new(value),

@@ -168,6 +168,66 @@ impl HirPattern {
     }
 }
 
+/// Check if a match expression's arms are exhaustive.
+///
+/// A match is considered exhaustive if:
+/// - Any arm's pattern is a wildcard or variable (always matches) without a guard, OR
+/// - The arms cover both `true` and `false` boolean literals (without guards),
+///   including via or-patterns
+pub fn is_exhaustive_match(
+    arms: &[(HirPattern, Option<super::expr::Hir>, super::expr::Hir)],
+) -> bool {
+    // Check if any arm is a catch-all (wildcard or variable without guard)
+    // Typically the last arm, but check all for robustness
+    for (pat, guard, _) in arms {
+        if guard.is_none() && is_catch_all(pat) {
+            return true;
+        }
+    }
+
+    // Check if all boolean values are covered (without guards)
+    let mut has_true = false;
+    let mut has_false = false;
+    for (pat, guard, _) in arms {
+        if guard.is_none() {
+            collect_bool_coverage(pat, &mut has_true, &mut has_false);
+        }
+    }
+    if has_true && has_false {
+        return true;
+    }
+
+    false
+}
+
+/// Check if a pattern is a catch-all (always matches).
+fn is_catch_all(pat: &HirPattern) -> bool {
+    match pat {
+        HirPattern::Wildcard | HirPattern::Var(_) => true,
+        HirPattern::Or(alts) => alts.iter().any(is_catch_all),
+        _ => false,
+    }
+}
+
+/// Collect boolean literal coverage from a pattern, including or-pattern alternatives.
+fn collect_bool_coverage(pat: &HirPattern, has_true: &mut bool, has_false: &mut bool) {
+    match pat {
+        HirPattern::Literal(PatternLiteral::Bool(b)) => {
+            if *b {
+                *has_true = true;
+            } else {
+                *has_false = true;
+            }
+        }
+        HirPattern::Or(alts) => {
+            for alt in alts {
+                collect_bool_coverage(alt, has_true, has_false);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Validate that all alternatives in an or-pattern bind the same set of variables.
 pub(crate) fn validate_or_pattern_bindings(
     alternatives: &[HirPattern],
