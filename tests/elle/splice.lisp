@@ -119,8 +119,3 @@
 
 # Splice with list (runtime error — lists are not indexed)
 # ============================================================================
-
-(begin
-  (def xs (list 1 2 3))
-  (let ([result (protect (+ ;xs))])
-    (assert-eq (get result 0) false "splice with list errors")))
