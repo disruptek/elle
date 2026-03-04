@@ -143,3 +143,148 @@
 (assert-eq (nth 2 (list 10 20 30)) 30 "nth: last of list")
 (assert-eq (nth 1 @[10 20 30]) 20 "nth: array")
 (assert-eq (nth 1 [10 20 30]) 20 "nth: tuple")
+
+## ── zip ─────────────────────────────────────────────────────────────
+(let ((z (zip (list 1 2 3) (list :a :b :c))))
+  (assert-eq (length z) 3 "zip: length")
+  (assert-list-eq (first z) (list 1 :a) "zip: first pair")
+  (assert-list-eq (first (rest z)) (list 2 :b) "zip: second pair"))
+(let ((z (zip (list 1 2) (list :a :b :c))))
+  (assert-eq (length z) 2 "zip: stops at shortest"))
+(assert-list-eq (zip) () "zip: no args")
+(let ((z (zip @[1 2 3] @[:a :b :c])))
+  (assert-true (array? z) "zip: array input returns array")
+  (assert-eq (length z) 3 "zip: array length"))
+(let ((z (zip [1 2] [:a :b])))
+  (assert-true (tuple? z) "zip: tuple input returns tuple"))
+
+## ── flatten ─────────────────────────────────────────────────────────
+(assert-list-eq (flatten (list 1 (list 2 3) (list 4 (list 5))))
+                (list 1 2 3 4 5)
+                "flatten: nested lists")
+(assert-list-eq (flatten ()) () "flatten: empty")
+(assert-list-eq (flatten (list 1 2 3)) (list 1 2 3) "flatten: already flat")
+(let ((f (flatten @[1 @[2 3] @[4]])))
+  (assert-true (array? f) "flatten: array returns array")
+  (assert-eq (length f) 4 "flatten: array length"))
+
+## ── take-while ──────────────────────────────────────────────────────
+(assert-list-eq (take-while even? (list 2 4 5 6)) (list 2 4) "take-while: list")
+(assert-list-eq (take-while even? (list 1 2 3)) () "take-while: none match")
+(assert-list-eq (take-while even? ()) () "take-while: empty")
+(let ((tw (take-while even? @[2 4 5 6])))
+  (assert-true (array? tw) "take-while: array returns array")
+  (assert-eq (length tw) 2 "take-while: array length"))
+(let ((tw (take-while even? [2 4 5 6])))
+  (assert-true (tuple? tw) "take-while: tuple returns tuple"))
+
+## ── drop-while ──────────────────────────────────────────────────────
+(assert-list-eq (drop-while even? (list 2 4 5 6)) (list 5 6) "drop-while: list")
+(assert-list-eq (drop-while even? (list 1 2 3)) (list 1 2 3) "drop-while: none dropped")
+(assert-list-eq (drop-while even? ()) () "drop-while: empty")
+(let ((dw (drop-while even? @[2 4 5 6])))
+  (assert-true (array? dw) "drop-while: array returns array")
+  (assert-eq (length dw) 2 "drop-while: array length"))
+(let ((dw (drop-while even? [2 4 5 6])))
+  (assert-true (tuple? dw) "drop-while: tuple returns tuple"))
+
+## ── distinct ────────────────────────────────────────────────────────
+(assert-list-eq (distinct (list 1 2 1 3 2 4)) (list 1 2 3 4) "distinct: list")
+(assert-list-eq (distinct ()) () "distinct: empty")
+(let ((d (distinct @[1 2 1 3 2 4])))
+  (assert-true (array? d) "distinct: array returns array")
+  (assert-eq (length d) 4 "distinct: array deduped"))
+(let ((d (distinct [1 2 1 3 2 4])))
+  (assert-true (tuple? d) "distinct: tuple returns tuple"))
+
+## ── frequencies ─────────────────────────────────────────────────────
+(let ((freq (frequencies (list :a :b :a :c :b :a))))
+  (assert-true (table? freq) "frequencies: returns table")
+  (assert-eq (get freq :a) 3 "frequencies: a=3")
+  (assert-eq (get freq :b) 2 "frequencies: b=2")
+  (assert-eq (get freq :c) 1 "frequencies: c=1"))
+(let ((freq (frequencies @[:a :b :a])))
+  (assert-true (table? freq) "frequencies: array input")
+  (assert-eq (get freq :a) 2 "frequencies: array a=2"))
+(let ((freq (frequencies ())))
+  (assert-true (table? freq) "frequencies: empty"))
+
+## ── mapcat ──────────────────────────────────────────────────────────
+(assert-list-eq (mapcat (fn (x) (list x (* x 10))) (list 1 2 3))
+                (list 1 10 2 20 3 30)
+                "mapcat: list")
+(assert-list-eq (mapcat (fn (x) ()) (list 1 2 3))
+                ()
+                "mapcat: empty results")
+(let ((mc (mapcat (fn (x) @[x (* x 10)]) @[1 2 3])))
+  (assert-true (array? mc) "mapcat: array returns array")
+  (assert-eq (length mc) 6 "mapcat: array length"))
+
+## ── group-by ────────────────────────────────────────────────────────
+(let ((groups (group-by even? (list 1 2 3 4 5 6))))
+  (assert-true (table? groups) "group-by: returns table")
+  (assert-eq (length (get groups true)) 3 "group-by: evens count")
+  (assert-eq (length (get groups false)) 3 "group-by: odds count"))
+(let ((groups (group-by even? @[1 2 3 4 5 6])))
+  (assert-true (table? groups) "group-by: array input")
+  (assert-eq (length (get groups true)) 3 "group-by: array evens"))
+
+## ── map-indexed ─────────────────────────────────────────────────────
+(assert-list-eq (map-indexed (fn (i x) (list i x)) (list :a :b :c))
+                (list (list 0 :a) (list 1 :b) (list 2 :c))
+                "map-indexed: list")
+(assert-list-eq (map-indexed (fn (i x) (list i x)) ())
+                ()
+                "map-indexed: empty")
+(let ((mi (map-indexed (fn (i x) (+ i x)) @[10 20 30])))
+  (assert-true (array? mi) "map-indexed: array returns array")
+  (assert-eq (get mi 0) 10 "map-indexed: 0+10")
+  (assert-eq (get mi 1) 21 "map-indexed: 1+20")
+  (assert-eq (get mi 2) 32 "map-indexed: 2+30"))
+
+## ── partition ───────────────────────────────────────────────────────
+(let ((p (partition 2 (list 1 2 3 4 5))))
+  (assert-eq (length p) 3 "partition: list count")
+  (assert-list-eq (first p) (list 1 2) "partition: first group")
+  (assert-list-eq (last p) (list 5) "partition: last group partial"))
+(let ((p (partition 2 @[1 2 3 4 5])))
+  (assert-true (array? p) "partition: array returns array")
+  (assert-eq (length p) 3 "partition: array count")
+  (assert-true (array? (get p 0)) "partition: array chunks are arrays"))
+(assert-list-eq (partition 3 ()) () "partition: empty")
+
+## ── interpose ───────────────────────────────────────────────────────
+(assert-list-eq (interpose :sep (list 1 2 3)) (list 1 :sep 2 :sep 3) "interpose: list")
+(assert-list-eq (interpose :sep (list 1)) (list 1) "interpose: single")
+(assert-list-eq (interpose :sep ()) () "interpose: empty")
+(let ((ip (interpose :sep @[1 2 3])))
+  (assert-true (array? ip) "interpose: array returns array")
+  (assert-eq (length ip) 5 "interpose: array length"))
+
+## ── min-key / max-key ───────────────────────────────────────────────
+(assert-eq (min-key abs -3 1 -7 4) 1 "min-key: smallest abs")
+(assert-eq (max-key abs -3 1 -7 4) -7 "max-key: largest abs")
+(assert-eq (min-key identity 5 3 8 1) 1 "min-key: identity")
+(assert-eq (max-key identity 5 3 8 1) 8 "max-key: identity")
+
+## ── memoize ─────────────────────────────────────────────────────────
+(let* ((call-count 0)
+       (mf (memoize (fn (x)
+                      (set call-count (+ call-count 1))
+                      (* x x)))))
+  (assert-eq (mf 3) 9 "memoize: compute 3*3")
+  (assert-eq (mf 3) 9 "memoize: cached 3*3")
+  (assert-eq (mf 4) 16 "memoize: compute 4*4")
+  (assert-eq call-count 2 "memoize: called twice not thrice"))
+
+## ── sort-by ─────────────────────────────────────────────────────────
+(assert-list-eq (sort-by abs (list -3 1 -2)) (list 1 -2 -3) "sort-by: abs list")
+(assert-list-eq (sort-by identity (list 3 1 2)) (list 1 2 3) "sort-by: identity = sort")
+(assert-list-eq (sort-by identity ()) () "sort-by: empty")
+(let ((result (sort-by abs @[-3 1 -2])))
+  (assert-true (array? result) "sort-by: array returns array")
+  (assert-eq (get result 0) 1 "sort-by: array first")
+  (assert-eq (get result 1) -2 "sort-by: array second")
+  (assert-eq (get result 2) -3 "sort-by: array third"))
+(let ((result (sort-by abs [3 1 2])))
+  (assert-true (tuple? result) "sort-by: tuple returns tuple"))
