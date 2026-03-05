@@ -851,7 +851,10 @@ fn get_memory_usage() -> (u64, u64) {
 /// (environment) — return the current global environment as a struct
 ///
 /// Returns a struct mapping keyword names to values for all defined
-/// globals: {:+ <native-fn> :cons <native-fn> :my-var 42 ...}
+/// globals:
+/// ```text
+/// {:+ <native-fn> :cons <native-fn> :my-var 42 ...}
+/// ```
 pub fn prim_environment(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
