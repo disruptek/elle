@@ -70,8 +70,9 @@ jobs:
       - name: Run property tests
         run: "cargo test --test lib property:: --verbose"
         env:
-          # PR: fast feedback (8). Merge queue / push to main: thorough validation (64).
-          PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '8' || '64' }}
+          # PR: fast feedback (8). Merge queue / push to main: moderate (16).
+          # Nightly/weekly runs use 128 via toolchain-check job.
+          PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '8' || '16' }}
 
   fmt:
     name: Rustfmt
