@@ -198,7 +198,7 @@ impl VM {
         let trace = self.capture_stack_trace();
         if !trace.is_empty() {
             const MAX_TRACE_DEPTH: usize = 20;
-            for (i, frame) in trace.iter().take(MAX_TRACE_DEPTH).enumerate() {
+            for (_i, frame) in trace.iter().take(MAX_TRACE_DEPTH).enumerate() {
                 if let Some(name) = &frame.function_name {
                     result.push_str(&format!("\n  in {}", name));
                     if let Some(loc) = &frame.location {
