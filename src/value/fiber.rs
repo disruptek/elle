@@ -216,9 +216,10 @@ pub struct Frame {
 /// while execution dispatch needs closure references.
 #[derive(Debug, Clone)]
 pub struct CallFrame {
-    pub name: String,
+    pub name: Rc<str>,
     pub ip: usize,
     pub frame_base: usize,
+    pub location_map: Rc<crate::error::LocationMap>,
 }
 
 /// The fiber: an independent execution context.
@@ -337,6 +338,7 @@ mod tests {
             doc: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: 0,
+            name: None,
         })
     }
 

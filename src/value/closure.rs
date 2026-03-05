@@ -48,6 +48,9 @@ pub struct Closure {
     pub vararg_kind: crate::hir::VarargKind,
     /// Total number of parameter slots (required + optional + rest if present).
     pub num_params: usize,
+    /// Optional name of this closure (for debugging/stack traces).
+    /// Set from LirFunction.name during emission.
+    pub name: Option<Rc<str>>,
 }
 
 impl Closure {
@@ -80,6 +83,7 @@ impl PartialEq for Closure {
             && self.doc == other.doc
             && self.vararg_kind == other.vararg_kind
             && self.num_params == other.num_params
+            && self.name == other.name
         // Note: jit_code and lir_function are not compared
         // as they are derived/cached data
     }
@@ -107,6 +111,7 @@ mod tests {
             doc: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: 0,
+            name: None,
         };
         assert_eq!(closure.effect(), Effect::none());
     }
@@ -130,6 +135,7 @@ mod tests {
             doc: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: 3,
+            name: None,
         };
         // env_capacity = 2 (captures) + 3 (params) + 2 (locally-defined) = 7
         assert_eq!(closure.env_capacity(), 7);
@@ -151,6 +157,7 @@ mod tests {
             doc: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: 3,
+            name: None,
         };
         // env_capacity = 1 (captures) + 3 (param slots) + 1 (locally-defined) = 5
         assert_eq!(closure_variadic.env_capacity(), 5);
@@ -172,6 +179,7 @@ mod tests {
             doc: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: 3,
+            name: None,
         };
         // env_capacity = 0 (captures) + 3 (params) + 0 (locally-defined) = 3
         assert_eq!(closure_range.env_capacity(), 3);

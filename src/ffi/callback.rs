@@ -442,6 +442,7 @@ mod tests {
             doc: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: arity,
+            name: None,
         })
     }
 
@@ -536,6 +537,7 @@ mod tests {
             doc: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: 1,
+            name: None,
         });
         let args = vec![Value::int(42)];
         let env = build_callback_env(&closure, &args);

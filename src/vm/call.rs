@@ -7,7 +7,9 @@
 //! - Tail call optimization
 //! - JIT compilation and dispatch
 
+use crate::error::LocationMap;
 use crate::value::error_val;
+use crate::value::fiber::CallFrame;
 use crate::value::{
     SignalBits, SuspendedFrame, SymbolId, Value, SIG_ERROR, SIG_HALT, SIG_OK, SIG_YIELD,
 };
@@ -41,6 +43,8 @@ impl VM {
         constants: &Rc<Vec<Value>>,
         closure_env: &Rc<Vec<Value>>,
         ip: &mut usize,
+        instr_ip: usize,
+        location_map: &Rc<LocationMap>,
     ) -> Option<SignalBits> {
         let bc: &[u8] = bytecode;
         let arg_count = self.read_u8(bc, ip) as usize;
@@ -61,7 +65,16 @@ impl VM {
         }
         args.reverse();
 
-        self.call_inner(func, args, bytecode, constants, closure_env, ip)
+        self.call_inner(
+            func,
+            args,
+            bytecode,
+            constants,
+            closure_env,
+            ip,
+            instr_ip,
+            location_map,
+        )
     }
 
     /// Handle the CallArray instruction.
@@ -78,6 +91,8 @@ impl VM {
         constants: &Rc<Vec<Value>>,
         closure_env: &Rc<Vec<Value>>,
         ip: &mut usize,
+        instr_ip: usize,
+        location_map: &Rc<LocationMap>,
     ) -> Option<SignalBits> {
         let args_val = self
             .fiber
@@ -108,7 +123,16 @@ impl VM {
             return None;
         };
 
-        self.call_inner(func, args, bytecode, constants, closure_env, ip)
+        self.call_inner(
+            func,
+            args,
+            bytecode,
+            constants,
+            closure_env,
+            ip,
+            instr_ip,
+            location_map,
+        )
     }
 
     /// Shared Call/CallArray logic after argument extraction.
@@ -123,6 +147,8 @@ impl VM {
         constants: &Rc<Vec<Value>>,
         closure_env: &Rc<Vec<Value>>,
         ip: &mut usize,
+        instr_ip: usize,
+        location_map: &Rc<LocationMap>,
     ) -> Option<SignalBits> {
         if let Some(f) = func.as_native_fn() {
             let (bits, value) = f(args.as_slice());
@@ -136,9 +162,21 @@ impl VM {
                 return Some(SIG_ERROR);
             }
 
+            // Push call frame for stack traces
+            self.fiber.call_stack.push(CallFrame {
+                name: closure
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| Rc::from("<anonymous>")),
+                ip: instr_ip,
+                frame_base: self.fiber.stack.len(),
+                location_map: location_map.clone(),
+            });
+
             // Validate argument count
             if !self.check_arity(&closure.arity, args.len()) {
                 self.fiber.call_depth -= 1;
+                self.fiber.call_stack.pop();
                 self.fiber.stack.push(Value::NIL);
                 return None;
             }
@@ -178,6 +216,7 @@ impl VM {
                 SIG_OK => {
                     let (_, value) = self.fiber.signal.take().unwrap();
                     self.fiber.stack.push(value);
+                    self.fiber.call_stack.pop();
                 }
                 SIG_YIELD => {
                     // Yield propagated from a nested call. Two cases:
@@ -205,10 +244,12 @@ impl VM {
                         self.fiber.signal = Some((SIG_YIELD, value));
                         self.fiber.suspended = Some(frames);
                     }
+                    self.fiber.call_stack.pop();
                     return Some(SIG_YIELD);
                 }
                 _ => {
                     // Other signal (error, etc.) — propagate to caller.
+                    // DO NOT pop the call frame on error — preserve it for stack traces
                     return Some(bits);
                 }
             }

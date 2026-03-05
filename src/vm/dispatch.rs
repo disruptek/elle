@@ -111,8 +111,14 @@ impl VM {
 
                 // Call instructions
                 Instruction::Call => {
-                    if let Some(bits) = self.handle_call(bytecode, constants, closure_env, &mut ip)
-                    {
+                    if let Some(bits) = self.handle_call(
+                        bytecode,
+                        constants,
+                        closure_env,
+                        &mut ip,
+                        instr_ip,
+                        location_map,
+                    ) {
                         return (bits, ip);
                     }
                 }
@@ -321,9 +327,14 @@ impl VM {
                     data::handle_array_push(self);
                 }
                 Instruction::CallArray => {
-                    if let Some(bits) =
-                        self.handle_call_array(bytecode, constants, closure_env, &mut ip)
-                    {
+                    if let Some(bits) = self.handle_call_array(
+                        bytecode,
+                        constants,
+                        closure_env,
+                        &mut ip,
+                        instr_ip,
+                        location_map,
+                    ) {
                         return (bits, ip);
                     }
                 }

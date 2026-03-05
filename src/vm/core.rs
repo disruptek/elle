@@ -83,6 +83,7 @@ fn root_closure() -> Rc<Closure> {
         doc: None,
         vararg_kind: crate::hir::VarargKind::List,
         num_params: 0,
+        name: None,
     })
 }
 
@@ -167,10 +168,53 @@ impl VM {
     /// Format a runtime error value with source location.
     pub(crate) fn format_error_with_location(&self, err_value: Value) -> String {
         let base_msg = crate::value::format_error(err_value);
-        match &self.error_loc {
-            Some(loc) => format!("{}\n  at {}", base_msg, loc),
-            None => base_msg,
+        let mut result = base_msg;
+
+        if let Some(loc) = &self.error_loc {
+            result.push_str(&format!("\n  at {}", loc));
+
+            // Add source context if available
+            if let Some(source) = crate::error::formatting::load_source_for_loc(loc) {
+                if let Some(line) = crate::error::formatting::extract_source_line(&source, loc.line)
+                {
+                    let truncated = if line.len() > 120 {
+                        format!("{}...", &line[..117])
+                    } else {
+                        line.to_string()
+                    };
+                    result.push_str(&format!("\n   {} | {}", loc.line, truncated));
+
+                    let caret = crate::error::formatting::highlight_column(&line, loc.col);
+                    result.push_str(&format!(
+                        "\n   {} | {}",
+                        " ".repeat(loc.line.to_string().len()),
+                        caret
+                    ));
+                }
+            }
         }
+
+        // Add stack trace
+        let trace = self.capture_stack_trace();
+        if !trace.is_empty() {
+            const MAX_TRACE_DEPTH: usize = 20;
+            for (i, frame) in trace.iter().take(MAX_TRACE_DEPTH).enumerate() {
+                if let Some(name) = &frame.function_name {
+                    result.push_str(&format!("\n  in {}", name));
+                    if let Some(loc) = &frame.location {
+                        result.push_str(&format!(" at {}", loc));
+                    }
+                }
+            }
+            if trace.len() > MAX_TRACE_DEPTH {
+                result.push_str(&format!(
+                    "\n  ... {} more frames",
+                    trace.len() - MAX_TRACE_DEPTH
+                ));
+            }
+        }
+
+        result
     }
 
     /// Record a closure call and return whether it's "hot" (called 10+ times)
@@ -208,22 +252,35 @@ impl VM {
             .unwrap_or(0)
     }
 
-    pub fn push_call_frame(&mut self, name: String, ip: usize) {
+    pub fn push_call_frame(
+        &mut self,
+        name: String,
+        ip: usize,
+        location_map: Rc<crate::error::LocationMap>,
+    ) {
         let frame_base = self.fiber.stack.len();
         self.fiber.call_depth += 1;
         self.fiber.call_stack.push(CallFrame {
-            name,
+            name: Rc::from(name.as_str()),
             ip,
             frame_base,
+            location_map,
         });
     }
 
-    pub fn push_call_frame_with_base(&mut self, name: String, ip: usize, frame_base: usize) {
+    pub fn push_call_frame_with_base(
+        &mut self,
+        name: String,
+        ip: usize,
+        frame_base: usize,
+        location_map: Rc<crate::error::LocationMap>,
+    ) {
         self.fiber.call_depth += 1;
         self.fiber.call_stack.push(CallFrame {
-            name,
+            name: Rc::from(name.as_str()),
             ip,
             frame_base,
+            location_map,
         });
     }
 
@@ -253,9 +310,9 @@ impl VM {
             .iter()
             .rev()
             .map(|frame| {
-                let location = self.location_map.get(&frame.ip).cloned();
+                let location = frame.location_map.get(&frame.ip).cloned();
                 StackFrame {
-                    function_name: Some(frame.name.clone()),
+                    function_name: Some(frame.name.to_string()),
                     location,
                 }
             })
@@ -427,11 +484,13 @@ mod tests {
 
     #[test]
     fn test_capture_stack_trace() {
+        use std::collections::HashMap;
         let mut vm = VM::new();
+        let empty_map = Rc::new(HashMap::new());
 
-        vm.push_call_frame("function_a".to_string(), 10);
-        vm.push_call_frame("function_b".to_string(), 20);
-        vm.push_call_frame("function_c".to_string(), 30);
+        vm.push_call_frame("function_a".to_string(), 10, empty_map.clone());
+        vm.push_call_frame("function_b".to_string(), 20, empty_map.clone());
+        vm.push_call_frame("function_c".to_string(), 30, empty_map.clone());
 
         let trace = vm.capture_stack_trace();
 
@@ -443,10 +502,12 @@ mod tests {
 
     #[test]
     fn test_wrap_error_with_trace() {
+        use std::collections::HashMap;
         let mut vm = VM::new();
+        let empty_map = Rc::new(HashMap::new());
 
-        vm.push_call_frame("outer".to_string(), 5);
-        vm.push_call_frame("inner".to_string(), 15);
+        vm.push_call_frame("outer".to_string(), 5, empty_map.clone());
+        vm.push_call_frame("inner".to_string(), 15, empty_map.clone());
 
         let error_msg = "Something went wrong".to_string();
         let wrapped = vm.wrap_error(error_msg);
