@@ -153,3 +153,18 @@ fn test_parameterize_non_parameter_errors() {
         err
     );
 }
+
+// === fiber inheritance ===
+
+#[test]
+fn test_fiber_inherits_parent_parameterize() {
+    let result = eval_source(
+        "(let ((p (make-parameter 1)))
+           (parameterize ((p 42))
+             (let ((f (fiber/new (fn () (p)) 1)))
+               (fiber/resume f nil)
+               (fiber/value f))))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(42));
+}
