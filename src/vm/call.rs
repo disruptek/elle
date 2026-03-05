@@ -168,6 +168,7 @@ impl VM {
                 &closure.bytecode,
                 &closure.constants,
                 &new_env_rc,
+                &closure.location_map,
             );
 
             self.fiber.call_depth -= 1;
@@ -197,6 +198,7 @@ impl VM {
                             ip: *ip,
                             stack: caller_stack,
                             active_allocator: crate::value::fiber_heap::save_active_allocator(),
+                            location_map: result.location_map.clone(),
                         };
 
                         frames.push(caller_frame);
@@ -328,11 +330,12 @@ impl VM {
             let new_env_rc = Rc::new(self.tail_call_env_cache.clone());
 
             // Store the tail call information (Rc clones, not data copies)
-            self.pending_tail_call = Some((
-                closure.bytecode.clone(),
-                closure.constants.clone(),
-                new_env_rc,
-            ));
+            self.pending_tail_call = Some(crate::vm::core::TailCallInfo {
+                bytecode: closure.bytecode.clone(),
+                constants: closure.constants.clone(),
+                env: new_env_rc,
+                location_map: closure.location_map.clone(),
+            });
 
             self.fiber.signal = Some((SIG_OK, Value::NIL));
             return Some(SIG_OK);
@@ -443,8 +446,13 @@ impl VM {
 
         // Check for pending tail call (JIT function did a TailCall)
         if result.to_bits() == TAIL_CALL_SENTINEL {
-            if let Some((tail_bc, tail_consts, tail_env)) = self.pending_tail_call.take() {
-                match self.execute_closure_bytecode(&tail_bc, &tail_consts, &tail_env) {
+            if let Some(tail) = self.pending_tail_call.take() {
+                match self.execute_closure_bytecode(
+                    &tail.bytecode,
+                    &tail.constants,
+                    &tail.env,
+                    &tail.location_map,
+                ) {
                     Ok(val) => {
                         self.fiber.stack.push(val);
                         return None;

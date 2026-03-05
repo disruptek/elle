@@ -12,7 +12,12 @@ use std::rc::Rc;
 
 use crate::jit::JitCode;
 
-type TailCallInfo = (Rc<Vec<u8>>, Rc<Vec<Value>>, Rc<Vec<Value>>);
+pub struct TailCallInfo {
+    pub bytecode: Rc<Vec<u8>>,
+    pub constants: Rc<Vec<Value>>,
+    pub env: Rc<Vec<Value>>,
+    pub location_map: Rc<LocationMap>,
+}
 
 pub struct VM {
     /// The current fiber holding all per-execution state:
@@ -345,6 +350,7 @@ impl VM {
                 &frame.constants,
                 &frame.env,
                 frame.ip,
+                &frame.location_map,
             );
 
             match exec.bits {
@@ -369,6 +375,7 @@ impl VM {
                             ip: exec.ip,
                             stack: vec![],
                             active_allocator: crate::value::fiber_heap::save_active_allocator(),
+                            location_map: exec.location_map,
                         }]);
                     }
 

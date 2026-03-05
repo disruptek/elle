@@ -317,8 +317,13 @@ pub extern "C" fn elle_jit_call(
 
             // Handle tail call sentinel
             if result_bits == TAIL_CALL_SENTINEL {
-                if let Some((tail_bc, tail_consts, tail_env)) = vm.pending_tail_call.take() {
-                    match vm.execute_closure_bytecode(&tail_bc, &tail_consts, &tail_env) {
+                if let Some(tail) = vm.pending_tail_call.take() {
+                    match vm.execute_closure_bytecode(
+                        &tail.bytecode,
+                        &tail.constants,
+                        &tail.env,
+                        &tail.location_map,
+                    ) {
                         Ok(val) => return val.to_bits(),
                         Err(e) => {
                             vm.fiber.signal = Some((SIG_ERROR, error_val("error", e)));
@@ -339,7 +344,12 @@ pub extern "C" fn elle_jit_call(
         let new_env = build_closure_env_for_jit(closure, &args);
 
         vm.fiber.call_depth += 1;
-        let result = vm.execute_closure_bytecode(&closure.bytecode, &closure.constants, &new_env);
+        let result = vm.execute_closure_bytecode(
+            &closure.bytecode,
+            &closure.constants,
+            &new_env,
+            &closure.location_map,
+        );
         vm.fiber.call_depth -= 1;
 
         match result {
@@ -371,8 +381,13 @@ pub extern "C" fn elle_jit_resolve_tail_call(result: u64, vm: *mut ()) -> u64 {
         return result;
     }
     let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
-    if let Some((tail_bc, tail_consts, tail_env)) = vm.pending_tail_call.take() {
-        match vm.execute_closure_bytecode(&tail_bc, &tail_consts, &tail_env) {
+    if let Some(tail) = vm.pending_tail_call.take() {
+        match vm.execute_closure_bytecode(
+            &tail.bytecode,
+            &tail.constants,
+            &tail.env,
+            &tail.location_map,
+        ) {
             Ok(val) => val.to_bits(),
             Err(e) => {
                 vm.fiber.signal = Some((SIG_ERROR, error_val("error", e)));
@@ -486,7 +501,12 @@ pub extern "C" fn elle_jit_tail_call(
             .collect();
 
         let new_env = build_closure_env_for_jit(closure, &args);
-        vm.pending_tail_call = Some((closure.bytecode.clone(), closure.constants.clone(), new_env));
+        vm.pending_tail_call = Some(crate::vm::core::TailCallInfo {
+            bytecode: closure.bytecode.clone(),
+            constants: closure.constants.clone(),
+            env: new_env,
+            location_map: closure.location_map.clone(),
+        });
 
         return TAIL_CALL_SENTINEL;
     }

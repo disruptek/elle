@@ -4,6 +4,7 @@
 //! instructions to their handlers.
 
 use crate::compiler::bytecode::Instruction;
+use crate::error::LocationMap;
 use crate::value::{SignalBits, SuspendedFrame, Value, SIG_ERROR, SIG_HALT, SIG_OK, SIG_YIELD};
 use std::rc::Rc;
 
@@ -26,6 +27,7 @@ impl VM {
         constants: &Rc<Vec<Value>>,
         closure_env: &Rc<Vec<Value>>,
         start_ip: usize,
+        location_map: &Rc<LocationMap>,
     ) -> (SignalBits, usize) {
         let mut ip = start_ip;
 
@@ -300,7 +302,7 @@ impl VM {
 
                 // Yield — capture suspended frame and suspend
                 Instruction::Yield => {
-                    return self.handle_yield(bytecode, constants, closure_env, ip);
+                    return self.handle_yield(bytecode, constants, closure_env, ip, location_map);
                 }
 
                 // Runtime eval — compile and execute a datum
@@ -354,6 +356,7 @@ impl VM {
         constants: &Rc<Vec<Value>>,
         closure_env: &Rc<Vec<Value>>,
         ip: usize,
+        location_map: &Rc<LocationMap>,
     ) -> (SignalBits, usize) {
         let yielded_value = self
             .fiber
@@ -370,6 +373,7 @@ impl VM {
             ip,
             stack: saved_stack,
             active_allocator: crate::value::fiber_heap::save_active_allocator(),
+            location_map: location_map.clone(),
         };
 
         self.fiber.signal = Some((SIG_YIELD, yielded_value));

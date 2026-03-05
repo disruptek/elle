@@ -68,6 +68,7 @@ impl VM {
         let mut current_bytecode = Rc::new(bytecode.to_vec());
         let mut current_constants = Rc::new(constants.to_vec());
         let mut current_env = closure_env.cloned().unwrap_or(empty_env);
+        let mut current_location_map = Rc::new(self.location_map.clone());
 
         loop {
             let (bits, _ip) = self.execute_bytecode_inner_impl(
@@ -75,12 +76,14 @@ impl VM {
                 &current_constants,
                 &current_env,
                 0,
+                &current_location_map,
             );
 
-            if let Some((tail_bytecode, tail_constants, tail_env)) = self.pending_tail_call.take() {
-                current_bytecode = tail_bytecode;
-                current_constants = tail_constants;
-                current_env = tail_env;
+            if let Some(tail) = self.pending_tail_call.take() {
+                current_bytecode = tail.bytecode;
+                current_constants = tail.constants;
+                current_env = tail.env;
+                current_location_map = tail.location_map;
             } else {
                 return match bits {
                     SIG_OK | SIG_HALT => {
