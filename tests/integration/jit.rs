@@ -715,7 +715,7 @@ fn test_jit_rejects_polymorphic() {
 
     let compiler = JitCompiler::new().unwrap();
     let result = compiler.compile(&func, None);
-    assert!(matches!(result, Err(JitError::NotPure)));
+    assert!(matches!(result, Err(JitError::Polymorphic)));
 }
 
 #[test]

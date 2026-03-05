@@ -33,6 +33,10 @@ pub struct Emitter {
     call_sites: Vec<CallSiteInfo>,
     /// Whether the current function may suspend (gates call site recording).
     current_func_may_suspend: bool,
+    /// Number of local variable slots in the current function.
+    /// Recorded in yield points and call sites so the JIT can spill
+    /// local values into the SuspendedFrame stack.
+    current_func_num_locals: u16,
 }
 
 impl Emitter {
@@ -48,6 +52,7 @@ impl Emitter {
             yield_points: Vec::new(),
             call_sites: Vec::new(),
             current_func_may_suspend: false,
+            current_func_num_locals: 0,
         }
     }
 
@@ -64,6 +69,7 @@ impl Emitter {
             yield_points: Vec::new(),
             call_sites: Vec::new(),
             current_func_may_suspend: false,
+            current_func_num_locals: 0,
         }
     }
 
@@ -84,6 +90,7 @@ impl Emitter {
         self.yield_points.clear();
         self.call_sites.clear();
         self.current_func_may_suspend = func.effect.may_suspend();
+        self.current_func_num_locals = func.num_locals;
 
         // First pass: record label offsets (simplified - emit all blocks in order)
         // Second pass handled inline since we emit sequentially
@@ -396,6 +403,7 @@ impl Emitter {
                     self.call_sites.push(CallSiteInfo {
                         resume_ip: call_resume_ip,
                         stack_regs: self.stack.clone(),
+                        num_locals: self.current_func_num_locals,
                     });
                 }
 
@@ -855,9 +863,13 @@ impl Emitter {
                 let resume_ip = self.bytecode.current_pos();
 
                 // Record yield point metadata for JIT.
+                // num_locals is needed so the JIT can spill local variable
+                // values into the SuspendedFrame stack, matching the
+                // interpreter's layout: [locals..., operands...].
                 self.yield_points.push(YieldPointInfo {
                     resume_ip,
                     stack_regs: self.stack.clone(),
+                    num_locals: self.current_func_num_locals,
                 });
 
                 // Save stack state for the resume block.

@@ -277,7 +277,7 @@ No errors are silently swallowed.
 ## Invariants
 
 1. **Only non-polymorphic functions.** `JitCompiler::compile` returns
-   `JitError::NotPure` for functions where `effect.propagates != 0` (polymorphic).
+   `JitError::Polymorphic` for functions where `effect.propagates != 0` (polymorphic).
    Functions with `Effect::none()` or `Effect::yields()` are accepted.
    Errors (SIG_ERROR) and FFI (SIG_FFI) are fine — they don't require frame
    snapshot/restore.

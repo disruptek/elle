@@ -50,8 +50,8 @@ use std::fmt;
 pub enum JitError {
     /// Instruction not supported by JIT
     UnsupportedInstruction(String),
-    /// Function is not pure (may yield)
-    NotPure,
+    /// Function has polymorphic effect
+    Polymorphic,
     /// Cranelift compilation failed
     CompilationFailed(String),
     /// Invalid LIR structure
@@ -64,7 +64,7 @@ impl fmt::Display for JitError {
             JitError::UnsupportedInstruction(name) => {
                 write!(f, "JIT: unsupported instruction: {}", name)
             }
-            JitError::NotPure => write!(f, "JIT: function is not pure (may yield)"),
+            JitError::Polymorphic => write!(f, "JIT: function has polymorphic effect"),
             JitError::CompilationFailed(msg) => write!(f, "JIT compilation failed: {}", msg),
             JitError::InvalidLir(msg) => write!(f, "JIT: invalid LIR: {}", msg),
         }

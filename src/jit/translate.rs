@@ -744,24 +744,10 @@ impl<'a> FunctionTranslator<'a> {
                     .get(yield_index as usize)
                     .map(|yp| yp.stack_regs.as_slice())
                     .unwrap_or(&[]);
-                let num_spilled = stack_regs.len();
 
-                // Spill registers to a stack slot
-                let spilled_ptr = if num_spilled > 0 {
-                    let slot =
-                        builder.create_sized_stack_slot(cranelift_codegen::ir::StackSlotData::new(
-                            cranelift_codegen::ir::StackSlotKind::ExplicitSlot,
-                            (num_spilled * 8) as u32,
-                            0,
-                        ));
-                    for (i, reg) in stack_regs.iter().enumerate() {
-                        let val = builder.use_var(var(reg.0));
-                        builder.ins().stack_store(val, slot, (i * 8) as i32);
-                    }
-                    builder.ins().stack_addr(I64, slot, 0)
-                } else {
-                    builder.ins().iconst(I64, 0) // null pointer
-                };
+                // Spill locals + operand stack to match interpreter layout:
+                // [param_0, ..., param_{arity-1}, local_0, ..., local_n, operand_0, ..., operand_m]
+                let spilled_ptr = self.spill_locals_and_operands(builder, stack_regs)?;
 
                 let yield_idx_val = builder.ins().iconst(I64, yield_index as i64);
 
@@ -784,6 +770,63 @@ impl<'a> FunctionTranslator<'a> {
             }
         }
         Ok(())
+    }
+
+    /// Spill local variables and operand stack registers to a stack slot.
+    ///
+    /// The interpreter's stack layout at yield/call is:
+    /// `[param_0, ..., param_{arity-1}, local_0, ..., local_n, operand_0, ..., operand_m]`
+    ///
+    /// The JIT stores params in arg variables and locals in local variables
+    /// (Cranelift variables, i.e., CPU registers). This method spills them
+    /// all into a contiguous buffer matching the interpreter's layout.
+    ///
+    /// Returns a Cranelift value pointing to the spilled buffer, or a null
+    /// pointer constant if there's nothing to spill.
+    fn spill_locals_and_operands(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        stack_regs: &[Reg],
+    ) -> Result<cranelift_codegen::ir::Value, JitError> {
+        let arity = self.lir.arity.fixed_params() as u16;
+        let num_locals = self.lir.num_locals;
+        let num_locally_defined = num_locals.saturating_sub(arity);
+        let total = num_locals as usize + stack_regs.len();
+
+        if total == 0 {
+            return Ok(builder.ins().iconst(I64, 0)); // null pointer
+        }
+
+        let slot = builder.create_sized_stack_slot(cranelift_codegen::ir::StackSlotData::new(
+            cranelift_codegen::ir::StackSlotKind::ExplicitSlot,
+            (total * 8) as u32,
+            0,
+        ));
+
+        let mut offset: i32 = 0;
+
+        // 1. Spill parameters (from arg variables)
+        for i in 0..arity as u32 {
+            let val = builder.use_var(var(self.arg_var_base + i));
+            builder.ins().stack_store(val, slot, offset * 8);
+            offset += 1;
+        }
+
+        // 2. Spill locally-defined variables
+        for i in 0..num_locally_defined as u32 {
+            let val = builder.use_var(var(self.local_var_base + i));
+            builder.ins().stack_store(val, slot, offset * 8);
+            offset += 1;
+        }
+
+        // 3. Spill operand stack registers
+        for reg in stack_regs {
+            let val = builder.use_var(var(reg.0));
+            builder.ins().stack_store(val, slot, offset * 8);
+            offset += 1;
+        }
+
+        Ok(builder.ins().stack_addr(I64, slot, 0))
     }
 
     /// Translate a constant to a Cranelift value
@@ -1095,23 +1138,12 @@ impl<'a> FunctionTranslator<'a> {
             None => (0, &[] as &[crate::lir::Reg]),
         };
 
-        let num_spilled = stack_regs.len();
-        let spilled_ptr = if num_spilled > 0 {
-            let slot = builder.create_sized_stack_slot(cranelift_codegen::ir::StackSlotData::new(
-                cranelift_codegen::ir::StackSlotKind::ExplicitSlot,
-                (num_spilled * 8) as u32,
-                0,
-            ));
-            for (i, reg) in stack_regs.iter().enumerate() {
-                let val = builder.use_var(var(reg.0));
-                builder.ins().stack_store(val, slot, (i * 8) as i32);
-            }
-            builder.ins().stack_addr(I64, slot, 0)
-        } else {
-            builder.ins().iconst(I64, 0)
-        };
+        // Spill locals + operand stack to match interpreter layout
+        let spilled_ptr = self.spill_locals_and_operands(builder, stack_regs)?;
+        let num_locals = self.lir.num_locals;
+        let total_spilled = num_locals as usize + stack_regs.len();
 
-        let num_spilled_val = builder.ins().iconst(I64, num_spilled as i64);
+        let num_spilled_val = builder.ins().iconst(I64, total_spilled as i64);
         let resume_ip_val = builder.ins().iconst(I64, resume_ip as i64);
 
         // Call elle_jit_yield_through_call(spilled, num_spilled, resume_ip, vm, self_bits)

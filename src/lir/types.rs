@@ -85,6 +85,11 @@ pub struct YieldPointInfo {
     /// The JIT spills these Cranelift variables in this order to
     /// reconstruct the interpreter's operand stack on resume.
     pub stack_regs: Vec<Reg>,
+    /// Number of local variable slots (params + locally-defined).
+    /// The interpreter stores locals at `[frame_base, frame_base + num_locals)`.
+    /// The JIT must spill local values first, then operand stack registers,
+    /// so the SuspendedFrame stack matches the interpreter's layout.
+    pub num_locals: u16,
 }
 
 /// Metadata about a call site, collected during bytecode emission.
@@ -103,6 +108,11 @@ pub struct CallSiteInfo {
     /// interpreter's stack state when yield propagates through a call
     /// (call_inner line 192: `self.fiber.stack.drain(..).collect()`).
     pub stack_regs: Vec<Reg>,
+    /// Number of local variable slots (params + locally-defined).
+    /// The interpreter stores locals at `[frame_base, frame_base + num_locals)`.
+    /// The JIT must spill local values first, then operand stack registers,
+    /// so the SuspendedFrame stack matches the interpreter's layout.
+    pub num_locals: u16,
 }
 
 impl LirFunction {

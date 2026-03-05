@@ -79,6 +79,12 @@ pub struct YieldPointMeta {
     /// Number of spilled values that constitute the operand stack.
     /// Single source of truth — the JIT yield helper reads this, not a parameter.
     pub num_spilled: u16,
+    /// Number of local variable slots (params + locally-defined).
+    /// The JIT spills locals first, then operand stack registers.
+    /// The runtime helper uses this to split the spilled buffer into
+    /// locals and operands, matching the interpreter's stack layout:
+    /// `[local_0, ..., local_{n-1}, operand_0, ..., operand_m]`.
+    pub num_locals: u16,
 }
 
 // =============================================================================
@@ -601,12 +607,17 @@ pub extern "C" fn elle_jit_yield(
         .get(&bytecode_ptr)
         .expect("VM bug: elle_jit_yield called but no JitCode in cache");
     let yield_meta = &jit_code.yield_points[yield_index as usize];
-    let num_spilled = yield_meta.num_spilled as usize;
+    let num_locals = yield_meta.num_locals as usize;
+    let num_operands = yield_meta.num_spilled as usize;
+    let total_spilled = num_locals + num_operands;
 
-    // Build the operand stack from spilled values
+    // Build the stack from spilled values.
+    // The JIT spills in interpreter layout: [locals..., operands...].
+    // The SuspendedFrame.stack must match what the interpreter would have
+    // captured via `self.fiber.stack.drain(..).collect()`.
     let spilled_ptr = spilled_values as *const u64;
-    let mut stack = Vec::with_capacity(num_spilled);
-    for i in 0..num_spilled {
+    let mut stack = Vec::with_capacity(total_spilled);
+    for i in 0..total_spilled {
         let bits = unsafe { *spilled_ptr.add(i) };
         stack.push(unsafe { Value::from_bits(bits) });
     }

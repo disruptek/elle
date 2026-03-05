@@ -93,12 +93,6 @@ fn test_jit_yield_through_call_stack_preservation() {
     // Tests that values computed before the call survive yield.
     // outer computes (+ 1 (inner)), inner yields 10 then returns 20.
     // First resume yields 10, second resume returns 1 + 20 = 21.
-    //
-    // Note: inner avoids local variables (def x ...) because the JIT
-    // yield helper uses closure.env (captures only), not the full env
-    // that build_closure_env creates. Local variables in the yielding
-    // function would cause StoreUpvalue to fail on resume. This is a
-    // known limitation tracked separately.
     let source = r#"
         (def inner (fn () (yield 10) 20))
         (def outer (fn () (+ 1 (inner))))
@@ -172,4 +166,75 @@ fn test_jit_yield_with_captures() {
     "#;
     let result = eval_source(source).unwrap();
     assert_eq!(format!("{}", result), "(10 11)");
+}
+
+#[test]
+fn test_jit_yield_locals_survive_yield_resume() {
+    // Regression test for #461: local variables lost across JIT yield/resume.
+    //
+    // The interpreter stores locals on the operand stack at
+    // [frame_base, frame_base + num_locals). The JIT stores locals in
+    // Cranelift variables (CPU registers). When the JIT builds a
+    // SuspendedFrame at yield, it must include local variable values
+    // so the interpreter can find them on resume.
+    //
+    // outer has a local variable x=10. It calls inner, which yields.
+    // After resume, x must still be 10.
+    let source = r#"
+        (def inner (fn () (yield 1) 2))
+        (def outer (fn ()
+          (let ((x 10))
+            (let ((y (inner)))
+              (+ x y)))))
+        (def run (fn () (outer)))
+
+        (var warmup-i 0)
+        (forever
+          (if (>= warmup-i 15) (break))
+          (def warmup-c (make-coroutine run))
+          (coro/resume warmup-c)
+          (coro/resume warmup-c)
+          (set warmup-i (+ warmup-i 1)))
+
+        (def c (make-coroutine run))
+        (def v1 (coro/resume c))
+        (def v2 (coro/resume c))
+        (list v1 v2)
+    "#;
+    let result = eval_source(source).unwrap();
+    // v1 = 1 (yielded value from inner)
+    // v2 = 10 + 2 = 12 (x survives yield, y = inner's return value)
+    assert_eq!(format!("{}", result), "(1 12)");
+}
+
+#[test]
+fn test_jit_yield_multiple_locals_survive() {
+    // Multiple locals must all survive yield/resume.
+    let source = r#"
+        (def inner (fn () (yield 100) 200))
+        (def outer (fn ()
+          (let ((a 1))
+            (let ((b 2))
+              (let ((c 3))
+                (let ((d (inner)))
+                  (+ a (+ b (+ c d)))))))))
+        (def run (fn () (outer)))
+
+        (var warmup-i 0)
+        (forever
+          (if (>= warmup-i 15) (break))
+          (def warmup-c (make-coroutine run))
+          (coro/resume warmup-c)
+          (coro/resume warmup-c)
+          (set warmup-i (+ warmup-i 1)))
+
+        (def c (make-coroutine run))
+        (def v1 (coro/resume c))
+        (def v2 (coro/resume c))
+        (list v1 v2)
+    "#;
+    let result = eval_source(source).unwrap();
+    // v1 = 100 (yielded)
+    // v2 = 1 + 2 + 3 + 200 = 206
+    assert_eq!(format!("{}", result), "(100 206)");
 }

@@ -341,7 +341,7 @@ impl JitCompiler {
         // Only reject polymorphic effects (effect depends on arguments).
         // Yielding functions are now supported via side-exit.
         if lir.effect.propagates != 0 {
-            return Err(JitError::NotPure);
+            return Err(JitError::Polymorphic);
         }
 
         // Create function signature
@@ -387,6 +387,7 @@ impl JitCompiler {
             .map(|yp| super::dispatch::YieldPointMeta {
                 resume_ip: yp.resume_ip,
                 num_spilled: yp.stack_regs.len() as u16,
+                num_locals: yp.num_locals,
             })
             .collect();
 
@@ -406,7 +407,7 @@ impl JitCompiler {
         self_sym: Option<SymbolId>,
     ) -> Result<Vec<String>, JitError> {
         if lir.effect.propagates != 0 {
-            return Err(JitError::NotPure);
+            return Err(JitError::Polymorphic);
         }
 
         let sig = self.make_jit_signature();
@@ -446,7 +447,7 @@ impl JitCompiler {
         // Validate all members are non-polymorphic
         for member in members {
             if member.lir.effect.propagates != 0 {
-                return Err(JitError::NotPure);
+                return Err(JitError::Polymorphic);
             }
         }
 
@@ -792,7 +793,7 @@ mod tests {
 
         let compiler = JitCompiler::new().expect("Failed to create compiler");
         let result = compiler.compile(&lir, None);
-        assert!(matches!(result, Err(JitError::NotPure)));
+        assert!(matches!(result, Err(JitError::Polymorphic)));
     }
 
     #[test]
@@ -992,7 +993,7 @@ mod tests {
             lir: &lir,
         }];
         let result = compiler.compile_batch(&members);
-        assert!(matches!(result, Err(JitError::NotPure)));
+        assert!(matches!(result, Err(JitError::Polymorphic)));
     }
 
     #[test]
@@ -1032,6 +1033,7 @@ mod tests {
         func.yield_points = vec![YieldPointInfo {
             resume_ip: 5,
             stack_regs: vec![],
+            num_locals: 0,
         }];
 
         let compiler = JitCompiler::new().expect("Failed to create compiler");

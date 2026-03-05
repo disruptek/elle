@@ -493,7 +493,7 @@ impl VM {
                                 // MakeClosure and other instructions not yet in JIT.
                                 // Fall back to interpreter — the function still works.
                             }
-                            crate::jit::JitError::NotPure => {
+                            crate::jit::JitError::Polymorphic => {
                                 // Polymorphic — fall through to interpreter
                             }
                             _ => {
