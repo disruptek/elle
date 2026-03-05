@@ -1,6 +1,7 @@
 // Parameter type tests
 //
-// Tests for Racket-style dynamic parameters (make-parameter, parameter?, callability).
+// Tests for Racket-style dynamic parameters (make-parameter, parameter?, callability)
+// and the parameterize special form.
 
 use crate::common::eval_source;
 use elle::Value;
@@ -71,4 +72,84 @@ fn test_parameter_via_def() {
 fn test_parameter_type_of() {
     let result = eval_source("(type (make-parameter 0))").unwrap();
     assert_eq!(result.as_keyword_name(), Some("parameter"));
+}
+
+// === parameterize special form ===
+
+#[test]
+fn test_parameterize_basic() {
+    let result = eval_source("(let ((p (make-parameter 1))) (parameterize ((p 2)) (p)))").unwrap();
+    assert_eq!(result, Value::int(2));
+}
+
+#[test]
+fn test_parameterize_reverts_after() {
+    let result = eval_source(
+        "(let ((p (make-parameter 1)))
+           (parameterize ((p 2)) (p))
+           (p))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(1));
+}
+
+#[test]
+fn test_parameterize_nested_shadows() {
+    let result = eval_source(
+        "(let ((p (make-parameter 1)))
+           (parameterize ((p 2))
+             (parameterize ((p 3))
+               (p))))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(3));
+}
+
+#[test]
+fn test_parameterize_nested_outer_visible() {
+    let result = eval_source(
+        "(let ((p (make-parameter 1)))
+           (parameterize ((p 2))
+             (parameterize ((p 3))
+               (p))
+             (p)))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(2));
+}
+
+#[test]
+fn test_parameterize_multiple_bindings() {
+    let result = eval_source(
+        "(let ((a (make-parameter 1))
+               (b (make-parameter 10)))
+           (parameterize ((a 2) (b 20))
+             (+ (a) (b))))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(22));
+}
+
+#[test]
+fn test_parameterize_body_is_begin() {
+    let result = eval_source(
+        "(let ((p (make-parameter 0)))
+           (parameterize ((p 42))
+             (def x (p))
+             x))",
+    )
+    .unwrap();
+    assert_eq!(result, Value::int(42));
+}
+
+#[test]
+fn test_parameterize_non_parameter_errors() {
+    let result = eval_source("(parameterize ((42 1)) 0)");
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("not a parameter"),
+        "expected 'not a parameter' error, got: {}",
+        err
+    );
 }

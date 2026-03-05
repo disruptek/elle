@@ -160,6 +160,9 @@ impl Lowerer {
             // the normal return path."
             HirKind::Break { .. } => true,
 
+            // Parameterize: result is the body's result
+            HirKind::Parameterize { body, .. } => self.result_is_safe(body, scope_bindings),
+
             // Everything else: conservatively unsafe
             // String, Lambda, Yield, Quote, Eval, Set, Define
             _ => false,
@@ -348,6 +351,13 @@ impl Lowerer {
             HirKind::Eval { expr, env } => {
                 self.walk_for_outward_set(expr, scope_bindings)
                     || self.walk_for_outward_set(env, scope_bindings)
+            }
+
+            HirKind::Parameterize { bindings, body } => {
+                bindings.iter().any(|(param, value)| {
+                    self.walk_for_outward_set(param, scope_bindings)
+                        || self.walk_for_outward_set(value, scope_bindings)
+                }) || self.walk_for_outward_set(body, scope_bindings)
             }
         }
     }
@@ -610,6 +620,13 @@ impl Lowerer {
             HirKind::Eval { expr, env } => {
                 Self::walk_for_escaping_break(expr, inner_blocks)
                     || Self::walk_for_escaping_break(env, inner_blocks)
+            }
+
+            HirKind::Parameterize { bindings, body } => {
+                bindings.iter().any(|(param, value)| {
+                    Self::walk_for_escaping_break(param, inner_blocks)
+                        || Self::walk_for_escaping_break(value, inner_blocks)
+                }) || Self::walk_for_escaping_break(body, inner_blocks)
             }
         }
     }
