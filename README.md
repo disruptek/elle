@@ -142,9 +142,10 @@ entirely.
 every `let`, `letrec`, and `block` scope. When it can prove that no
 allocated value escapes — no captures, no suspension, no outward
 mutation — it emits region instructions that free the scope's
-allocations at exit. The allocator architecture supports custom
-allocators at the scope level, allowing hot scopes to use dedicated
-arenas tuned for their allocation patterns.
+allocations at exit. The allocator architecture is designed to support
+custom allocators at the scope level, allowing hot scopes to use
+dedicated arenas tuned for their allocation patterns (currently in
+development).
 
 The combination means Elle reclaims memory deterministically, at scope
 exit or fiber death, without pausing the world. Long-running fiber
