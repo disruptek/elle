@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772756624199,
+  "lastUpdate": 1772764232308,
   "repoUrl": "https://github.com/elle-lisp/elle",
   "entries": {
     "Elle Benchmarks": [
@@ -611,6 +611,210 @@ window.BENCHMARK_DATA = {
             "name": "memory_operations/list_to_vec",
             "value": 121,
             "range": "± 0",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "disruptek@users.noreply.github.com",
+            "name": "Smooth Operator",
+            "username": "disruptek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": false,
+          "id": "a1954cc37072a3bc650f2ccd8c75693458b228d7",
+          "message": "Implement Racket-style parameters for dynamic bindings (#466) (#482)\n\n* Implement Racket-style parameters: value type, primitives, and callable dispatch\n\nThis commit adds the foundation for dynamic (fiber-scoped) bindings:\n\n- New heap type `Parameter` with unique id and default value\n- Primitives: `make-parameter`, `parameter?`\n- Parameters are callable: `(param)` reads current value from fiber's param_frames\n- Fiber.env field removed (unused); param_frames field added\n- 11 integration tests covering basic parameter operations\n\nThe `parameterize` special form and fiber inheritance are in subsequent commits.\n\n* Implement parameterize special form: HIR, bytecode, lowering, and VM dispatch\n\nThis commit adds the `parameterize` special form for dynamic parameter binding:\n\n- New HirKind::Parameterize variant with bindings and body\n- PushParamFrame and PopParamFrame bytecode instructions\n- Lowering from HIR to LIR with proper stack protocol\n- VM dispatch for frame push/pop with parameter validation\n- 18 integration tests covering parameterize behavior:\n  - Basic override and revert\n  - Nested parameterize with shadowing\n  - Multiple bindings\n  - Body as begin (multiple expressions)\n  - Error on non-parameter values\n\nBody is NOT in tail position (PopParamFrame must execute after).\nStack protocol: push pairs as [param1, val1, param2, val2, ...], pop in reverse.\n\n* Add child fiber parameter inheritance (phase 8, #466)\n\nOn first resume, flatten the parent's param_frames into a single frame\nand set it on the child fiber so it inherits the parent's current\ndynamic parameter bindings.\n\n* Add parameters example and documentation\n\nCreated comprehensive example demonstrating:\n- Parameter creation and reading\n- parameterize special form with override and revert\n- Nested parameterize with shadowing\n- Multiple parameters in one parameterize\n- I/O port simulation use case\n- Fiber inheritance of parameter bindings\n\nUpdated all AGENTS.md files to document:\n- Parameter heap type and runtime representation\n- parameterize special form semantics\n- Bytecode instructions (PushParamFrame, PopParamFrame)\n- HIR and LIR representations\n- VM parameter resolution and frame management\n- Primitives (make-parameter, parameter?)\n\nThe example is executable and demonstrates all major features of the parameters system.\n\n* Move parameter behavioral tests to Elle scripts\n\nMove 15 behavioral parameter tests from Rust integration tests to Elle scripts\nin tests/elle/parameters.lisp. Keep only 4 Rust tests that require type inspection\n(is_parameter, as_keyword_name, error message validation).\n\nThis follows the testing convention: Elle scripts for behavioral tests,\nRust tests for type inspection and error handling.\n\nAll 19 tests pass (4 Rust + 15 Elle).\n\n* Add missing HirKind::Parameterize arms to escape analysis\n\nThe escape analysis module has three match statements that must be exhaustive over HirKind. The Parameterize variant was added in a prior commit but the escape.rs match arms were missed, causing compilation failure in CI.",
+          "timestamp": "2026-03-06T01:34:46Z",
+          "tree_id": "38f7aa66bbacf44c144a76afa981522de9d95461",
+          "url": "https://github.com/elle-lisp/elle/commit/a1954cc37072a3bc650f2ccd8c75693458b228d7"
+        },
+        "date": 1772764231184,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parsing/simple_number",
+            "value": 160,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/list_literal",
+            "value": 1313,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/nested_expr",
+            "value": 2228,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/deep_nesting",
+            "value": 1339,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/large_list_100",
+            "value": 26100,
+            "range": "± 37",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/first_intern",
+            "value": 74,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/repeat_intern",
+            "value": 9,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/many_unique",
+            "value": 17152,
+            "range": "± 440",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/simple_arithmetic",
+            "value": 248926,
+            "range": "± 22281",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/conditional",
+            "value": 293074,
+            "range": "± 22745",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/nested_arithmetic",
+            "value": 316078,
+            "range": "± 21479",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/int_add",
+            "value": 584,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/mixed_arithmetic",
+            "value": 434,
+            "range": "± 16",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/comparison",
+            "value": 284,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/cons",
+            "value": 1030,
+            "range": "± 23",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/first",
+            "value": 882,
+            "range": "± 16",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conditionals/if_true",
+            "value": 593,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conditionals/nested_if",
+            "value": 2841,
+            "range": "± 222",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "end_to_end/simple",
+            "value": 426012,
+            "range": "± 42631",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "end_to_end/complex",
+            "value": 517090,
+            "range": "± 30652",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/10",
+            "value": 1774,
+            "range": "± 45",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/10",
+            "value": 809,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/50",
+            "value": 26111,
+            "range": "± 4015",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/50",
+            "value": 11157,
+            "range": "± 1388",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/100",
+            "value": 50495,
+            "range": "± 7261",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/100",
+            "value": 22199,
+            "range": "± 6945",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/500",
+            "value": 182402,
+            "range": "± 31657",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/500",
+            "value": 132708,
+            "range": "± 19168",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_operations/value_clone",
+            "value": 0,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_operations/list_to_vec",
+            "value": 112,
+            "range": "± 3",
             "unit": "ns/iter"
           }
         ]
