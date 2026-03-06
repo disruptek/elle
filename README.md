@@ -3,16 +3,24 @@
 [![CI](https://github.com/elle-lisp/elle/actions/workflows/ci.yml/badge.svg)](https://github.com/elle-lisp/elle/actions/workflows/ci.yml)
 
 Elle is a Lisp that compiles to bytecode and runs on a register-based VM
-written in Rust. It takes heavy inspiration from
-[Janet](https://janet-lang.org) — fibers as the universal control flow
-primitive, signals over exceptions, masks over handler chains — and
-extends the model with static effect inference, a Cranelift JIT, and
-per-fiber heap isolation. The result is a dynamic language where the
-compiler knows enough about your code to make the runtime fast without
-annotations, without a garbage collector, and without coloring your
-functions.
+with a focus on correctness, performance, and clarity.
 
 ## Contents
+
+- [Why Another Lisp](#why-another-lisp)
+- [Colorless Concurrency](#colorless-concurrency)
+- [Effects](#effects)
+- [Fibers and Processes](#fibers-and-processes)
+- [Memory](#memory)
+- [FFI](#ffi)
+- [Modules and Plugins](#modules-and-plugins)
+- [JIT](#jit)
+- [Source-to-Source Rewriting](#source-to-source-rewriting)
+- [Macros](#macros)
+- [Destructuring](#destructuring)
+- [The Compilation Pipeline](#the-compilation-pipeline)
+- [Getting Started](#getting-started)
+- [License](#license)
 
 - [Why Another Lisp](#why-another-lisp)
 - [Colorless Concurrency](#colorless-concurrency)

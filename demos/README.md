@@ -5,6 +5,19 @@ This directory contains demonstration programs that serve two purposes:
 1. **Dogfooding**: Testing Elle itself with non-trivial algorithms
 2. **Cross-Language Comparison**: Implementing the same algorithms in multiple Lisps to compare ergonomics, idioms, and performance
 
+## Contents
+
+- [The Philosophy](#the-philosophy)
+- [Demo Categories](#demo-categories)
+- [Running the Demos](#running-the-demos)
+- [Known Issues](#known-issues)
+- [Code Organization](#code-organization)
+- [Contributing Fixes](#contributing-fixes)
+- [What These Demos Test](#what-these-demos-test)
+- [Future Demos](#future-demos)
+- [Notes for Implementers](#notes-for-implementers)
+- [References](#references)
+
 ## The Philosophy
 
 Elle is designed with Janet ergonomics in mind. These demos allow us to:
