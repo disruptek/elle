@@ -79,7 +79,7 @@ impl Lowerer {
         }
 
         // First allocate all slots with nil (or cells containing nil)
-        for (binding, _) in bindings {
+        for (binding, _) in bindings.iter() {
             let nil_reg = self.emit_const(LirConst::Nil)?;
             let slot = self.allocate_slot(*binding);
 
@@ -115,7 +115,7 @@ impl Lowerer {
             }
         }
         // Then initialize
-        for (binding, init) in bindings {
+        for (binding, init) in bindings.iter() {
             let init_reg = self.lower_expr(init)?;
             let slot = self.binding_to_slot[binding];
 
