@@ -286,7 +286,7 @@ fn effect_propagates_combine_none_none() {
         propagates: 0,
     };
     let combined = a.combine(b);
-    assert_eq!(combined.propagates, 0 | 0);
+    assert_eq!(combined.propagates, 0);
 }
 
 #[test]

@@ -252,7 +252,10 @@ mod tests {
 
         let result = rename_symbol(0, 0, "bar", &index, &symbol_table, source, uri);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "No symbol found at the given position");
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No symbol found at the given position"));
     }
 
     #[test]
