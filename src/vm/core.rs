@@ -61,6 +61,10 @@ pub struct VM {
     /// Cached Expander for runtime `eval`. Avoids re-loading the prelude
     /// on every eval call. Taken out during eval, put back after.
     pub eval_expander: Option<crate::syntax::Expander>,
+    /// Local slot index → variable name mapping for the current top-level
+    /// execution. Set by `vm.execute()` from `Bytecode.local_names`.
+    /// Used by `(doc)` and `(environment)` to find file-level locals.
+    pub(crate) local_names: HashMap<u16, String>,
 }
 
 /// Create a dummy root closure for the root fiber.
@@ -114,6 +118,7 @@ impl VM {
             jit_cache: FxHashMap::default(),
             docs: HashMap::new(),
             eval_expander: None,
+            local_names: HashMap::new(),
         }
     }
 
