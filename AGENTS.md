@@ -38,7 +38,7 @@ bytecode. Error messages include file:line:col information.
 | Effects | — | `Effect` on each `Hir` | `LirFunction.effect` | — | `Closure.effect` |
 | Arity | — | `Lambda.params.len()` | `LirFunction.arity` | — | `Closure.arity` |
 | Cell mask (params) | — | `Binding.needs_cell()` | `LirFunction.cell_params_mask` | — | `Closure.cell_params_mask` |
-| Cell mask (locals) | — | `Binding.needs_cell()` | `LirFunction.cell_locals_mask` | — | JIT only (not on `Closure`) |
+| Cell mask (locals) | — | `Binding.needs_cell()` (mutable captures only) | `LirFunction.cell_locals_mask` | — | JIT only (not on `Closure`) |
 | Docstring | — | `Lambda.doc` | `LirFunction.doc` | — | `Closure.doc` |
 
 **What is transformed at each boundary:**
@@ -166,9 +166,10 @@ These must remain true. Violating them breaks the system:
    Value pointing to heap `BindingInner`), not symbols. If you see symbol
    lookup at runtime, something is wrong.
 
-2. **Closures capture by value into their environment.** Mutable captures use
-   `LocalCell`. The `cell_params_mask` on `Closure` tracks which parameters need
-   cell wrapping.
+2. **Closures capture by value into their environment.** Immutable captured
+   locals are captured directly. Mutable captured locals and mutated parameters
+   use `LocalCell` for indirection. The `cell_params_mask` on `Closure` tracks
+   which parameters need cell wrapping.
 
 3. **Effects are inferred, not declared.** The `Effect` enum (`Pure`, `Yields`,
    `Polymorphic`) propagates from leaves to root during analysis.
