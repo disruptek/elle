@@ -84,7 +84,7 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
   Fibers are independent execution contexts. Each has its own stack, call frames, and heap. When a fiber finishes, its entire heap is freed in O(1). No garbage collection, no reference counting, no pause.
   </details>
 
-- **The Rust ecosystem.** FFI without ceremony. Native plugins as Rust cdylib crates. No C marshalling layer.
+- **The Rust ecosystem.** FFI without ceremony. Native plugins as Rust cdylib crates. Values are marshalled directly to C types via libffi — no intermediate serialization format, no separate process, no generated bindings.
 
 ## Language
 
@@ -304,7 +304,7 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
   ```
   </details>
 
-- **Native plugins are Rust cdylib crates.** Link against `elle`, export an init function. Plugins register primitives through the same `PrimitiveDef` mechanism as builtins — same effect declarations, same doc strings, same arity checking. Work directly with `Value`. No C marshalling, no serialization boundary.
+- **Native plugins are Rust cdylib crates.** Link against `elle`, export an init function. Plugins register primitives through the same `PrimitiveDef` mechanism as builtins — same effect declarations, same doc strings, same arity checking. Work directly with `Value`. No intermediate serialization format, no separate process, no generated bindings.
   <details><summary>Example: Plugin Usage</summary>
 
   ```lisp
