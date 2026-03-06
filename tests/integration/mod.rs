@@ -137,6 +137,9 @@ mod parameters {
 mod ports {
     include!("ports.rs");
 }
+mod chan {
+    include!("chan.rs");
+}
 
 // Temporarily disabled while sorting out compilation caching.
 // mod fn_flow {
