@@ -664,7 +664,7 @@ fn test_jit_branch_integer_truthy() {
 // =============================================================================
 
 #[test]
-fn test_jit_accepts_yielding() {
+fn test_jit_rejects_yielding() {
     let mut func = LirFunction::new(Arity::Exact(0));
     func.num_regs = 1;
     func.num_captures = 0;
@@ -684,11 +684,7 @@ fn test_jit_accepts_yielding() {
 
     let compiler = JitCompiler::new().unwrap();
     let result = compiler.compile(&func, None);
-    assert!(
-        result.is_ok(),
-        "JIT should accept yielding functions via side-exit: {:?}",
-        result
-    );
+    assert!(matches!(result, Err(JitError::NotPure)));
 }
 
 #[test]
@@ -1817,10 +1813,10 @@ fn test_jit_not_empty_list() {
 // =============================================================================
 
 #[test]
-fn test_jit_accepts_yields_errors_effect() {
+fn test_jit_rejects_yields_errors_effect() {
     // Effect::yields_errors() has may_suspend() = true.
-    // The JIT gate now accepts this via side-exit — yielding functions
-    // can be JIT-compiled and will side-exit to the interpreter on yield.
+    // The JIT gate must reject this — fiber/resume and fiber/signal
+    // propagate this effect to their callers.
     let mut func = LirFunction::new(Arity::Exact(0));
     func.num_regs = 1;
     func.num_captures = 0;
@@ -1841,8 +1837,8 @@ fn test_jit_accepts_yields_errors_effect() {
     let compiler = JitCompiler::new().unwrap();
     let result = compiler.compile(&func, None);
     assert!(
-        result.is_ok(),
-        "JIT should accept yields_errors effect via side-exit: {:?}",
+        matches!(result, Err(JitError::NotPure)),
+        "JIT should reject yields_errors effect: {:?}",
         result
     );
 }
