@@ -156,7 +156,7 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
     }
 
     // Deep-copy environment and constants using SendValue
-    let env_send: LResult<Vec<SendValue>> = closure
+    let env_send: Result<Vec<SendValue>, String> = closure
         .env
         .iter()
         .map(|v| SendValue::from_value(*v))
@@ -164,7 +164,7 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
     let env_send = env_send
         .map_err(|e| LError::generic(format!("spawn: failed to copy environment: {}", e)))?;
 
-    let constants_send: LResult<Vec<SendValue>> = closure
+    let constants_send: Result<Vec<SendValue>, String> = closure
         .constants
         .iter()
         .map(|v| SendValue::from_value(*v))

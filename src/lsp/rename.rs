@@ -1,5 +1,6 @@
 //! Symbol renaming support for LSP
 
+use crate::error::{LError, LResult};
 use crate::symbol::SymbolTable;
 use crate::symbols::SymbolIndex;
 use serde_json::{json, Value};
@@ -39,26 +40,26 @@ const RESERVED_WORDS: &[&str] = &[
 ];
 
 /// Validate that a new name is acceptable for renaming
-fn validate_new_name(new_name: &str) -> Result<(), String> {
+fn validate_new_name(new_name: &str) -> LResult<()> {
     if new_name.is_empty() {
-        return Err("New name cannot be empty".to_string());
+        return Err(LError::generic("New name cannot be empty"));
     }
 
     if !new_name
         .chars()
         .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     {
-        return Err(format!(
+        return Err(LError::generic(format!(
             "Invalid identifier format: '{}' contains invalid characters",
             new_name
-        ));
+        )));
     }
 
     if RESERVED_WORDS.contains(&new_name) {
-        return Err(format!(
+        return Err(LError::generic(format!(
             "'{}' is a reserved word and cannot be used as a symbol name",
             new_name
-        ));
+        )));
     }
 
     Ok(())
