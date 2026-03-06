@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use super::core::VM;
 use super::{
-    arithmetic, cell, closure, comparison, control, data, literals, scope, stack, types, variables,
+    arithmetic, cell, closure, comparison, control, data, literals, stack, types, variables,
 };
 
 impl VM {
@@ -287,17 +287,16 @@ impl VM {
                     literals::handle_false(self);
                 }
 
-                // Scope management
+                // Dead instructions — never emitted by the LIR emitter.
+                // Panic immediately if encountered (indicates bytecode bug).
                 Instruction::PushScope => {
-                    let scope_type_byte = bc[ip];
-                    ip += 1;
-                    scope::handle_push_scope(self, scope_type_byte);
+                    panic!("VM bug: PushScope is a dead instruction — never emitted");
                 }
                 Instruction::PopScope => {
-                    scope::handle_pop_scope(self);
+                    panic!("VM bug: PopScope is a dead instruction — never emitted");
                 }
                 Instruction::DefineLocal => {
-                    scope::handle_define_local(self, bc, &mut ip, consts);
+                    panic!("VM bug: DefineLocal is a dead instruction — never emitted");
                 }
 
                 // Cell operations
