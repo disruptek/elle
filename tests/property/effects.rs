@@ -382,22 +382,22 @@ fn polymorphic_propagates_correct_param_7() {
 
 #[test]
 fn polymorphic_raises_has_error_bit_0() {
-    let effect = Effect::polymorphic(0);
-    assert!(effect.may_ffi());
+    let effect = Effect::polymorphic_errors(0);
+    assert!(effect.may_error());
     assert!(effect.is_polymorphic());
 }
 
 #[test]
 fn polymorphic_raises_has_error_bit_1() {
-    let effect = Effect::polymorphic(1);
-    assert!(effect.may_ffi());
+    let effect = Effect::polymorphic_errors(1);
+    assert!(effect.may_error());
     assert!(effect.is_polymorphic());
 }
 
 #[test]
 fn polymorphic_raises_has_error_bit_7() {
-    let effect = Effect::polymorphic(7);
-    assert!(effect.may_ffi());
+    let effect = Effect::polymorphic_errors(7);
+    assert!(effect.may_error());
     assert!(effect.is_polymorphic());
 }
 
@@ -423,7 +423,7 @@ fn yields_effect_may_yield() {
 #[test]
 fn raises_effect_may_raise() {
     let effect = Effect::errors();
-    assert!(effect.may_ffi());
+    assert!(effect.may_error());
     assert!(!effect.may_yield());
 }
 
@@ -431,7 +431,7 @@ fn raises_effect_may_raise() {
 fn yields_raises_has_both() {
     let effect = Effect::yields_errors();
     assert!(effect.may_yield());
-    assert!(effect.may_ffi());
+    assert!(effect.may_error());
     assert!(effect.may_suspend());
 }
 
@@ -445,5 +445,5 @@ fn ffi_effect_may_ffi() {
 fn halts_effect_may_halt() {
     let effect = Effect::halts();
     assert!(effect.may_halt());
-    assert!(effect.may_ffi());
+    assert!(effect.may_error());
 }
