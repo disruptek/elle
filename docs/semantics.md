@@ -149,7 +149,6 @@ If you need to change these semantics:
 2. Update `src/value/repr.rs` to match
 3. Update all tests to match
 4. Update AGENTS.md files to match
-5. Update docs/whats-new.md to match
 
 **Never** change code to "fix" tests that contradict this document.
 The tests are wrong if they contradict this document.

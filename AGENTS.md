@@ -498,6 +498,10 @@ When CI fails or tests break, use this to find the cause fast.
 - Do not add features "for the future." Build what's needed now.
 - Do not silently swallow errors. Propagate or log with context.
 - Do not bypass the type system with excessive use of `Any` or downcasting.
+- Do not leave behind research notes, analysis summaries, plan drafts, or any
+  other working files in the repository. The codebase is not a scratch pad.
+  Temporary artifacts belong in `/run/user/1000/` or similar — never committed,
+  never left untracked in the working tree.
 
 ## Where to start
 

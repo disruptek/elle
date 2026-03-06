@@ -1,19 +1,20 @@
-# Elle Language Guide
+# Elle Language Reference
 
-A comprehensive guide to Elle's core language features, data types, control flow, and standard library.
+A comprehensive reference for Elle's core language features, data types, control flow, scoping, and standard library.
 
 ## Table of Contents
 
 1. [Introduction](#introduction)
 2. [Basic Data Types](#basic-data-types)
-3. [Variables and Bindings](#variables-and-bindings) (includes destructuring)
-4. [Control Flow](#control-flow)
-5. [Exception Handling](#exception-handling)
-6. [The Condition System](#the-condition-system)
-7. [Functions and Higher-Order Operations](#functions-and-higher-order-operations)
-8. [Collections](#collections)
-9. [Standard Library Overview](#standard-library-overview)
-10. [Advanced Topics](#advanced-topics)
+3. [Values and Type Checking](#values-and-type-checking)
+4. [Variables and Bindings](#variables-and-bindings)
+5. [Scoping Rules](#scoping-rules)
+6. [Functions and Closures](#functions-and-closures)
+7. [Control Flow](#control-flow)
+8. [Exception Handling](#exception-handling)
+9. [Collections](#collections)
+10. [Standard Library Overview](#standard-library-overview)
+11. [Advanced Topics](#advanced-topics)
 
 ---
 
@@ -25,7 +26,7 @@ Elle is a Lisp dialect implemented in Rust with a focus on performance and expre
 
 - **First-class functions** and closures with proper lexical scoping
 - **Rich data types** including lists, vectors, tables, and structs
-- **Modern exception handling** with try-catch-finally and the condition system
+- **Modern exception handling** with try-catch-finally
 - **Comprehensive standard library** for strings, math, file I/O, and more
 - **Bytecode compilation** for efficient execution
 - **FFI (Foreign Function Interface)** for calling C libraries
@@ -34,23 +35,22 @@ Elle is a Lisp dialect implemented in Rust with a focus on performance and expre
 
 ## Basic Data Types
 
-Elle's type system provides a rich set of data types for different programming needs.
-See `docs/types.md` for the complete type system reference.
+Elle's type system provides a rich set of data types for different programming needs. See `docs/types.md` for the complete type system reference.
 
 ### Nil and Booleans
 
 ```lisp
 nil          # The null/empty value
-true           # True
-false           # False
+true         # True
+false        # False
 ```
 
 Use `nil?` to test for null values and `boolean?` to test for boolean values.
 
 ```lisp
 (nil? nil)       ⟹ true
-(nil? false)        ⟹ false
-(boolean? true)    ⟹ true
+(nil? false)     ⟹ false
+(boolean? true)  ⟹ true
 (boolean? 42)    ⟹ false
 ```
 
@@ -167,6 +167,10 @@ Structs are immutable hash maps:
 (length s)                # Get number of entries
 ```
 
+---
+
+## Values and Type Checking
+
 ### Type Checking Predicates
 
 Elle provides predicate functions for type testing (all end with `?`):
@@ -185,9 +189,9 @@ Elle provides predicate functions for type testing (all end with `?`):
 
 ## Variables and Bindings
 
-### define - Global Definitions
+### var - Global Mutable Definitions
 
-Define creates a global binding:
+`var` creates a global mutable binding:
 
 ```lisp
 (var x 42)
@@ -203,6 +207,15 @@ Once defined, you can modify a variable with `set`:
 ```lisp
 (set x 100)
 x ⟹ 100
+```
+
+### def - Global Immutable Definitions
+
+`def` creates a global immutable binding:
+
+```lisp
+(def x 42)
+(set x 100) ⟹ Error: immutable binding
 ```
 
 ### let - Local Bindings
@@ -247,9 +260,7 @@ This is different from `let`, where all bindings are in parallel:
 
 ### Destructuring
 
-Destructuring extracts values from lists and arrays into multiple bindings
-in a single form. It works in `def`, `var`, `let`, `let*`, and function
-parameters.
+Destructuring extracts values from lists and arrays into multiple bindings in a single form. It works in `def`, `var`, `let`, `let*`, and function parameters.
 
 #### List Destructuring
 
@@ -366,7 +377,7 @@ Destructuring patterns in parameter lists extract values from arguments:
 
 #### Mutable Destructuring with `var`
 
-`var` creates mutable bindings# `def` creates immutable ones:
+`var` creates mutable bindings; `def` creates immutable ones:
 
 ```lisp
 (var (a b) (list 1 2))
@@ -377,17 +388,6 @@ a ⟹ 100
 (set x 10) ⟹ Error: immutable binding
 ```
 
-### defn - Named Function Shorthand
-
-`defn` combines `def` and `fn`:
-
-```lisp
-(defn add (x y) (+ x y))
-# equivalent to: (def add (fn (x y) (+ x y)))
-
-(add 3 4) ⟹ 7
-```
-
 ### set! - Mutation
 
 `set` updates an existing binding:
@@ -396,6 +396,348 @@ a ⟹ 100
 (var counter 0)
 (set counter (+ counter 1))
 counter ⟹ 1
+```
+
+---
+
+## Scoping Rules
+
+Elle Lisp implements proper lexical scoping with support for global, function, block, and let-binding scopes.
+
+### Scope Types
+
+#### Global Scope
+
+Variables defined at the top level are global and accessible everywhere.
+
+```lisp
+(var global-x 100)
+
+(var my-function (lambda ()
+  (display global-x)))  # Can access global-x
+
+(my-function)  # Prints: 100
+```
+
+#### Function Scope (Parameters & Captures)
+
+Function parameters are local to the function and shadow outer variables.
+
+```lisp
+(var x 100)
+
+(var add-one (lambda (x)
+  (+ x 1)))  # x is parameter, shadows global x
+
+(add-one 5)   # Returns 6
+x             # Still 100
+```
+
+#### Block Scope
+
+Block scopes are created by `block` expressions. The `block` form creates a new lexical scope where bindings don't leak out.
+
+```lisp
+(var x 100)
+
+(block
+  (var x 50)  # Block-scoped, shadows outer x
+  (display x))   # Prints: 50
+
+(display x)      # Prints: 100
+```
+
+You can optionally name a block and use `break` to exit early with a value:
+
+```lisp
+(var result (block :my-block
+  (var x 10)
+  (if (> x 5)
+    (break :my-block "early exit"))
+  "normal exit"))
+
+result  # ⟹ "early exit"
+```
+
+#### Let-Binding Scope
+
+Let-bindings create local variables with scope isolation.
+
+```lisp
+(let ((x 5)
+      (y 10))
+  (display (+ x y)))  # x and y are local
+
+# x and y are NOT accessible here
+```
+
+### Scope Chain Lookup
+
+When a variable is referenced, Elle searches for it in this order:
+
+1. **Current scope** - Check the current block/loop/let scope
+2. **Parent scopes** - Walk up the scope chain to parent blocks/functions
+3. **Global scope** - Finally check global variables
+4. **Error** - If not found anywhere
+
+```lisp
+(var global-x 1)
+
+(var outer-function (lambda (param-x)
+  (let ((let-x 5))
+    (display (+ global-x param-x let-x)))))
+    # Lookup order: let-x (found) → param-x (found) → global-x (found)
+
+(outer-function 2)  # Prints: 1 + 2 + 5 = 8
+```
+
+### Variable Shadowing
+
+Inner scopes can shadow (hide) outer scope variables:
+
+```lisp
+(var x 100)
+
+(lambda (x)  # Parameter x shadows global x
+  (+ x 1))   # References parameter x, not global
+
+(call-lambda-with 5)  # Returns 6, not 101
+```
+
+This is usually clear when variables have descriptive names:
+
+```lisp
+(var total 1000)
+
+(lambda (total)  # OK: parameter total shadows global total
+  (+ total 100))
+```
+
+But can be confusing with poor naming:
+
+```lisp
+(var x 100)
+
+(lambda (x)  # Confusing: hides outer x
+  (let ((x 5))  # Even more confusing!
+    (+ x 1)))
+```
+
+### Variable Modification (set)
+
+The `set` operator modifies existing variables:
+
+```lisp
+(var counter 0)
+
+(lambda ()
+  (set counter (+ counter 1))  # Modifies global counter
+  counter)
+```
+
+`set` searches the scope chain to find where a variable is defined:
+
+```lisp
+(var outer-var 100)
+
+(lambda ()
+  (set outer-var 200)  # Modifies outer-var in global scope
+)
+```
+
+### Common Scoping Patterns
+
+#### Pattern 1: Temporary Variables
+
+Use let-bindings for temporary calculations:
+
+```lisp
+(let ((temp-result (* x y))
+      (temp-sum (+ a b)))
+  (+ temp-result temp-sum))
+```
+
+#### Pattern 2: Function Factories
+
+Create functions with captured variables:
+
+```lisp
+(var make-multiplier (lambda (factor)
+  (lambda (x)
+    (* x factor))))
+
+(var double (make-multiplier 2))
+(var triple (make-multiplier 3))
+
+(double 5)   # Returns 10
+(triple 5)   # Returns 15
+```
+
+#### Pattern 3: Loop Accumulation
+
+Use a global or let-bound accumulator with loops:
+
+```lisp
+(let ((sum 0))
+  (for item (list 1 2 3 4 5)
+    (set sum (+ sum item)))
+  sum)  # Returns 15
+```
+
+#### Pattern 4: Nested Functions
+
+Inner functions access outer scope:
+
+```lisp
+(var make-adder (lambda (base)
+  (lambda (x)
+    (+ base x))))  # Can access base from outer scope
+
+(var add-10 (make-adder 10))
+(add-10 5)  # Returns 15
+```
+
+### Scope Errors
+
+#### Undefined Variable
+
+```lisp
+(display undefined-var)  # ERROR: Undefined global variable
+```
+
+**Fix**: Define the variable first:
+```lisp
+(var undefined-var 42)
+(display undefined-var)  # OK
+```
+
+#### Variable Out of Scope
+
+```lisp
+(let ((x 5))
+  (display x))  # OK - inside let
+
+(display x)     # ERROR: x not defined
+```
+
+**Fix**: Use the variable inside its scope:
+```lisp
+(let ((x 5))
+  (display x))
+```
+
+---
+
+## Functions and Closures
+
+### Defining Functions
+
+Functions are defined with `fn` and named with `defn`:
+
+```lisp
+# Anonymous function
+(fn (x y) (+ x y))
+
+# Named function with defn (preferred)
+(defn add (x y) (+ x y))
+
+# Equivalent long form
+(def add (fn (x y) (+ x y)))
+
+(add 3 4) ⟹ 7
+```
+
+`defn` supports destructured parameters:
+
+```lisp
+(defn sum-pair ((a b)) (+ a b))
+(sum-pair (list 3 4)) ⟹ 7
+```
+
+Note: `lambda` is available as an alias for `fn`.
+
+### Closures
+
+Functions close over their definition environment:
+
+```lisp
+(defn make-adder (n)
+  (fn (x) (+ x n)))
+
+(var add-5 (make-adder 5))
+(add-5 10) ⟹ 15
+(add-5 20) ⟹ 25
+```
+
+Each closure has its own captured variables:
+
+```lisp
+(defn make-counter ()
+  (var count 0)
+  (fn ()
+    (set count (+ count 1))
+    count))
+
+(var c1 (make-counter))
+(c1) ⟹ 1
+(c1) ⟹ 2
+(c1) ⟹ 3
+
+(var c2 (make-counter))
+(c2) ⟹ 1
+(c1) ⟹ 4
+(c2) ⟹ 2
+```
+
+### Higher-Order Functions
+
+#### map
+
+`map` applies a function to each element of a list:
+
+```lisp
+(map (fn (x) (* x 2)) (list 1 2 3))
+⟹ (2 4 6)
+
+(map (fn (x) (> x 2)) (list 1 2 3 4))
+⟹ (false false true true)
+```
+
+#### filter
+
+`filter` selects elements that satisfy a predicate:
+
+```lisp
+(filter (fn (x) (> x 2)) (list 1 2 3 4))
+⟹ (3 4)
+
+(filter (fn (x) (even? x)) (list 1 2 3 4 5 6))
+⟹ (2 4 6)
+```
+
+#### fold
+
+`fold` (also called reduce) accumulates a result:
+
+```lisp
+(fold (fn (acc x) (+ acc x)) 0 (list 1 2 3 4))
+⟹ 10
+
+(fold (fn (acc x) (cons x acc)) nil (list 1 2 3))
+⟹ (3 2 1)
+```
+
+### apply
+
+`apply` calls a function with a list of arguments:
+
+```lisp
+(apply + (list 1 2 3))
+⟹ 6
+
+(defn add-three (x y z) (+ x y z))
+(apply add-three (list 10 20 30))
+⟹ 60
 ```
 
 ---
@@ -441,8 +783,6 @@ The else branch is optional:
 
 The final clause `(true ...)` acts as a catch-all.
 
-
-
 ### begin - Sequencing Expressions
 
 `begin` sequences multiple expressions, returning the value of the last. It does NOT create a new scope—bindings defined inside `begin` go into the enclosing scope.
@@ -482,6 +822,59 @@ result  # ⟹ "early exit"
 
 `break` exits the innermost (or named) block, returning a value. Syntax: `(break)`, `(break val)`, `(break :name)`, `(break :name val)`. `break` is validated at compile time—it must be inside a block and cannot cross function boundaries.
 
+### while - Conditional Loop
+
+`while` executes a body repeatedly as long as a condition is truthy:
+
+```lisp
+(var counter 0)
+(while (< counter 5)
+  (begin
+    (display counter)
+    (newline)
+    (set counter (+ counter 1))))
+⟹ nil (prints 0 1 2 3 4)
+
+(var x 100)
+(while (> x 0)
+  (set x (/ x 2)))
+⟹ nil (x becomes 0 after repeated halving)
+```
+
+### forever - Infinite Loop
+
+`forever` creates an infinite loop that must be exited via `break` or exception:
+
+```lisp
+(forever body...)
+```
+
+`forever` is syntactic sugar for `(while true ...)`. It's useful for event loops or server loops that run until explicitly stopped.
+
+**Examples:**
+
+```lisp
+# Simple infinite loop (would need break to exit)
+(forever
+  (display "Running...")
+  (newline))
+
+# Event loop pattern
+(var running true)
+(forever
+  (process-event)
+  (if (not running)
+    (break)))
+
+# Multiple statements in body
+(forever
+  (display "Tick")
+  (newline)
+  (time/sleep 1)
+  (if should-stop
+    (break)))
+```
+
 ### Functional Iteration (map, filter, fold)
 
 Elle uses functional iteration rather than imperative loops. Use higher-order functions to process collections:
@@ -499,8 +892,6 @@ Elle uses functional iteration rather than imperative loops. Use higher-order fu
 (fold (fn (acc x) (+ acc x)) 0 (list 1 2 3 4))
 ⟹ 10
 ```
-
-See the [Higher-Order Functions](#functions-and-higher-order-operations) section for more details.
 
 ---
 
@@ -563,189 +954,6 @@ Get information from exceptions:
 (var e (exception "Test error" (table "context" "validation")))
 (exception-message e) ⟹ "Test error"
 (exception-data e)    ⟹ #<table String("context")="validation">
-```
-
----
-
-## The Condition System
-
-> **Deprecated.** The condition system described below will be replaced by
-> the fiber/signal model with `try`/`catch`/`finally` surface syntax. See
-> `docs/fibers.md`. These primitives still work but will be removed.
-
-Elle provides a modern condition system for sophisticated error handling and signaling.
-
-### Signals and Handlers
-
-The condition system allows defining custom signal types with handlers:
-
-```lisp
-(var-condition :validation-error
-  (message "Validation failed")
-  (field "The field that failed"))
-
-(var-handler :validation-error
-  (fn (condition)
-    (display "Validation error in ")
-    (display (condition-get condition 'field))
-    (display ": ")
-    (display (condition-get condition 'message))
-    (newline)))
-```
-
-### Signaling Conditions
-
-Use `signal` to trigger a condition:
-
-```lisp
-(signal :validation-error
-  :message "Email is invalid"
-  :field "email")
-```
-
-The system will invoke registered handlers in order.
-
-### Catching Conditions
-
-Use `catch-condition` to intercept specific conditions:
-
-```lisp
-(catch-condition :validation-error
-  (signal :validation-error
-    :message "Invalid format"
-    :field "username"))
-  (fn (condition)
-    (display "Handled validation error")
-    (newline)))
-```
-
-### Multiple Handlers
-
-Register multiple handlers for same signal - they're called in order:
-
-```lisp
-(var-handler :validation-error
-  (fn (c) (display "Handler 1") (newline)))
-
-(var-handler :validation-error
-  (fn (c) (display "Handler 2") (newline)))
-
-(signal :validation-error
-  :message "Test"
-  :field "test")
-```
-
-Output:
-```
-Handler 1
-Handler 2
-```
-
-### Catch-All with condition-catch
-
-Catch all conditions with a generic handler:
-
-```lisp
-(condition-catch
-  (signal :some-error :data 42)
-  (fn (condition-type condition-data)
-    (display "Caught: ")
-    (display condition-type)
-    (newline)))
-```
-
----
-
-## Functions and Higher-Order Operations
-
-### Defining Functions
-
-Functions are defined with `fn` and named with `defn`:
-
-```lisp
-# Anonymous function
-(fn (x y) (+ x y))
-
-# Named function with defn (preferred)
-(defn add (x y) (+ x y))
-
-# Equivalent long form
-(def add (fn (x y) (+ x y)))
-
-(add 3 4) ⟹ 7
-```
-
-`defn` supports destructured parameters:
-
-```lisp
-(defn sum-pair ((a b)) (+ a b))
-(sum-pair (list 3 4)) ⟹ 7
-```
-
-Note: `lambda` is available as an alias for `fn`.
-
-### Closures
-
-Functions close over their definition environment:
-
-```lisp
-(defn make-adder (n)
-  (fn (x) (+ x n)))
-
-(var add-5 (make-adder 5))
-(add-5 10) ⟹ 15
-(add-5 20) ⟹ 25
-```
-
-### Higher-Order Functions
-
-#### map
-
-`map` applies a function to each element of a list:
-
-```lisp
-(map (fn (x) (* x 2)) (list 1 2 3))
-⟹ (2 4 6)
-
-(map (fn (x) (> x 2)) (list 1 2 3 4))
-⟹ (false false true true)
-```
-
-#### filter
-
-`filter` selects elements that satisfy a predicate:
-
-```lisp
-(filter (fn (x) (> x 2)) (list 1 2 3 4))
-⟹ (3 4)
-
-(filter (fn (x) (even? x)) (list 1 2 3 4 5 6))
-⟹ (2 4 6)
-```
-
-#### fold
-
-`fold` (also called reduce) accumulates a result:
-
-```lisp
-(fold (fn (acc x) (+ acc x)) 0 (list 1 2 3 4))
-⟹ 10
-
-(fold (fn (acc x) (cons x acc)) nil (list 1 2 3))
-⟹ (3 2 1)
-```
-
-### apply
-
-`apply` calls a function with a list of arguments:
-
-```lisp
-(apply + (list 1 2 3))
-⟹ 6
-
-(defn add-three (x y z) (+ x y z))
-(apply add-three (list 10 20 30))
-⟹ 60
 ```
 
 ---
@@ -1018,32 +1226,6 @@ Load external files as modules:
 (add-module-path "/opt/elle-libs")
 ```
 
-### Closures and Variable Capture
-
-Functions capture their definition environment:
-
-```lisp
-(defn make-counter ()
-  (var count 0)
-  (fn ()
-    (set count (+ count 1))
-    count))
-
-(var c1 (make-counter))
-(c1) ⟹ 1
-(c1) ⟹ 2
-(c1) ⟹ 3
-```
-
-Each closure has its own captured variables:
-
-```lisp
-(var c2 (make-counter))
-(c2) ⟹ 1
-(c1) ⟹ 4
-(c2) ⟹ 2
-```
-
 ---
 
 ## Best Practices
@@ -1090,21 +1272,85 @@ Use `map`, `filter`, and `fold` for clear data transformations:
 
 ### Handle Errors Explicitly
 
-Use the condition system for expected error cases:
+Use try-catch for expected error cases:
 
 ```lisp
-(catch-condition :validation-error
-  (validate-user-input username)
-  (fn (c)
-    (display "Invalid: ")
-    (display (condition-get c 'message))
+(try
+  (risky-operation)
+  (catch (e)
+    (display "Error: ")
+    (display (exception-message e))
     (newline)))
+```
+
+### Prefer cond for Multiple Conditions
+
+Instead of nested `if`:
+
+```lisp
+# Good
+(cond
+  ((nil? x) "empty")
+  ((> x 0) "positive")
+  ((< x 0) "negative")
+  (true "zero"))
+
+# Avoid
+(if (nil? x)
+  "empty"
+  (if (> x 0)
+    "positive"
+    (if (< x 0)
+      "negative"
+      "zero")))
+```
+
+### Use Functional Iteration for Data Processing
+
+Prefer `map`, `filter`, and `fold` for processing collections:
+
+```lisp
+# Good: Clear intent, composable
+(var doubled (map (fn (x) (* x 2)) (list 1 2 3)))
+(var evens (filter even? (list 1 2 3 4 5 6)))
+(var sum (fold (fn (acc x) (+ acc x)) 0 (list 1 2 3)))
+
+# Less idiomatic: Manual recursion (still valid)
+(def (sum-list lst)
+  (if (nil? lst)
+    0
+    (+ (first lst) (sum-list (rest lst)))))
+```
+
+### Combine map/filter for Complex Transformations
+
+Chain functional operations for clarity:
+
+```lisp
+# Get square of all positive even numbers
+(map (fn (x) (* x x))
+  (filter even?
+    (filter (fn (x) (> x 0))
+      (list -2 1 2 3 -4 5 6))))
+⟹ (4 36)
+```
+
+### Document Captured Variables
+
+Make it clear which outer variables a function uses:
+
+```lisp
+(var make-adder (lambda (base)
+  (lambda (x)
+    (+ base x))))  # Captures: base
 ```
 
 ---
 
 ## Further Reading
 
-- **builtins.md**: Comprehensive reference of all built-in primitives
-- **scoping-guide.md**: Detailed explanation of variable scoping rules
+- **types.md**: Complete type system reference
+- **effects.md**: Effect system and type inference
+- **macros.md**: Macro system and metaprogramming
+- **fibers.md**: Coroutines and fiber-based concurrency
 - **examples/**: Browse example programs for common patterns
