@@ -60,9 +60,23 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
   </details>
 
 - **Functions are colorless.** Any function can be called from a fiber. There is no `async`/`await` annotation that marks a function as suspending and forces all its callers to be marked too. Whether something runs concurrently is decided at the call site, not baked into the function definition.
-  <details><summary>More: Colorless Functions</summary>
+  <details><summary>Example: Colorless Functions</summary>
 
-  In languages like Rust, JavaScript, and Python, a function marked `async` infects its entire call graph — every caller must also be `async`. In Elle, a function is just a function. The caller decides whether to wrap it in a fiber. A pure function and a yielding function have the same type, the same calling convention, and the same syntax. The difference is only visible to the compiler's effect analysis, which uses it to optimize, not to restrict.
+  ```lisp
+  # A pure function
+  (defn add (a b)
+    (+ a b))
+
+  # A yielding function — suspends to fetch a value
+  (defn fetch (key)
+    (yield :get key))
+
+  # Both called identically — compute is not marked async/await
+  (defn compute (a b key)
+    (+ (add a b) (fetch key)))
+  ```
+
+  In Rust/JS/Python, `fetch` would be `async fn`/`async def`, forcing `compute` to be `async` too, and every caller to `await` it. In Elle, the effect is inferred by the compiler, not declared by the programmer. Callers are unaffected.
   </details>
 
 - **Structured concurrency via fibers with per-fiber memory.** Each fiber has its own heap arena. When a fiber finishes, its memory is reclaimed in O(1) — no GC pause, no reference counting. The compiler's escape analysis drives scope-level reclamation within fibers.
