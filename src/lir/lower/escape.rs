@@ -501,6 +501,13 @@ impl Lowerer {
                 self.hir_break_values_safe(expr, target_id, scope_bindings)
                     && self.hir_break_values_safe(env, target_id, scope_bindings)
             }
+
+            HirKind::Parameterize { bindings, body } => {
+                bindings.iter().all(|(param, value)| {
+                    self.hir_break_values_safe(param, target_id, scope_bindings)
+                        && self.hir_break_values_safe(value, target_id, scope_bindings)
+                }) && self.hir_break_values_safe(body, target_id, scope_bindings)
+            }
         }
     }
 
@@ -722,6 +729,13 @@ impl Lowerer {
 
             HirKind::Eval { expr, env } => {
                 self.all_breaks_have_safe_values(expr) && self.all_breaks_have_safe_values(env)
+            }
+
+            HirKind::Parameterize { bindings, body } => {
+                bindings.iter().all(|(param, value)| {
+                    self.all_breaks_have_safe_values(param)
+                        && self.all_breaks_have_safe_values(value)
+                }) && self.all_breaks_have_safe_values(body)
             }
         }
     }
