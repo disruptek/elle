@@ -3,7 +3,10 @@
 //! These functions handle complex operations that interact with heap types
 //! or require VM access: data structures, cells, globals, and function calls.
 
-use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_HALT, SIG_OK, SIG_QUERY, SIG_YIELD};
+use crate::value::fiber::{
+    SignalBits, SIG_CANCEL, SIG_ERROR, SIG_HALT, SIG_OK, SIG_PROPAGATE, SIG_QUERY, SIG_RESUME,
+    SIG_YIELD,
+};
 use crate::value::repr::TAG_NIL;
 use crate::value::{error_val, SuspendedFrame, Value};
 
@@ -14,7 +17,9 @@ use crate::value::{error_val, SuspendedFrame, Value};
 /// Handle signal bits from a primitive call in JIT context.
 ///
 /// With the relaxed JIT gate, SIG_YIELD can now appear here from primitives
-/// like `fiber/resume`. SIG_RESUME should never appear (it's VM-internal).
+/// like `fiber/resume`. VM-internal signals (SIG_RESUME, SIG_PROPAGATE,
+/// SIG_CANCEL) are dispatched to the VM's fiber handlers, which run the
+/// child fiber synchronously and return a result.
 /// SIG_ERROR sets the exception on the fiber for the JIT caller to check.
 /// SIG_QUERY is dispatched to the VM's query handler (for primitives like
 /// `list-primitives` and `primitive-meta` that read VM state).
@@ -41,13 +46,25 @@ fn jit_handle_primitive_signal(vm: &mut crate::vm::VM, bits: SignalBits, value: 
             // JIT caller can side-exit.
             YIELD_SENTINEL
         }
+        SIG_RESUME => {
+            // Fiber primitive (fiber/resume, coro/resume) returned
+            // SIG_RESUME. Dispatch to the VM's fiber handler which runs
+            // the child fiber synchronously and returns value bits,
+            // TAG_NIL (error), or YIELD_SENTINEL (yield propagation).
+            vm.handle_fiber_resume_signal_jit(value)
+        }
+        SIG_PROPAGATE => {
+            // fiber/propagate: re-raise the child fiber's signal.
+            vm.handle_fiber_propagate_signal_jit(value)
+        }
+        SIG_CANCEL => {
+            // fiber/cancel: inject error into suspended fiber.
+            vm.handle_fiber_cancel_signal_jit(value)
+        }
         _ => {
-            // Reaching here means the effect system has a bug: a suspending
-            // primitive was called from JIT-compiled code, which should be
-            // impossible since the JIT gate rejects polymorphic closures.
             panic!(
-                "Effect system bug: signal {} reached JIT-compiled code. \
-                 Only SIG_OK, SIG_ERROR, SIG_HALT, SIG_YIELD, and SIG_QUERY should appear in JIT context.",
+                "Unhandled signal {} reached JIT-compiled code. \
+                 This indicates a missing signal handler in jit_handle_primitive_signal.",
                 bits
             );
         }
