@@ -1,4 +1,6 @@
-# Janet's Unified Fiber Architecture
+# [Reference] Janet's Unified Fiber Architecture
+
+> This document is a reference for design inspiration from the Janet language. It does not describe Elle's implementation.
 
 A design reference for language designers. Janet unifies coroutines, error
 handling, generators, dynamic scoping, and green threads into a single

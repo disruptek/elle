@@ -1,4 +1,6 @@
-# Janet's Compiler Architecture
+# [Reference] Janet's Compiler Architecture
+
+> This document is a reference for design inspiration from the Janet language. It does not describe Elle's implementation.
 
 A design reference for language designers. Janet's compiler is a single-pass
 tree-walking compiler that produces bytecode for a register-based VM. It is

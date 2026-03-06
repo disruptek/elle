@@ -1,4 +1,6 @@
-# Janet's Destructuring
+# [Reference] Janet's Destructuring
+
+> This document is a reference for design inspiration from the Janet language. It does not describe Elle's implementation.
 
 A design reference for language designers. Janet has two completely separate
 destructuring systems: a **compiler-level** system used by binding forms, and
