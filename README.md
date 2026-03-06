@@ -113,16 +113,19 @@ dispatch is a single bitmask check: O(1), branch-predictor-friendly.
 `try`/`catch`, `protect`, and generators are all prelude macros built on
 `fiber/new` and `resume`. One primitive; the language provides sugar.
 
-This is the same idea as Erlang's process model, built on cooperative
-scheduling. Each fiber runs until it yields, then the scheduler picks
-the next one. Crash isolation comes from each fiber owning its own heap
-— when a fiber dies, its entire heap is freed in O(1). Link-based
-supervision comes from signal propagation through fiber chains.
+**Fibers are the primitive; scheduling is user-space.** Elle provides no
+built-in scheduler. Instead, `examples/processes.lisp` demonstrates how to
+build Erlang-style cooperative scheduling entirely in Elle: it implements
+`spawn`, `send`, `recv`, `link`, `trap-exit`, and `spawn-link` in under
+200 lines, including crash cascade and deadlock detection. The scheduler
+interprets yielded commands, manages mailboxes, and propagates exit signals
+through fiber chains. This shows that fibers are composable enough to build
+sophisticated concurrency patterns on top of them.
 
-The scheduler itself is user-level Elle code, not a runtime built-in.
-`examples/processes.lisp` implements Erlang-style `spawn`, `send`,
-`recv`, `link`, `trap-exit`, and `spawn-link` in under 200 lines,
-including crash cascade and deadlock detection.
+Crash isolation comes from each fiber owning its own heap — when a fiber
+dies, its entire heap is freed in O(1). Link-based supervision comes from
+signal propagation through fiber chains. Both are properties of fibers
+themselves, not the scheduler.
 
 ## Memory
 
