@@ -573,10 +573,6 @@ impl VM {
                         self.fiber.stack.push(Value::NIL);
                         return None;
                     }
-                    _ => {
-                        self.fiber.signal = Some((bits, val));
-                        return None;
-                    }
                 }
             }
         }

@@ -1000,6 +1000,7 @@ mod tests {
             constants,
             effect: Effect::yields(),
             cell_params_mask: 0,
+            cell_locals_mask: 0,
             symbol_names: Rc::new(HashMap::new()),
             location_map: Rc::new(crate::error::LocationMap::new()),
             jit_code: None,
@@ -1007,6 +1008,7 @@ mod tests {
             doc: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: 0,
+            name: None,
         };
 
         // bytecode_ptr must be captured before Value::closure moves the Closure
