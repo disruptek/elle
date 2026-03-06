@@ -199,32 +199,36 @@ impl VM {
 
             // JIT compilation and dispatch.
             // Polymorphic closures are rejected by the JIT compiler itself.
-            if let Some(bits) = self.try_jit_call(closure, &args, func) {
-                self.fiber.call_depth -= 1;
-                match bits {
-                    Some(SIG_YIELD) => {
-                        // JIT function yielded. fiber.signal and fiber.suspended
-                        // are set by the JIT yield helpers. Build the interpreter-
-                        // level caller frame (same logic as lines 189-205 below).
-                        if let Some(mut frames) = self.fiber.suspended.take() {
-                            let (_, value) = self.fiber.signal.take().unwrap();
-                            let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
-                            let caller_frame = SuspendedFrame {
-                                bytecode: bytecode.clone(),
-                                constants: constants.clone(),
-                                env: closure_env.clone(),
-                                ip: *ip,
-                                stack: caller_stack,
-                                active_allocator: crate::value::fiber_heap::save_active_allocator(),
-                                location_map: location_map.clone(),
-                            };
-                            frames.push(caller_frame);
-                            self.fiber.signal = Some((SIG_YIELD, value));
-                            self.fiber.suspended = Some(frames);
+            // Skip profiling for primitives (no LIR means not JIT-compilable).
+            if closure.lir_function.is_some() {
+                if let Some(bits) = self.try_jit_call(closure, &args, func) {
+                    self.fiber.call_depth -= 1;
+                    match bits {
+                        Some(SIG_YIELD) => {
+                            // JIT function yielded. fiber.signal and fiber.suspended
+                            // are set by the JIT yield helpers. Build the interpreter-
+                            // level caller frame (same logic as lines 189-205 below).
+                            if let Some(mut frames) = self.fiber.suspended.take() {
+                                let (_, value) = self.fiber.signal.take().unwrap();
+                                let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
+                                let caller_frame = SuspendedFrame {
+                                    bytecode: bytecode.clone(),
+                                    constants: constants.clone(),
+                                    env: closure_env.clone(),
+                                    ip: *ip,
+                                    stack: caller_stack,
+                                    active_allocator:
+                                        crate::value::fiber_heap::save_active_allocator(),
+                                    location_map: location_map.clone(),
+                                };
+                                frames.push(caller_frame);
+                                self.fiber.signal = Some((SIG_YIELD, value));
+                                self.fiber.suspended = Some(frames);
+                            }
+                            return Some(SIG_YIELD);
                         }
-                        return Some(SIG_YIELD);
+                        other => return other,
                     }
-                    other => return other,
                 }
             }
 
