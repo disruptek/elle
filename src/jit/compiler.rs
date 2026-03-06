@@ -664,7 +664,6 @@ impl JitCompiler {
         for bb in &lir.blocks {
             let cl_block = block_map[&bb.label];
             builder.switch_to_block(cl_block);
-            builder.seal_block(cl_block);
 
             // Translate instructions
             let mut block_terminated = false;
@@ -686,8 +685,11 @@ impl JitCompiler {
             }
         }
 
-        // NOW seal loop_header — all self-tail-call back-edges have been emitted
-        builder.seal_block(loop_header);
+        // Seal all blocks at once — LIR can have back-edges (e.g. while loops)
+        // so we cannot seal LIR blocks eagerly during translation.
+        // Blocks created and sealed inside translate_instr/translate_terminator
+        // (exception, yield, fastpath blocks) are skipped since already sealed.
+        builder.seal_all_blocks();
 
         builder.finalize();
         Ok(())
