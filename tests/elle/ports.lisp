@@ -67,6 +67,12 @@
   (fn () (port/open? 42))
   "port/open? on non-port errors")
 
+# === Display format ===
+
+(assert-string-eq (string (port/stdin)) "#<port:stdin>" "stdin display")
+(assert-string-eq (string (port/stdout)) "#<port:stdout>" "stdout display")
+(assert-string-eq (string (port/stderr)) "#<port:stderr>" "stderr display")
+
 # === Standard port parameters ===
 
 (assert-true (parameter? *stdin*) "*stdin* is a parameter")
@@ -84,3 +90,21 @@
     (assert-true (port? (*stdout*)) "parameterized *stdout* is a port")
     (assert-true (port/open? (*stdout*)) "parameterized *stdout* is open"))
   (port/close custom-port))
+
+# === Additional error cases ===
+
+(assert-err
+  (fn () (port/open 42 :read))
+  "port/open with non-string path errors")
+
+# === Read-write and append modes ===
+
+(let ((p (port/open "/tmp/elle-test-ports-readwrite-474" :read-write)))
+  (assert-true (port? p) "read-write port is a port")
+  (assert-true (port/open? p) "read-write port is open")
+  (port/close p))
+
+(let ((p (port/open "/tmp/elle-test-ports-append-474" :append)))
+  (assert-true (port? p) "append port is a port")
+  (assert-true (port/open? p) "append port is open")
+  (port/close p))
