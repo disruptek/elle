@@ -8,3 +8,6 @@
 
 (display (html-escape "test"))
 (newline)
+
+## Module exports
+(fn [] {:html-escape html-escape})
