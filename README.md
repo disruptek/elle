@@ -2,14 +2,13 @@
 
 [![CI](https://github.com/elle-lisp/elle/actions/workflows/ci.yml/badge.svg)](https://github.com/elle-lisp/elle/actions/workflows/ci.yml)
 
-Elle is a Lisp with modern syntax inspired by Janet. It has first-class fibers, a static effect system, and deep static analysis — giving you the safety and tooling of a compiled language with the flexibility of a Lisp. It runs on the Rust ecosystem with no garbage collector.
+Elle is a Lisp. What separates it from other Lisps is the depth of its static analysis: full binding resolution, capture analysis, and effect inference happen at compile time, before any code runs. This gives Elle a sound effect system, fully hygienic macros, colorless concurrency via fibers, and deterministic memory management — all derived from the same analysis pass.
 
 ## Contents
 
+- [What Makes Elle Different](#what-makes-elle-different)
 - [Language](#language)
 - [Control Flow](#control-flow)
-- [Static Analysis](#static-analysis)
-- [Fibers and Concurrency](#fibers-and-concurrency)
 - [Memory](#memory)
 - [FFI](#ffi)
 - [Modules and Plugins](#modules-and-plugins)
@@ -17,11 +16,35 @@ Elle is a Lisp with modern syntax inspired by Janet. It has first-class fibers, 
 - [Getting Started](#getting-started)
 - [License](#license)
 
-## Language
+## What Makes Elle Different
 
-- **Modern Lisp syntax with no parser ambiguity.** Macros operate on syntax trees, not text. See [`prelude.lisp`](prelude.lisp) for hygienic macros and standard forms.
+- **Static analysis is a first-class feature.** The compiler performs full binding resolution, capture analysis, effect inference, and lint passes before any code runs. This is not optional tooling bolted on — it is the compilation pipeline. Most Lisps are dynamic; Elle knows at compile time what every binding refers to, what every closure captures, and what effects every function can produce.
+  <details><summary>More: Compile-Time Analysis</summary>
 
-- **Hygienic macros prevent accidental name capture.** Scope sets (Racket-style) protect macro-introduced bindings. `defmacro`, `quasiquote`, `unquote`, `datum->syntax` for intentional capture.
+  The compilation pipeline is: Source → Reader → Syntax → Expander → Analyzer → HIR → Lowerer → LIR → Emitter → Bytecode → VM. Each stage infers more than the last. The analyzer resolves all bindings to their definitions, computes which variables each closure captures, infers the effect of every expression, and flags lint violations — all before bytecode is emitted. This is why the linter catches errors at compile time, why the effect system is sound, and why the JIT can make intelligent decisions about what to compile natively.
+  </details>
+
+- **A sound effect system, inferred not declared.** Every function is automatically classified as `Pure`, `Yields`, or `Polymorphic`. The compiler enforces this: a pure context cannot call a yielding function. No annotations required. This is what makes the fiber/concurrency story coherent — the compiler knows which functions can suspend.
+  <details><summary>Example: Effect System</summary>
+
+  ```lisp
+  # Pure function — inferred automatically
+  (defn add (a b) (+ a b))
+
+  # Yielding function — inferred from yield call
+  (defn fetch-data (url)
+    (yield :http-request url)
+    (yield :http-wait))
+
+  # Polymorphic — effect depends on callback
+  (defn map-effect (f xs)
+    (map f xs))  # effect = effect of f
+  ```
+
+  The compiler enforces effect contracts: a pure context cannot call a yielding function. This is checked at compile time.
+  </details>
+
+- **Fully hygienic macros that operate on syntax objects, not text or s-expressions.** Macros receive and return `Syntax` objects carrying scope information (Racket-style scope sets). Name capture is structurally impossible, not just conventionally avoided. This is stronger than Janet's macros, which are s-expression templates.
   <details><summary>Example: Hygienic Macros</summary>
 
   ```lisp
@@ -32,9 +55,40 @@ Elle is a Lisp with modern syntax inspired by Janet. It has first-class fibers, 
     (my-swap x y)
     tmp)  # => 100, not 1
   ```
+
+  The `tmp` binding introduced by the macro does not shadow the caller's `tmp`. This is guaranteed by the scope set mechanism, not by convention.
   </details>
 
-- **Prelude macros for common patterns.** `defn`, `let*`, `->`, `->>`, `when`, `unless`, `try`/`catch`, `protect`, `defer`, `with`, `yield*`, `each`, `forever` — all defined in Elle, not special forms.
+- **Functions are colorless.** Any function can be called from a fiber. There is no `async`/`await` annotation that marks a function as suspending and forces all its callers to be marked too. Whether something runs concurrently is decided at the call site, not baked into the function definition.
+  <details><summary>More: Colorless Functions</summary>
+
+  In languages like Rust, JavaScript, and Python, a function marked `async` infects its entire call graph — every caller must also be `async`. In Elle, a function is just a function. The caller decides whether to wrap it in a fiber. A pure function and a yielding function have the same type, the same calling convention, and the same syntax. The difference is only visible to the compiler's effect analysis, which uses it to optimize, not to restrict.
+  </details>
+
+- **Structured concurrency via fibers with per-fiber memory.** Each fiber has its own heap arena. When a fiber finishes, its memory is reclaimed in O(1) — no GC pause, no reference counting. The compiler's escape analysis drives scope-level reclamation within fibers.
+  <details><summary>Example: Fibers and Coroutines</summary>
+
+  ```lisp
+  (defn make-producer []
+    (coro/new (fn []
+      (each i in (range 5)
+        (yield i)))))
+
+  (def co (make-producer))
+  (forever
+    (if (coro/done? co)
+      (break)
+      (print (coro/resume co))))
+  ```
+
+  Fibers are independent execution contexts. Each has its own stack, call frames, and heap. When a fiber finishes, its entire heap is freed in O(1). No garbage collection, no reference counting, no pause.
+  </details>
+
+- **The Rust ecosystem.** FFI without ceremony. Native plugins as Rust cdylib crates. No C marshalling layer.
+
+## Language
+
+- **Modern Lisp syntax with no parser ambiguity.** Macros operate on syntax trees, not text. See [`prelude.lisp`](prelude.lisp) for hygienic macros and standard forms.
 
 - **Collection literals with mutable/immutable split.** Bare delimiters are immutable: `[1 2 3]` (tuple), `{:key val}` (struct), `"hello"` (string). `@`-prefixed are mutable: `@[1 2 3]` (array), `@{:key val}` (table), `@"hello"` (buffer).
   <details><summary>Example: Collections</summary>
@@ -68,8 +122,8 @@ Elle is a Lisp with modern syntax inspired by Janet. It has first-class fibers, 
   ```
   </details>
 
-- **Functions with closures and capture analysis.** `fn`, `defn`, variadic parameters (`&`), tail calls optimized, closures capture by value, mutable captures use cells automatically.
-  <details><summary>Example: Functions and Closures</summary>
+- **Closures with automatic capture analysis.** The compiler tracks which variables each closure captures. Mutable captures use cells automatically. Enables escape analysis for scope-level memory reclamation.
+  <details><summary>Example: Closures</summary>
 
   ```lisp
   (defn make-counter [start]
@@ -82,6 +136,8 @@ Elle is a Lisp with modern syntax inspired by Janet. It has first-class fibers, 
   (c)  # => 1
   (c)  # => 2
   ```
+
+  The closure captures `n` by value. The compiler detects that `n` is mutated, so it wraps it in a cell automatically. No explicit `box` or `ref` needed.
   </details>
 
 - **Splice operator for array spreading.** `;expr` marks a value for spreading at call sites and in data constructors. `(splice expr)` is the long form.
@@ -131,7 +187,7 @@ Elle is a Lisp with modern syntax inspired by Janet. It has first-class fibers, 
   ```
   </details>
 
-- **Pattern matching with `match`.** Type guards (`IsArray`, `IsPair`, `IsStruct`, `IsTable`), element extraction, nested patterns, wildcard `_`.
+- **Pattern matching with `match`.** Type guards, element extraction, nested patterns, wildcard `_`.
   <details><summary>Example: Pattern Matching</summary>
 
   ```lisp
@@ -178,78 +234,6 @@ Elle is a Lisp with modern syntax inspired by Janet. It has first-class fibers, 
       (if (found? x) (break :outer x))))
   ```
   </details>
-
-## Static Analysis
-
-- **Effect system infers what code does.** Compiler automatically determines whether a function is pure, yields, or polymorphic — no annotations needed. Effects flow through the entire pipeline.
-  <details><summary>Example: Effect System</summary>
-
-  ```lisp
-  # Pure function — inferred automatically
-  (defn add (a b) (+ a b))
-
-  # Yielding function — inferred from yield call
-  (defn fetch-data (url)
-    (yield :http-request url)
-    (yield :http-wait))
-
-  # Polymorphic — effect depends on callback
-  (defn map-effect (f xs)
-    (map f xs))  # effect = effect of f
-  ```
-  </details>
-
-- **Static linter catches errors at compile time.** Wrong arity, unused bindings, effect violations, type mismatches in patterns, duplicate pattern variables.
-  <details><summary>Example: Static Analysis and Linting</summary>
-
-  ```lisp
-  # Compile-time errors caught by elle lint:
-  (defn foo (x y) (+ x))  # Error: missing argument y
-  (let ((unused 42)) 100) # Warning: unused binding
-  (fn (a b) (yield))      # Error: pure context, can't yield
-  (match x
-    ([a b c] a)           # Error: pattern expects 3 elements
-    (v v))                # Error: duplicate pattern variable
-  ```
-  </details>
-
-- **Capture analysis and closure optimization.** Compiler tracks which variables are captured by closures. Mutable captures use cells automatically. Enables escape analysis for scope-level memory reclamation and JIT eligibility decisions.
-  <details><summary>More: Capture Analysis</summary>
-
-  The compiler analyzes every closure to determine which variables from outer scopes it references. This enables:
-  - Automatic cell wrapping for mutable captures
-  - Escape analysis for scope-level memory reclamation
-  - JIT eligibility decisions (non-suspending closures compile to native code)
-  </details>
-
-## Fibers and Concurrency
-
-- **Fibers are independent execution contexts.** Each fiber has its own stack, call frames, and heap. Fibers communicate through `yield`/`resume`, each yield carries a signal (integer classifying the event).
-  <details><summary>Example: Fibers and Coroutines</summary>
-
-  ```lisp
-  (defn make-producer []
-    (coro/new (fn []
-      (each i in (range 5)
-        (yield i)))))
-
-  (def co (make-producer))
-  (forever
-    (if (coro/done? co)
-      (break)
-      (print (coro/resume co))))
-  ```
-  </details>
-
-- **Colorless functions, colored fibers.** Any function can run inside a fiber. The fiber's signal mask (set at creation) decides what to catch — not the function. No `async`/`await` coloring.
-
-- **Scheduling is user-space.** Elle provides no built-in scheduler. [`examples/processes.lisp`](examples/processes.lisp) demonstrates Erlang-style cooperative scheduling in ~200 lines: `spawn`, `send`, `recv`, `link`, `trap-exit`, `spawn-link`, crash cascade, deadlock detection.
-  <details><summary>More: Fiber Scheduling</summary>
-
-  Crash isolation comes from each fiber owning its own heap — when a fiber dies, its entire heap is freed in O(1). Link-based supervision comes from signal propagation through fiber chains. Both are properties of fibers themselves, not the scheduler.
-  </details>
-
-- **Signal dispatch is O(1).** Single bitmask check, branch-predictor-friendly. `try`/`catch`, `protect`, generators are all prelude macros built on `coro/new` and `coro/resume`.
 
 ## Memory
 
@@ -339,24 +323,25 @@ Elle is a Lisp with modern syntax inspired by Janet. It has first-class fibers, 
 
 - **Language server (LSP) for IDE integration.** Real-time diagnostics, hover documentation, jump-to-definition, refactoring support.
 
+- **Static linter catches errors at compile time.** Wrong arity, unused bindings, effect violations, type mismatches in patterns, duplicate pattern variables.
+  <details><summary>Example: Static Analysis and Linting</summary>
+
+  ```lisp
+  # Compile-time errors caught by elle lint:
+  (defn foo (x y) (+ x))  # Error: missing argument y
+  (let ((unused 42)) 100) # Warning: unused binding
+  (fn (a b) (yield))      # Error: pure context, can't yield
+  (match x
+    ([a b c] a)           # Error: pattern expects 3 elements
+    (v v))                # Error: duplicate pattern variable
+  ```
+  </details>
+
 - **Source-to-source rewriting tool.** The `rewrite` subcommand applies pattern-based rules to Elle source files for refactoring and code generation. Rules are pattern-action pairs that match syntax trees and produce transformed output.
 
 - **Formatter for consistent code style.** The `formatter` subcommand formats Elle source files.
 
 - **Compilation pipeline is fully documented.** See [`docs/pipeline.md`](docs/pipeline.md) for data flow across boundaries and [`AGENTS.md`](AGENTS.md) for architecture details.
-  <details><summary>More: Pipeline Stages</summary>
-
-  Source → Reader → Syntax → Expander → Syntax → Analyzer → HIR → Lowerer → LIR → Emitter → Bytecode → VM
-
-  Source locations survive the full journey for error reporting. Each stage infers more than the last: the reader produces syntax objects with scope sets; the analyzer resolves bindings, infers effects, computes captures, and flags mutations; the lowerer runs escape analysis and emits scope-level memory reclamation.
-
-  The pipeline has three non-linear paths:
-  - The analyzer loops until inter-procedural effects converge (fixpoint iteration over mutually recursive top-level defines)
-  - The expander re-enters the pipeline recursively to evaluate macro bodies
-  - The JIT forks off the VM to compile non-suspending closures to native x86_64 after bytecode execution
-
-  Nothing is annotated. Everything is inferred.
-  </details>
 
 ## Getting Started
 
