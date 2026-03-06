@@ -188,8 +188,10 @@ impl<'a> Analyzer<'a> {
             }
 
             if let Some(name) = pair[0].as_symbol() {
-                // Simple binding — bind immediately for mutual recursion
+                // Simple binding — bind immediately for mutual recursion.
+                // Marked prebound: may be captured before initialization.
                 let b = self.bind(name, pair[0].scopes.as_slice(), BindingScope::Local);
+                b.mark_prebound();
                 entries.push(LetrecEntry::Simple(b, &pair[1]));
             } else if Self::is_destructure_pattern(&pair[0]) {
                 // Destructure pattern — pre-bind leaf names for mutual visibility
@@ -197,7 +199,8 @@ impl<'a> Analyzer<'a> {
                 Self::extract_pattern_names(&pair[0], &mut names);
                 for (name, name_scopes) in &names {
                     if *name != "_" {
-                        self.bind(name, name_scopes, BindingScope::Local);
+                        let b = self.bind(name, name_scopes, BindingScope::Local);
+                        b.mark_prebound();
                     }
                 }
                 entries.push(LetrecEntry::Destructure(&pair[0], &pair[1]));

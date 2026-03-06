@@ -65,7 +65,8 @@ HIR (bindings are inline — no separate HashMap)
    `Hash`/`Eq` via `Value::to_bits()`.
 
 3. **`needs_cell()` determines cell boxing.** A local binding needs a cell if
-   captured. A parameter needs a cell if mutated. Globals never need cells.
+   captured AND mutable. A parameter needs a cell if mutated. Globals never need
+   cells. Immutable captured locals are captured by value directly.
 
 4. **Effects combine upward.** A `begin` has the combined effect of its
    children. A `fn` body's effect is stored but the fn itself is Pure.
