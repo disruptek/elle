@@ -554,3 +554,86 @@ fn test_mutual_recursion_pure_stays_pure() {
     assert_eq!(items[0], Value::bool(true), "even? should be pure");
     assert_eq!(items[1], Value::bool(true), "odd? should be pure");
 }
+
+// ============================================================================
+// SECTION: import-file re-execution (Bug 1 — import-file must not cache)
+// ============================================================================
+
+#[test]
+fn test_import_file_twice_reruns_module() {
+    // Importing the same file twice should re-execute the module each time,
+    // giving independent closures with independent mutable state.
+    // If import-file caches, both imports share the same counter.
+    let result = eval_file_source_with_stdlib(
+        r#"
+        (def {:inc inc1 :count count1} ((import-file "test-modules/counter.lisp")))
+        (def {:inc inc2 :count count2} ((import-file "test-modules/counter.lisp")))
+        (inc1)
+        (inc1)
+        (inc1)
+        # If caching, inc2 shares state with inc1 and count2 would be 3
+        (list (count1) (count2))
+    "#,
+    );
+    let val = result.unwrap();
+    let items = val.list_to_vec().expect("expected list");
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0], Value::int(3), "counter1 should be 3");
+    assert_eq!(
+        items[1],
+        Value::int(0),
+        "counter2 should be 0 (independent)"
+    );
+}
+
+// ============================================================================
+// SECTION: eval with (environment) containing closures (Bug 2)
+// ============================================================================
+
+#[test]
+fn test_eval_with_environment_containing_closures() {
+    // (eval expr (environment)) should work even when the environment
+    // contains closures (file-level functions). Non-serializable values
+    // are silently skipped; serializable values (numbers, strings, etc.)
+    // are included.
+    let result = eval_file_source_with_stdlib(
+        r#"
+        (def x 42)
+        (defn f [] x)
+        (eval 'x (environment))
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::int(42));
+}
+
+// ============================================================================
+// SECTION: eval cannot see file-level locals without env (Bug 3 — by design)
+// ============================================================================
+
+#[test]
+fn test_eval_cannot_see_file_level_locals_without_env() {
+    // eval compiles fresh code; file-level locals are not globals.
+    // Without an explicit environment, eval cannot see them.
+    let result = eval_file_source_with_stdlib(
+        r#"
+        (def x 42)
+        (eval 'x)
+    "#,
+    );
+    assert!(
+        result.is_err(),
+        "eval without env cannot see file-level locals"
+    );
+}
+
+#[test]
+fn test_eval_can_see_file_level_locals_with_environment() {
+    // With (environment), serializable locals are visible to eval.
+    let result = eval_file_source_with_stdlib(
+        r#"
+        (def x 42)
+        (eval 'x (environment))
+    "#,
+    );
+    assert_eq!(result.unwrap(), Value::int(42));
+}

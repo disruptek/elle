@@ -397,16 +397,16 @@ fn test_import_multiple_files_sequentially() {
 }
 
 #[test]
-fn test_import_same_file_twice_idempotent() {
-    // Within a single VM, loading the same file twice is idempotent:
-    // first load returns the module closure, second returns true (already loaded)
+fn test_import_same_file_twice_reexecutes() {
+    // Importing the same file twice re-executes the module each time.
+    // Both imports return fresh closures (no caching).
     let result = eval_source(
         "(def r1 (import-file \"test-modules/test.lisp\"))
          (def r2 (import-file \"test-modules/test.lisp\"))
-         (list (fn? r1) (= r2 true))",
+         (list (fn? r1) (fn? r2))",
     );
     assert!(result.is_ok());
-    // r1 is a closure (module export function), r2 is true (already loaded)
+    // Both r1 and r2 are closures (module export functions)
     assert_eq!(
         result.unwrap(),
         elle::list([Value::bool(true), Value::bool(true)])
