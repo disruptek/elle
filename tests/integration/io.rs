@@ -282,15 +282,90 @@ fn test_io_completion_struct_has_value() {
 fn test_io_submit_sync_backend_errors() {
     let result = eval_source(
         "(begin
-           (spit \"/tmp/elle-test-submit-sync\" \"test\")
-           (let* ((backend (io/backend :sync))
-                  (port (port/open \"/tmp/elle-test-submit-sync\" :read))
-                  (f (fiber/new (fn [] (stream/read-all port)) 512)))
-             (fiber/resume f)
-             (io/submit backend (fiber/value f))))",
+            (spit \"/tmp/elle-test-submit-sync\" \"test\")
+            (let* ((backend (io/backend :sync))
+                   (port (port/open \"/tmp/elle-test-submit-sync\" :read))
+                   (f (fiber/new (fn [] (stream/read-all port)) 512)))
+              (fiber/resume f)
+              (io/submit backend (fiber/value f))))",
     );
     assert!(
         result.is_err(),
         "io/submit on sync backend should signal error"
     );
+}
+
+// Chunk 7: Async scheduler tests
+
+#[test]
+fn test_make_async_scheduler_returns_list() {
+    let result = eval_source("(pair? (make-async-scheduler))").unwrap();
+    assert_eq!(result, elle::Value::bool(true));
+}
+
+#[test]
+fn test_ev_run_pure_thunk() {
+    // ev/run with a non-I/O thunk should complete
+    let result = eval_source("(ev/run (fn [] 42))").unwrap();
+    // ev/run returns the result of pump-fn, which is nil when done
+    // (the thunk's return value is not captured by ev/run)
+    assert!(result.is_nil());
+}
+
+#[test]
+fn test_ev_run_io_thunk() {
+    let result = eval_source(
+        "(begin
+            (spit \"/tmp/elle-test-ev-run-io\" \"async scheduler\")
+            (let ((result @[]))
+              (ev/run
+                (fn []
+                  (push result (stream/read-all (port/open \"/tmp/elle-test-ev-run-io\" :read)))))
+              (get result 0)))",
+    )
+    .unwrap();
+    result
+        .with_string(|s| assert_eq!(s, "async scheduler"))
+        .unwrap();
+}
+
+#[test]
+fn test_ev_run_multiple_thunks() {
+    let result = eval_source(
+        "(begin
+            (spit \"/tmp/elle-test-ev-multi-1\" \"first\")
+            (spit \"/tmp/elle-test-ev-multi-2\" \"second\")
+            (let ((results @[]))
+              (ev/run
+                (fn []
+                  (push results (stream/read-all (port/open \"/tmp/elle-test-ev-multi-1\" :read))))
+                (fn []
+                  (push results (stream/read-all (port/open \"/tmp/elle-test-ev-multi-2\" :read)))))
+              (length results)))",
+    )
+    .unwrap();
+    assert_eq!(result.as_int(), Some(2));
+}
+
+#[test]
+fn test_ev_run_error_propagation() {
+    let result = eval_source("(ev/run (fn [] (error :async-boom)))");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_ev_run_write_thunk() {
+    let result = eval_source(
+        "(begin
+            (ev/run
+              (fn []
+                (let ((p (port/open \"/tmp/elle-test-ev-write\" :write)))
+                  (stream/write p \"async write test\")
+                  (stream/flush p))))
+            (slurp \"/tmp/elle-test-ev-write\"))",
+    )
+    .unwrap();
+    result
+        .with_string(|s| assert_eq!(s, "async write test"))
+        .unwrap();
 }
