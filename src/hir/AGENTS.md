@@ -136,10 +136,10 @@ HIR (bindings are inline — no separate HashMap)
     context and caches the Expander on the VM for reuse.
 
 15. **Docstrings are extracted from leading string literals.**
-     `HirKind::Lambda` has a `doc: Option<Value>` field. The analyzer
-     extracts the first string literal in a function body and stores it
-     in `doc`. This field is threaded through LIR into `Closure.doc` and
-     used by the `(doc name)` primitive and LSP hover.
+      `HirKind::Lambda` has a `doc: Option<Value>` field. The analyzer
+      extracts the first string literal in a function body and stores it
+      in `doc`. This field is threaded through LIR into `Closure.doc` and
+      used by the `(doc name)` primitive and LSP hover.
 
 16. **Set literals are desugared to constructor calls.**
       `SyntaxKind::Set` (immutable set `|1 2 3|`) desugars to `(set ;elems)`.
@@ -147,7 +147,14 @@ HIR (bindings are inline — no separate HashMap)
       The `set` and `mutable-set` bindings resolve to global primitives.
       All synthesized nodes carry the original set literal's span.
 
-17. **Qualified symbols are desugared to nested `get` calls.**
+17. **Original syntax is captured for eval reconstruction.**
+      `HirKind::Lambda` has a `syntax: Option<Rc<Syntax>>` field that stores
+      the original lambda `Syntax` node, captured in `analyze_lambda` from
+      the input `Syntax`. This enables `eval` to reconstruct closures in the
+      environment. The field is threaded through LIR and set on `Closure.syntax`
+      by the emitter.
+
+18. **Qualified symbols are desugared to nested `get` calls.**
       `a:b:c` in `SyntaxKind::Symbol` is desugared during analysis to
       `(get (get a :b) :c)`. The first segment is resolved as a variable
       (local or global). Subsequent segments become keyword arguments to
@@ -157,29 +164,29 @@ HIR (bindings are inline — no separate HashMap)
       literal desugaring. All synthesized nodes carry the original
       symbol's span.
 
-18. **`Parameterize` creates dynamic binding frames.**
+19. **`Parameterize` creates dynamic binding frames.**
        `HirKind::Parameterize { bindings: Vec<(Hir, Hir)>, body: Box<Hir> }`
        is produced by the analyzer for `(parameterize ((p1 v1) (p2 v2) ...) body ...)`.
        Each binding is a (parameter, value) pair. The analyzer validates that
        each parameter expression is a parameter (or will be at runtime). The
        lowerer emits `PushParamFrame` before evaluating bindings, stores them
        in the frame, then emits `PopParamFrame` after the body.
+ 
+ 20. **Files compile to a single synthetic letrec.** `analyze_file_letrec`
+     transforms a list of top-level forms into a single `HirKind::Letrec`.
+     Each form is classified: `def` → immutable binding, `var` → mutable
+     binding, bare expression → gensym-named dummy binding. Two-pass analysis
+     pre-binds all names (enabling mutual recursion), then analyzes initializers
+     sequentially. The letrec body is the last binding's name (or a gensym if
+     the last form was a bare expression). This replaces the old model of
+     independent top-level forms connected by mutable globals.
 
-17. **Files compile to a single synthetic letrec.** `analyze_file_letrec`
-    transforms a list of top-level forms into a single `HirKind::Letrec`.
-    Each form is classified: `def` → immutable binding, `var` → mutable
-    binding, bare expression → gensym-named dummy binding. Two-pass analysis
-    pre-binds all names (enabling mutual recursion), then analyzes initializers
-    sequentially. The letrec body is the last binding's name (or a gensym if
-    the last form was a bare expression). This replaces the old model of
-    independent top-level forms connected by mutable globals.
-
-18. **Primitives are pre-bound as immutable Global bindings.** `bind_primitives`
-    wraps the file's letrec in an outer scope containing all registered
-    primitives. Primitives are `BindingScope::Global` with `mark_immutable()`
-    set. File-level `def` bindings shadow primitives. The lowerer emits
-    `LoadGlobal` for both, but compile-time checks (e.g., `(set + 42)` is
-    an error) use the `Binding` identity.
+ 21. **Primitives are pre-bound as immutable Global bindings.** `bind_primitives`
+     wraps the file's letrec in an outer scope containing all registered
+     primitives. Primitives are `BindingScope::Global` with `mark_immutable()`
+     set. File-level `def` bindings shadow primitives. The lowerer emits
+     `LoadGlobal` for both, but compile-time checks (e.g., `(set + 42)` is
+     an error) use the `Binding` identity.
 
 ## Files
 
