@@ -397,88 +397,7 @@ impl VM {
                 );
                 (SIG_OK, Value::struct_from(fields))
             }
-            "environment" => {
-                use crate::value::heap::TableKey;
-                use std::collections::BTreeMap;
-                let mut fields = BTreeMap::new();
-                let st_ptr = unsafe { crate::context::get_symbol_table() };
-                if let Some(st_ptr) = st_ptr {
-                    let st = unsafe { &*st_ptr };
-                    for (idx, &defined) in self.defined_globals.iter().enumerate() {
-                        if !defined {
-                            continue;
-                        }
-                        if let Some(name) = st.name(crate::value::SymbolId(idx as u32)) {
-                            fields.insert(TableKey::Keyword(name.to_string()), self.globals[idx]);
-                        }
-                    }
-                }
-                // Also include file-level locals (letrec model)
-                let frame_base = self.current_frame_base();
-                for (&slot, name) in &self.local_names {
-                    let abs_idx = frame_base + slot as usize;
-                    if abs_idx < self.fiber.stack.len() {
-                        let val = self.unwrap_local_cell(self.fiber.stack[abs_idx]);
-                        fields.insert(TableKey::Keyword(name.clone()), val);
-                    }
-                }
-                (SIG_OK, Value::struct_from(fields))
-            }
-            "arena/fiber-stats" => {
-                let fiber_handle = match arg.as_fiber() {
-                    Some(h) => h,
-                    None => {
-                        return (
-                            SIG_ERROR,
-                            error_val(
-                                "type-error",
-                                "arena/fiber-stats: expected a fiber".to_string(),
-                            ),
-                        )
-                    }
-                };
-                match fiber_handle.try_with(|fiber| {
-                    use crate::value::heap::TableKey;
-                    use std::collections::BTreeMap;
-                    let mut fields = BTreeMap::new();
-                    fields.insert(
-                        TableKey::Keyword("count".to_string()),
-                        Value::int(fiber.heap.len() as i64),
-                    );
-                    fields.insert(
-                        TableKey::Keyword("bytes".to_string()),
-                        Value::int(fiber.heap.allocated_bytes() as i64),
-                    );
-                    fields.insert(
-                        TableKey::Keyword("peak".to_string()),
-                        Value::int(fiber.heap.peak_alloc_count() as i64),
-                    );
-                    let limit_val = match fiber.heap.object_limit() {
-                        Some(n) => Value::int(n as i64),
-                        None => Value::NIL,
-                    };
-                    fields.insert(TableKey::Keyword("object-limit".to_string()), limit_val);
-                    fields.insert(
-                        TableKey::Keyword("scope-enters".to_string()),
-                        Value::int(fiber.heap.scope_enters() as i64),
-                    );
-                    fields.insert(
-                        TableKey::Keyword("dtors-run".to_string()),
-                        Value::int(fiber.heap.scope_dtors_run() as i64),
-                    );
-                    Value::struct_from(fields)
-                }) {
-                    Some(val) => (SIG_OK, val),
-                    None => (
-                        SIG_ERROR,
-                        error_val(
-                            "state-error",
-                            "arena/fiber-stats: cannot inspect a currently-executing fiber"
-                                .to_string(),
-                        ),
-                    ),
-                }
-            }
+            "environment" => (SIG_OK, self.build_current_environment()),
             _ => (
                 SIG_ERROR,
                 error_val(
@@ -486,6 +405,42 @@ impl VM {
                     format!("SIG_QUERY: unknown operation: {}", op_name),
                 ),
             ),
+        }
+    }
+
+    /// Build a struct containing the current lexical environment.
+    ///
+    /// Includes defined globals and file-level locals (letrec model).
+    /// Returns `Value::NIL` if no bindings are available.
+    pub(crate) fn build_current_environment(&self) -> Value {
+        use crate::value::heap::TableKey;
+        use std::collections::BTreeMap;
+        let mut fields = BTreeMap::new();
+        let st_ptr = unsafe { crate::context::get_symbol_table() };
+        if let Some(st_ptr) = st_ptr {
+            let st = unsafe { &*st_ptr };
+            for (idx, &defined) in self.defined_globals.iter().enumerate() {
+                if !defined {
+                    continue;
+                }
+                if let Some(name) = st.name(crate::value::SymbolId(idx as u32)) {
+                    fields.insert(TableKey::Keyword(name.to_string()), self.globals[idx]);
+                }
+            }
+        }
+        // Also include file-level locals (letrec model)
+        let frame_base = self.current_frame_base();
+        for (&slot, name) in &self.local_names {
+            let abs_idx = frame_base + slot as usize;
+            if abs_idx < self.fiber.stack.len() {
+                let val = self.unwrap_local_cell(self.fiber.stack[abs_idx]);
+                fields.insert(TableKey::Keyword(name.clone()), val);
+            }
+        }
+        if fields.is_empty() {
+            Value::NIL
+        } else {
+            Value::struct_from(fields)
         }
     }
 
