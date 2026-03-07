@@ -204,7 +204,12 @@ fn wrap_with_env(expr_syntax: Syntax, env_value: &Value, symbols: &SymbolTable) 
 
     let mut bindings = Vec::new();
     for (name, val) in entries {
-        let val_syntax = Syntax::from_value(&val, symbols, span.clone())?;
+        // Skip bindings whose values can't be converted to Syntax
+        // (closures, fibers, etc.). Only include literal-convertible values.
+        let val_syntax = match Syntax::from_value(&val, symbols, span.clone()) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
         let name_syntax = Syntax::new(SyntaxKind::Symbol(name), span.clone());
         let binding_pair = Syntax::new(
             SyntaxKind::List(vec![name_syntax, val_syntax]),

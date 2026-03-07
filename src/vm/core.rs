@@ -40,7 +40,10 @@ pub struct VM {
     /// without scanning the full sparse vector.
     pub defined_globals: Vec<bool>,
     pub ffi: FFISubsystem,
-    pub loaded_modules: HashMap<String, Value>,
+    /// Modules currently being loaded (circular-import guard).
+    /// Added before execution, removed after. If a module is in this set
+    /// when import-file is called, it's a circular dependency.
+    pub loading_modules: std::collections::HashSet<String>,
     pub closure_call_counts: FxHashMap<*const u8, usize>,
     pub location_map: LocationMap,
     pub tail_call_env_cache: Vec<Value>,
@@ -108,7 +111,7 @@ impl VM {
             globals: vec![Value::UNDEFINED; 256],
             defined_globals: vec![false; 256],
             ffi: FFISubsystem::new(),
-            loaded_modules: HashMap::new(),
+            loading_modules: std::collections::HashSet::new(),
             closure_call_counts: FxHashMap::default(),
             location_map: LocationMap::new(),
             tail_call_env_cache: Vec::with_capacity(256),
@@ -146,7 +149,7 @@ impl VM {
         self.error_loc = None;
         self.closure_call_counts.clear();
         self.location_map = LocationMap::new();
-        self.loaded_modules.clear();
+        self.loading_modules.clear();
     }
 
     pub fn set_global(&mut self, sym_id: u32, value: Value) {
@@ -242,14 +245,19 @@ impl VM {
             .unwrap_or(0)
     }
 
-    /// Return the cached value for an already-loaded module, or None.
-    pub fn get_module_value(&self, module_path: &str) -> Option<Value> {
-        self.loaded_modules.get(module_path).copied()
+    /// Check if a module is currently being loaded (circular dependency).
+    pub fn is_module_loading(&self, module_path: &str) -> bool {
+        self.loading_modules.contains(module_path)
     }
 
-    /// Cache a module's return value so subsequent imports return it.
-    pub fn cache_module_value(&mut self, module_path: String, value: Value) {
-        self.loaded_modules.insert(module_path, value);
+    /// Mark a module as currently loading (for circular-import detection).
+    pub fn mark_module_loading(&mut self, module_path: String) {
+        self.loading_modules.insert(module_path);
+    }
+
+    /// Unmark a module as loading (after execution completes).
+    pub fn unmark_module_loading(&mut self, module_path: &str) {
+        self.loading_modules.remove(module_path);
     }
 
     /// Get the frame base for the current call frame
