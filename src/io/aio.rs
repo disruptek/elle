@@ -15,7 +15,6 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::os::unix::io::{AsRawFd, RawFd};
 
 /// Completion from an async I/O operation.
-#[allow(dead_code)]
 pub(crate) struct Completion {
     pub(crate) id: u64,
     pub(crate) result: Result<Value, Value>,
@@ -41,7 +40,6 @@ impl Completion {
 }
 
 /// Pending async I/O operation.
-#[allow(dead_code)]
 struct PendingOp {
     op: IoOp,
     port_key: PortKey,
@@ -54,7 +52,6 @@ pub struct AsyncBackend {
     inner: RefCell<AsyncBackendInner>,
 }
 
-#[allow(dead_code)]
 struct AsyncBackendInner {
     fd_states: HashMap<PortKey, FdState>,
     pending: HashMap<u64, PendingOp>,
@@ -67,14 +64,12 @@ struct AsyncBackendInner {
 
 // --- Platform backend dispatch ---
 
-#[allow(dead_code)]
 enum PlatformBackend {
     #[cfg(all(target_os = "linux", feature = "io-uring"))]
     Uring(io_uring::IoUring),
     ThreadPool(ThreadPoolBackend),
 }
 
-#[allow(dead_code)]
 struct ThreadPoolBackend {
     sender: crossbeam_channel::Sender<(u64, i32, Vec<u8>)>,
     receiver: crossbeam_channel::Receiver<(u64, i32, Vec<u8>)>,
@@ -82,10 +77,8 @@ struct ThreadPoolBackend {
 }
 
 /// Maximum concurrent thread-pool operations.
-#[allow(dead_code)]
 const MAX_THREAD_POOL_OPS: usize = 64;
 
-#[allow(dead_code)]
 impl ThreadPoolBackend {
     fn new() -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
@@ -241,28 +234,26 @@ impl ThreadPoolBackend {
 /// Drop order: request_tx drops first (closing channel), then completion_rx,
 /// then handle (detaching thread). The thread exits on next recv() attempt.
 /// No custom Drop impl needed.
-#[allow(dead_code)]
 struct StdinThread {
     request_tx: crossbeam_channel::Sender<StdinRequest>,
     completion_rx: crossbeam_channel::Receiver<StdinCompletion>,
+    /// Thread handle kept for Drop semantics: when dropped, the thread detaches.
+    /// Not directly read, but essential for proper cleanup.
     #[allow(dead_code)]
     handle: std::thread::JoinHandle<()>,
 }
 
-#[allow(dead_code)]
 struct StdinRequest {
     id: u64,
     op_kind: StdinOpKind,
 }
 
-#[allow(dead_code)]
 enum StdinOpKind {
     ReadLine,
     Read { count: usize },
     ReadAll,
 }
 
-#[allow(dead_code)]
 struct StdinCompletion {
     id: u64,
     result: Result<Vec<u8>, String>,
@@ -342,7 +333,6 @@ impl std::fmt::Debug for AsyncBackend {
     }
 }
 
-#[allow(dead_code)]
 impl AsyncBackend {
     /// Create a new async backend.
     ///
@@ -777,6 +767,7 @@ impl AsyncBackend {
     }
 
     /// Check if there are pending operations.
+    /// Used by the async scheduler (Chunk 6) to determine when to exit the event loop.
     #[allow(dead_code)]
     pub(crate) fn has_pending(&self) -> bool {
         let inner = self.inner.borrow();
@@ -784,7 +775,6 @@ impl AsyncBackend {
     }
 }
 
-#[allow(dead_code)]
 impl AsyncBackendInner {
     /// Drain completions from the platform backend into self.completions.
     fn drain_platform_completions(&mut self) {
