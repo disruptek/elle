@@ -118,7 +118,6 @@ fn prim_io_execute(args: &[Value]) -> (SignalBits, Value) {
     };
     backend.execute(request)
 }
-
 pub const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io-request?",
