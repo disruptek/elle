@@ -5,7 +5,7 @@
 #
 # Usage: cargo run --release -- demos/microgpt/microgpt.lisp
 
-(import-file "target/debug/libelle_random.so")
+(import "target/debug/libelle_random.so")
 (import "demos/microgpt/helpers.lisp")
 (import "demos/microgpt/autograd.lisp")
 (import "demos/microgpt/model.lisp")
