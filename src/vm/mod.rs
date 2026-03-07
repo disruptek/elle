@@ -21,7 +21,7 @@ pub use crate::value::fiber::CallFrame;
 pub use core::VM;
 
 use crate::compiler::bytecode::Bytecode;
-use crate::value::{error_val, Value, SIG_ERROR, SIG_HALT, SIG_OK, SIG_YIELD};
+use crate::value::{error_val, Value, SIG_ERROR, SIG_HALT, SIG_IO, SIG_OK, SIG_YIELD};
 use std::rc::Rc;
 
 impl VM {
@@ -94,6 +94,10 @@ impl VM {
                         Ok(value)
                     }
                     SIG_YIELD => Err("Unexpected yield outside coroutine context".to_string()),
+                    SIG_IO => {
+                        self.fiber.signal.take();
+                        Err("Unexpected SIG_IO outside scheduler context".to_string())
+                    }
                     SIG_ERROR => {
                         // Extract the error from fiber.signal
                         let (_, err_value) =
