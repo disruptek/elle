@@ -3,6 +3,31 @@
 use super::*;
 use crate::syntax::{ScopeId, Syntax, SyntaxKind};
 
+/// Intermediate classification for file-scope letrec Pass 1.
+/// Each form is pre-bound as either a simple name or a destructure pattern.
+enum PreBound<'s> {
+    Simple {
+        binding: Binding,
+        value_syntax: &'s Syntax,
+        /// Name and scopes for deferred bindings (duplicate names).
+        /// When set, Pass 2 registers this binding in the scope
+        /// before analyzing the value, achieving sequential shadowing.
+        deferred: Option<(String, Vec<ScopeId>)>,
+    },
+    Destructure {
+        pattern_syntax: &'s Syntax,
+        value_syntax: &'s Syntax,
+        immutable: bool,
+        /// Pre-created bindings from pass 1, keyed by name.
+        /// Passed to `analyze_destructure_pattern` in pass 2 to
+        /// ensure binding identity matches.
+        leaf_bindings: HashMap<String, Binding>,
+        /// Leaf bindings that were deferred (duplicate names).
+        /// Maps name → (scopes, binding) for registration in Pass 2.
+        deferred_leaves: Vec<(String, Vec<ScopeId>, Binding)>,
+    },
+}
+
 impl<'a> Analyzer<'a> {
     pub(crate) fn analyze_let(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
         if items.len() < 2 {
@@ -487,9 +512,10 @@ impl<'a> Analyzer<'a> {
     /// Analyze a list of top-level forms as a synthetic letrec.
     ///
     /// Each form is classified as `Def` (immutable), `Var` (mutable), or
-    /// `Expr` (gensym-named dummy binding). Two-pass analysis:
+    /// `Expr` (gensym-named dummy binding). Three-pass analysis:
     /// - Pass 1: pre-bind all names (enables mutual recursion)
     /// - Pass 2: analyze initializers sequentially
+    /// - Pass 3: fixpoint loop for effect propagation through mutual recursion
     ///
     /// Returns a single `HirKind::Letrec` node. The body is a reference
     /// to the last binding (the file's return value).
@@ -504,30 +530,6 @@ impl<'a> Analyzer<'a> {
 
         self.push_scope(false);
 
-        // Classify each form and collect binding info for pass 1.
-        enum PreBound<'s> {
-            Simple {
-                binding: Binding,
-                value_syntax: &'s Syntax,
-                /// Name and scopes for deferred bindings (duplicate names).
-                /// When set, Pass 2 registers this binding in the scope
-                /// before analyzing the value, achieving sequential shadowing.
-                deferred: Option<(String, Vec<ScopeId>)>,
-            },
-            Destructure {
-                pattern_syntax: &'s Syntax,
-                value_syntax: &'s Syntax,
-                immutable: bool,
-                /// Pre-created bindings from pass 1, keyed by name.
-                /// Passed to `analyze_destructure_pattern` in pass 2 to
-                /// ensure binding identity matches.
-                leaf_bindings: HashMap<String, Binding>,
-                /// Leaf bindings that were deferred (duplicate names).
-                /// Maps name → (scopes, binding) for registration in Pass 2.
-                deferred_leaves: Vec<(String, Vec<ScopeId>, Binding)>,
-            },
-        }
-
         let mut entries: Vec<PreBound> = Vec::new();
         let mut gensym_counter = 0u32;
         // Track names seen in Pass 1 to detect duplicates.
@@ -537,215 +539,32 @@ impl<'a> Analyzer<'a> {
         // Pass 1: pre-bind all names for mutual visibility.
         for form in &forms {
             match form {
-                FileForm::Def(name_syntax, value_syntax) => {
+                FileForm::Def(name_syntax, value_syntax)
+                | FileForm::Var(name_syntax, value_syntax) => {
+                    let immutable = matches!(form, FileForm::Def(..));
+                    let form_name = if immutable { "def" } else { "var" };
+
                     if let Some(name) = name_syntax.as_symbol() {
-                        let is_duplicate = !seen_names.insert(name.to_string());
-                        if is_duplicate {
-                            // Duplicate name: create binding but don't register
-                            // in scope yet. Pass 2 will register it at the
-                            // correct sequential point for proper shadowing.
-                            let sym = self.symbols.intern(name);
-                            let binding = Binding::new(sym, BindingScope::Local);
-                            // Still need to bump next_local for slot allocation
-                            if let Some(scope_frame) = self.scopes.last_mut() {
-                                scope_frame.next_local += 1;
-                            }
-                            binding.mark_prebound();
-                            binding.mark_immutable();
-
-                            // Seed effect_env and arity_env for lambda forms
-                            if Self::is_lambda_syntax(value_syntax) {
-                                self.effect_env.insert(binding, Effect::none());
-                                if let Some(list) = value_syntax.as_list() {
-                                    if let Some(params_syn) =
-                                        list.get(1).and_then(|s| s.as_list_or_tuple())
-                                    {
-                                        self.arity_env.insert(
-                                            binding,
-                                            Self::arity_from_syntax_params(params_syn),
-                                        );
-                                    }
-                                }
-                            }
-
-                            entries.push(PreBound::Simple {
-                                binding,
-                                value_syntax,
-                                deferred: Some((name.to_string(), name_syntax.scopes.clone())),
-                            });
-                        } else {
-                            let binding =
-                                self.bind(name, name_syntax.scopes.as_slice(), BindingScope::Local);
-                            binding.mark_prebound();
-                            binding.mark_immutable();
-
-                            // Seed effect_env and arity_env for lambda forms
-                            if Self::is_lambda_syntax(value_syntax) {
-                                self.effect_env.insert(binding, Effect::none());
-                                if let Some(list) = value_syntax.as_list() {
-                                    if let Some(params_syn) =
-                                        list.get(1).and_then(|s| s.as_list_or_tuple())
-                                    {
-                                        self.arity_env.insert(
-                                            binding,
-                                            Self::arity_from_syntax_params(params_syn),
-                                        );
-                                    }
-                                }
-                            }
-
-                            entries.push(PreBound::Simple {
-                                binding,
-                                value_syntax,
-                                deferred: None,
-                            });
-                        }
-                    } else if Self::is_destructure_pattern(name_syntax) {
-                        // Pre-bind leaf names for mutual visibility
-                        let mut names = Vec::new();
-                        Self::extract_pattern_names(name_syntax, &mut names);
-                        let mut leaf_bindings = HashMap::new();
-                        let mut deferred_leaves = Vec::new();
-                        for (name, name_scopes) in &names {
-                            if *name != "_" {
-                                let is_dup = !seen_names.insert(name.to_string());
-                                if is_dup {
-                                    // Duplicate: create binding without scope registration
-                                    let sym = self.symbols.intern(name);
-                                    let b = Binding::new(sym, BindingScope::Local);
-                                    if let Some(scope_frame) = self.scopes.last_mut() {
-                                        scope_frame.next_local += 1;
-                                    }
-                                    b.mark_prebound();
-                                    b.mark_immutable();
-                                    leaf_bindings.insert(name.to_string(), b);
-                                    deferred_leaves.push((
-                                        name.to_string(),
-                                        name_scopes.to_vec(),
-                                        b,
-                                    ));
-                                } else {
-                                    let b = self.bind(name, name_scopes, BindingScope::Local);
-                                    b.mark_prebound();
-                                    b.mark_immutable();
-                                    leaf_bindings.insert(name.to_string(), b);
-                                }
-                            }
-                        }
-                        entries.push(PreBound::Destructure {
-                            pattern_syntax: name_syntax,
+                        let entry = self.prebind_simple(
+                            name,
+                            name_syntax,
                             value_syntax,
-                            immutable: true,
-                            leaf_bindings,
-                            deferred_leaves,
-                        });
+                            immutable,
+                            &mut seen_names,
+                        );
+                        entries.push(entry);
+                    } else if Self::is_destructure_pattern(name_syntax) {
+                        let entry = self.prebind_destructure(
+                            name_syntax,
+                            value_syntax,
+                            immutable,
+                            &mut seen_names,
+                        );
+                        entries.push(entry);
                     } else {
                         return Err(format!(
-                            "{}: def name must be a symbol or destructure pattern",
-                            name_syntax.span
-                        ));
-                    }
-                }
-                FileForm::Var(name_syntax, value_syntax) => {
-                    if let Some(name) = name_syntax.as_symbol() {
-                        let is_duplicate = !seen_names.insert(name.to_string());
-                        if is_duplicate {
-                            // Duplicate name: create binding but defer scope
-                            // registration to Pass 2 for sequential shadowing.
-                            let sym = self.symbols.intern(name);
-                            let binding = Binding::new(sym, BindingScope::Local);
-                            if let Some(scope_frame) = self.scopes.last_mut() {
-                                scope_frame.next_local += 1;
-                            }
-                            binding.mark_prebound();
-                            // var is mutable — do NOT mark_immutable
-
-                            if Self::is_lambda_syntax(value_syntax) {
-                                self.effect_env.insert(binding, Effect::none());
-                                if let Some(list) = value_syntax.as_list() {
-                                    if let Some(params_syn) =
-                                        list.get(1).and_then(|s| s.as_list_or_tuple())
-                                    {
-                                        self.arity_env.insert(
-                                            binding,
-                                            Self::arity_from_syntax_params(params_syn),
-                                        );
-                                    }
-                                }
-                            }
-
-                            entries.push(PreBound::Simple {
-                                binding,
-                                value_syntax,
-                                deferred: Some((name.to_string(), name_syntax.scopes.clone())),
-                            });
-                        } else {
-                            let binding =
-                                self.bind(name, name_syntax.scopes.as_slice(), BindingScope::Local);
-                            binding.mark_prebound();
-                            // var is mutable — do NOT mark_immutable
-
-                            if Self::is_lambda_syntax(value_syntax) {
-                                self.effect_env.insert(binding, Effect::none());
-                                if let Some(list) = value_syntax.as_list() {
-                                    if let Some(params_syn) =
-                                        list.get(1).and_then(|s| s.as_list_or_tuple())
-                                    {
-                                        self.arity_env.insert(
-                                            binding,
-                                            Self::arity_from_syntax_params(params_syn),
-                                        );
-                                    }
-                                }
-                            }
-
-                            entries.push(PreBound::Simple {
-                                binding,
-                                value_syntax,
-                                deferred: None,
-                            });
-                        }
-                    } else if Self::is_destructure_pattern(name_syntax) {
-                        let mut names = Vec::new();
-                        Self::extract_pattern_names(name_syntax, &mut names);
-                        let mut leaf_bindings = HashMap::new();
-                        let mut deferred_leaves = Vec::new();
-                        for (name, name_scopes) in &names {
-                            if *name != "_" {
-                                let is_dup = !seen_names.insert(name.to_string());
-                                if is_dup {
-                                    let sym = self.symbols.intern(name);
-                                    let b = Binding::new(sym, BindingScope::Local);
-                                    if let Some(scope_frame) = self.scopes.last_mut() {
-                                        scope_frame.next_local += 1;
-                                    }
-                                    b.mark_prebound();
-                                    // var — mutable
-                                    leaf_bindings.insert(name.to_string(), b);
-                                    deferred_leaves.push((
-                                        name.to_string(),
-                                        name_scopes.to_vec(),
-                                        b,
-                                    ));
-                                } else {
-                                    let b = self.bind(name, name_scopes, BindingScope::Local);
-                                    b.mark_prebound();
-                                    // var — mutable
-                                    leaf_bindings.insert(name.to_string(), b);
-                                }
-                            }
-                        }
-                        entries.push(PreBound::Destructure {
-                            pattern_syntax: name_syntax,
-                            value_syntax,
-                            immutable: false,
-                            leaf_bindings,
-                            deferred_leaves,
-                        });
-                    } else {
-                        return Err(format!(
-                            "{}: var name must be a symbol or destructure pattern",
-                            name_syntax.span
+                            "{}: {} name must be a symbol or destructure pattern",
+                            name_syntax.span, form_name
                         ));
                     }
                 }
@@ -778,9 +597,6 @@ impl<'a> Analyzer<'a> {
                     value_syntax,
                     deferred,
                 } => {
-                    // For deferred bindings (duplicate names), register in
-                    // scope now so that this binding shadows the previous one.
-                    // References after this point will resolve to this binding.
                     if let Some((name, scopes)) = deferred {
                         self.register_binding(name, scopes, *binding);
                     }
@@ -788,8 +604,6 @@ impl<'a> Analyzer<'a> {
                     effect = effect.combine(value.effect);
 
                     let bindings_idx = bindings.len();
-
-                    // Update effect_env and arity_env with actual inferred values
                     if let HirKind::Lambda {
                         params: lambda_params,
                         num_required,
@@ -818,17 +632,12 @@ impl<'a> Analyzer<'a> {
                     leaf_bindings,
                     deferred_leaves,
                 } => {
-                    // Register deferred leaf bindings (duplicate names) in
-                    // scope now for sequential shadowing.
                     for (name, scopes, binding) in deferred_leaves {
                         self.register_binding(name, scopes, *binding);
                     }
                     let value = self.analyze_expr(value_syntax)?;
                     effect = effect.combine(value.effect);
 
-                    // Analyze the pattern using pre-created bindings from pass 1.
-                    // This ensures binding identity matches even when the same
-                    // name appears in multiple file-scope forms.
                     self.pre_bindings.clone_from(leaf_bindings);
                     let pattern = self.analyze_destructure_pattern(
                         pattern_syntax,
@@ -838,23 +647,14 @@ impl<'a> Analyzer<'a> {
                     )?;
                     self.pre_bindings.clear();
 
-                    // Add leaf bindings to the Letrec bindings vec (initialized
-                    // to nil) FIRST so the lowerer allocates slots for them
-                    // before processing the destructure gensym.
                     for leaf_binding in &pattern.bindings().bindings {
                         bindings.push((*leaf_binding, Hir::pure(HirKind::Nil, span.clone())));
                         last_binding = Some(*leaf_binding);
                     }
 
-                    // Create a temp binding for the value in the Letrec bindings
                     let tmp = self.bind("__destructure_tmp", &[], BindingScope::Local);
                     bindings.push((tmp, value));
 
-                    // Emit the destructure inline as a gensym binding whose
-                    // initializer is the Destructure node. This ensures the
-                    // destructure runs in sequence with other initializers,
-                    // not deferred to the body (which would be too late for
-                    // subsequent initializers that reference the leaf bindings).
                     let destructure_hir = Hir::pure(
                         HirKind::Destructure {
                             pattern,
@@ -881,6 +681,11 @@ impl<'a> Analyzer<'a> {
         //
         // foo stays Pure even though it calls a Yields function. Fix: re-analyze
         // lambda bindings until effect_env stabilizes.
+        //
+        // Re-analysis side effects are benign: the side effects of re-analyzing
+        // a lambda (additional `mark_captured()`, `mark_mutated()` calls on
+        // bindings) are monotonic — they only add flags, never remove them.
+        // Re-analysis can only make the result more conservative, never incorrect.
         if !lambda_entries.is_empty() {
             const MAX_FIXPOINT_ITERS: usize = 10;
             for _ in 0..MAX_FIXPOINT_ITERS {
@@ -925,6 +730,101 @@ impl<'a> Analyzer<'a> {
             span,
             effect,
         ))
+    }
+
+    /// Pass 1 helper: pre-bind a simple (non-destructuring) name for file-scope letrec.
+    ///
+    /// Creates the binding and seeds effect/arity tracking for lambda forms.
+    /// Duplicate names are deferred to Pass 2 for sequential shadowing.
+    fn prebind_simple<'s>(
+        &mut self,
+        name: &str,
+        name_syntax: &'s Syntax,
+        value_syntax: &'s Syntax,
+        immutable: bool,
+        seen_names: &mut HashSet<String>,
+    ) -> PreBound<'s> {
+        let is_duplicate = !seen_names.insert(name.to_string());
+        let (binding, deferred) = if is_duplicate {
+            // Duplicate name: create binding but don't register in scope yet.
+            // Pass 2 will register it via register_binding for sequential shadowing.
+            let sym = self.symbols.intern(name);
+            let b = Binding::new(sym, BindingScope::Local);
+            (b, Some((name.to_string(), name_syntax.scopes.clone())))
+        } else {
+            let b = self.bind(name, name_syntax.scopes.as_slice(), BindingScope::Local);
+            (b, None)
+        };
+
+        binding.mark_prebound();
+        if immutable {
+            binding.mark_immutable();
+        }
+
+        // Seed effect_env and arity_env for lambda forms so self-recursive
+        // calls don't default to Yields during analysis.
+        if Self::is_lambda_syntax(value_syntax) {
+            self.effect_env.insert(binding, Effect::none());
+            if let Some(list) = value_syntax.as_list() {
+                if let Some(params_syn) = list.get(1).and_then(|s| s.as_list_or_tuple()) {
+                    self.arity_env
+                        .insert(binding, Self::arity_from_syntax_params(params_syn));
+                }
+            }
+        }
+
+        PreBound::Simple {
+            binding,
+            value_syntax,
+            deferred,
+        }
+    }
+
+    /// Pass 1 helper: pre-bind destructure leaf names for file-scope letrec.
+    ///
+    /// Extracts leaf names from the pattern and creates bindings for each.
+    /// Duplicate names are deferred to Pass 2 for sequential shadowing.
+    fn prebind_destructure<'s>(
+        &mut self,
+        pattern_syntax: &'s Syntax,
+        value_syntax: &'s Syntax,
+        immutable: bool,
+        seen_names: &mut HashSet<String>,
+    ) -> PreBound<'s> {
+        let mut names = Vec::new();
+        Self::extract_pattern_names(pattern_syntax, &mut names);
+        let mut leaf_bindings = HashMap::new();
+        let mut deferred_leaves = Vec::new();
+
+        for (name, name_scopes) in &names {
+            if *name == "_" {
+                continue;
+            }
+            let is_dup = !seen_names.insert(name.to_string());
+            let b = if is_dup {
+                // Duplicate: create binding without scope registration.
+                // register_binding in Pass 2 handles slot allocation.
+                let sym = self.symbols.intern(name);
+                let b = Binding::new(sym, BindingScope::Local);
+                deferred_leaves.push((name.to_string(), name_scopes.to_vec(), b));
+                b
+            } else {
+                self.bind(name, name_scopes, BindingScope::Local)
+            };
+            b.mark_prebound();
+            if immutable {
+                b.mark_immutable();
+            }
+            leaf_bindings.insert(name.to_string(), b);
+        }
+
+        PreBound::Destructure {
+            pattern_syntax,
+            value_syntax,
+            immutable,
+            leaf_bindings,
+            deferred_leaves,
+        }
     }
 
     /// Check if a syntax node is a lambda form: `(fn ...)`.
