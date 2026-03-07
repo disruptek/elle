@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772810831816,
+  "lastUpdate": 1772857109270,
   "repoUrl": "https://github.com/elle-lisp/elle",
   "entries": {
     "Elle Benchmarks": [
@@ -1427,6 +1427,210 @@ window.BENCHMARK_DATA = {
             "name": "memory_operations/list_to_vec",
             "value": 102,
             "range": "± 0",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "disruptek@users.noreply.github.com",
+            "name": "Smooth Operator",
+            "username": "disruptek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": false,
+          "id": "8c6de8dcfbfb387e089dba8948fdc0ca301aef86",
+          "message": "feat(io): I/O Phase 3 — synchronous I/O, scheduler foundation, SIG_IO (#505)\n\n* feat(io): add SIG_IO signal constant and Effect::io() / Effect::io_errors()\n\n- SIG_IO = 1 << 9 (reserved signal range, distinct from SIG_YIELD)\n- Effect::io() and Effect::io_errors() constructors\n- may_io() predicate; may_suspend() now includes SIG_IO\n- SIG_IO arm in execute_bytecode returns error instead of panicking\n\n* feat(io): add Port::with_fd() for backend fd access\n\nAllows the SyncBackend to borrow the underlying raw fd from a Port\nwithout duplicating it. Returns None for closed or stdio ports.\n\n* feat(io): add IoRequest type and src/io/ module\n\n- IoOp enum: ReadLine, Read, ReadAll, Write, Flush\n- IoRequest wraps IoOp + port as ExternalObject(\"io-request\")\n- io-request? and io-backend? type predicates\n- Integration tests for predicates\n\n* feat(io): add stream primitives (stream/read-line, read, read-all, write, flush)\n\nEach primitive validates its port argument, builds an IoRequest, and\nreturns (SIG_IO, request) to suspend the fiber for scheduler dispatch.\nEffect: io_errors() — may suspend on SIG_IO, may signal error.\n\n* feat(io): add SyncBackend with per-fd buffering, io/backend and io/execute\n\nSyncBackend executes IoRequests synchronously using libc::read/write.\nPer-fd FdState buffers preserve data across partial reads (buffer drain\ninvariant). Direction validation rejects reads from write-only ports.\nio/backend creates a backend; io/execute dispatches a single request.\n\n* feat(io): add sync-scheduler, *scheduler* parameter, and ev/spawn\n\nsync-scheduler is a trampoline that resumes fibers, dispatching SIG_IO\nrequests to a SyncBackend via io/execute. Error detection uses\nfiber/bits (not fiber/status) because caught signals always yield\n:suspended status regardless of signal type.\n\n*scheduler* is a dynamic parameter holding the active scheduler.\nev/spawn creates a fiber with SIG_ERROR|SIG_IO mask and runs it\nthrough the current *scheduler*.\n\n* feat(io): add VM::execute_scheduled() root fiber bootstrap\n\nTop-level execution now runs through *scheduler* when available.\nexecute_scheduled wraps user bytecode in a fiber (SIG_ERROR|SIG_IO\nmask), resolves *scheduler*, and calls it with the fiber. Falls back\nto direct vm.execute() when stdlib hasn't loaded yet. Updates all\nthree main.rs execution call sites.\n\n* docs(io): document I/O system — SIG_IO, IoRequest, SyncBackend, effects\n\n- AGENTS.md: SIG_IO in signal bits table, src/io/ in directories/modules\n- src/io/AGENTS.md: new file documenting IoOp, IoRequest, SyncBackend,\n  buffer drain invariant, and all io/* primitives\n- src/effects/AGENTS.md: Effect::io(), Effect::io_errors(), may_io()\n- docs/effects.md: I/O effects section explaining SIG_IO and scheduler",
+          "timestamp": "2026-03-07T03:27:52Z",
+          "tree_id": "304aaa09f6b2190b5cc8c69de452ad8c3a338215",
+          "url": "https://github.com/elle-lisp/elle/commit/8c6de8dcfbfb387e089dba8948fdc0ca301aef86"
+        },
+        "date": 1772857108173,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parsing/simple_number",
+            "value": 157,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/list_literal",
+            "value": 1286,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/nested_expr",
+            "value": 2215,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/deep_nesting",
+            "value": 1343,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/large_list_100",
+            "value": 25243,
+            "range": "± 53",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/first_intern",
+            "value": 75,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/repeat_intern",
+            "value": 9,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/many_unique",
+            "value": 18674,
+            "range": "± 165",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/simple_arithmetic",
+            "value": 266287,
+            "range": "± 35160",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/conditional",
+            "value": 301283,
+            "range": "± 31876",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/nested_arithmetic",
+            "value": 380266,
+            "range": "± 38044",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/int_add",
+            "value": 595,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/mixed_arithmetic",
+            "value": 431,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/comparison",
+            "value": 289,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/cons",
+            "value": 1034,
+            "range": "± 30",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/first",
+            "value": 879,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conditionals/if_true",
+            "value": 569,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conditionals/nested_if",
+            "value": 3928,
+            "range": "± 1523",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "end_to_end/simple",
+            "value": 549487,
+            "range": "± 51446",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "end_to_end/complex",
+            "value": 605937,
+            "range": "± 42876",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/10",
+            "value": 1785,
+            "range": "± 56",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/10",
+            "value": 838,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/50",
+            "value": 28697,
+            "range": "± 6194",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/50",
+            "value": 13792,
+            "range": "± 2567",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/100",
+            "value": 58473,
+            "range": "± 12522",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/100",
+            "value": 32315,
+            "range": "± 10604",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/500",
+            "value": 187698,
+            "range": "± 70407",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/500",
+            "value": 158023,
+            "range": "± 48072",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_operations/value_clone",
+            "value": 0,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_operations/list_to_vec",
+            "value": 111,
+            "range": "± 4",
             "unit": "ns/iter"
           }
         ]
