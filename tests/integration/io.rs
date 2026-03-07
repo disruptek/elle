@@ -79,3 +79,73 @@ fn test_io_execute_roundtrip() {
         .with_string(|s| assert_eq!(s, "hello from elle"))
         .unwrap();
 }
+
+#[test]
+fn test_sync_scheduler_pure_fiber() {
+    let result =
+        eval_source("(sync-scheduler (fiber/new (fn [] (+ 1 2)) (bit/or 1 512)))").unwrap();
+    assert_eq!(result.as_int(), Some(3));
+}
+
+#[test]
+fn test_sync_scheduler_error_propagation() {
+    let result =
+        eval_source("(sync-scheduler (fiber/new (fn [] (error :test-error)) (bit/or 1 512)))");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_sync_scheduler_io_dispatch() {
+    // Write a file, then read it via the scheduler
+    let result = eval_source(
+        "(begin
+           (spit \"/tmp/elle-test-sched-io\" \"scheduler test\")
+           (sync-scheduler
+             (fiber/new
+               (fn []
+                 (let ((p (port/open \"/tmp/elle-test-sched-io\" :read)))
+                   (stream/read-all p)))
+               (bit/or 1 512))))",
+    )
+    .unwrap();
+    result
+        .with_string(|s| assert_eq!(s, "scheduler test"))
+        .unwrap();
+}
+
+#[test]
+fn test_scheduler_parameter_exists() {
+    let result = eval_source("(parameter? *scheduler*)").unwrap();
+    assert_eq!(result, elle::Value::bool(true));
+}
+
+#[test]
+fn test_scheduler_parameter_default() {
+    let result = eval_source("(= (*scheduler*) sync-scheduler)").unwrap();
+    assert_eq!(result, elle::Value::bool(true));
+}
+
+#[test]
+fn test_ev_spawn_pure() {
+    let result = eval_source("(ev/spawn (fn [] 42))").unwrap();
+    assert_eq!(result.as_int(), Some(42));
+}
+
+#[test]
+fn test_ev_spawn_with_io() {
+    let result = eval_source(
+        "(begin
+           (spit \"/tmp/elle-test-ev-spawn\" \"spawn test\")
+           (ev/spawn (fn []
+             (let ((p (port/open \"/tmp/elle-test-ev-spawn\" :read)))
+               (stream/read-all p)))))",
+    )
+    .unwrap();
+    result.with_string(|s| assert_eq!(s, "spawn test")).unwrap();
+}
+
+#[test]
+fn test_ev_spawn_error_propagation() {
+    let result = eval_source("(ev/spawn (fn [] (error :boom)))");
+    assert!(result.is_err());
+}
