@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772863012389,
+  "lastUpdate": 1772901586017,
   "repoUrl": "https://github.com/elle-lisp/elle",
   "entries": {
     "Elle Benchmarks": [
@@ -1835,6 +1835,210 @@ window.BENCHMARK_DATA = {
             "name": "memory_operations/list_to_vec",
             "value": 108,
             "range": "± 60",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "disruptek@users.noreply.github.com",
+            "name": "Smooth Operator",
+            "username": "disruptek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "456f478b3569d743eb35b03de61ea4161bb98862",
+          "message": "refactor: rename Effect::none() → Effect::inert() throughout (#517)\n\n* add microgpt demo: minimal GPT with scalar autograd ported from Common Lisp\n\n* use random plugin in microgpt demo instead of adding math/random primitive\n\n* refactor: rename Effect::none() → Effect::inert() throughout\n\nCollapse all Rust-side aliases for the zero effect into a single\nprecise name. 'Inert' means the function does not react with the\nsignal/effect system — it runs to completion without interrupting\nthe fiber chain. Unlike 'none' (too generic) or 'pure' (misleading\n— inert functions can still mutate state), 'inert' says exactly\nwhat it means.\n\n- Effect::none() → Effect::inert()\n- Effect::pure() → removed (was deprecated alias)\n- Effect::PURE → Effect::INERT\n- Effect::is_pure() → removed (use !may_suspend())\n- Hir::pure() → Hir::inert()\n- Display: 'none' → 'inert'\n\nCloses #514\n\n* fix: remove stale io effect tests after signals refactor",
+          "timestamp": "2026-03-07T15:58:24Z",
+          "tree_id": "0841d0e94683daf0e4f1fcb829229b2bc2c58bda",
+          "url": "https://github.com/elle-lisp/elle/commit/456f478b3569d743eb35b03de61ea4161bb98862"
+        },
+        "date": 1772901585419,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parsing/simple_number",
+            "value": 141,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/list_literal",
+            "value": 1219,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/nested_expr",
+            "value": 2127,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/deep_nesting",
+            "value": 1278,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/large_list_100",
+            "value": 23195,
+            "range": "± 71",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/first_intern",
+            "value": 62,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/repeat_intern",
+            "value": 9,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/many_unique",
+            "value": 20011,
+            "range": "± 113",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/simple_arithmetic",
+            "value": 255259,
+            "range": "± 16910",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/conditional",
+            "value": 329934,
+            "range": "± 23998",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/nested_arithmetic",
+            "value": 337427,
+            "range": "± 39680",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/int_add",
+            "value": 730,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/mixed_arithmetic",
+            "value": 502,
+            "range": "± 46",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/comparison",
+            "value": 254,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/cons",
+            "value": 1099,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/first",
+            "value": 958,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conditionals/if_true",
+            "value": 699,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conditionals/nested_if",
+            "value": 5873,
+            "range": "± 335",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "end_to_end/simple",
+            "value": 454133,
+            "range": "± 33066",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "end_to_end/complex",
+            "value": 515559,
+            "range": "± 55037",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/10",
+            "value": 1686,
+            "range": "± 765",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/10",
+            "value": 938,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/50",
+            "value": 27491,
+            "range": "± 2916",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/50",
+            "value": 11752,
+            "range": "± 3025",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/100",
+            "value": 56853,
+            "range": "± 4238",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/100",
+            "value": 36908,
+            "range": "± 1484",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/500",
+            "value": 157701,
+            "range": "± 25490",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/500",
+            "value": 124904,
+            "range": "± 18109",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_operations/value_clone",
+            "value": 0,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_operations/list_to_vec",
+            "value": 123,
+            "range": "± 3",
             "unit": "ns/iter"
           }
         ]
