@@ -1065,6 +1065,7 @@ mod tests {
             jit_code: None,
             lir_function: None,
             doc: None,
+            syntax: None,
             vararg_kind: crate::hir::VarargKind::List,
             name: None,
         });

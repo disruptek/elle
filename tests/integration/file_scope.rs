@@ -647,11 +647,11 @@ fn test_eval_can_see_file_level_locals_with_environment() {
 
 #[test]
 fn test_eval_sees_file_level_function() {
-    // A file defines a function (def (double x) (* x 2)), then does
+    // A file defines a function via defn, then does
     // (eval '(double 5) (environment)). Should return 10.
     let result = eval_file_source_with_stdlib(
         r#"
-        (def (double x) (* x 2))
+        (defn double [x] (* x 2))
         (eval '(double 5) (environment))
     "#,
     );
@@ -673,12 +673,12 @@ fn test_eval_sees_file_level_lambda() {
 
 #[test]
 fn test_eval_sees_multiple_file_level_functions() {
-    // A file defines (def (add a b) (+ a b)) and (def (mul a b) (* a b)),
-    // then does (eval '(add (mul 2 3) 4) (environment)). Should return 10.
+    // A file defines two functions via defn, then does
+    // (eval '(add (mul 2 3) 4) (environment)). Should return 10.
     let result = eval_file_source_with_stdlib(
         r#"
-        (def (add a b) (+ a b))
-        (def (mul a b) (* a b))
+        (defn add [a b] (+ a b))
+        (defn mul [a b] (* a b))
         (eval '(add (mul 2 3) 4) (environment))
     "#,
     );
@@ -687,13 +687,13 @@ fn test_eval_sees_multiple_file_level_functions() {
 
 #[test]
 fn test_eval_environment_closure_roundtrip() {
-    // A file defines (def (greet name) (string-append "hello " name)),
-    // then does (eval '(greet "world") (environment)). Should return "hello world".
+    // A file defines a function via defn that uses arithmetic,
+    // then does (eval '(offset 7) (environment)). Should return 17.
     let result = eval_file_source_with_stdlib(
         r#"
-        (def (greet name) (string-append "hello " name))
-        (eval '(greet "world") (environment))
+        (defn offset [x] (+ x 10))
+        (eval '(offset 7) (environment))
     "#,
     );
-    assert_eq!(result.unwrap(), Value::string("hello world"));
+    assert_eq!(result.unwrap(), Value::int(17));
 }

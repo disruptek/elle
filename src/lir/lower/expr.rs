@@ -30,6 +30,7 @@ impl Lowerer {
                 num_locals,
                 inferred_effect,
                 doc,
+                syntax,
             } => self.lower_lambda_expr(
                 params,
                 *num_required,
@@ -40,6 +41,7 @@ impl Lowerer {
                 *num_locals,
                 inferred_effect,
                 *doc,
+                syntax.clone(),
             ),
 
             HirKind::If {
