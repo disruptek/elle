@@ -18,6 +18,7 @@ impl Lowerer {
         num_locals: u16,
         inferred_effect: &crate::effects::Effect,
         doc: Option<crate::value::Value>,
+        syntax: Option<std::rc::Rc<crate::syntax::Syntax>>,
     ) -> Result<Reg, String> {
         // Collect capture registers
         let mut capture_regs = Vec::new();
@@ -104,6 +105,7 @@ impl Lowerer {
             num_locals,
             *inferred_effect,
             doc,
+            syntax,
         )?;
 
         // Create closure with the nested function
@@ -129,6 +131,7 @@ impl Lowerer {
         _num_locals: u16,
         inferred_effect: crate::effects::Effect,
         doc: Option<crate::value::Value>,
+        syntax: Option<std::rc::Rc<crate::syntax::Syntax>>,
     ) -> Result<LirFunction, String> {
         // Compute arity
         let arity = Arity::for_lambda(rest_param.is_some(), num_required, params.len());
@@ -154,6 +157,7 @@ impl Lowerer {
         self.in_lambda = true;
         self.num_captures = captures.len() as u16;
         self.current_func.doc = doc;
+        self.current_func.syntax = syntax;
         self.current_func.vararg_kind = vararg_kind.clone();
         self.current_func.num_params = params.len();
 

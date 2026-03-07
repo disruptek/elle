@@ -1167,6 +1167,7 @@ fn test_spawn_primitive() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: std::rc::Rc::new(vec![]),
     });
@@ -1694,6 +1695,7 @@ fn test_json_serialize_errors() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: std::rc::Rc::new(vec![]),
     });
@@ -2037,6 +2039,7 @@ fn test_function_predicate() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: std::rc::Rc::new(vec![]),
     });
@@ -2083,6 +2086,7 @@ fn test_primitive_predicate() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: std::rc::Rc::new(vec![]),
     });

@@ -56,6 +56,8 @@ pub struct LirFunction {
     pub effect: Effect,
     /// Optional docstring from the source lambda
     pub doc: Option<Value>,
+    /// Original lambda Syntax node for eval environment reconstruction
+    pub syntax: Option<std::rc::Rc<crate::syntax::Syntax>>,
     /// How varargs are collected: List (cons chain) or Struct (immutable struct).
     /// Only meaningful when arity is AtLeast.
     pub vararg_kind: crate::hir::VarargKind,
@@ -130,6 +132,7 @@ impl LirFunction {
             cell_locals_mask: 0,
             effect: Effect::none(),
             doc: None,
+            syntax: None,
             vararg_kind: crate::hir::VarargKind::List,
             num_params: 0,
             yield_points: Vec::new(),

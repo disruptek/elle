@@ -331,6 +331,7 @@ impl Emitter {
                     jit_code: None,
                     lir_function: Some(Rc::new(nested_lir)),
                     doc: func.doc,
+                    syntax: func.syntax.clone(),
                     vararg_kind: func.vararg_kind.clone(),
                     name: func.name.clone().map(|s| Rc::from(s.as_str())),
                 };

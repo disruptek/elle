@@ -342,6 +342,7 @@ mod tests {
                 doc: None,
                 vararg_kind: crate::hir::VarargKind::List,
                 name: None,
+                syntax: None,
             }),
             env: Rc::new(vec![]),
         })

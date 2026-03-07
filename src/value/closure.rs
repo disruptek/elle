@@ -53,6 +53,10 @@ pub struct ClosureTemplate {
     pub lir_function: Option<Rc<crate::lir::LirFunction>>,
     /// Optional docstring from the source lambda
     pub doc: Option<Value>,
+    /// Original lambda Syntax node for eval environment reconstruction.
+    /// Populated by the emitter for user-defined lambdas; `None` for
+    /// test-constructed or primitive closures.
+    pub syntax: Option<Rc<crate::syntax::Syntax>>,
     /// How varargs are collected (List or Struct).
     /// Only meaningful when arity is AtLeast.
     pub vararg_kind: crate::hir::VarargKind,
@@ -133,6 +137,7 @@ mod tests {
             jit_code: None,
             lir_function: None,
             doc: None,
+            syntax: None,
             vararg_kind: crate::hir::VarargKind::List,
             name: None,
         })
@@ -166,6 +171,7 @@ mod tests {
                 jit_code: None,
                 lir_function: None,
                 doc: None,
+                syntax: None,
                 vararg_kind: crate::hir::VarargKind::List,
                 name: None,
             }),
@@ -191,6 +197,7 @@ mod tests {
                 jit_code: None,
                 lir_function: None,
                 doc: None,
+                syntax: None,
                 vararg_kind: crate::hir::VarargKind::List,
                 name: None,
             }),
@@ -216,6 +223,7 @@ mod tests {
                 jit_code: None,
                 lir_function: None,
                 doc: None,
+                syntax: None,
                 vararg_kind: crate::hir::VarargKind::List,
                 name: None,
             }),

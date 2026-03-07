@@ -41,6 +41,7 @@ fn test_closure_type_identification() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -73,6 +74,7 @@ fn test_closure_display() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -102,6 +104,7 @@ fn test_closure_clone() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![Value::int(42)]),
     };
@@ -177,6 +180,7 @@ fn test_closure_empty_environment() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -205,6 +209,7 @@ fn test_closure_single_captured_variable() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(env),
     };
@@ -239,6 +244,7 @@ fn test_closure_multiple_captured_variables() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(env),
     };
@@ -270,6 +276,7 @@ fn test_closure_environment_sharing() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: shared_env.clone(),
     };
@@ -292,6 +299,7 @@ fn test_closure_environment_sharing() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: shared_env.clone(),
     };
@@ -327,6 +335,7 @@ fn test_closure_bytecode_storage() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -355,6 +364,7 @@ fn test_closure_constants_storage() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -383,6 +393,7 @@ fn test_closure_num_locals() {
                 doc: None,
                 vararg_kind: elle::hir::VarargKind::List,
                 name: None,
+            syntax: None,
             }),
             env: Rc::new(vec![]),
         };
@@ -414,6 +425,7 @@ fn test_closure_zero_parameters() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -441,6 +453,7 @@ fn test_closure_single_parameter() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -467,6 +480,7 @@ fn test_closure_multiple_parameters() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -495,6 +509,7 @@ fn test_closure_variadic_parameters() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -528,6 +543,7 @@ fn test_closures_never_equal() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     });
@@ -550,6 +566,7 @@ fn test_closures_never_equal() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     });
@@ -579,6 +596,7 @@ fn test_same_closure_reference_equality() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     });
@@ -618,6 +636,7 @@ fn test_closure_with_nested_captured_values() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(env),
     };
@@ -646,6 +665,7 @@ fn test_closure_with_closure_in_constants() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     });
@@ -668,6 +688,7 @@ fn test_closure_with_closure_in_constants() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -698,6 +719,7 @@ fn test_closure_with_many_upvalues() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(env),
     };
@@ -731,6 +753,7 @@ fn test_closure_as_method() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![Value::int(10)]),
     };
@@ -766,6 +789,7 @@ fn test_closure_type_check() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     });
@@ -803,6 +827,7 @@ fn test_closure_environment_isolation() {
         doc: None,
         vararg_kind: elle::hir::VarargKind::List,
         name: None,
+            syntax: None,
     });
 
     let closure1 = Closure {
@@ -840,6 +865,7 @@ fn test_closure_local_variables_count() {
                 doc: None,
                 vararg_kind: elle::hir::VarargKind::List,
                 name: None,
+            syntax: None,
             }),
             env: Rc::new(vec![]),
         };
@@ -871,6 +897,7 @@ fn test_closure_with_empty_bytecode() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -899,6 +926,7 @@ fn test_closure_with_large_bytecode() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -929,6 +957,7 @@ fn test_closure_rc_reference_counting() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![]),
     };
@@ -962,6 +991,7 @@ fn test_closure_debug_format() {
             doc: None,
             vararg_kind: elle::hir::VarargKind::List,
             name: None,
+            syntax: None,
         }),
         env: Rc::new(vec![Value::int(42)]),
     };

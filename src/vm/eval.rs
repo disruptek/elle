@@ -201,11 +201,19 @@ fn wrap_with_env(expr_syntax: Syntax, env_value: &Value, symbols: &SymbolTable) 
 
     let mut bindings = Vec::new();
     for (name, val) in entries {
-        // Skip bindings whose values can't be converted to Syntax
-        // (closures, fibers, etc.). Only include literal-convertible values.
-        let val_syntax = match Syntax::from_value(&val, symbols, span.clone()) {
-            Ok(s) => s,
-            Err(_) => continue,
+        // For closures with stored syntax, use the original lambda form directly.
+        // For other values, convert to Syntax (skipping unconvertible values).
+        let val_syntax = if let Some(closure) = val.as_closure() {
+            if let Some(syntax_node) = &closure.template.syntax {
+                syntax_node.as_ref().clone()
+            } else {
+                continue;
+            }
+        } else {
+            match Syntax::from_value(&val, symbols, span.clone()) {
+                Ok(s) => s,
+                Err(_) => continue,
+            }
         };
         let name_syntax = Syntax::new(SyntaxKind::Symbol(name), span.clone());
         let binding_pair = Syntax::new(
