@@ -1101,6 +1101,113 @@ pub fn prim_arena_reset(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::NIL)
 }
 
+/// (arena/allocs thunk) — run thunk, return (result . net-allocs)
+///
+/// Sends SIG_QUERY with (:arena/allocs . thunk). The VM handles this
+/// specially: it snapshots the heap count, calls the thunk, snapshots
+/// again, and returns a cons of (result . net-allocs).
+pub fn prim_arena_allocs(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("arena/allocs: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+    (
+        SIG_QUERY,
+        Value::cons(Value::keyword("arena/allocs"), args[0]),
+    )
+}
+
+/// (arena/peak) or (arena/peak :global) — return peak object count (high-water mark)
+pub fn prim_arena_peak(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() > 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("arena/peak: expected 0-1 arguments, got {}", args.len()),
+            ),
+        );
+    }
+    let is_global = args.len() == 1 && {
+        if args[0].as_keyword_name() == Some("global") {
+            true
+        } else {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "value-error",
+                    "arena/peak: argument must be :global".to_string(),
+                ),
+            );
+        }
+    };
+    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
+    let peak = if is_global || heap_ptr.is_null() {
+        crate::value::heap::heap_arena_peak()
+    } else {
+        unsafe { (*heap_ptr).peak_alloc_count() }
+    };
+    (SIG_OK, Value::int(peak as i64))
+}
+
+/// (arena/reset-peak) or (arena/reset-peak :global) — reset peak to current count, return previous peak
+pub fn prim_arena_reset_peak(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() > 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!(
+                    "arena/reset-peak: expected 0-1 arguments, got {}",
+                    args.len()
+                ),
+            ),
+        );
+    }
+    let is_global = args.len() == 1 && {
+        if args[0].as_keyword_name() == Some("global") {
+            true
+        } else {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "value-error",
+                    "arena/reset-peak: argument must be :global".to_string(),
+                ),
+            );
+        }
+    };
+    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
+    let prev = if is_global || heap_ptr.is_null() {
+        crate::value::heap::heap_arena_reset_peak()
+    } else {
+        unsafe { (*heap_ptr).reset_peak() }
+    };
+    (SIG_OK, Value::int(prev as i64))
+}
+
+/// (arena/fiber-stats fiber) — return heap stats for a suspended or dead fiber
+pub fn prim_arena_fiber_stats(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("arena/fiber-stats: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+    (
+        SIG_QUERY,
+        Value::cons(Value::keyword("arena/fiber-stats"), args[0]),
+    )
+}
+
 /// Declarative primitive definitions for debugging operations.
 pub const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
@@ -1377,6 +1484,50 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["mark"],
         category: "meta",
         example: "(let ((m (arena/checkpoint))) (cons 1 2) (arena/reset m))",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "arena/allocs",
+        func: prim_arena_allocs,
+        effect: Effect::inert(),
+        arity: Arity::Exact(1),
+        doc: "Run thunk, return (result . net-allocs) where net-allocs is the net heap objects allocated.",
+        params: &["thunk"],
+        category: "meta",
+        example: "(arena/allocs (fn [] (cons 1 2)))",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "arena/peak",
+        func: prim_arena_peak,
+        effect: Effect::inert(),
+        arity: Arity::Range(0, 1),
+        doc: "Return peak object count (high-water mark). Optional :global scope.",
+        params: &["scope?"],
+        category: "meta",
+        example: "(arena/peak)",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "arena/reset-peak",
+        func: prim_arena_reset_peak,
+        effect: Effect::inert(),
+        arity: Arity::Range(0, 1),
+        doc: "Reset peak to current count. Returns previous peak. Optional :global scope.",
+        params: &["scope?"],
+        category: "meta",
+        example: "(arena/reset-peak)",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "arena/fiber-stats",
+        func: prim_arena_fiber_stats,
+        effect: Effect::inert(),
+        arity: Arity::Exact(1),
+        doc: "Return heap stats for a suspended or dead fiber as a struct with :count, :bytes, :peak, :object-limit, :scope-enters, :dtors-run.",
+        params: &["fiber"],
+        category: "meta",
+        example: "(let* ([f (fiber/new (fn [] 42) 1)] [_ (fiber/resume f nil)]) (arena/fiber-stats f))",
         aliases: &[],
     },
     PrimitiveDef {

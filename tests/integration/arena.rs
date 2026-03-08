@@ -164,3 +164,116 @@ fn test_scope_bump_reclaims_memory() {
         "scope bump should reclaim memory: bytes-after should be close to bytes-before"
     );
 }
+
+// ── arena/allocs primitive tests ────────────────────────────────────
+
+#[test]
+fn test_arena_allocs_primitive_cons() {
+    let result = eval_source("(rest (arena/allocs (fn [] (cons 1 2))))").unwrap();
+    assert_eq!(result.as_int(), Some(1), "cons allocates 1 object");
+}
+
+#[test]
+fn test_arena_allocs_zero_for_immediate() {
+    let result = eval_source("(rest (arena/allocs (fn [] 42)))").unwrap();
+    assert_eq!(result.as_int(), Some(0), "immediate allocates 0 objects");
+}
+
+#[test]
+fn test_arena_allocs_preserves_result() {
+    let result = eval_source("(first (arena/allocs (fn [] (+ 40 2))))").unwrap();
+    assert_eq!(result.as_int(), Some(42));
+}
+
+#[test]
+fn test_arena_allocs_list() {
+    let result = eval_source("(rest (arena/allocs (fn [] (list 1 2 3 4 5))))").unwrap();
+    assert_eq!(result.as_int(), Some(5), "list of 5 = 5 cons cells");
+}
+
+// ── arena/peak tests ────────────────────────────────────────────────
+
+#[test]
+fn test_arena_peak_returns_int() {
+    let result = eval_source("(arena/peak :global)").unwrap();
+    assert!(result.as_int().is_some(), "arena/peak returns int");
+}
+
+#[test]
+fn test_arena_peak_gte_count() {
+    // arena/count allocates a SIG_QUERY cons, so read count first to
+    // ensure peak is updated, then check peak >= that count value.
+    let result = eval_source(
+        "(let ((c (arena/count)))
+           (>= (arena/peak :global) c))",
+    )
+    .unwrap();
+    assert_eq!(result, elle::Value::TRUE, "peak >= count");
+}
+
+#[test]
+fn test_arena_reset_peak_returns_previous() {
+    let result = eval_source(
+        "(begin
+           (arena/reset-peak :global)
+           (cons 1 2)
+           (cons 3 4)
+           (let ((p (arena/peak :global)))
+             (let ((prev (arena/reset-peak :global)))
+               (= prev p))))",
+    )
+    .unwrap();
+    assert_eq!(result, elle::Value::TRUE);
+}
+
+// ── arena/stats includes :peak ──────────────────────────────────────
+
+#[test]
+fn test_arena_stats_includes_peak() {
+    let result = eval_source("(int? (get (arena/stats) :peak))").unwrap();
+    assert_eq!(result, elle::Value::TRUE, "arena/stats has :peak field");
+}
+
+// ── arena/fiber-stats tests ─────────────────────────────────────────
+
+#[test]
+fn test_arena_fiber_stats_suspended() {
+    let result = eval_source(
+        "(let* ([f (fiber/new (fn [] (fiber/signal 2 42)) 2)]
+                [_ (fiber/resume f)])
+           (let ((stats (arena/fiber-stats f)))
+             (and (struct? stats)
+                  (int? (get stats :count))
+                  (int? (get stats :bytes))
+                  (int? (get stats :peak))
+                  (int? (get stats :scope-enters))
+                  (int? (get stats :dtors-run)))))",
+    )
+    .unwrap();
+    assert_eq!(
+        result,
+        elle::Value::TRUE,
+        "fiber-stats returns struct with expected fields"
+    );
+}
+
+#[test]
+fn test_arena_fiber_stats_dead() {
+    let result = eval_source(
+        "(let* ([f (fiber/new (fn [] 42) 1)]
+                [_ (fiber/resume f)])
+           (struct? (arena/fiber-stats f)))",
+    )
+    .unwrap();
+    assert_eq!(
+        result,
+        elle::Value::TRUE,
+        "fiber-stats works on dead fibers"
+    );
+}
+
+#[test]
+fn test_arena_fiber_stats_type_error() {
+    let result = eval_source("(try (arena/fiber-stats 42) (catch e (get e :error)))").unwrap();
+    assert_eq!(result.as_keyword_name(), Some("type-error"));
+}

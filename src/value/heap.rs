@@ -426,6 +426,7 @@ struct HeapArena {
     #[allow(clippy::vec_box)]
     objects: Vec<Box<HeapObject>>,
     object_limit: Option<usize>,
+    peak_object_count: usize,
 }
 
 impl HeapArena {
@@ -433,6 +434,7 @@ impl HeapArena {
         HeapArena {
             objects: Vec::new(),
             object_limit: None,
+            peak_object_count: 0,
         }
     }
 }
@@ -618,6 +620,21 @@ pub fn heap_arena_set_object_limit(limit: Option<usize>) -> Option<usize> {
     })
 }
 
+/// Get the peak object count for the global heap arena.
+pub fn heap_arena_peak() -> usize {
+    HEAP_ARENA.with(|a| a.borrow().peak_object_count)
+}
+
+/// Reset peak to current count. Returns previous peak.
+pub fn heap_arena_reset_peak() -> usize {
+    HEAP_ARENA.with(|a| {
+        let mut a = a.borrow_mut();
+        let prev = a.peak_object_count;
+        a.peak_object_count = a.objects.len();
+        prev
+    })
+}
+
 /// Set the allocation error flag. Called by FiberHeap when its limit is exceeded.
 pub fn set_alloc_error(count: usize, limit: usize) {
     ALLOC_ERROR.with(|e| e.set(Some((count, limit))));
@@ -645,6 +662,9 @@ pub fn alloc(obj: HeapObject) -> Value {
         let boxed = Box::new(obj);
         let ptr = &*boxed as *const HeapObject as *const ();
         a.objects.push(boxed);
+        if a.objects.len() > a.peak_object_count {
+            a.peak_object_count = a.objects.len();
+        }
         Value::from_heap_ptr(ptr)
     })
 }

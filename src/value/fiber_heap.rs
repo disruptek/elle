@@ -4,6 +4,10 @@
 //! ensures that `HeapObject` variants with inner heap allocations (`Vec`, `Rc`,
 //! `BTreeMap`, `Box<str>`, etc.) have their `Drop` impls called on release/clear.
 //!
+//! `peak_alloc_count` tracks the high-water mark of `alloc_count` since the
+//! last `clear()`. Updated on every `alloc()`. Queryable via `arena/peak`
+//! and `arena/fiber-stats`.
+//!
 //! ## Per-scope bump allocators
 //!
 //! Each `RegionEnter` pushes a fresh `bumpalo::Bump` onto `scope_bumps`.
@@ -93,6 +97,8 @@ pub struct FiberHeap {
     dtors: Vec<*mut HeapObject>,
     /// Total number of objects allocated (including those not needing Drop).
     alloc_count: usize,
+    /// Peak number of objects allocated (high-water mark).
+    peak_alloc_count: usize,
     /// Pointer to the bump allocator that new allocations should use.
     /// Points to the top of `scope_bumps` when non-empty, otherwise to
     /// the root `bump`.
@@ -133,6 +139,7 @@ impl FiberHeap {
             scope_bumps: Vec::new(),
             dtors: Vec::new(),
             alloc_count: 0,
+            peak_alloc_count: 0,
             active_allocator: std::ptr::null(),
             scope_marks: Vec::new(),
             owned_shared: Vec::new(),
@@ -198,6 +205,9 @@ impl FiberHeap {
                     self.dtors.push(typed);
                 }
                 self.alloc_count += 1;
+                if self.alloc_count > self.peak_alloc_count {
+                    self.peak_alloc_count = self.alloc_count;
+                }
                 return Value::from_heap_ptr(typed as *const ());
             }
             // Fall through to bumpalo on null return
@@ -222,6 +232,9 @@ impl FiberHeap {
             self.dtors.push(raw);
         }
         self.alloc_count += 1;
+        if self.alloc_count > self.peak_alloc_count {
+            self.peak_alloc_count = self.alloc_count;
+        }
         Value::from_heap_ptr(raw as *const ())
     }
 
@@ -358,6 +371,18 @@ impl FiberHeap {
         self.scope_dtors_run
     }
 
+    /// Peak number of objects allocated (high-water mark).
+    pub fn peak_alloc_count(&self) -> usize {
+        self.peak_alloc_count
+    }
+
+    /// Reset peak to current count. Returns previous peak.
+    pub fn reset_peak(&mut self) -> usize {
+        let prev = self.peak_alloc_count;
+        self.peak_alloc_count = self.alloc_count;
+        prev
+    }
+
     /// Push a custom allocator onto the stack. Allocations will route
     /// to this allocator until it is popped.
     pub fn push_custom_allocator(&mut self, allocator: Rc<AllocatorBox>) {
@@ -465,6 +490,7 @@ impl FiberHeap {
 
         self.scope_marks.clear();
         self.alloc_count = 0;
+        self.peak_alloc_count = 0;
         self.scope_enters = 0;
         self.scope_dtors_run = 0;
         // Drop all scope bumps before resetting the root bump.
