@@ -136,25 +136,11 @@ jobs:
           done
           echo "✓ All Elle script tests passed"
 
-  audit:
-    name: Dependency Audit
+  benchmarks:
+    name: Benchmarks
     needs: changes
     runs-on: ubuntu-latest
     if: needs.changes.outputs.source == 'true'
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install and run cargo-audit
-        run: |
-          cargo install cargo-audit
-          cargo audit
-
-  benchmarks:
-    name: Benchmarks
-    runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'performance')
     permissions:
       pull-requests: write
     steps:
@@ -199,7 +185,7 @@ jobs:
 
   all-checks:
     name: All Checks Passed
-    needs: [changes, fmt, clippy, examples, audit]
+    needs: [changes, fmt, clippy, examples, benchmarks]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -212,8 +198,8 @@ jobs:
       - name: Check examples
         if: needs.examples.result == 'failure'
         run: exit 1
-      - name: Check audit
-        if: needs.audit.result == 'failure'
+      - name: Check benchmarks
+        if: needs.benchmarks.result == 'failure'
         run: exit 1
       - name: Check changes detection
         if: needs.changes.result == 'failure'

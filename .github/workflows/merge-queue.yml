@@ -12,6 +12,28 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Run clippy on workspace
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
   examples:
     name: Examples
     runs-on: ubuntu-latest
@@ -81,6 +103,54 @@ jobs:
           echo "=========================="
           for f in tests/elle/*.lisp; do
             echo "  $f"
-            ./target/release/elle "$f" || exit 1
-          done
-          echo "✓ All Elle script tests passed"
+           ./target/release/elle "$f" || exit 1
+           done
+           echo "✓ All Elle script tests passed"
+
+  tests:
+    name: Rust Tests
+    needs: examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run all tests (integration + property)
+        run: cargo test --workspace
+
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install and run cargo-audit
+        run: |
+          cargo install cargo-audit
+          cargo audit
+
+  all-checks:
+    name: All Checks Passed
+    needs: [fmt, clippy, examples, tests, audit]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check fmt
+        if: needs.fmt.result == 'failure'
+        run: exit 1
+      - name: Check clippy
+        if: needs.clippy.result == 'failure'
+        run: exit 1
+      - name: Check examples
+        if: needs.examples.result == 'failure'
+        run: exit 1
+      - name: Check tests
+        if: needs.tests.result == 'failure'
+        run: exit 1
+      - name: Check audit
+        if: needs.audit.result == 'failure'
+        run: exit 1
+      - name: Success
+        run: echo "All checks passed"
