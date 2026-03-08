@@ -244,3 +244,8 @@ fn arena() {
 fn new_pipeline() {
     run_elle_script("new-pipeline");
 }
+
+#[test]
+fn slice() {
+    run_elle_script("slice");
+}
