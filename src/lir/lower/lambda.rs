@@ -86,9 +86,6 @@ impl Lowerer {
                     }
                     capture_regs.push(reg);
                 }
-                CaptureKind::Global { .. } => {
-                    unreachable!("no bindings are Global after primitives-as-locals")
-                }
             }
         }
 

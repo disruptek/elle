@@ -208,8 +208,6 @@ pub enum BindingScope {
     Parameter,
     /// Local variable (let-bound, define inside function)
     Local,
-    /// Global/top-level definition
-    Global,
 }
 
 /// Thread handle for concurrent execution.

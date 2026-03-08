@@ -344,11 +344,6 @@ impl<'a> Analyzer<'a> {
 
         if let Some((_found_depth, binding, needs_capture)) = found_in_scope {
             if needs_capture {
-                // Check if this is a global - globals are not captured, accessed directly
-                if binding.is_global() {
-                    return Some(binding);
-                }
-
                 // Primitives are immutable locals with known constant values.
                 // They don't need capturing — the lowerer emits LoadConst
                 // for them directly from immutable_values.
@@ -359,21 +354,8 @@ impl<'a> Analyzer<'a> {
                 // Mark as captured
                 binding.mark_captured();
 
-                // Determine capture kind based on where it was found
-                let capture_kind = match binding.scope() {
-                    BindingScope::Parameter | BindingScope::Local => {
-                        // Direct capture from parent's locals
-                        // Use binding_to_slot in the lowerer to find the actual index
-                        // For now, use 0 as placeholder — the lowerer resolves this
-                        CaptureKind::Local
-                    }
-                    BindingScope::Global => {
-                        // This should not happen due to the check above
-                        CaptureKind::Global {
-                            sym: binding.name(),
-                        }
-                    }
-                };
+                // Determine capture kind
+                let capture_kind = CaptureKind::Local;
 
                 // Add to current captures if not already present
                 if !self.current_captures.iter().any(|c| c.binding == binding) {

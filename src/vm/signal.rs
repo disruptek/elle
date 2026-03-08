@@ -205,11 +205,9 @@ impl VM {
                 }
             }
             "global?" => {
-                if let Some(sym_id) = arg.as_symbol() {
-                    (SIG_OK, Value::bool(self.get_global(sym_id).is_some()))
-                } else {
-                    (SIG_OK, Value::FALSE)
-                }
+                // No global mutable state — always false.
+                let _ = arg;
+                (SIG_OK, Value::FALSE)
             }
             "doc" => {
                 let name = if let Some(s) = arg.with_string(|s| s.to_string()) {
@@ -222,16 +220,10 @@ impl VM {
                         error_val("type-error", "doc: expected string or keyword".to_string()),
                     );
                 };
-                // First, check if the named global is a closure with a doc field
-                let user_doc = unsafe { crate::context::get_symbol_table() }
-                    .and_then(|st_ptr| unsafe { (*st_ptr).get(&name) })
-                    .and_then(|sym_id| self.get_global(sym_id.0))
-                    .and_then(|val| val.as_closure().cloned())
-                    .and_then(|closure| closure.template.doc)
-                    .and_then(|doc_val| doc_val.with_string(|s| s.to_string()));
-                if let Some(doc_str) = user_doc {
-                    (SIG_OK, Value::string(doc_str))
-                } else if let Some(doc) = self.docs.get(&name) {
+                // Look up builtin docs by name.
+                // TODO(chunk-8): user-defined closure docs are no longer
+                // accessible via globals; needs eval-scoped lookup.
+                if let Some(doc) = self.docs.get(&name) {
                     (SIG_OK, Value::string(doc.format()))
                 } else {
                     (

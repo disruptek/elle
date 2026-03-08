@@ -47,9 +47,6 @@ impl Binding {
     pub fn is_immutable(&self) -> bool {
         self.inner().borrow().is_immutable
     }
-    pub fn is_global(&self) -> bool {
-        self.scope() == BindingScope::Global
-    }
 
     /// A binding needs a cell if captured (for locals) or mutated (for params).
     ///
@@ -62,7 +59,6 @@ impl Binding {
         match inner.scope {
             BindingScope::Local => inner.is_captured && (!inner.is_immutable || inner.is_prebound),
             BindingScope::Parameter => inner.is_mutated,
-            BindingScope::Global => false,
         }
     }
 
@@ -121,6 +117,4 @@ pub enum CaptureKind {
     Local,
     /// Capture from parent's capture (transitive capture)
     Capture { index: u16 },
-    /// Capture from global scope
-    Global { sym: SymbolId },
 }

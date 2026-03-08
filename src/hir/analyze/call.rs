@@ -131,13 +131,11 @@ impl<'a> Analyzer<'a> {
             HirKind::Var(binding) => {
                 if let Some(effect) = self.effect_env.get(binding) {
                     *effect
-                } else if binding.is_global() {
+                } else {
                     self.primitive_effects
                         .get(&binding.name())
                         .cloned()
                         .unwrap_or(Effect::yields())
-                } else {
-                    Effect::yields()
                 }
             }
             _ => Effect::yields(),
@@ -222,13 +220,7 @@ impl<'a> Analyzer<'a> {
                 .effect_env
                 .get(binding)
                 .cloned()
-                .or_else(|| {
-                    if binding.is_global() {
-                        self.primitive_effects.get(&binding.name()).cloned()
-                    } else {
-                        None
-                    }
-                })
+                .or_else(|| self.primitive_effects.get(&binding.name()).cloned())
                 .unwrap_or(Effect::yields()),
             // Unknown argument effect - conservatively Yields for soundness
             _ => Effect::yields(),

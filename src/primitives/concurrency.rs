@@ -143,7 +143,6 @@ fn is_value_sendable(value: &Value) -> bool {
 /// Extracts closure data, validates sendability, and executes in a fresh VM
 fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
     use crate::value::SendValue;
-    use std::collections::HashMap;
 
     // Check that all captured values are sendable
     for (i, captured) in closure.env.iter().enumerate() {
@@ -198,10 +197,6 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
         crate::value::Arity::Range(min, _) => min,
     };
 
-    // Extract symbol names for cross-thread portability
-    // This allows remapping symbol IDs in the new thread's symbol table
-    let symbol_names_for_thread: HashMap<u32, String> = (*closure.template.symbol_names).clone();
-
     // Extract location map for error reporting in the spawned thread
     let location_map_for_thread: std::collections::HashMap<usize, crate::error::SourceLoc> =
         (*closure.template.location_map).clone();
@@ -216,37 +211,9 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
         // Create a fresh VM with primitives registered
         let mut vm = VM::new();
         let mut symbols = SymbolTable::new();
-        // Register primitives so they're available in the spawned thread
+        // Register primitives so docs are available in the spawned thread.
+        // Primitives are in the bytecode constant pool — no globals remapping needed.
         let _effects = register_primitives(&mut vm, &mut symbols);
-
-        // Remap globals so bytecode symbol IDs resolve correctly.
-        // The bytecode was compiled with symbol IDs from the parent thread's symbol table.
-        // The new thread has a fresh symbol table with potentially different IDs.
-        // We need to ensure that when the bytecode looks up a symbol by its old ID,
-        // it finds the correct value (which was registered under a new ID).
-        for (old_id, name) in &symbol_names_for_thread {
-            // Find what register_primitives registered this name under
-            if let Some(new_id) = symbols.get(name) {
-                if new_id.0 != *old_id {
-                    // The bytecode expects this symbol under old_id, but register_primitives
-                    // put it under new_id. Copy the value to the old_id slot.
-                    if let Some(val) = vm
-                        .globals
-                        .get(new_id.0 as usize)
-                        .filter(|v| !v.is_undefined())
-                        .copied()
-                    {
-                        let idx = *old_id as usize;
-                        if idx >= vm.globals.len() {
-                            vm.globals.resize(idx + 1, Value::UNDEFINED);
-                            vm.defined_globals.resize(idx + 1, false);
-                        }
-                        vm.globals[idx] = val;
-                        vm.defined_globals[idx] = true;
-                    }
-                }
-            }
-        }
 
         // Reconstruct values from SendValue
         let bytecode_rc = Rc::new(bytecode_data);

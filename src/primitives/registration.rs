@@ -63,7 +63,6 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> PrimitiveM
         for def in *table {
             let sym_id = symbols.intern(def.name);
             let native_val = Value::native_fn(def.func);
-            vm.set_global(sym_id.0, native_val);
             meta.effects.insert(sym_id, def.effect);
             meta.arities.insert(sym_id, def.arity);
             meta.functions.insert(sym_id, native_val);
@@ -83,7 +82,6 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> PrimitiveM
             for alias in def.aliases {
                 let alias_id = symbols.intern(alias);
                 let alias_val = Value::native_fn(def.func);
-                vm.set_global(alias_id.0, alias_val);
                 meta.effects.insert(alias_id, def.effect);
                 meta.arities.insert(alias_id, def.arity);
                 meta.functions.insert(alias_id, alias_val);

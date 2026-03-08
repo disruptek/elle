@@ -33,11 +33,6 @@ pub struct VM {
     /// fiber. Used to set `child.parent_value` during resume chain wiring,
     /// so `fiber/parent` can return the original Value without re-allocating.
     pub current_fiber_value: Option<Value>,
-    /// Global variable bindings (shared across all fibers)
-    pub globals: Vec<Value>,
-    /// Tracks which global slots have been assigned. Same length as
-    /// `globals`.
-    pub defined_globals: Vec<bool>,
     pub ffi: FFISubsystem,
     /// Modules currently being loaded (circular-import guard).
     /// Added before execution, removed after. If a module is in this set
@@ -103,8 +98,6 @@ impl VM {
             fiber,
             current_fiber_handle: None, // root fiber has no handle
             current_fiber_value: None,  // root fiber has no Value
-            globals: vec![Value::UNDEFINED; 256],
-            defined_globals: vec![false; 256],
             ffi: FFISubsystem::new(),
             loading_modules: std::collections::HashSet::new(),
             closure_call_counts: FxHashMap::default(),
@@ -121,9 +114,8 @@ impl VM {
 
     /// Reset the VM's fiber and transient state for reuse.
     ///
-    /// Preserves: globals (primitives), docs, ffi, jit_cache,
-    /// eval_expander, env_cache, tail_call_env_cache, fiber heap Box
-    /// (reused for pointer stability).
+    /// Preserves: docs, ffi, jit_cache, eval_expander, env_cache,
+    /// tail_call_env_cache, fiber heap Box (reused for pointer stability).
     /// Resets: fiber, call state, location map,
     /// loaded modules, closure call counts.
     pub fn reset_fiber(&mut self) {
@@ -144,21 +136,6 @@ impl VM {
         self.closure_call_counts.clear();
         self.location_map = LocationMap::new();
         self.loading_modules.clear();
-    }
-
-    pub fn set_global(&mut self, sym_id: u32, value: Value) {
-        let idx = sym_id as usize;
-        if idx >= self.globals.len() {
-            self.globals.resize(idx + 1, Value::UNDEFINED);
-            self.defined_globals.resize(idx + 1, false);
-        }
-        self.globals[idx] = value;
-        self.defined_globals[idx] = true;
-    }
-
-    pub fn get_global(&self, sym_id: u32) -> Option<&Value> {
-        let idx = sym_id as usize;
-        self.globals.get(idx).filter(|v| !v.is_undefined())
     }
 
     /// Set the location map for mapping bytecode instructions to source locations
@@ -536,30 +513,5 @@ mod tests {
         let wrapped = vm.wrap_error(error_msg.clone());
 
         assert_eq!(wrapped, error_msg);
-    }
-
-    #[test]
-    fn test_defined_globals_tracks_set_global() {
-        let mut vm = VM::new();
-        // Initially all false
-        assert!(vm.defined_globals.iter().all(|&d| !d));
-        // Set a global in the pre-allocated range
-        vm.set_global(5, Value::int(42));
-        assert!(vm.defined_globals[5]);
-        // Adjacent slots remain false
-        assert!(!vm.defined_globals[4]);
-        assert!(!vm.defined_globals[6]);
-    }
-
-    #[test]
-    fn test_defined_globals_grows_with_globals() {
-        let mut vm = VM::new();
-        let big_idx = 500u32;
-        vm.set_global(big_idx, Value::int(99));
-        // Both vectors grew to the same length
-        assert_eq!(vm.globals.len(), vm.defined_globals.len());
-        assert!(vm.defined_globals[big_idx as usize]);
-        // Slots between old capacity and new index are false
-        assert!(!vm.defined_globals[big_idx as usize - 1]);
     }
 }

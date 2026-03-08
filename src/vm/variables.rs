@@ -104,28 +104,16 @@ pub fn handle_store_upvalue(
             env.len()
         );
     }
-    // Handle cell-based storage for shared mutable captures
-    // If the closure environment contains a cell at this index, update the cell
+    // Handle cell-based storage for shared mutable captures.
+    // Upvalues are always cells (LocalCell for mutable captures).
     let env_val = env[idx];
     if env_val.is_cell() {
-        // Update the cell's contents
         if let Some(cell_ref) = env_val.as_cell() {
             let mut cell_mut = cell_ref.borrow_mut();
             *cell_mut = val;
         }
         vm.fiber.stack.push(val);
-    } else if let Some(sym) = env_val.as_symbol() {
-        // This is a global variable reference - update it in the global scope
-        let idx = sym as usize;
-        if idx >= vm.globals.len() {
-            vm.globals.resize(idx + 1, Value::UNDEFINED);
-            vm.defined_globals.resize(idx + 1, false);
-        }
-        vm.globals[idx] = val;
-        vm.defined_globals[idx] = true;
-        vm.fiber.stack.push(val);
     } else {
-        // If it's not a cell or symbol, we cannot mutate it
         panic!("VM bug: Cannot mutate non-cell closure environment variables");
     }
 }

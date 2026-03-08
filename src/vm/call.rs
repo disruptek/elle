@@ -648,7 +648,9 @@ impl VM {
         func: Value,
         hot_sym: Option<SymbolId>,
     ) -> Option<Option<SignalBits>> {
-        let group = crate::jit::discover_compilation_group(lir_func, &self.globals);
+        // With globals removed, discover_compilation_group always returns
+        // empty — batch JIT requires compile-time peer discovery (future work).
+        let group = crate::jit::discover_compilation_group(lir_func);
         if group.is_empty() {
             return None;
         }
@@ -683,10 +685,6 @@ impl VM {
             Err(e) => match &e {
                 crate::jit::JitError::UnsupportedInstruction(_)
                 | crate::jit::JitError::Yielding => {
-                    // Some member has an instruction the JIT can't handle,
-                    // or a member has yielding effect (yield metadata not
-                    // propagated to shared JitCode).
-                    // Fall through to solo compilation for the hot function.
                     return None;
                 }
                 _ => {
@@ -699,19 +697,14 @@ impl VM {
             },
         };
 
-        // Insert all compiled functions into cache
+        // Insert all compiled functions into cache and find the hot one
         let mut hot_jit_code = None;
         for (sym, jit_code) in results {
             let jit_code = Rc::new(jit_code);
-            let idx = sym.0 as usize;
-            if let Some(val) = self.globals.get(idx) {
-                if let Some(peer_closure) = val.as_closure() {
-                    let peer_bc_ptr = peer_closure.template.bytecode.as_ptr();
-                    self.jit_cache.insert(peer_bc_ptr, jit_code.clone());
-                    if sym == hot_sym {
-                        hot_jit_code = Some(jit_code);
-                    }
-                }
+            if sym == hot_sym {
+                let bc_ptr = closure.template.bytecode.as_ptr();
+                self.jit_cache.insert(bc_ptr, jit_code.clone());
+                hot_jit_code = Some(jit_code);
             }
         }
 
@@ -722,18 +715,12 @@ impl VM {
         None
     }
 
-    /// Find the SymbolId for a global closure matching the given bytecode pointer.
+    /// Find the SymbolId for a closure matching the given bytecode pointer.
     ///
-    /// O(n) over globals, but runs at most once per hot function (subsequent
-    /// calls hit the jit_cache).
-    fn find_global_sym_for_bytecode(&self, bytecode_ptr: *const u8) -> Option<SymbolId> {
-        for (i, val) in self.globals.iter().enumerate() {
-            if let Some(closure) = val.as_closure() {
-                if closure.template.bytecode.as_ptr() == bytecode_ptr {
-                    return Some(SymbolId(i as u32));
-                }
-            }
-        }
+    /// With globals removed, there is no global symbol table to scan.
+    /// Always returns `None`. Solo JIT compilation still works — it just
+    /// won't emit direct self-calls (falls back to `elle_jit_call`).
+    fn find_global_sym_for_bytecode(&self, _bytecode_ptr: *const u8) -> Option<SymbolId> {
         None
     }
 

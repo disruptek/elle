@@ -159,8 +159,7 @@ pub enum HirKind {
         value: Box<Hir>,
     },
 
-    /// Define - create/update a binding (global or local).
-    /// The lowerer checks binding.is_global() to decide StoreGlobal vs StoreLocal.
+    /// Define - create/update a local binding.
     Define {
         binding: Binding,
         value: Box<Hir>,
