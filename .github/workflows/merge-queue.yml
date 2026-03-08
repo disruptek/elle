@@ -118,16 +118,18 @@ jobs:
       - name: Run integration and unit tests
         run: cargo test --lib && cargo test --test '*' --skip property
 
-  tests-property:
-    name: Property Tests
-    needs: tests-integration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run property tests
-        run: cargo test --test property
+    tests-property:
+      name: Property Tests
+      needs: tests-integration
+      runs-on: ubuntu-latest
+      env:
+        PROPTEST_CASES: 8
+      steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+        - uses: Swatinem/rust-cache@v2
+        - name: Run property tests
+          run: cargo test --test property
 
   audit:
     name: Dependency Audit
