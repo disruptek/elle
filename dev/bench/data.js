@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773011079722,
+  "lastUpdate": 1773011456935,
   "repoUrl": "https://github.com/elle-lisp/elle",
   "entries": {
     "Elle Benchmarks": [
@@ -2447,6 +2447,210 @@ window.BENCHMARK_DATA = {
             "name": "memory_operations/list_to_vec",
             "value": 114,
             "range": "± 54",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "disruptek@users.noreply.github.com",
+            "name": "Smooth Operator",
+            "username": "disruptek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c901308e3a18d9cbb3ea4df0afa290610cf87cb0",
+          "message": "allocation observability, limits, and reclamation without GC (#527)\n\n* add arena/set-object-limit, arena/object-limit, arena/bytes primitives\n\n* add fiber-per-computation example and arena/checkpoint, arena/reset primitives\n\n* implement per-scope bump allocators: RegionExit now reclaims bump memory\n\n* expand escape analysis whitelist with missing immediate-returning primitives\n\n* document VM re-entrancy; add arena/peak, arena/reset-peak, arena/fiber-stats",
+          "timestamp": "2026-03-08T23:01:44Z",
+          "tree_id": "c85c87350af6b7461dcf320985a35ca9e7badb20",
+          "url": "https://github.com/elle-lisp/elle/commit/c901308e3a18d9cbb3ea4df0afa290610cf87cb0"
+        },
+        "date": 1773011455804,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parsing/simple_number",
+            "value": 159,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/list_literal",
+            "value": 1294,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/nested_expr",
+            "value": 2228,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/deep_nesting",
+            "value": 1341,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parsing/large_list_100",
+            "value": 25845,
+            "range": "± 353",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/first_intern",
+            "value": 73,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/repeat_intern",
+            "value": 9,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "symbol_interning/many_unique",
+            "value": 18496,
+            "range": "± 331",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/simple_arithmetic",
+            "value": 368868,
+            "range": "± 23208",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/conditional",
+            "value": 383793,
+            "range": "± 22998",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "compilation/nested_arithmetic",
+            "value": 414537,
+            "range": "± 34975",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/int_add",
+            "value": 611,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/mixed_arithmetic",
+            "value": 468,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/comparison",
+            "value": 287,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/cons",
+            "value": 1065,
+            "range": "± 19",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vm_execution/first",
+            "value": 945,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conditionals/if_true",
+            "value": 654,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "conditionals/nested_if",
+            "value": 2733,
+            "range": "± 40",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "end_to_end/simple",
+            "value": 433873,
+            "range": "± 22888",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "end_to_end/complex",
+            "value": 488635,
+            "range": "± 28562",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/10",
+            "value": 1821,
+            "range": "± 281",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/10",
+            "value": 813,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/50",
+            "value": 22345,
+            "range": "± 2146",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/50",
+            "value": 10669,
+            "range": "± 736",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/100",
+            "value": 42335,
+            "range": "± 6296",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/100",
+            "value": 25520,
+            "range": "± 4578",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/list_construction/500",
+            "value": 185985,
+            "range": "± 37692",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "scalability/addition_chain/500",
+            "value": 127733,
+            "range": "± 14134",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_operations/value_clone",
+            "value": 0,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_operations/list_to_vec",
+            "value": 110,
+            "range": "± 3",
             "unit": "ns/iter"
           }
         ]
