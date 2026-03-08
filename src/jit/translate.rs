@@ -361,32 +361,6 @@ impl<'a> FunctionTranslator<'a> {
                 }
             }
 
-            // === Phase 3: Global variables ===
-            LirInstr::LoadGlobal { dst, sym } => {
-                let sym_bits = builder.ins().iconst(I64, sym.0 as i64);
-                let vm = self.vm_ptr.ok_or_else(|| {
-                    JitError::InvalidLir("LoadGlobal without vm pointer".to_string())
-                })?;
-                let result =
-                    self.call_helper_binary(builder, self.helpers.load_global, sym_bits, vm)?;
-                builder.def_var(var(dst.0), result);
-            }
-
-            LirInstr::StoreGlobal { sym, src } => {
-                let sym_bits = builder.ins().iconst(I64, sym.0 as i64);
-                let val = builder.use_var(var(src.0));
-                let vm = self.vm_ptr.ok_or_else(|| {
-                    JitError::InvalidLir("StoreGlobal without vm pointer".to_string())
-                })?;
-                let _result = self.call_helper_ternary(
-                    builder,
-                    self.helpers.store_global,
-                    sym_bits,
-                    val,
-                    vm,
-                )?;
-            }
-
             // === Phase 3: Function calls ===
             LirInstr::Call { dst, func, args } => {
                 let func_val = builder.use_var(var(func.0));

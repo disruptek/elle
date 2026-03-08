@@ -12,9 +12,6 @@ pub use analyze::{analyze, analyze_file};
 pub use compile::{compile, compile_file};
 pub use eval::{eval, eval_all, eval_file, eval_syntax};
 
-// Internal-only: used by init_stdlib
-pub(crate) use compile::compile_all;
-
 /// Compilation result
 #[derive(Debug)]
 pub struct CompileResult {

@@ -143,8 +143,8 @@ impl Lowerer {
             return Ok(None);
         };
 
-        // Must be a global that hasn't been mutated
-        if !binding.is_global() || binding.is_mutated() {
+        // Must be an immutable binding that hasn't been mutated
+        if !binding.is_immutable() || binding.is_mutated() {
             return Ok(None);
         }
 

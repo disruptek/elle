@@ -29,7 +29,7 @@ use crate::symbol::SymbolTable;
 use crate::syntax::{ScopeId, Span, Syntax};
 use crate::value::heap::BindingScope;
 use crate::value::types::Arity;
-use crate::value::SymbolId;
+use crate::value::{SymbolId, Value};
 use std::collections::{HashMap, HashSet};
 
 /// A classified top-level form for file-as-letrec compilation.
@@ -124,9 +124,7 @@ pub struct Analyzer<'a> {
     arity_env: HashMap<Binding, Arity>,
     /// Known arities of primitive functions, from PrimitiveMeta.
     primitive_arities: HashMap<SymbolId, Arity>,
-    /// Bindings explicitly created by var/def forms (to distinguish from
-    /// implicit global references when checking primitive arities).
-    user_defined_globals: HashSet<Binding>,
+
     /// Tracks effect sources within the current lambda body for polymorphic inference
     current_effect_sources: EffectSources,
     /// Parameters of the current lambda being analyzed (for polymorphic inference)
@@ -143,6 +141,11 @@ pub struct Analyzer<'a> {
     /// `lookup_in_current_scope` to avoid binding identity mismatch
     /// when the same name appears in multiple file-scope forms.
     pre_bindings: HashMap<String, Binding>,
+    /// Compile-time constant values for primitive bindings.
+    /// Populated by `bind_primitives`. The lowerer seeds its
+    /// `immutable_values` map from this so primitive references
+    /// emit `LoadConst` instead of `LoadGlobal`.
+    primitive_values: HashMap<Binding, Value>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -175,13 +178,14 @@ impl<'a> Analyzer<'a> {
             primitive_effects,
             arity_env: HashMap::new(),
             primitive_arities,
-            user_defined_globals: HashSet::new(),
+
             current_effect_sources: EffectSources::default(),
             current_lambda_params: Vec::new(),
             block_contexts: Vec::new(),
             next_block_id: 0,
             fn_depth: 0,
             pre_bindings: HashMap::new(),
+            primitive_values: HashMap::new(),
         };
         // Initialize with a global scope so top-level bindings can be registered
         analyzer.push_scope(false);
@@ -194,26 +198,37 @@ impl<'a> Analyzer<'a> {
         Ok(AnalysisResult { hir })
     }
 
-    /// Bind all registered primitives as immutable Global bindings in the
+    /// Bind all registered primitives as immutable Local bindings in the
     /// analyzer's initial scope.
     ///
     /// Called before `analyze_file_letrec` so that primitives are in scope
-    /// during file analysis. Primitives are `BindingScope::Global` with
+    /// during file analysis. Primitives are `BindingScope::Local` with
     /// `mark_immutable()` set. File-level `def` bindings shadow primitives
     /// because `analyze_file_letrec` pushes a new scope.
     ///
-    /// The lowerer emits `LoadGlobal` for these bindings (same as today),
-    /// but compile-time checks (e.g., `(set + 42)` is an error) use the
-    /// `Binding` identity.
+    /// The lowerer uses `immutable_values` to emit `LoadConst` for these
+    /// bindings — the `NativeFn` values are baked into the constant pool.
+    /// No slot allocation is needed.
     pub fn bind_primitives(&mut self, meta: &PrimitiveMeta) {
         for (&sym_id, &effect) in &meta.effects {
-            let binding = self.bind_by_sym(sym_id, BindingScope::Global);
+            let binding = self.bind_by_sym(sym_id, BindingScope::Local);
             binding.mark_immutable();
             self.effect_env.insert(binding, effect);
             if let Some(&arity) = meta.arities.get(&sym_id) {
                 self.arity_env.insert(binding, arity);
             }
+            if let Some(&func_value) = meta.functions.get(&sym_id) {
+                self.primitive_values.insert(binding, func_value);
+            }
         }
+    }
+
+    /// Return the primitive binding→value map for the lowerer.
+    ///
+    /// The lowerer seeds its `immutable_values` from this so that
+    /// primitive references compile to `LoadConst`.
+    pub fn primitive_values(&self) -> &HashMap<Binding, Value> {
+        &self.primitive_values
     }
 
     // === Scope Management ===
@@ -331,6 +346,13 @@ impl<'a> Analyzer<'a> {
             if needs_capture {
                 // Check if this is a global - globals are not captured, accessed directly
                 if binding.is_global() {
+                    return Some(binding);
+                }
+
+                // Primitives are immutable locals with known constant values.
+                // They don't need capturing — the lowerer emits LoadConst
+                // for them directly from immutable_values.
+                if self.primitive_values.contains_key(&binding) {
                     return Some(binding);
                 }
 

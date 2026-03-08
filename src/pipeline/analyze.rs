@@ -22,7 +22,9 @@ pub fn analyze(
     let (mut expander, meta) = cache::get_cached_expander_and_meta();
 
     let expanded = expander.expand(syntax, symbols, vm)?;
-    let mut analyzer = Analyzer::new_with_primitives(symbols, meta.effects, meta.arities);
+    let mut analyzer =
+        Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
+    analyzer.bind_primitives(&meta);
     let analysis = analyzer.analyze(&expanded)?;
     Ok(AnalyzeResult { hir: analysis.hir })
 }

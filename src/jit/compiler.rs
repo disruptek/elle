@@ -593,15 +593,9 @@ impl JitCompiler {
         // Set up SCC peer map for direct calls between mutually recursive functions
         if let Some(peers) = scc_peers {
             translator.scc_peers = peers.clone();
-            // Build global_load_map: scan all blocks for LoadGlobal instructions
-            // to map Reg -> SymbolId. Since LIR is SSA, each Reg is assigned once.
-            for bb in &lir.blocks {
-                for spanned in &bb.instructions {
-                    if let LirInstr::LoadGlobal { dst, sym } = &spanned.instr {
-                        translator.global_load_map.insert(*dst, *sym);
-                    }
-                }
-            }
+            // global_load_map is no longer populated from LIR (LoadGlobal was removed).
+            // SCC peer detection now relies on the scc_peers map passed in from
+            // the batch compilation caller.
         }
 
         // Declare variables for all registers, local slots, arg variables, and locally-defined variables
@@ -983,7 +977,7 @@ mod tests {
 
     #[test]
     fn test_compile_batch_mutual_calls() {
-        // Two functions that call each other via LoadGlobal + Call.
+        // Two functions that call each other via ValueConst + Call.
         // f(x) = if x <= 0 then x else g(x - 1)
         // g(x) = f(x)  (just forwards to f)
         //
@@ -1059,9 +1053,9 @@ mod tests {
             Span::synthetic(),
         ));
         b2.instructions.push(SpannedInstr::new(
-            LirInstr::LoadGlobal {
+            LirInstr::ValueConst {
                 dst: Reg(5),
-                sym: sym_g,
+                value: crate::value::Value::NIL,
             },
             Span::synthetic(),
         ));
@@ -1094,9 +1088,9 @@ mod tests {
             Span::synthetic(),
         ));
         gb0.instructions.push(SpannedInstr::new(
-            LirInstr::LoadGlobal {
+            LirInstr::ValueConst {
                 dst: Reg(1),
-                sym: sym_f,
+                value: crate::value::Value::NIL,
             },
             Span::synthetic(),
         ));

@@ -26,15 +26,19 @@ pub fn eval_syntax(
     let expanded = expander.expand(syntax, symbols, vm)?;
 
     let meta = cached_primitive_meta(symbols);
-    let mut analyzer = Analyzer::new_with_primitives(symbols, meta.effects, meta.arities);
+    let mut analyzer =
+        Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
+    analyzer.bind_primitives(&meta);
     let mut analysis = analyzer.analyze(&expanded)?;
     mark_tail_calls(&mut analysis.hir);
+    let prim_values = analyzer.primitive_values().clone();
 
     let intrinsics = crate::lir::intrinsics::build_intrinsics(symbols);
     let imm_prims = crate::lir::intrinsics::build_immediate_primitives(symbols);
     let mut lowerer = Lowerer::new()
         .with_intrinsics(intrinsics)
-        .with_immediate_primitives(imm_prims);
+        .with_immediate_primitives(imm_prims)
+        .with_primitive_values(prim_values);
     let lir_func = lowerer.lower(&analysis.hir)?;
 
     let symbol_snapshot = symbols.all_names();
@@ -59,15 +63,19 @@ pub fn eval(
 
     let expanded = expander.expand(syntax, symbols, vm)?;
 
-    let mut analyzer = Analyzer::new_with_primitives(symbols, meta.effects, meta.arities);
+    let mut analyzer =
+        Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
+    analyzer.bind_primitives(&meta);
     let mut analysis = analyzer.analyze(&expanded)?;
     mark_tail_calls(&mut analysis.hir);
+    let prim_values = analyzer.primitive_values().clone();
 
     let intrinsics = crate::lir::intrinsics::build_intrinsics(symbols);
     let imm_prims = crate::lir::intrinsics::build_immediate_primitives(symbols);
     let mut lowerer = Lowerer::new()
         .with_intrinsics(intrinsics)
-        .with_immediate_primitives(imm_prims);
+        .with_immediate_primitives(imm_prims)
+        .with_primitive_values(prim_values);
     let lir_func = lowerer.lower(&analysis.hir)?;
 
     let symbol_snapshot = symbols.all_names();

@@ -183,6 +183,17 @@ impl Lowerer {
         self
     }
 
+    /// Seed `immutable_values` with primitive binding→value pairs.
+    ///
+    /// Primitive bindings are `BindingScope::Local` with `mark_immutable()`.
+    /// The lowerer never allocates slots for them — instead, `lower_var`
+    /// checks `immutable_values` first and emits `LoadConst` for any
+    /// binding with a known constant value.
+    pub fn with_primitive_values(mut self, values: HashMap<Binding, Value>) -> Self {
+        self.immutable_values.extend(values);
+        self
+    }
+
     /// Return compile-time scope allocation statistics.
     pub fn scope_stats(&self) -> &ScopeStats {
         &self.scope_stats

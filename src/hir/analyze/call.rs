@@ -93,17 +93,14 @@ impl<'a> Analyzer<'a> {
                 params.len(),
             )),
             HirKind::Var(binding) => {
-                // Check local arity env first
+                // Check arity env (covers both user-defined and primitive bindings)
                 if let Some(arity) = self.arity_env.get(binding) {
                     return Some(*arity);
                 }
-                // Fall back to primitive/global arities,
-                // but only if this binding was NOT explicitly defined by the user
-                // (user definitions shadow primitives even for non-lambda values)
-                if binding.is_global() && !self.user_defined_globals.contains(binding) {
-                    if let Some(arity) = self.primitive_arities.get(&binding.name()) {
-                        return Some(*arity);
-                    }
+                // Fall back to primitive arities by symbol name
+                // (for code paths that don't call bind_primitives)
+                if let Some(arity) = self.primitive_arities.get(&binding.name()) {
+                    return Some(*arity);
                 }
                 None
             }

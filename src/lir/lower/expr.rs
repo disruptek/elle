@@ -85,6 +85,13 @@ impl Lowerer {
     }
 
     fn lower_var(&mut self, binding: &Binding) -> Result<Reg, String> {
+        // Check immutable_values first — primitive bindings and immutable
+        // globals with literal values are compiled to LoadConst without
+        // needing a slot allocation.
+        if let Some(&literal_value) = self.immutable_values.get(binding) {
+            return self.emit_value_const(literal_value);
+        }
+
         if let Some(&slot) = self.binding_to_slot.get(binding) {
             // Check if this binding needs cell unwrapping
             let needs_cell = binding.needs_cell();
@@ -116,17 +123,6 @@ impl Lowerer {
                     Ok(dst)
                 }
             }
-        } else if binding.is_global() {
-            // Check if this is an immutable binding with a known literal value
-            if let Some(&literal_value) = self.immutable_values.get(binding) {
-                return self.emit_value_const(literal_value);
-            }
-            let dst = self.fresh_reg();
-            self.emit(LirInstr::LoadGlobal {
-                dst,
-                sym: binding.name(),
-            });
-            Ok(dst)
         } else {
             Err(format!("Unknown binding: {:?}", binding))
         }
@@ -198,9 +194,6 @@ impl Lowerer {
                 _ => continue,
             };
             for binding in bindings_to_preallocate {
-                if binding.is_global() {
-                    continue;
-                }
                 // Allocate slot now so captures can find it
                 if !self.binding_to_slot.contains_key(&binding) {
                     let slot = self.allocate_slot(binding);

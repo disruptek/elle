@@ -371,13 +371,8 @@ impl<'a> Analyzer<'a> {
 
         // Destructuring: (var (a b) expr) or (def [a b] expr)
         if Self::is_destructure_pattern(&items[1]) {
-            let in_function = self.scopes.iter().any(|s| s.is_function);
-            let scope = if in_function {
-                BindingScope::Local
-            } else {
-                BindingScope::Global
-            };
-            let pattern = self.analyze_destructure_pattern(&items[1], scope, immutable, &span)?;
+            let pattern =
+                self.analyze_destructure_pattern(&items[1], BindingScope::Local, immutable, &span)?;
             let value = self.analyze_expr(&items[2])?;
             let effect = value.effect;
             return Ok(Hir::new(
@@ -459,9 +454,8 @@ impl<'a> Analyzer<'a> {
                 Effect::inert(),
             ))
         } else {
-            // At top level, creates a global binding
-            let binding = self.bind(name, &[], BindingScope::Global);
-            self.user_defined_globals.insert(binding);
+            // At top level, creates a local binding
+            let binding = self.bind(name, &[], BindingScope::Local);
 
             if immutable {
                 binding.mark_immutable();
@@ -850,70 +844,7 @@ impl<'a> Analyzer<'a> {
         let target = match self.lookup(name, items[1].scopes.as_slice()) {
             Some(binding) => binding,
             None => {
-                // Treat as global reference
-                let sym = self.symbols.intern(name);
-                // Check if this was declared const in a previous form
-                if self.immutable_globals.contains(&sym) {
-                    return Err(format!(
-                        "{}: cannot assign immutable binding '{}'",
-                        span, name
-                    ));
-                }
-                Binding::new(sym, BindingScope::Global)
-            }
-        };
-
-        // Check for immutable binding
-        if target.is_immutable() {
-            return Err(format!(
-                "{}: cannot assign immutable binding '{}'",
-                span, name
-            ));
-        }
-
-        // Mark as mutated
-        target.mark_mutated();
-
-        // Invalidate effect and arity tracking for this binding since it's being mutated
-        // The binding's effect and arity are now uncertain
-        self.effect_env.remove(&target);
-        self.arity_env.remove(&target);
-
-        let value = self.analyze_expr(&items[2])?;
-        let effect = value.effect;
-
-        Ok(Hir::new(
-            HirKind::Assign {
-                target,
-                value: Box::new(value),
-            },
-            span,
-            effect,
-        ))
-    }
-
-    pub(crate) fn analyze_set(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
-        if items.len() != 3 {
-            return Err(format!("{}: assign requires target and value", span));
-        }
-
-        let name = items[1]
-            .as_symbol()
-            .ok_or_else(|| format!("{}: assign target must be a symbol", span))?;
-
-        let target = match self.lookup(name, items[1].scopes.as_slice()) {
-            Some(binding) => binding,
-            None => {
-                // Treat as global reference (may have been defined in a previous form)
-                let sym = self.symbols.intern(name);
-                // Check if this was declared const in a previous form
-                if self.immutable_globals.contains(&sym) {
-                    return Err(format!(
-                        "{}: cannot assign immutable binding '{}'",
-                        span, name
-                    ));
-                }
-                Binding::new(sym, BindingScope::Global)
+                return Err(format!("{}: undefined variable: {}", span, name));
             }
         };
 
