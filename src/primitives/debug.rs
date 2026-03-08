@@ -1029,6 +1029,78 @@ pub fn prim_arena_bytes(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
+/// (arena/checkpoint) — return an opaque mark for the current root-fiber arena position.
+///
+/// Pass to arena/reset to reclaim all objects allocated after this point.
+/// Dangerous: invalidates all Values allocated after the mark.
+pub fn prim_arena_checkpoint(args: &[Value]) -> (SignalBits, Value) {
+    if !args.is_empty() {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("arena/checkpoint: expected 0 arguments, got {}", args.len()),
+            ),
+        );
+    }
+    (
+        SIG_OK,
+        Value::int(crate::value::heap::heap_arena_checkpoint() as i64),
+    )
+}
+
+/// (arena/reset mark) — reclaim all root-fiber arena objects allocated after mark.
+///
+/// Runs Drop for freed objects. Dangerous: any Value pointing into the
+/// freed region is now invalid.
+pub fn prim_arena_reset(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("arena/reset: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+    let mark = match args[0].as_int() {
+        Some(n) if n >= 0 => n as usize,
+        Some(_) => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "value-error",
+                    "arena/reset: mark must be non-negative".to_string(),
+                ),
+            );
+        }
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!("arena/reset: expected integer, got {}", args[0].type_name()),
+                ),
+            );
+        }
+    };
+    let current = crate::value::heap::heap_arena_checkpoint();
+    if mark > current {
+        return (
+            SIG_ERROR,
+            error_val(
+                "value-error",
+                format!(
+                    "arena/reset: mark {} exceeds current arena count {}",
+                    mark, current
+                ),
+            ),
+        );
+    }
+    crate::value::heap::heap_arena_reset(mark);
+    (SIG_OK, Value::NIL)
+}
+
 /// Declarative primitive definitions for debugging operations.
 pub const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
@@ -1283,6 +1355,28 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["scope?"],
         category: "meta",
         example: "(arena/bytes)",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "arena/checkpoint",
+        func: prim_arena_checkpoint,
+        effect: Effect::inert(),
+        arity: Arity::Exact(0),
+        doc: "Return an opaque mark for the current root-fiber arena position. Pass to arena/reset to reclaim all objects allocated after this point. Dangerous: invalidates all Values allocated after the mark.",
+        params: &[],
+        category: "meta",
+        example: "(arena/checkpoint)",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "arena/reset",
+        func: prim_arena_reset,
+        effect: Effect::inert(),
+        arity: Arity::Exact(1),
+        doc: "Reclaim all root-fiber arena objects allocated after mark (from arena/checkpoint). Runs Drop for freed objects. Dangerous: any Value pointing into the freed region is now invalid.",
+        params: &["mark"],
+        category: "meta",
+        example: "(let ((m (arena/checkpoint))) (cons 1 2) (arena/reset m))",
         aliases: &[],
     },
     PrimitiveDef {

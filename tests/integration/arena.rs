@@ -1,5 +1,42 @@
 use crate::common::eval_source;
 
+// ── Checkpoint/reset tests ──────────────────────────────────────────
+
+#[test]
+fn test_checkpoint_reset_reclaims_objects() {
+    // arena/count has 1 object overhead (SIG_QUERY cons), so after reset
+    // the count will be mark + 1 when we measure it.
+    let result = eval_source(
+        "(let ((mark (arena/checkpoint)))
+           (cons 1 2)
+           (cons 3 4)
+           (cons 5 6)
+           (list 7 8 9)
+           (arena/reset mark)
+           (- (arena/count) mark))",
+    )
+    .unwrap();
+    // Exactly 1: the SIG_QUERY cons from arena/count itself
+    assert_eq!(result.as_int(), Some(1));
+}
+
+#[test]
+fn test_reset_with_invalid_mark_errors() {
+    // arena/checkpoint reads root arena; adding 999 guarantees mark > current.
+    let result = eval_source(
+        "(try
+           (arena/reset (+ (arena/checkpoint) 999))
+           (catch e (get e :error)))",
+    )
+    .unwrap();
+    assert_eq!(
+        result.as_keyword_name(),
+        Some("value-error"),
+        "expected :value-error, got {:?}",
+        result
+    );
+}
+
 // ── Object limit tests ──────────────────────────────────────────────
 
 #[test]

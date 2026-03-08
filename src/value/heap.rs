@@ -545,6 +545,34 @@ pub fn heap_arena_release(mark: ArenaMark) {
     HEAP_ARENA.with(|arena| arena.borrow_mut().objects.truncate(mark.position()))
 }
 
+/// Return the current root-fiber arena position as an opaque checkpoint.
+///
+/// Pass to [`heap_arena_reset`] to reclaim all objects allocated after
+/// this point. Only meaningful for the global HEAP_ARENA (root fiber).
+pub fn heap_arena_checkpoint() -> usize {
+    HEAP_ARENA.with(|arena| arena.borrow().objects.len())
+}
+
+/// Truncate the root-fiber HEAP_ARENA back to `mark`, running Drop for
+/// all objects allocated after that position.
+///
+/// # Safety contract (caller's responsibility)
+///
+/// Any `Value` pointing into the freed region is now dangling. The caller
+/// must ensure those Values are unreachable before calling this.
+///
+/// # Panics
+///
+/// Does not panic if `mark > len` — silently no-ops (validated by caller).
+pub fn heap_arena_reset(mark: usize) {
+    HEAP_ARENA.with(|arena| {
+        let mut a = arena.borrow_mut();
+        if mark <= a.objects.len() {
+            a.objects.truncate(mark);
+        }
+    })
+}
+
 /// Current number of live objects in the thread-local heap arena.
 pub fn heap_arena_len() -> usize {
     if let Some(len) = crate::value::fiber_heap::with_current_heap_mut(|heap| heap.len()) {
