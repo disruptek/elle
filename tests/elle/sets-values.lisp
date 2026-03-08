@@ -2,6 +2,11 @@
 ##
 ## Tests set value creation, display, equality, and basic operations.
 ## Chunk 3 of issue #509: set value implementation.
+##
+## Note: Inside lists, |...| with content produces Pipe markers (for
+## or-patterns), so non-empty immutable set literals use the (set ...)
+## constructor when inside function calls. Empty sets || work everywhere.
+## Mutable sets @|...| work everywhere (the @| token is unambiguous).
 
 (import-file "tests/elle/assert.lisp")
 
@@ -53,7 +58,7 @@
 # Type checking
 # ============================================================================
 
-(assert-true (set? |1 2 3|)
+(assert-true (set? (set 1 2 3))
   "set? returns true for immutable set literal")
 
 (assert-true (set? @|1 2 3|)
@@ -80,7 +85,7 @@
 (assert-false (set? {:a 1})
   "set? returns false for struct")
 
-(assert-eq (type-of |1 2 3|) :set
+(assert-eq (type-of (set 1 2 3)) :set
   "type-of returns :set for immutable set")
 
 (assert-eq (type-of @|1 2 3|) :@set
@@ -96,19 +101,19 @@
 # Equality
 # ============================================================================
 
-(assert-eq |1 2 3| |1 2 3|
+(assert-eq (set 1 2 3) (set 1 2 3)
   "identical immutable sets are equal")
 
-(assert-eq |1 2 3| |3 2 1|
+(assert-eq (set 1 2 3) (set 3 2 1)
   "immutable sets are equal regardless of order")
 
-(assert-eq |1 2 3| |2 1 3|
+(assert-eq (set 1 2 3) (set 2 1 3)
   "immutable sets are equal regardless of order (different permutation)")
 
-(assert-false (= |1 2 3| |1 2|)
+(assert-false (= (set 1 2 3) (set 1 2))
   "immutable sets with different elements are not equal")
 
-(assert-false (= |1 2 3| |1 2 3 4|)
+(assert-false (= (set 1 2 3) (set 1 2 3 4))
   "immutable sets with different sizes are not equal")
 
 (assert-eq @|1 2 3| @|1 2 3|
@@ -120,7 +125,7 @@
 (assert-false (= @|1 2 3| @|1 2|)
   "mutable sets with different elements are not equal")
 
-(assert-false (= |1 2 3| @|1 2 3|)
+(assert-false (= (set 1 2 3) @|1 2 3|)
   "immutable and mutable sets are not equal (different types)")
 
 (assert-eq (set 1 2 3) (set 1 2 3)
@@ -155,7 +160,7 @@
 # Length and empty
 # ============================================================================
 
-(assert-eq (length |1 2 3|) 3
+(assert-eq (length (set 1 2 3)) 3
   "length of set with 3 elements is 3")
 
 (assert-eq (length (set 1 2 3)) 3
@@ -173,7 +178,7 @@
 (assert-true (empty? (set))
   "empty? returns true for empty set from constructor")
 
-(assert-false (empty? |1|)
+(assert-false (empty? (set 1))
   "empty? returns false for non-empty immutable set")
 
 (assert-false (empty? (set 1))
@@ -192,19 +197,19 @@
 # Membership (contains?)
 # ============================================================================
 
-(assert-true (contains? |1 2 3| 2)
+(assert-true (contains? (set 1 2 3) 2)
   "contains? returns true for element in set")
 
-(assert-true (contains? |1 2 3| 1)
+(assert-true (contains? (set 1 2 3) 1)
   "contains? returns true for first element")
 
-(assert-true (contains? |1 2 3| 3)
+(assert-true (contains? (set 1 2 3) 3)
   "contains? returns true for last element")
 
-(assert-false (contains? |1 2 3| 4)
+(assert-false (contains? (set 1 2 3) 4)
   "contains? returns false for element not in set")
 
-(assert-false (contains? |1 2 3| 0)
+(assert-false (contains? (set 1 2 3) 0)
   "contains? returns false for element not in set (before range)")
 
 (assert-true (contains? @|1 2 3| 2)
@@ -223,10 +228,10 @@
 # Conversions: set->array
 # ============================================================================
 
-(assert-true (tuple? (set->array |1 2 3|))
+(assert-true (tuple? (set->array (set 1 2 3)))
   "set->array on immutable set returns a tuple")
 
-(assert-eq (length (set->array |1 2 3|)) 3
+(assert-eq (length (set->array (set 1 2 3))) 3
   "set->array preserves element count")
 
 (assert-eq (length (set->array ||)) 0
@@ -242,10 +247,10 @@
 # Conversions: seq->set
 # ============================================================================
 
-(assert-eq (seq->set (list 1 2 3)) |1 2 3|
+(assert-eq (seq->set (list 1 2 3)) (set 1 2 3)
   "seq->set from list creates immutable set")
 
-(assert-eq (seq->set (list 1 1 2)) |1 2|
+(assert-eq (seq->set (list 1 1 2)) (set 1 2)
   "seq->set deduplicates elements")
 
 (assert-eq (seq->set (list)) ||
@@ -257,7 +262,7 @@
 (assert-eq (type-of (seq->set (list 1 2 3))) :set
   "seq->set from list creates immutable set")
 
-(assert-eq (seq->set [1 2 3]) |1 2 3|
+(assert-eq (seq->set [1 2 3]) (set 1 2 3)
   "seq->set from tuple creates immutable set")
 
 (assert-eq (type-of (seq->set @[1 2 3])) :@set
@@ -276,25 +281,25 @@
 # Freeze/thaw
 # ============================================================================
 
-(assert-eq (freeze @|1 2 3|) |1 2 3|
+(assert-eq (freeze @|1 2 3|) (set 1 2 3)
   "freeze converts mutable set to immutable")
 
 (assert-eq (type-of (freeze @|1 2 3|)) :set
   "freeze produces :set type")
 
-(assert-eq (thaw |1 2 3|) @|1 2 3|
+(assert-eq (thaw (set 1 2 3)) @|1 2 3|
   "thaw converts immutable set to mutable")
 
-(assert-eq (type-of (thaw |1 2 3|)) :@set
+(assert-eq (type-of (thaw (set 1 2 3))) :@set
   "thaw produces :@set type")
 
-(assert-eq (freeze (freeze @|1 2 3|)) |1 2 3|
+(assert-eq (freeze (freeze @|1 2 3|)) (set 1 2 3)
   "freeze is idempotent on already-frozen sets")
 
-(assert-eq (thaw (thaw |1 2 3|)) @|1 2 3|
+(assert-eq (thaw (thaw (set 1 2 3))) @|1 2 3|
   "thaw is idempotent on already-thawed sets")
 
-(assert-eq (freeze (thaw |1 2 3|)) |1 2 3|
+(assert-eq (freeze (thaw (set 1 2 3))) (set 1 2 3)
   "freeze after thaw returns to original")
 
 (assert-eq (thaw (freeze @|1 2 3|)) @|1 2 3|
@@ -342,9 +347,9 @@
 # Set operations preserve immutability
 # ============================================================================
 
-(def original-set |1 2 3|)
+(def original-set (set 1 2 3))
 (def converted-arr (set->array original-set))
-(assert-eq original-set |1 2 3|
+(assert-eq original-set (set 1 2 3)
   "set->array does not modify original set")
 
 (def original-list (list 1 2 3))
