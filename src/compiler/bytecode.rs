@@ -12,13 +12,17 @@ pub enum Instruction {
     /// Load local variable (index u16)
     LoadLocal,
 
-    /// Load global variable
+    /// Dead instruction — never emitted. Retained to preserve repr(u8)
+    /// byte values of subsequent variants. The VM panics if encountered.
+    /// Operands: const_idx u16
     LoadGlobal,
 
     /// Store local variable (index u16)
     StoreLocal,
 
-    /// Store global variable
+    /// Dead instruction — never emitted. Retained to preserve repr(u8)
+    /// byte values of subsequent variants. The VM panics if encountered.
+    /// Operands: const_idx u16
     StoreGlobal,
 
     /// Load from closure environment
@@ -358,10 +362,17 @@ pub fn disassemble_lines(instructions: &[u8]) -> Vec<String> {
         i += 1;
 
         match instr {
-            Instruction::LoadConst | Instruction::LoadGlobal | Instruction::StoreGlobal => {
+            Instruction::LoadConst => {
                 if i + 1 < instructions.len() {
                     let idx = ((instructions[i] as u16) << 8) | (instructions[i + 1] as u16);
                     line.push_str(&format!(" (const_idx={})", idx));
+                    i += 2;
+                }
+            }
+            Instruction::LoadGlobal | Instruction::StoreGlobal => {
+                // Dead instructions — skip operands for disassembly
+                line.push_str(" (dead)");
+                if i + 1 < instructions.len() {
                     i += 2;
                 }
             }

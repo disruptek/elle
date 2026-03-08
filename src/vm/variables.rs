@@ -1,47 +1,5 @@
 use super::core::VM;
-use crate::value::{error_val, Value, SIG_ERROR};
-
-pub fn handle_load_global(vm: &mut VM, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
-    let idx = vm.read_u16(bytecode, ip) as usize;
-    if let Some(sym_id) = constants[idx].as_symbol() {
-        if let Some(val) = vm
-            .globals
-            .get(sym_id as usize)
-            .filter(|v| !v.is_undefined())
-        {
-            vm.fiber.stack.push(*val);
-        } else {
-            let name = crate::context::resolve_symbol_name(sym_id)
-                .unwrap_or_else(|| format!("symbol #{}", sym_id));
-            let msg = format!("undefined variable: {}", name);
-            vm.fiber.signal = Some((SIG_ERROR, error_val("undefined-variable", msg)));
-            vm.fiber.stack.push(Value::NIL);
-        }
-    } else {
-        panic!("VM bug: LoadGlobal expects symbol constant");
-    }
-}
-
-pub fn handle_store_global(vm: &mut VM, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
-    let idx = vm.read_u16(bytecode, ip) as usize;
-    let val = vm
-        .fiber
-        .stack
-        .pop()
-        .expect("VM bug: Stack underflow on StoreGlobal");
-    if let Some(sym_id) = constants[idx].as_symbol() {
-        let slot = sym_id as usize;
-        if slot >= vm.globals.len() {
-            vm.globals.resize(slot + 1, Value::UNDEFINED);
-            vm.defined_globals.resize(slot + 1, false);
-        }
-        vm.globals[slot] = val;
-        vm.defined_globals[slot] = true;
-        vm.fiber.stack.push(val);
-    } else {
-        panic!("VM bug: StoreGlobal expects symbol constant");
-    }
-}
+use crate::value::Value;
 
 pub fn handle_store_local(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
     let idx = vm.read_u16(bytecode, ip) as usize;
