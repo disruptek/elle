@@ -20,6 +20,7 @@ pub mod fileio;
 pub mod format;
 pub mod io;
 pub mod json;
+pub mod kwarg;
 pub mod list;
 pub mod logic;
 pub mod math;
