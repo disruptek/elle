@@ -81,6 +81,7 @@ Supported instructions:
 
 Unsupported (returns JitError::UnsupportedInstruction):
 - `MakeClosure` — rare in hot loops, deferred
+- Variadic functions (`AtLeast` arity) — rest-arg collection not implemented in entry block
 
 Supported in yielding functions (via side-exit):
 - `LoadResumeValue` — emitted as dead code (unreachable in JIT, resume goes through interpreter)
@@ -320,9 +321,16 @@ No errors are silently swallowed.
     without copying. If `Value`'s representation changes, these casts break.
 
 12. **Yield helpers set fiber.signal and fiber.suspended.** `elle_jit_yield`
-    and `elle_jit_yield_through_call` are responsible for building the
-    `SuspendedFrame` and setting `fiber.signal = (SIG_YIELD, value)` and
-    `fiber.suspended`. The JIT caller must not modify these fields.
+     and `elle_jit_yield_through_call` are responsible for building the
+     `SuspendedFrame` and setting `fiber.signal = (SIG_YIELD, value)` and
+     `fiber.suspended`. The JIT caller must not modify these fields.
+
+13. **Variadic functions are excluded from JIT.** Functions with `AtLeast`
+     arity (rest parameters) are rejected by `compile()`, `compile_batch()`,
+     and `discover_compilation_group()`. The JIT entry block only loads
+     `fixed_params()` arguments and does not implement rest-arg collection.
+     These functions fall back to the interpreter. A future phase could add
+     JIT support for variadics by emitting `args_to_list` in the entry block.
 
 ## Cell Optimization for Locally-Defined Variables
 
