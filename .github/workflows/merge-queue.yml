@@ -91,21 +91,21 @@ jobs:
           echo "=============================================="
           echo "Results: $PASSED/$TOTAL passed, $FAILED failed"
 
-           if [ $FAILED -gt 0 ]; then
-             echo "✗ Some examples failed"
-             exit 1
-           else
-             echo "✓ All examples passed"
-            fi
+          if [ $FAILED -gt 0 ]; then
+            echo "✗ Some examples failed"
+            exit 1
+          else
+            echo "✓ All examples passed"
+          fi
       - name: Run Elle script tests
         run: |
           echo "Running Elle script tests:"
           echo "=========================="
           for f in tests/elle/*.lisp; do
             echo "  $f"
-           ./target/release/elle "$f" || exit 1
-           done
-           echo "✓ All Elle script tests passed"
+            ./target/release/elle "$f" || exit 1
+          done
+          echo "✓ All Elle script tests passed"
 
   tests-integration:
     name: Integration Tests
@@ -116,7 +116,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run integration and unit tests
-        run: cargo test --lib --test '*' --exclude property
+        run: cargo test --lib && cargo test --test '*' --skip property
 
   tests-property:
     name: Property Tests
