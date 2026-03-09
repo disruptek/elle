@@ -32,11 +32,11 @@ examples: elle  ## Run all examples
 # ── Test ────────────────────────────────────────────────────────────
 
 # Approximate runtimes (for guidance — vary by machine):
-#   make smoke    ~30s   examples + elle scripts + docgen
+#   make smoke    ~1min  examples + plugins + elle scripts + docgen
 #   make test     ~2min  smoke + rust unit tests (PROPTEST_CASES=8)
 #   cargo test    ~30min full suite (unit + integration + property)
 
-smoke: examples  ## Run examples, elle scripts, and docgen (~30s)
+smoke: examples plugins  ## Run examples, elle scripts, and docgen (~1min)
 	@for f in tests/elle/*.lisp; do \
 		case "$$f" in \
 			tests/elle/regex.lisp) \

@@ -63,7 +63,7 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   examples:
-    name: Examples
+    name: Elle Tests
     needs: changes
     runs-on: ubuntu-latest
     if: needs.changes.outputs.source == 'true'
@@ -224,9 +224,9 @@ jobs:
       - name: Check clippy
         if: needs.clippy.result == 'failure'
         run: exit 1
-      - name: Check examples
-        if: needs.examples.result == 'failure'
-        run: exit 1
+       - name: Check Elle Tests
+         if: needs.examples.result == 'failure'
+         run: exit 1
       - name: Check integration tests
         if: needs.tests-integration.result == 'failure'
         run: exit 1

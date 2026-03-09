@@ -9,7 +9,7 @@
 ## import-file to access plugin functions.
 
 ## Try to load the glob plugin. If it fails, exit cleanly.
-(def [ok? plugin] (protect (import-file "target/debug/libelle_glob.so")))
+(def [ok? plugin] (protect (import-file "target/release/libelle_glob.so")))
 (when (not ok?)
   (display "SKIP: glob plugin not built\n")
   (exit 0))
