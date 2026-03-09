@@ -232,6 +232,7 @@ jobs:
           } > comment.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
       - name: Store benchmark result
+        if: false
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Elle Benchmarks
