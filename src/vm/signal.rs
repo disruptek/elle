@@ -434,10 +434,10 @@ impl VM {
 
         // Execute the thunk via execute_bytecode_saving_stack
         let exec_result = self.execute_bytecode_saving_stack(
-            &closure.bytecode,
-            &closure.constants,
+            &closure.template.bytecode,
+            &closure.template.constants,
             &thunk_env,
-            &closure.location_map,
+            &closure.template.location_map,
         );
 
         if exec_result.bits.contains(SIG_ERROR) {

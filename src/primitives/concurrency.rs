@@ -73,8 +73,8 @@ fn is_value_sendable(value: &Value) -> bool {
         // Unsafe: mutable tables
         HeapObject::Table(_) => false,
 
-        // Unsafe: native functions (contain function pointers)
-        HeapObject::NativeFn(_) => false,
+        // Native function pointers are inherently Send + Sync
+        HeapObject::NativeFn(_) => true,
 
         // Unsafe: FFI handles
         HeapObject::LibHandle(_) => false,

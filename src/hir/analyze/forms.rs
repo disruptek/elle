@@ -210,8 +210,7 @@ impl<'a> Analyzer<'a> {
                         spliced: false,
                     });
                 }
-                let sym = self.symbols.intern("set");
-                let binding = Binding::new(sym, BindingScope::Global);
+                let binding = self.resolve_primitive("set");
                 let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
                 Ok(Hir::new(
                     HirKind::Call {
@@ -244,8 +243,7 @@ impl<'a> Analyzer<'a> {
                         spliced: false,
                     });
                 }
-                let sym = self.symbols.intern("@set");
-                let binding = Binding::new(sym, BindingScope::Global);
+                let binding = self.resolve_primitive("@set");
                 let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
                 Ok(Hir::new(
                     HirKind::Call {
