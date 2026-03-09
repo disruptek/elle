@@ -14,7 +14,7 @@ env:
 
 jobs:
   test-examples:
-    name: Test Examples
+    name: Elle Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
