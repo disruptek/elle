@@ -15,7 +15,7 @@ use loader::LibraryHandle;
 use std::collections::HashMap;
 
 /// The FFI subsystem manages loaded libraries and active callbacks.
-pub struct FFISubsystem {
+pub(crate) struct FFISubsystem {
     /// Loaded libraries: id -> handle
     libraries: HashMap<u32, LibraryHandle>,
     /// Next library ID to assign

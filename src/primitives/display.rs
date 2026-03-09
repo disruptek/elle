@@ -5,7 +5,7 @@ use crate::value::types::Arity;
 use crate::value::Value;
 
 /// (display val ...) — human-readable output, no quotes on strings
-pub fn prim_display(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_display(args: &[Value]) -> (SignalBits, Value) {
     for arg in args {
         print!("{}", arg);
     }
@@ -13,7 +13,7 @@ pub fn prim_display(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (print val ...) — human-readable output with newline, no quotes on strings
-pub fn prim_print(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_print(args: &[Value]) -> (SignalBits, Value) {
     for arg in args {
         print!("{}", arg);
     }
@@ -22,7 +22,7 @@ pub fn prim_print(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (write val ...) — readable literal form, strings quoted
-pub fn prim_write(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_write(args: &[Value]) -> (SignalBits, Value) {
     for arg in args {
         print!("{:?}", arg);
     }
@@ -30,7 +30,7 @@ pub fn prim_write(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (newline) — print a newline
-pub fn prim_newline(_args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_newline(_args: &[Value]) -> (SignalBits, Value) {
     println!();
     (SIG_OK, Value::NIL)
 }
@@ -259,7 +259,7 @@ fn pretty_print_impl(val: Value, indent: usize, remaining_width: usize, depth: u
 }
 
 /// (pp value) — Pretty-print a value with indentation, returns the value
-pub fn prim_pp(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_pp(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (SIG_OK, Value::NIL);
     }
@@ -273,7 +273,7 @@ pub fn prim_pp(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (describe value) — Return a string describing a value's type and content
-pub fn prim_describe(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_describe(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (SIG_OK, Value::string("<error>"));
     }
@@ -383,7 +383,7 @@ pub fn prim_describe(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::string("<unknown>"))
 }
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "display",
         func: prim_display,

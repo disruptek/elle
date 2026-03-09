@@ -31,7 +31,7 @@ const MAX_DISCOVERY_DEPTH: usize = 4;
 ///
 /// Phase 1 restriction: only includes capture-free functions
 /// (num_captures == 0) since direct SCC calls pass null env.
-pub fn discover_compilation_group(
+pub(crate) fn discover_compilation_group(
     hot_lir: &LirFunction,
     globals: &[Value],
 ) -> Vec<(SymbolId, Rc<LirFunction>)> {

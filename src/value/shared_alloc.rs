@@ -15,7 +15,7 @@ use crate::value::fiber_heap::needs_drop;
 use crate::value::heap::HeapObject;
 use crate::value::Value;
 
-pub struct SharedAllocator {
+pub(crate) struct SharedAllocator {
     bump: bumpalo::Bump,
     /// Raw pointers to bump-allocated HeapObjects that need Drop.
     /// Ordered by allocation time (oldest first).

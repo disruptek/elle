@@ -1,7 +1,7 @@
 use super::core::VM;
 use crate::value::{cons, error_val, TableKey, Value, SIG_ERROR};
 
-pub fn handle_cons(vm: &mut VM) {
+pub(crate) fn handle_cons(vm: &mut VM) {
     let rest = vm
         .fiber
         .stack
@@ -15,7 +15,7 @@ pub fn handle_cons(vm: &mut VM) {
     vm.fiber.stack.push(cons(first, rest));
 }
 
-pub fn handle_car(vm: &mut VM) {
+pub(crate) fn handle_car(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -57,7 +57,7 @@ pub fn handle_car(vm: &mut VM) {
     }
 }
 
-pub fn handle_cdr(vm: &mut VM) {
+pub(crate) fn handle_cdr(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -99,7 +99,7 @@ pub fn handle_cdr(vm: &mut VM) {
     }
 }
 
-pub fn handle_make_array(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
+pub(crate) fn handle_make_array(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
     let size = vm.read_u8(bytecode, ip) as usize;
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
@@ -114,7 +114,7 @@ pub fn handle_make_array(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
     vm.fiber.stack.push(Value::array(vec));
 }
 
-pub fn handle_array_ref(vm: &mut VM) {
+pub(crate) fn handle_array_ref(vm: &mut VM) {
     let idx = vm
         .fiber
         .stack
@@ -169,7 +169,7 @@ pub fn handle_array_ref(vm: &mut VM) {
     }
 }
 
-pub fn handle_array_set(vm: &mut VM) {
+pub(crate) fn handle_array_set(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -216,7 +216,7 @@ pub fn handle_array_set(vm: &mut VM) {
 
 /// Car with silent nil: returns nil if not a cons cell.
 /// Used by destructuring — missing values become nil, no errors.
-pub fn handle_car_or_nil(vm: &mut VM) {
+pub(crate) fn handle_car_or_nil(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -230,7 +230,7 @@ pub fn handle_car_or_nil(vm: &mut VM) {
 
 /// Cdr with silent empty-list: returns EMPTY_LIST if not a cons cell.
 /// Used by destructuring — rest of an exhausted list is empty list, not nil.
-pub fn handle_cdr_or_nil(vm: &mut VM) {
+pub(crate) fn handle_cdr_or_nil(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -245,7 +245,7 @@ pub fn handle_cdr_or_nil(vm: &mut VM) {
 /// Indexed ref with silent nil: returns nil if out of bounds or not an array/tuple.
 /// Operand: u16 index (immediate, read from bytecode).
 /// Used by destructuring — missing values become nil, no errors.
-pub fn handle_array_ref_or_nil(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
+pub(crate) fn handle_array_ref_or_nil(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
     let index = vm.read_u16(bytecode, ip) as usize;
     let val = vm
         .fiber
@@ -266,7 +266,7 @@ pub fn handle_array_ref_or_nil(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
 /// Works on both arrays and tuples; result type matches input type.
 /// Operand: u16 index (immediate, read from bytecode).
 /// Used by & rest destructuring — collects remaining elements.
-pub fn handle_array_slice_from(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
+pub(crate) fn handle_array_slice_from(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
     let index = vm.read_u16(bytecode, ip) as usize;
     let val = vm
         .fiber
@@ -295,7 +295,7 @@ pub fn handle_array_slice_from(vm: &mut VM, bytecode: &[u8], ip: &mut usize) {
 /// Table/struct get with silent nil: returns nil if key missing or wrong type.
 /// Operand: u16 constant pool index (keyword key).
 /// Used by destructuring — missing keys become nil, no errors.
-pub fn handle_table_get_or_nil(vm: &mut VM, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
+pub(crate) fn handle_table_get_or_nil(vm: &mut VM, bytecode: &[u8], ip: &mut usize, constants: &[Value]) {
     let const_idx = vm.read_u16(bytecode, ip) as usize;
     let key_value = constants[const_idx];
     let val = vm
@@ -334,7 +334,7 @@ pub fn handle_table_get_or_nil(vm: &mut VM, bytecode: &[u8], ip: &mut usize, con
 /// Extend an array with all elements from an indexed source (array or tuple).
 /// Stack: \[array, source\] → \[extended_array\]
 /// Used by splice: builds the args array incrementally.
-pub fn handle_array_extend(vm: &mut VM) {
+pub(crate) fn handle_array_extend(vm: &mut VM) {
     let source = vm
         .fiber
         .stack
@@ -404,7 +404,7 @@ pub fn handle_array_extend(vm: &mut VM) {
 /// Push a single value onto an array.
 /// Stack: \[array, value\] → \[extended_array\]
 /// Used by splice: adds non-spliced args to the args array.
-pub fn handle_array_push(vm: &mut VM) {
+pub(crate) fn handle_array_push(vm: &mut VM) {
     let value = vm
         .fiber
         .stack

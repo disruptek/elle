@@ -7,7 +7,7 @@ use crate::value::{error_val, TableKey, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Declarative table of struct primitives.
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "struct",
         func: prim_struct,
@@ -56,7 +56,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
 
 /// Create an immutable struct from key-value pairs
 /// (struct key1 val1 key2 val2 ...)
-pub fn prim_struct(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_struct(args: &[Value]) -> (SignalBits, Value) {
     if !args.len().is_multiple_of(2) {
         return (
             SIG_ERROR,
@@ -90,7 +90,7 @@ pub fn prim_struct(args: &[Value]) -> (SignalBits, Value) {
 
 /// Get a value from a struct by key
 /// `(struct-get struct key [default])`
-pub fn prim_struct_get(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_struct_get(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
         return (
             SIG_ERROR,
@@ -134,7 +134,7 @@ pub fn prim_struct_get(args: &[Value]) -> (SignalBits, Value) {
 
 /// Create a new struct with an updated key-value pair (immutable)
 /// (struct-put struct key value) returns a new struct
-pub fn prim_struct_put(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_struct_put(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
             SIG_ERROR,
@@ -180,7 +180,7 @@ pub fn prim_struct_put(args: &[Value]) -> (SignalBits, Value) {
 
 /// Create a new struct without a key (immutable)
 /// (struct-del struct key) returns a new struct
-pub fn prim_struct_del(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_struct_del(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -224,7 +224,7 @@ pub fn prim_struct_del(args: &[Value]) -> (SignalBits, Value) {
 
 /// Get all keys from a struct as a list
 /// (struct-keys struct)
-pub fn prim_struct_keys(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_struct_keys(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -255,7 +255,7 @@ pub fn prim_struct_keys(args: &[Value]) -> (SignalBits, Value) {
 
 /// Get all values from a struct as a list
 /// (struct-values struct)
-pub fn prim_struct_values(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_struct_values(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -288,7 +288,7 @@ pub fn prim_struct_values(args: &[Value]) -> (SignalBits, Value) {
 
 /// Check if a struct has a key
 /// (struct-has? struct key)
-pub fn prim_struct_has(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_struct_has(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -330,7 +330,7 @@ pub fn prim_struct_has(args: &[Value]) -> (SignalBits, Value) {
 
 /// Get the number of entries in a struct
 /// (struct-length struct)
-pub fn prim_struct_length(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_struct_length(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -363,7 +363,7 @@ pub fn prim_struct_length(args: &[Value]) -> (SignalBits, Value) {
 /// Convert a mutable collection to its immutable equivalent
 /// (freeze collection) -> immutable collection
 /// Handles: table -> struct, @set -> set
-pub fn prim_freeze(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_freeze(args: &[Value]) -> (SignalBits, Value) {
     // Handle mutable set -> immutable set
     if let Some(s) = args[0].as_set_mut() {
         let items: BTreeSet<Value> = s.borrow().iter().copied().collect();
@@ -401,7 +401,7 @@ pub fn prim_freeze(args: &[Value]) -> (SignalBits, Value) {
 /// Convert an immutable collection to its mutable equivalent
 /// (thaw collection) -> mutable collection
 /// Handles: struct -> table, set -> @set
-pub fn prim_thaw(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_thaw(args: &[Value]) -> (SignalBits, Value) {
     // Handle immutable set -> mutable set
     if let Some(s) = args[0].as_set() {
         let items: BTreeSet<Value> = s.iter().copied().collect();

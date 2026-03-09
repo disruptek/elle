@@ -69,7 +69,7 @@ use super::core::VM;
 /// When a tail call occurs before a signal, the active context differs from
 /// the original closure — callers that create `SuspendedFrame`s must use
 /// these fields, not the original closure's bytecode/constants.
-pub struct ExecResult {
+pub(crate) struct ExecResult {
     pub bits: SignalBits,
     pub ip: usize,
     pub bytecode: Rc<Vec<u8>>,

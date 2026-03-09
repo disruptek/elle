@@ -101,7 +101,7 @@ pub const YIELD_SENTINEL: u64 = 0xDEAD_CAFE_DEAD_CAFEu64;
 /// Read by `elle_jit_yield` runtime helper (Chunk 2).
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub struct YieldPointMeta {
+pub(crate) struct YieldPointMeta {
     /// Bytecode IP to resume at (matches the interpreter's SuspendedFrame.ip)
     pub resume_ip: usize,
     /// Number of spilled values that constitute the operand stack.
@@ -120,7 +120,7 @@ pub struct YieldPointMeta {
 /// Read by `elle_jit_yield_through_call` runtime helper.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub struct CallSiteMeta {
+pub(crate) struct CallSiteMeta {
     /// Bytecode IP to resume at (matches the interpreter's SuspendedFrame.ip)
     pub resume_ip: usize,
     /// Total number of spilled values (locals + operands).

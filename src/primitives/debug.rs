@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 // ============================================================================
 
 /// (closure? value) — true if value is a bytecode closure
-pub fn prim_is_closure(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_closure(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -34,7 +34,7 @@ pub fn prim_is_closure(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (jit? value) — true if closure has JIT-compiled code
-pub fn prim_is_jit(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_jit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -52,7 +52,7 @@ pub fn prim_is_jit(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (pure? value) — true if closure has Pure yield behavior
-pub fn prim_is_pure(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_pure(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -70,7 +70,7 @@ pub fn prim_is_pure(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (mutates-params? value) — true if closure mutates any parameters
-pub fn prim_mutates_params(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_mutates_params(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -88,7 +88,7 @@ pub fn prim_mutates_params(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (fn/errors? value) — true if closure may error
-pub fn prim_errors(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_errors(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -110,7 +110,7 @@ pub fn prim_errors(args: &[Value]) -> (SignalBits, Value) {
 // ============================================================================
 
 /// (arity value) — closure arity as int, pair, or nil
-pub fn prim_arity(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arity(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -133,7 +133,7 @@ pub fn prim_arity(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (captures value) — number of captured variables, or nil
-pub fn prim_captures(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_captures(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -151,7 +151,7 @@ pub fn prim_captures(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (bytecode-size value) — size of bytecode in bytes, or nil
-pub fn prim_bytecode_size(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_bytecode_size(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -177,7 +177,7 @@ pub fn prim_bytecode_size(args: &[Value]) -> (SignalBits, Value) {
 /// If `target` is a closure, returns its docstring directly (or "No documentation found").
 /// If `target` is a string or keyword, sends a SIG_QUERY to the VM to look up
 /// builtin docs by name.
-pub fn prim_doc(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_doc(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -214,7 +214,7 @@ pub fn prim_doc(args: &[Value]) -> (SignalBits, Value) {
 /// - "doc" name → string
 /// - "global?" symbol → bool
 /// - "fiber/self" _ → fiber or nil
-pub fn prim_vm_query(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_vm_query(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -242,7 +242,7 @@ pub fn prim_vm_query(args: &[Value]) -> (SignalBits, Value) {
 /// (string->keyword str) — convert a string to a keyword
 ///
 /// Creates a content-addressed keyword from the string name.
-pub fn prim_string_to_keyword(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_to_keyword(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -272,7 +272,7 @@ pub fn prim_string_to_keyword(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Returns a sorted list of strings. With no arguments, returns all names.
 /// With a category keyword or string, filters by category (e.g., :math, :"special form").
-pub fn prim_list_primitives(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_list_primitives(args: &[Value]) -> (SignalBits, Value) {
     if args.len() > 1 {
         return (
             SIG_ERROR,
@@ -296,7 +296,7 @@ pub fn prim_list_primitives(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Returns a struct with keys: "name", "doc", "params", "category", "example", "arity", "effect".
 /// Returns nil if the primitive is not found.
-pub fn prim_primitive_meta(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_primitive_meta(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -316,7 +316,7 @@ pub fn prim_primitive_meta(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Returns a bare integer. Unlike arena/stats (which returns a struct),
 /// this has zero measurement overhead — integers are immediate values.
-pub fn prim_arena_count(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_count(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
             SIG_ERROR,
@@ -335,7 +335,7 @@ pub fn prim_arena_count(args: &[Value]) -> (SignalBits, Value) {
 /// (arena/stats) — return heap arena statistics
 ///
 /// Returns a struct with :count (live objects) and :capacity (vec capacity).
-pub fn prim_arena_stats(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_stats(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
             SIG_ERROR,
@@ -356,7 +356,7 @@ pub fn prim_arena_stats(args: &[Value]) -> (SignalBits, Value) {
 /// Returns a struct with :enters (RegionEnter count) and :dtors-run
 /// (destructors run by RegionExit). Only non-zero inside child fibers
 /// (root fiber has no FiberHeap). Returns {:enters 0 :dtors-run 0} for root.
-pub fn prim_scope_stats(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_scope_stats(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
             SIG_ERROR,
@@ -380,7 +380,7 @@ pub fn prim_scope_stats(args: &[Value]) -> (SignalBits, Value) {
 // ============================================================================
 
 /// (disbit closure) — disassemble bytecode as array of strings
-pub fn prim_disbit(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_disbit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -411,7 +411,7 @@ pub fn prim_disbit(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (disjit closure) — return Cranelift IR as array of strings, or nil
-pub fn prim_disjit(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_disjit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -647,7 +647,7 @@ fn flow_from_closure(closure: &std::rc::Rc<crate::value::heap::Closure>) -> (Sig
 ///
 /// Returns nil if the closure has no LIR (e.g., native function or LIR discarded).
 /// Errors if argument is not a closure or fiber, or if the fiber is currently executing.
-pub fn prim_fn_flow(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fn_flow(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -687,7 +687,7 @@ pub fn prim_fn_flow(args: &[Value]) -> (SignalBits, Value) {
 
 /// Prints a value with debug information
 /// (debug-print value)
-pub fn prim_debug_print(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_debug_print(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -708,7 +708,7 @@ pub fn prim_debug_print(args: &[Value]) -> (SignalBits, Value) {
 /// Label can be a string or symbol. Symbols are resolved to their
 /// name via the thread-local symbol table (same access pattern as
 /// symbol->string).
-pub fn prim_trace(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_trace(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -745,7 +745,7 @@ pub fn prim_trace(args: &[Value]) -> (SignalBits, Value) {
 /// Returns memory usage statistics
 /// (memory-usage)
 /// Returns a list: (rss-bytes virtual-bytes)
-pub fn prim_memory_usage(_args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_memory_usage(_args: &[Value]) -> (SignalBits, Value) {
     let (rss_bytes, virtual_bytes) = get_memory_usage();
     (
         SIG_OK,
@@ -869,7 +869,7 @@ fn get_memory_usage() -> (u64, u64) {
 /// ```text
 /// {:+ <native-fn> :cons <native-fn> :my-var 42 ...}
 /// ```
-pub fn prim_environment(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_environment(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
             SIG_ERROR,
@@ -895,7 +895,7 @@ pub fn prim_environment(args: &[Value]) -> (SignalBits, Value) {
 /// Operates directly on thread-local state (no SIG_QUERY) to avoid allocating
 /// cons cells for the query message — those allocations would themselves be
 /// subject to the limit, creating a chicken-and-egg problem.
-pub fn prim_arena_set_object_limit(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_set_object_limit(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() || args.len() > 2 {
         return (
             SIG_ERROR,
@@ -964,7 +964,7 @@ pub fn prim_arena_set_object_limit(args: &[Value]) -> (SignalBits, Value) {
 /// Get current object limit. Returns int or nil (unlimited).
 ///
 /// Operates directly on thread-local state (no SIG_QUERY).
-pub fn prim_arena_object_limit(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_object_limit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() > 1 {
         return (
             SIG_ERROR,
@@ -1009,7 +1009,7 @@ pub fn prim_arena_object_limit(args: &[Value]) -> (SignalBits, Value) {
 /// (0 for root). :global = HEAP_ARENA object count × 128 (estimated object size).
 ///
 /// Operates directly on thread-local state (no SIG_QUERY).
-pub fn prim_arena_bytes(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_bytes(args: &[Value]) -> (SignalBits, Value) {
     if args.len() > 1 {
         return (
             SIG_ERROR,
@@ -1047,7 +1047,7 @@ pub fn prim_arena_bytes(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Pass to arena/reset to reclaim all objects allocated after this point.
 /// Dangerous: invalidates all Values allocated after the mark.
-pub fn prim_arena_checkpoint(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_checkpoint(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
             SIG_ERROR,
@@ -1067,7 +1067,7 @@ pub fn prim_arena_checkpoint(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Runs Drop for freed objects. Dangerous: any Value pointing into the
 /// freed region is now invalid.
-pub fn prim_arena_reset(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_reset(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -1120,7 +1120,7 @@ pub fn prim_arena_reset(args: &[Value]) -> (SignalBits, Value) {
 /// Sends SIG_QUERY with (:arena/allocs . thunk). The VM handles this
 /// specially: it snapshots the heap count, calls the thunk, snapshots
 /// again, and returns a cons of (result . net-allocs).
-pub fn prim_arena_allocs(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_allocs(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -1137,7 +1137,7 @@ pub fn prim_arena_allocs(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (arena/peak) or (arena/peak :global) — return peak object count (high-water mark)
-pub fn prim_arena_peak(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_peak(args: &[Value]) -> (SignalBits, Value) {
     if args.len() > 1 {
         return (
             SIG_ERROR,
@@ -1170,7 +1170,7 @@ pub fn prim_arena_peak(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (arena/reset-peak) or (arena/reset-peak :global) — reset peak to current count, return previous peak
-pub fn prim_arena_reset_peak(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_reset_peak(args: &[Value]) -> (SignalBits, Value) {
     if args.len() > 1 {
         return (
             SIG_ERROR,
@@ -1206,7 +1206,7 @@ pub fn prim_arena_reset_peak(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (arena/fiber-stats fiber) — return heap stats for a suspended or dead fiber
-pub fn prim_arena_fiber_stats(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_arena_fiber_stats(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -1223,7 +1223,7 @@ pub fn prim_arena_fiber_stats(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for debugging operations.
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "closure?",
         func: prim_is_closure,

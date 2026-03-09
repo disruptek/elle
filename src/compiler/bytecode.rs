@@ -230,7 +230,7 @@ pub enum Instruction {
 
 /// Inline cache entry for function lookups
 #[derive(Debug, Clone)]
-pub struct CacheEntry {
+pub(crate) struct CacheEntry {
     pub symbol_id: u32,
     pub cached_value: Option<Value>,
 }

@@ -11,7 +11,7 @@ use libffi::middle::Type;
 use std::ffi::{c_void, CString};
 
 /// Convert a `TypeDesc` to the corresponding `libffi::middle::Type`.
-pub fn to_libffi_type(desc: &TypeDesc) -> Type {
+pub(crate) fn to_libffi_type(desc: &TypeDesc) -> Type {
     match desc {
         TypeDesc::Void => Type::void(),
         TypeDesc::Bool => Type::c_int(),

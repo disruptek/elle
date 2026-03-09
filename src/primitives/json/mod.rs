@@ -16,7 +16,7 @@ use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
 /// Parse a JSON string into Elle values
-pub fn prim_json_parse(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_json_parse(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -44,7 +44,7 @@ pub fn prim_json_parse(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Serialize an Elle value to compact JSON
-pub fn prim_json_serialize(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_json_serialize(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -63,7 +63,7 @@ pub fn prim_json_serialize(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Serialize an Elle value to pretty-printed JSON with 2-space indentation
-pub fn prim_json_serialize_pretty(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_json_serialize_pretty(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -82,7 +82,7 @@ pub fn prim_json_serialize_pretty(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for JSON operations
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "json/parse",
         func: prim_json_parse,

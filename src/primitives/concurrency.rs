@@ -283,7 +283,7 @@ fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
 /// The closure's bytecode is compiled and executed in that VM.
 ///
 /// For JIT-compiled closures, falls back to the source closure for thread-safe execution.
-pub fn prim_spawn(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_spawn(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -323,7 +323,7 @@ pub fn prim_spawn(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Blocks until the spawned thread completes and returns the actual Value result.
 /// If the thread produced an error, that error is propagated.
-pub fn prim_join(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_join(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -375,7 +375,7 @@ pub fn prim_join(args: &[Value]) -> (SignalBits, Value) {
 
 /// Returns the ID of the current thread
 /// (current-thread-id)
-pub fn prim_current_thread_id(_args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_current_thread_id(_args: &[Value]) -> (SignalBits, Value) {
     let id = std::thread::current().id();
     // ThreadId debug format is "ThreadId(N)" — extract the integer
     let s = format!("{:?}", id);
@@ -388,7 +388,7 @@ pub fn prim_current_thread_id(_args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for concurrency operations
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "sys/spawn",
         func: prim_spawn,

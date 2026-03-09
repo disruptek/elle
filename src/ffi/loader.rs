@@ -3,7 +3,7 @@
 //! Supports loading .so files on Linux and provides stubs for other platforms.
 
 /// Handle to a loaded shared library.
-pub struct LibraryHandle {
+pub(crate) struct LibraryHandle {
     /// Unique ID for this library in the FFI subsystem
     pub id: u32,
     /// Path to the library file

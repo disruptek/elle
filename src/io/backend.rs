@@ -29,7 +29,7 @@ struct SyncBackendInner {
 }
 
 /// Synchronous I/O backend. Wrapped as ExternalObject "io-backend".
-pub struct SyncBackend {
+pub(crate) struct SyncBackend {
     inner: RefCell<SyncBackendInner>,
 }
 

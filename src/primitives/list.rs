@@ -46,7 +46,7 @@ fn get_symbol_name(sid: SymbolId) -> Option<String> {
 }
 
 /// Construct a cons cell
-pub fn prim_cons(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_cons(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -60,7 +60,7 @@ pub fn prim_cons(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Get the first element of a sequence (list, tuple, array, string)
-pub fn prim_first(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_first(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -124,7 +124,7 @@ pub fn prim_first(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Get the rest of a sequence (list, tuple, array, string)
-pub fn prim_rest(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_rest(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -194,12 +194,12 @@ pub fn prim_rest(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Create a list from arguments
-pub fn prim_list(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_list(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, list(args.to_vec()))
 }
 
 /// Get the length of a collection (universal for all container types)
-pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_length(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -321,7 +321,7 @@ pub fn prim_length(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if a collection is empty (O(1) operation for most types)
-pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -459,7 +459,7 @@ pub fn prim_empty(args: &[Value]) -> (SignalBits, Value) {
 /// For tuples: returns new tuple
 /// For strings: returns new string
 /// `(append collection1 collection2)`
-pub fn prim_append(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_append(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -645,7 +645,7 @@ pub fn prim_append(args: &[Value]) -> (SignalBits, Value) {
 /// Polymorphic concat - always returns new value, never mutates
 /// Works on arrays, tuples, and strings
 /// `(concat collection1 collection2)`
-pub fn prim_concat(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_concat(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -785,7 +785,7 @@ pub fn prim_concat(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Reverse a sequence (list, tuple, array, string)
-pub fn prim_reverse(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_reverse(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -835,7 +835,7 @@ pub fn prim_reverse(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Get the last element of a list
-pub fn prim_last(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_last(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -860,7 +860,7 @@ pub fn prim_last(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Get all elements of a list except the last
-pub fn prim_butlast(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_butlast(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -894,7 +894,7 @@ pub fn prim_butlast(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Take the first n elements of a list
-pub fn prim_take(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_take(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -936,7 +936,7 @@ pub fn prim_take(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Drop the first n elements of a list
-pub fn prim_drop(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_drop(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -978,7 +978,7 @@ pub fn prim_drop(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for list operations
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "cons",
         func: prim_cons,

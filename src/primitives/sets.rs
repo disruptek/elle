@@ -44,7 +44,7 @@ fn freeze_value(v: Value) -> Value {
 /// (set elem1 elem2 ...) -> set
 ///
 /// Creates an immutable set, deduplicating elements and freezing mutable values
-pub fn prim_set(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_set(args: &[Value]) -> (SignalBits, Value) {
     let mut set = BTreeSet::new();
     for arg in args {
         set.insert(freeze_value(*arg));
@@ -57,7 +57,7 @@ pub fn prim_set(args: &[Value]) -> (SignalBits, Value) {
 /// (@set elem1 elem2 ...) -> @set
 ///
 /// Creates a mutable set, deduplicating elements and freezing mutable values
-pub fn prim_at_set(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_at_set(args: &[Value]) -> (SignalBits, Value) {
     let mut set = BTreeSet::new();
     for arg in args {
         set.insert(freeze_value(*arg));
@@ -70,7 +70,7 @@ pub fn prim_at_set(args: &[Value]) -> (SignalBits, Value) {
 /// (set? value) -> bool
 ///
 /// Returns true for both immutable and mutable sets. Use (type-of x) to distinguish.
-pub fn prim_is_set(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_set(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -91,7 +91,7 @@ pub fn prim_is_set(args: &[Value]) -> (SignalBits, Value) {
 /// (contains? set value) -> bool
 ///
 /// Returns true if the value is a member of the set
-pub fn prim_contains(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_contains(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -126,7 +126,7 @@ pub fn prim_contains(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// For immutable sets, returns a new set with the element added.
 /// For mutable sets, modifies in place and returns the set.
-pub fn prim_add(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_add(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -164,7 +164,7 @@ pub fn prim_add(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// For immutable sets, returns a new set with the element removed.
 /// For mutable sets, modifies in place and returns the set.
-pub fn prim_del(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_del(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -202,7 +202,7 @@ pub fn prim_del(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Both arguments must be the same type (both immutable or both mutable).
 /// Returns a set containing all elements from both sets.
-pub fn prim_union(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_union(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -235,7 +235,7 @@ pub fn prim_union(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Both arguments must be the same type (both immutable or both mutable).
 /// Returns a set containing only elements present in both sets.
-pub fn prim_intersection(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_intersection(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -269,7 +269,7 @@ pub fn prim_intersection(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Both arguments must be the same type (both immutable or both mutable).
 /// Returns a set containing elements in set1 but not in set2.
-pub fn prim_difference(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_difference(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -301,7 +301,7 @@ pub fn prim_difference(args: &[Value]) -> (SignalBits, Value) {
 /// (set->array set) -> array or tuple
 ///
 /// Immutable set → tuple, mutable set → array. Elements in sorted order.
-pub fn prim_set_to_array(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_set_to_array(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -338,7 +338,7 @@ pub fn prim_set_to_array(args: &[Value]) -> (SignalBits, Value) {
 /// Immutable inputs (list, tuple, string, bytes, set) → immutable set.
 /// Mutable inputs (array, buffer, blob, @set) → mutable set.
 /// Mutable values are frozen on insertion.
-pub fn prim_seq_to_set(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_seq_to_set(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -452,7 +452,7 @@ pub fn prim_seq_to_set(args: &[Value]) -> (SignalBits, Value) {
     )
 }
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "set",
         func: prim_set,

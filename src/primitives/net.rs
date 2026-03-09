@@ -615,7 +615,7 @@ fn prim_unix_shutdown(args: &[Value]) -> (SignalBits, Value) {
 // PRIMITIVES table
 // ---------------------------------------------------------------------------
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     // TCP
     PrimitiveDef {
         name: "tcp/listen",

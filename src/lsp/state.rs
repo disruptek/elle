@@ -13,7 +13,7 @@ use crate::{analyze_file, init_stdlib, register_primitives, VM};
 use std::collections::HashMap;
 
 /// Document state: source + diagnostics + symbol index
-pub struct DocumentState {
+pub(crate) struct DocumentState {
     pub uri: String,
     pub source_text: String,
     pub symbol_index: SymbolIndex,

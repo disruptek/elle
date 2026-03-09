@@ -15,7 +15,7 @@ use crate::value::{error_val, Value};
 /// (read "42")         # → 42
 /// (read "true")       # → true
 /// ```
-pub fn prim_read(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_read(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -68,7 +68,7 @@ pub fn prim_read(args: &[Value]) -> (SignalBits, Value) {
 /// (read-all "1 2 3")  # → (1 2 3)
 /// (read-all "(+ 1 2) (- 3 4)")  # → ((+ 1 2) (- 3 4))
 /// ```
-pub fn prim_read_all(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_read_all(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -112,7 +112,7 @@ pub fn prim_read_all(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, crate::value::list(values))
 }
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "read",
         func: prim_read,

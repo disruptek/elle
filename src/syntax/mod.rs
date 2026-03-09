@@ -23,7 +23,7 @@ pub use span::Span;
 /// Used for hygienic macro expansion - identifiers with different scope sets
 /// are considered different even if they have the same name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ScopeId(pub u32);
+pub(crate) struct ScopeId(pub u32);
 
 /// Pre-analysis syntax tree node.
 #[derive(Debug, Clone)]

@@ -1,7 +1,7 @@
 use super::core::VM;
 use crate::value::Value;
 
-pub fn handle_is_nil(vm: &mut VM) {
+pub(crate) fn handle_is_nil(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -10,7 +10,7 @@ pub fn handle_is_nil(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_nil()));
 }
 
-pub fn handle_is_pair(vm: &mut VM) {
+pub(crate) fn handle_is_pair(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -19,7 +19,7 @@ pub fn handle_is_pair(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_cons()));
 }
 
-pub fn handle_is_number(vm: &mut VM) {
+pub(crate) fn handle_is_number(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -28,7 +28,7 @@ pub fn handle_is_number(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_number()));
 }
 
-pub fn handle_is_symbol(vm: &mut VM) {
+pub(crate) fn handle_is_symbol(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -37,7 +37,7 @@ pub fn handle_is_symbol(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_symbol()));
 }
 
-pub fn handle_not(vm: &mut VM) {
+pub(crate) fn handle_not(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -46,7 +46,7 @@ pub fn handle_not(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(!val.is_truthy()));
 }
 
-pub fn handle_is_tuple(vm: &mut VM) {
+pub(crate) fn handle_is_tuple(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -55,7 +55,7 @@ pub fn handle_is_tuple(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_tuple()));
 }
 
-pub fn handle_is_array(vm: &mut VM) {
+pub(crate) fn handle_is_array(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -64,7 +64,7 @@ pub fn handle_is_array(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_array()));
 }
 
-pub fn handle_is_struct(vm: &mut VM) {
+pub(crate) fn handle_is_struct(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -73,7 +73,7 @@ pub fn handle_is_struct(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_struct()));
 }
 
-pub fn handle_array_len(vm: &mut VM) {
+pub(crate) fn handle_array_len(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -89,7 +89,7 @@ pub fn handle_array_len(vm: &mut VM) {
     vm.fiber.stack.push(Value::int(len));
 }
 
-pub fn handle_is_table(vm: &mut VM) {
+pub(crate) fn handle_is_table(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -98,7 +98,7 @@ pub fn handle_is_table(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_table()));
 }
 
-pub fn handle_is_empty_list(vm: &mut VM) {
+pub(crate) fn handle_is_empty_list(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -107,7 +107,7 @@ pub fn handle_is_empty_list(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_empty_list()));
 }
 
-pub fn handle_is_set(vm: &mut VM) {
+pub(crate) fn handle_is_set(vm: &mut VM) {
     let val = vm
         .fiber
         .stack
@@ -116,7 +116,7 @@ pub fn handle_is_set(vm: &mut VM) {
     vm.fiber.stack.push(Value::bool(val.is_set()));
 }
 
-pub fn handle_is_set_mut(vm: &mut VM) {
+pub(crate) fn handle_is_set_mut(vm: &mut VM) {
     let val = vm
         .fiber
         .stack

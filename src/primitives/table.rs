@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Declarative table of table primitives.
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "table",
         func: prim_table,
@@ -90,7 +90,7 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
 
 /// Create a mutable table from key-value pairs
 /// (table key1 val1 key2 val2 ...)
-pub fn prim_table(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_table(args: &[Value]) -> (SignalBits, Value) {
     if !args.len().is_multiple_of(2) {
         return (
             SIG_ERROR,
@@ -127,7 +127,7 @@ pub fn prim_table(args: &[Value]) -> (SignalBits, Value) {
 /// For structs: returns a new struct without the field (immutable)
 /// For sets: delegates to set-specific del
 /// `(del collection key)`
-pub fn prim_del(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_del(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -205,7 +205,7 @@ pub fn prim_del(args: &[Value]) -> (SignalBits, Value) {
 
 /// Polymorphic get - works on tuples, arrays, strings, tables, and structs
 /// `(get collection key [default])`
-pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_get(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
         return (
             SIG_ERROR,
@@ -511,7 +511,7 @@ pub fn prim_get(args: &[Value]) -> (SignalBits, Value) {
 
 /// Polymorphic keys - works on both tables and structs
 /// `(keys collection)`
-pub fn prim_keys(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_keys(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -569,7 +569,7 @@ pub fn prim_keys(args: &[Value]) -> (SignalBits, Value) {
 
 /// Polymorphic values - works on both tables and structs
 /// `(values collection)`
-pub fn prim_values(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_values(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -627,7 +627,7 @@ pub fn prim_values(args: &[Value]) -> (SignalBits, Value) {
 
 /// Polymorphic has-key? - works on both tables and structs
 /// `(has-key? collection key)`
-pub fn prim_has_key(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_has_key(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -700,7 +700,7 @@ pub fn prim_has_key(args: &[Value]) -> (SignalBits, Value) {
 /// For tables: mutates in-place and returns the table
 /// For structs: returns a new struct with the updated field (immutable)
 /// `(put collection key value)`
-pub fn prim_put(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_put(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
             SIG_ERROR,

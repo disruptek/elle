@@ -6,7 +6,7 @@ use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
 /// Check if value is nil
-pub fn prim_is_nil(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_nil(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -20,7 +20,7 @@ pub fn prim_is_nil(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a pair (cons cell)
-pub fn prim_is_pair(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_pair(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -38,7 +38,7 @@ pub fn prim_is_pair(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a list (empty list or cons cell)
-pub fn prim_is_list(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_list(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -57,7 +57,7 @@ pub fn prim_is_list(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a number
-pub fn prim_is_number(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_number(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -71,7 +71,7 @@ pub fn prim_is_number(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is an integer
-pub fn prim_is_integer(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_integer(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -85,7 +85,7 @@ pub fn prim_is_integer(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a float
-pub fn prim_is_float(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_float(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -99,7 +99,7 @@ pub fn prim_is_float(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a symbol
-pub fn prim_is_symbol(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_symbol(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -117,7 +117,7 @@ pub fn prim_is_symbol(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a string
-pub fn prim_is_string(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -131,7 +131,7 @@ pub fn prim_is_string(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a boolean
-pub fn prim_is_boolean(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_boolean(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -145,7 +145,7 @@ pub fn prim_is_boolean(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a keyword
-pub fn prim_is_keyword(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_keyword(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -160,7 +160,7 @@ pub fn prim_is_keyword(args: &[Value]) -> (SignalBits, Value) {
 
 /// Check if value is a keyword
 /// Get the type name of a value as a keyword
-pub fn prim_type_of(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_type_of(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -176,7 +176,7 @@ pub fn prim_type_of(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a raw C pointer
-pub fn prim_is_pointer(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_pointer(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -193,7 +193,7 @@ pub fn prim_is_pointer(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is an array (mutable indexed sequence)
-pub fn prim_is_array(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_array(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -207,7 +207,7 @@ pub fn prim_is_array(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a tuple (immutable indexed sequence)
-pub fn prim_is_tuple(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_tuple(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -221,7 +221,7 @@ pub fn prim_is_tuple(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a table (mutable key-value map)
-pub fn prim_is_table(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_table(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -235,7 +235,7 @@ pub fn prim_is_table(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a buffer (mutable byte sequence)
-pub fn prim_is_buffer(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_buffer(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -249,7 +249,7 @@ pub fn prim_is_buffer(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is bytes (immutable binary data)
-pub fn prim_is_bytes(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_bytes(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -263,7 +263,7 @@ pub fn prim_is_bytes(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a blob (mutable binary data)
-pub fn prim_is_blob(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_blob(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -277,7 +277,7 @@ pub fn prim_is_blob(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a struct (immutable key-value map)
-pub fn prim_is_struct(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_struct(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -291,7 +291,7 @@ pub fn prim_is_struct(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a function (closure or primitive)
-pub fn prim_is_function(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_function(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -308,7 +308,7 @@ pub fn prim_is_function(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is a built-in primitive function
-pub fn prim_is_primitive(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_primitive(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -322,7 +322,7 @@ pub fn prim_is_primitive(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if value is numerically zero
-pub fn prim_is_zero(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_zero(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -342,7 +342,7 @@ pub fn prim_is_zero(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::bool(is_zero))
 }
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "nil?",
         func: prim_is_nil,

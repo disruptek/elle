@@ -6,17 +6,17 @@ use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
 /// Create an array from arguments
-pub fn prim_array(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_array(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::array(args.to_vec()))
 }
 
 /// Create a tuple from arguments
-pub fn prim_tuple(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_tuple(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::tuple(args.to_vec()))
 }
 
 /// Create an array of n elements, all set to fill
-pub fn prim_array_new(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_array_new(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -54,7 +54,7 @@ pub fn prim_array_new(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Push a value onto the end of an array or buffer (mutates in place, returns the collection)
-pub fn prim_push(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_push(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -143,7 +143,7 @@ pub fn prim_push(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Pop a value from the end of an array or buffer (mutates in place, returns the removed element)
-pub fn prim_pop(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_pop(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -215,7 +215,7 @@ pub fn prim_pop(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Pop n values from the end of an array or buffer and return them as a new collection
-pub fn prim_popn(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_popn(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -278,7 +278,7 @@ pub fn prim_popn(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Insert a value at an index in an array or buffer (mutates in place, returns the collection)
-pub fn prim_insert(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_insert(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
             SIG_ERROR,
@@ -369,7 +369,7 @@ pub fn prim_insert(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Remove element(s) at an index from an array or buffer (mutates in place, returns the collection)
-pub fn prim_remove(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_remove(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
         return (
             SIG_ERROR,
@@ -464,7 +464,7 @@ pub fn prim_remove(args: &[Value]) -> (SignalBits, Value) {
     )
 }
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "tuple",
         func: prim_tuple,

@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use crate::jit::JitCode;
 
-pub struct TailCallInfo {
+pub(crate) struct TailCallInfo {
     pub bytecode: Rc<Vec<u8>>,
     pub constants: Rc<Vec<Value>>,
     pub env: Rc<Vec<Value>>,

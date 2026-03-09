@@ -86,7 +86,7 @@ fn extract_pointer_addr(value: &Value, context: &str) -> Result<usize, (SignalBi
 
 // ── Library loading ─────────────────────────────────────────────────
 
-pub fn prim_ffi_native(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_native(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -140,7 +140,7 @@ pub fn prim_ffi_native(args: &[Value]) -> (SignalBits, Value) {
 
 // ── Symbol lookup ───────────────────────────────────────────────────
 
-pub fn prim_ffi_lookup(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_lookup(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -206,7 +206,7 @@ pub fn prim_ffi_lookup(args: &[Value]) -> (SignalBits, Value) {
 
 // ── Signature creation ──────────────────────────────────────────────
 
-pub fn prim_ffi_signature(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_signature(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
         return (
             SIG_ERROR,
@@ -292,7 +292,7 @@ pub fn prim_ffi_signature(args: &[Value]) -> (SignalBits, Value) {
 
 // ── Function call ───────────────────────────────────────────────────
 
-pub fn prim_ffi_call(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_call(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 {
         return (
             SIG_ERROR,
@@ -371,7 +371,7 @@ pub fn prim_ffi_call(args: &[Value]) -> (SignalBits, Value) {
 
 // ── Struct/array type creation ──────────────────────────────────────
 
-pub fn prim_ffi_struct(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_struct(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -432,7 +432,7 @@ pub fn prim_ffi_struct(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::ffi_type(desc))
 }
 
-pub fn prim_ffi_array(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_array(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -886,7 +886,7 @@ pub fn prim_ffi_write(args: &[Value]) -> (SignalBits, Value) {
 
 // ── String from pointer ─────────────────────────────────────────────
 
-pub fn prim_ffi_string(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_string(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() || args.len() > 2 {
         return (
             SIG_ERROR,
@@ -943,7 +943,7 @@ pub fn prim_ffi_string(args: &[Value]) -> (SignalBits, Value) {
 
 // ── Callback creation ───────────────────────────────────────────────
 
-pub fn prim_ffi_callback(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_callback(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -1027,7 +1027,7 @@ pub fn prim_ffi_callback(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::pointer(code_ptr))
 }
 
-pub fn prim_ffi_callback_free(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_ffi_callback_free(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -1078,7 +1078,7 @@ pub fn prim_ffi_callback_free(args: &[Value]) -> (SignalBits, Value) {
 
 // ── PRIMITIVES table ────────────────────────────────────────────────
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "ffi/native",
         func: prim_ffi_native,

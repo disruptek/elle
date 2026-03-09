@@ -152,7 +152,7 @@ fn extract_allocator_rc(value: Value) -> Option<Rc<AllocatorBox>> {
     }
 }
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "%install-allocator",
         func: prim_install_allocator,

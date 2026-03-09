@@ -6,7 +6,7 @@ use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
 /// Convert to integer
-pub fn prim_to_int(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_to_int(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -50,7 +50,7 @@ pub fn prim_to_int(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Convert to float
-pub fn prim_to_float(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_to_float(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -94,7 +94,7 @@ pub fn prim_to_float(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Convert to string (variadic: 0 args → "", 1 arg → convert, N args → concatenate)
-pub fn prim_to_string(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_to_string(args: &[Value]) -> (SignalBits, Value) {
     match args.len() {
         0 => (SIG_OK, Value::string("")),
         1 => prim_to_string_single(args[0]),
@@ -232,7 +232,7 @@ fn prim_to_string_single(val: Value) -> (SignalBits, Value) {
 }
 
 /// Convert number to string
-pub fn prim_number_to_string(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_number_to_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -265,25 +265,25 @@ pub fn prim_number_to_string(args: &[Value]) -> (SignalBits, Value) {
 
 /// Convert string to integer (Scheme-style name)
 /// `(string->int str)`
-pub fn prim_string_to_int(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_to_int(args: &[Value]) -> (SignalBits, Value) {
     prim_to_int(args)
 }
 
 /// Convert string to float (Scheme-style name)
 /// `(string->float str)`
-pub fn prim_string_to_float(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_to_float(args: &[Value]) -> (SignalBits, Value) {
     prim_to_float(args)
 }
 
 /// Convert any value to string (Scheme-style name)
 /// `(any->string val)`
-pub fn prim_any_to_string(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_any_to_string(args: &[Value]) -> (SignalBits, Value) {
     prim_to_string(args)
 }
 
 /// Convert keyword to string (without colon prefix)
 /// `(keyword->string kw)` → `"name"`
-pub fn prim_keyword_to_string(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_keyword_to_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -310,7 +310,7 @@ pub fn prim_keyword_to_string(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// `(symbol->string sym)` → `"name"`
-pub fn prim_symbol_to_string(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_symbol_to_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -346,7 +346,7 @@ pub fn prim_symbol_to_string(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for conversion module.
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "number->string",
         func: prim_number_to_string,

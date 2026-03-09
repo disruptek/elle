@@ -5,7 +5,7 @@ use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
 /// Import a module file
-pub fn prim_import_file(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_import_file(args: &[Value]) -> (SignalBits, Value) {
     // (import-file "path/to/module.elle")
     // Loads and compiles a .elle file as a module
     if args.len() != 1 {
@@ -163,7 +163,7 @@ pub fn prim_import_file(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for module loading operations
-pub const PRIMITIVES: &[PrimitiveDef] = &[PrimitiveDef {
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[PrimitiveDef {
     name: "module/import",
     func: prim_import_file,
     effect: Effect::errors(),

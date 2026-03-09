@@ -39,7 +39,7 @@ fn as_text(val: &Value, prim_name: &str) -> Result<(String, bool), (SignalBits, 
 }
 
 /// Convert string or buffer to uppercase
-pub fn prim_string_upcase(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_upcase(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -62,7 +62,7 @@ pub fn prim_string_upcase(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Convert string or buffer to lowercase
-pub fn prim_string_downcase(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_downcase(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -85,7 +85,7 @@ pub fn prim_string_downcase(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Get a substring from a string or buffer
-pub fn prim_substring(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_substring(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
         return (
             SIG_ERROR,
@@ -144,7 +144,7 @@ pub fn prim_substring(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Find the grapheme index of a substring, with optional start offset
-pub fn prim_string_find(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_find(args: &[Value]) -> (SignalBits, Value) {
     if args.len() < 2 || args.len() > 3 {
         return (
             SIG_ERROR,
@@ -221,7 +221,7 @@ pub fn prim_string_find(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Get a character at an index from a string or buffer
-pub fn prim_char_at(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_char_at(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -280,7 +280,7 @@ pub fn prim_char_at(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Split string or buffer on delimiter, returning a tuple
-pub fn prim_string_split(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_split(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -324,7 +324,7 @@ pub fn prim_string_split(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Replace all occurrences of old with new in a string or buffer
-pub fn prim_string_replace(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_replace(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
         return (
             SIG_ERROR,
@@ -389,7 +389,7 @@ pub fn prim_string_replace(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Trim leading and trailing whitespace from a string or buffer
-pub fn prim_string_trim(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_trim(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -413,7 +413,7 @@ pub fn prim_string_trim(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if string or buffer contains substring
-pub fn prim_string_contains(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_contains(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -455,7 +455,7 @@ pub fn prim_string_contains(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if string or buffer starts with prefix
-pub fn prim_string_starts_with(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_starts_with(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -500,7 +500,7 @@ pub fn prim_string_starts_with(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Check if string or buffer ends with suffix
-pub fn prim_string_ends_with(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_ends_with(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -545,7 +545,7 @@ pub fn prim_string_ends_with(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Join sequence of strings with separator
-pub fn prim_string_join(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_join(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -616,7 +616,7 @@ pub fn prim_string_join(args: &[Value]) -> (SignalBits, Value) {
 /// Percent-encode a string per RFC 3986.
 /// Unreserved characters (A-Z, a-z, 0-9, '-', '.', '_', '~') pass through.
 /// All others are percent-encoded as %XX with uppercase hex.
-pub fn prim_uri_encode(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_uri_encode(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -664,7 +664,7 @@ pub fn prim_uri_encode(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for string module.
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/upcase",
         func: prim_string_upcase,

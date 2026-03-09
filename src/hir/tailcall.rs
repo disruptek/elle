@@ -33,7 +33,7 @@ use super::expr::{BlockId, Hir, HirKind};
 ///
 /// Call this after analysis, before lowering. The pass walks the tree
 /// and sets `is_tail: true` on `Call` nodes that are in tail position.
-pub fn mark_tail_calls(hir: &mut Hir) {
+pub(crate) fn mark_tail_calls(hir: &mut Hir) {
     // Top-level expressions are not inside a lambda, so not in tail position
     mark(hir, false, &HashSet::new());
 }

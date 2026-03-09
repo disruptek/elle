@@ -5,12 +5,12 @@ use crate::value::types::Arity;
 use crate::value::{list, Value};
 
 /// Get the current package version
-pub fn prim_package_version(_args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_package_version(_args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::string("0.3.0"))
 }
 
 /// Get package information
-pub fn prim_package_info(_args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_package_info(_args: &[Value]) -> (SignalBits, Value) {
     (
         SIG_OK,
         list(vec![
@@ -22,7 +22,7 @@ pub fn prim_package_info(_args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for package operations
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "pkg/version",
         func: prim_package_version,

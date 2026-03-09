@@ -10,7 +10,7 @@ use crate::value::{error_val, list, Value};
 /// Type-preserving: lists return new sorted lists, arrays are mutated
 /// in place and returned, tuples return new sorted tuples.
 /// All elements must be numbers.
-pub fn prim_sort(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_sort(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -127,7 +127,7 @@ pub fn prim_sort(args: &[Value]) -> (SignalBits, Value) {
 /// `(range end)` — 0 to end-1
 /// `(range start end)` — start to end-1
 /// `(range start end step)` — start, start+step, ... while < end (or > end for negative step)
-pub fn prim_range(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_range(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() || args.len() > 3 {
         return (
             SIG_ERROR,
@@ -256,7 +256,7 @@ pub fn prim_range(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::array(result))
 }
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "sort",
         func: prim_sort,

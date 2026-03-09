@@ -35,7 +35,7 @@ fn status_keyword(status: FiberStatus) -> Value {
 ///
 /// Create a fiber from a closure and a signal mask. The mask determines
 /// which signals the parent catches when resuming this fiber.
-pub fn prim_fiber_new(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_new(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -86,7 +86,7 @@ pub fn prim_fiber_new(args: &[Value]) -> (SignalBits, Value) {
 /// delivers the value and continues from where it left off.
 ///
 /// Returns SIG_RESUME — the VM handles the actual fiber swap.
-pub fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() || args.len() > 2 {
         return (
             SIG_ERROR,
@@ -142,7 +142,7 @@ pub fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
 /// Emit a signal from the current fiber. The signal bits and value are
 /// returned directly — the VM's dispatch loop stores them in fiber.signal
 /// and suspends the fiber.
-pub fn prim_fiber_signal(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_signal(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -178,7 +178,7 @@ pub fn prim_fiber_signal(args: &[Value]) -> (SignalBits, Value) {
 /// (fiber/status fiber) → keyword
 ///
 /// Returns the fiber's lifecycle status as a keyword.
-pub fn prim_fiber_status(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_status(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -210,7 +210,7 @@ pub fn prim_fiber_status(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Returns the signal payload from the fiber's last signal or return value.
 /// Returns nil if the fiber has no signal.
-pub fn prim_fiber_value(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_value(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -242,7 +242,7 @@ pub fn prim_fiber_value(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Returns the signal bits from the fiber's last signal.
 /// Returns 0 if the fiber has no signal.
-pub fn prim_fiber_bits(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_bits(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -273,7 +273,7 @@ pub fn prim_fiber_bits(args: &[Value]) -> (SignalBits, Value) {
 /// (fiber/mask fiber) → int
 ///
 /// Returns the fiber's signal mask.
-pub fn prim_fiber_mask(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_mask(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -304,7 +304,7 @@ pub fn prim_fiber_mask(args: &[Value]) -> (SignalBits, Value) {
 /// (fiber? value) → bool
 ///
 /// Type predicate: returns true if the value is a fiber.
-pub fn prim_is_fiber(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_is_fiber(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -322,7 +322,7 @@ pub fn prim_is_fiber(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Returns the parent fiber, or nil if the fiber has no parent
 /// (or the parent has been dropped).
-pub fn prim_fiber_parent(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_parent(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -353,7 +353,7 @@ pub fn prim_fiber_parent(args: &[Value]) -> (SignalBits, Value) {
 /// (fiber/child fiber) → fiber | nil
 ///
 /// Returns the most recently resumed child fiber, or nil if none.
-pub fn prim_fiber_child(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_child(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -388,7 +388,7 @@ pub fn prim_fiber_child(args: &[Value]) -> (SignalBits, Value) {
 ///
 /// Returns SIG_PROPAGATE — the VM sets parent.child = fiber and propagates
 /// the fiber's signal upward.
-pub fn prim_fiber_propagate(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_propagate(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -441,7 +441,7 @@ pub fn prim_fiber_propagate(args: &[Value]) -> (SignalBits, Value) {
 /// into the target fiber (does not walk the child chain).
 ///
 /// Returns SIG_CANCEL — the VM handles the cancellation.
-pub fn prim_fiber_cancel(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_fiber_cancel(args: &[Value]) -> (SignalBits, Value) {
     if args.is_empty() || args.len() > 2 {
         return (
             SIG_ERROR,
@@ -499,7 +499,7 @@ pub fn prim_fiber_cancel(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Declarative primitive definitions for fiber operations
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/new",
         func: prim_fiber_new,

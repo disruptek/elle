@@ -22,7 +22,7 @@ use std::collections::HashSet;
 /// `Root` is the scrutinee itself. Each variant descends one level
 /// into a compound value.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum AccessPath {
+pub(crate) enum AccessPath {
     /// The scrutinee itself.
     Root,
     /// Car (head) of a cons cell at the given path.
@@ -40,7 +40,7 @@ pub enum AccessPath {
 
 /// A constructor represents the "shape" that a pattern tests for.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Constructor {
+pub(crate) enum Constructor {
     /// Literal value (int, float, string, keyword, bool).
     Literal(PatternLiteral),
     /// Cons cell (pair).

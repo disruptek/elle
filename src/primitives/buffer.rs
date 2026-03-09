@@ -8,7 +8,7 @@ use crate::value::{error_val, Value};
 /// Create a buffer from byte arguments
 /// (buffer) => empty buffer
 /// (buffer 72 101 108) => buffer with those bytes
-pub fn prim_buffer(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_buffer(args: &[Value]) -> (SignalBits, Value) {
     let mut bytes = Vec::with_capacity(args.len());
     for (i, arg) in args.iter().enumerate() {
         match arg.as_int() {
@@ -41,7 +41,7 @@ pub fn prim_buffer(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Convert a string to a buffer (UTF-8 bytes)
-pub fn prim_string_to_buffer(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_string_to_buffer(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -68,7 +68,7 @@ pub fn prim_string_to_buffer(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// Convert a buffer to a string (UTF-8)
-pub fn prim_buffer_to_string(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_buffer_to_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -102,7 +102,7 @@ pub fn prim_buffer_to_string(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-pub const PRIMITIVES: &[PrimitiveDef] = &[
+pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "buffer",
         func: prim_buffer,
