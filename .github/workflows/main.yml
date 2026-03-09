@@ -13,8 +13,8 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  ci:
-    name: CI
+  test-examples:
+    name: Test Examples
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
