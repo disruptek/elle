@@ -663,7 +663,7 @@
 # decision tree match in loop
 (var test-result (list))
 (each i (list 1 2 3)
-  (set test-result (cons (match i
+  (assign test-result (cons (match i
                            (1 :one)
                            (2 :two)
                            (3 :three)

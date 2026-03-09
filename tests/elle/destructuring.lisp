@@ -99,7 +99,7 @@
   (assert-eq b 2 "var list basic: b"))
 
 # test_var_destructured_bindings_are_mutable
-(begin
+(block
   (var (a b) (list 1 2))
   (assign a 10)
   (assert-eq a 10 "var destructured mutable: a after set"))

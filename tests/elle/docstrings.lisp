@@ -9,12 +9,12 @@
 
 # Docstring in fn form
 (def my-fn (fn (x) "Adds one to x" (+ x 1)))
-(assert-eq (doc "my-fn") "Adds one to x"
+(assert-eq (doc my-fn) "Adds one to x"
   "fn with docstring should extract it")
 
 # Docstring in defn macro
-(defn greet (name) "Greets someone by name" (string/append "Hello, " name))
-(assert-eq (doc "greet") "Greets someone by name"
+(defn greet (name) "Greets someone by name" (append "Hello, " name))
+(assert-eq (doc greet) "Greets someone by name"
   "defn with docstring should extract it")
 
 # === Builtin docstrings ===
@@ -41,13 +41,13 @@
 
 # Single-body string is NOT a docstring (it's the return value)
 (def single-string-fn (fn () "hello"))
-(let ((result (doc "single-string-fn")))
+(let ((result (doc single-string-fn)))
   (assert-true (string/contains? result "No documentation found")
     "Single-body string should not be treated as docstring"))
 
 # Docstring with multiple body expressions
 (def multi-body-fn (fn (x y) "Adds two numbers" (+ x y)))
-(assert-eq (doc "multi-body-fn") "Adds two numbers"
+(assert-eq (doc multi-body-fn) "Adds two numbers"
   "Docstring with multiple body expressions should work")
 
 # Docstring with complex body
@@ -56,10 +56,10 @@
   (if (<= n 1)
     1
     (* n (complex-fn (- n 1))))))
-(assert-eq (doc "complex-fn") "Computes factorial"
+(assert-eq (doc complex-fn) "Computes factorial"
   "Docstring with complex body should work")
 
 # Empty docstring
 (def empty-doc-fn (fn () "" 42))
-(assert-eq (doc "empty-doc-fn") ""
+(assert-eq (doc empty-doc-fn) ""
   "Empty docstring should be preserved")
