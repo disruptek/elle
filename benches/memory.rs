@@ -14,7 +14,6 @@ use stats_alloc::{Region, StatsAlloc};
 
 static INSTRUMENTED: StatsAlloc<MiMalloc> = StatsAlloc::new(MiMalloc);
 
-#[global_allocator]
 static GLOBAL: &StatsAlloc<MiMalloc> = &INSTRUMENTED;
 
 use elle::pipeline::eval;
