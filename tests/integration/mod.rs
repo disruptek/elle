@@ -14,9 +14,6 @@ mod repl_exit_codes {
 mod new_pipeline {
     include!("new_pipeline.rs");
 }
-mod new_pipeline_property {
-    include!("new_pipeline_property.rs");
-}
 mod pipeline {
     include!("pipeline.rs");
 }
