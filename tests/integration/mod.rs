@@ -18,9 +18,7 @@ mod pipeline {
 mod pipeline_property {
     include!("pipeline_property.rs");
 }
-mod pipeline_point {
-    include!("pipeline_point.rs");
-}
+// pipeline_point tests migrated to tests/elle/pipeline.lisp
 mod thread_transfer {
     include!("thread_transfer.rs");
 }
@@ -46,10 +44,6 @@ mod blocks {
 }
 // primitives tests migrated to tests/elle/primitives.lisp
 // ffi tests migrated to tests/elle/ffi.lisp
-// Keeping only epsilon tolerance and error message tests in Rust
-mod ffi {
-    include!("ffi.rs");
-}
 // bracket_errors tests migrated to tests/elle/brackets.lisp
 mod dispatch {
     include!("dispatch.rs");
@@ -85,9 +79,7 @@ mod allocator {
 mod io {
     include!("io.rs");
 }
-mod jit_yield {
-    include!("jit_yield.rs");
-}
+// jit_yield tests migrated to tests/elle/jit-yield.lisp
 mod net {
     include!("net.rs");
 }
