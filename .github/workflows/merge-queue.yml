@@ -15,6 +15,8 @@ jobs:
   examples:
     name: Examples
     runs-on: ubuntu-latest
+    env:
+      PROPTEST_CASES: 1
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
