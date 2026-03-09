@@ -3,6 +3,7 @@ name: PR Checks
 on:
   pull_request:
     branches: [ main, develop ]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
 
 concurrency:
   group: pr-${{ github.ref }}
@@ -168,7 +169,7 @@ jobs:
     name: Benchmarks
     needs: changes
     runs-on: ubuntu-latest
-    if: needs.changes.outputs.source == 'true'
+    if: needs.changes.outputs.source == 'true' && contains(github.event.pull_request.labels.*.name, 'performance')
     permissions:
       pull-requests: write
     steps:
