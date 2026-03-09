@@ -172,10 +172,11 @@ pub fn prim_bytecode_size(args: &[Value]) -> (SignalBits, Value) {
 // VM-access introspection (SIG_QUERY)
 // ============================================================================
 
-/// (doc name) — look up documentation for any named form (primitive, special form, or macro)
+/// (doc target) — look up documentation for a closure, primitive, special form, or macro
 ///
-/// Sends a SIG_QUERY to the VM which looks up the name in its
-/// `docs` map and returns a formatted doc string.
+/// If `target` is a closure, returns its docstring directly (or "No documentation found").
+/// If `target` is a string or keyword, sends a SIG_QUERY to the VM to look up
+/// builtin docs by name.
 pub fn prim_doc(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -186,6 +187,19 @@ pub fn prim_doc(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
+    // Closure: extract docstring directly — no VM query needed.
+    if let Some(closure) = args[0].as_closure() {
+        return if let Some(doc) = closure.template.doc {
+            (SIG_OK, doc)
+        } else {
+            let name = closure.template.name.as_deref().unwrap_or("<anonymous>");
+            (
+                SIG_OK,
+                Value::string(format!("No documentation found for '{}'", name)),
+            )
+        };
+    }
+    // String or keyword: look up builtin docs via SIG_QUERY.
     (SIG_QUERY, Value::cons(Value::keyword("doc"), args[0]))
 }
 
@@ -1314,10 +1328,10 @@ pub const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_doc,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Look up documentation for a primitive.",
-        params: &["name"],
+        doc: "Look up documentation for a closure (by value) or a builtin (by name string).",
+        params: &["target"],
         category: "meta",
-        example: "(doc \"cons\")",
+        example: "(doc my-fn)",
         aliases: &[],
     },
     PrimitiveDef {

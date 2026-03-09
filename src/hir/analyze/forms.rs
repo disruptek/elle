@@ -292,19 +292,28 @@ impl<'a> Analyzer<'a> {
                         "eval" => return self.analyze_eval(items, span),
                         "parameterize" => return self.analyze_parameterize(items, span),
 
-                        // (doc <symbol>) → (doc "<symbol-name>")
-                        // Rewrites the symbol arg to a string so bare symbols
-                        // like (doc if) work without quoting.
+                        // (doc <symbol>) — if the symbol resolves to a
+                        // user-defined binding (closure with docstring),
+                        // evaluate it normally so prim_doc receives the
+                        // closure value. Otherwise (special forms like `if`,
+                        // primitives like `cons`), rewrite to a string so
+                        // the VM can look up builtin docs by name.
                         "doc" if items.len() == 2 => {
                             if let SyntaxKind::Symbol(sym_name) = &items[1].kind {
-                                let mut rewritten = items.to_vec();
-                                rewritten[1] = Syntax {
-                                    kind: SyntaxKind::String(sym_name.clone()),
-                                    span: items[1].span.clone(),
-                                    scopes: items[1].scopes.clone(),
-                                    scope_exempt: items[1].scope_exempt,
-                                };
-                                return self.analyze_call(&rewritten, span);
+                                let is_user_binding = self
+                                    .lookup(sym_name, &items[1].scopes)
+                                    .map(|b| !self.primitive_values.contains_key(&b))
+                                    .unwrap_or(false);
+                                if !is_user_binding {
+                                    let mut rewritten = items.to_vec();
+                                    rewritten[1] = Syntax {
+                                        kind: SyntaxKind::String(sym_name.clone()),
+                                        span: items[1].span.clone(),
+                                        scopes: items[1].scopes.clone(),
+                                        scope_exempt: items[1].scope_exempt,
+                                    };
+                                    return self.analyze_call(&rewritten, span);
+                                }
                             }
                         }
                         "splice" => {
