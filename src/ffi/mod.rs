@@ -5,9 +5,11 @@
 
 pub mod call;
 pub mod callback;
+pub(crate) mod from_c;
 pub mod loader;
 pub mod marshal;
 pub mod primitives;
+pub(crate) mod to_c;
 pub mod types;
 
 use callback::CallbackStore;

@@ -94,20 +94,23 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 | `buffer.rs` | `buffer`, `string->buffer`, `buffer->string` |
 | `string.rs` | `string/upcase`, `string/downcase`, `string/slice`, `string/find`, `string/char-at`, `string/split`, `string/replace`, `string/trim`, `string/contains?`, `string/starts-with?`, `string/ends-with?`, `string/join` |
 | `format.rs` | `string/format` |
-| `table.rs` | `table`, `get`, `put`, `del`, `keys`, `values`, `has-key?` |
+| `table.rs` | `table`, `del`, `keys`, `values`, `has-key?` (imports `get`/`put` from `access.rs`) |
+| `access.rs` | `get`, `put` — polymorphic collection access |
 | `sets.rs` | `set`, `@set`, `set?`, `contains?`, `add`, `del`, `union`, `intersection`, `difference`, `set->array`, `seq->set` |
 | `structs.rs` | `struct` |
 | `fileio.rs` | `slurp`, `spit` |
 | `path.rs` | `path/join`, `path/parent`, `path/filename`, `path/stem`, `path/extension`, `path/with-extension`, `path/normalize`, `path/absolute`, `path/canonicalize`, `path/relative`, `path/components`, `path/absolute?`, `path/relative?`, `path/cwd`, `path/exists?`, `path/file?`, `path/dir?` |
 | `ports.rs` | `port/open`, `port/open-bytes`, `port/close`, `port/stdin`, `port/stdout`, `port/stderr`, `port?`, `port/open?`, `port/set-options` |
-| `net.rs` | `tcp/listen`, `tcp/accept`, `tcp/connect`, `tcp/shutdown`, `udp/bind`, `udp/send-to`, `udp/recv-from`, `unix/listen`, `unix/accept`, `unix/connect`, `unix/shutdown` |
+| `net.rs` | `tcp/listen`, `tcp/accept`, `tcp/connect`, `tcp/shutdown`, `udp/bind`, `udp/send-to`, `udp/recv-from` |
+| `unix.rs` | `unix/listen`, `unix/accept`, `unix/connect`, `unix/shutdown` |
 | `kwarg.rs` | `extract_keyword_timeout` helper function |
 | `display.rs` | `print`, `println`, `display`, `newline` |
 | `types.rs` | `nil?`, `pair?`, `list?`, `number?`, `integer?`, `float?`, `string?`, `boolean?`, `symbol?`, `keyword?`, `array?`, `tuple?`, `table?`, `struct?`, `buffer?`, `box?`, `bytes?`, `blob?`, `set?`, `type-of` |
 | `concurrency.rs` | `spawn`, `join`, `current-thread-id` |
 | `chan.rs` | `chan/new`, `chan/send`, `chan/recv`, `chan/clone`, `chan/close`, `chan/close-recv`, `chan/select` |
 | `coroutines.rs` | `coro/new`, `coro/resume`, `coro/done?`, `coro/status`, `coro/value`, `coro/>iterator` |
-| `fibers.rs` | `fiber/new`, `fiber/resume`, `fiber/signal`, `fiber/status`, `fiber/value`, `fiber/bits`, `fiber/mask`, `fiber/parent`, `fiber/child`, `fiber/propagate`, `fiber/cancel`, `fiber?` |
+| `fibers.rs` | `fiber/new`, `fiber/resume`, `fiber/signal`, `fiber/status`, `fiber/value` |
+| `fiber_introspect.rs` | `fiber/bits`, `fiber/mask`, `fiber/parent`, `fiber/child`, `fiber/propagate`, `fiber/cancel`, `fiber?` |
 | `parameters.rs` | `make-parameter`, `parameter?` |
 | `time.rs` | `clock/monotonic`, `clock/realtime`, `clock/cpu`, `time/sleep` |
 | `time_def.rs` | `time/stopwatch`, `time/elapsed` (Elle definitions via `eval`) |
@@ -283,6 +286,9 @@ Arity changed from `Exact(N)` to `AtLeast(N)` to allow keyword args. Timeout is 
 | `memory.rs` | ~530 | FFI memory management, typed access, type construction |
 | `chan.rs` | varies | `chan/new`, `chan/send`, `chan/recv`, `chan/clone`, `chan/close`, `chan/close-recv`, `chan/select` |
 | `format.rs` | ~967 | `string/format` with positional/named modes, format specs, brace escaping |
-| `net.rs` | ~600 | 11 network primitives (TCP, UDP, Unix), PRIMITIVES array, tests |
+| `net.rs` | ~683 | TCP and UDP primitives, shared helpers, PRIMITIVES array, tests |
+| `unix.rs` | ~160 | Unix domain socket primitives |
+| `access.rs` | ~634 | Polymorphic `get`/`put` for all collection types |
+| `fiber_introspect.rs` | ~357 | Fiber introspection and management primitives, PRIMITIVES array |
 | `kwarg.rs` | ~100 | `extract_keyword_timeout` helper, tests |
 | (others) | varies | Individual primitive implementations |
