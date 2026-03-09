@@ -134,4 +134,5 @@ The `@` in `:@name` is consumed by the lexer and prepended to the keyword name.
 | `lexer.rs` | ~300 | Tokenization |
 | `token.rs` | ~100 | Token types, SourceLoc |
 | `parser.rs` | ~200 | Token → Value parsing |
-| `syntax.rs` | ~200 | Token → Syntax parsing |
+| `syntax.rs` | ~425 | Token → Syntax parsing |
+| `syntax_tests.rs` | ~484 | Tests for SyntaxReader |

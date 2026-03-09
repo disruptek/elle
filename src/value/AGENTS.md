@@ -24,7 +24,8 @@ Runtime value representation using NaN-boxing.
 | `ffi.rs` | `LibHandle` for C interop |
 | `fiber_heap.rs` | `FiberHeap` struct (bumpalo + destructor tracking + scope marks + scope stats + active_allocator + shared alloc ownership), thread-local routing, `region_enter`/`region_exit` |
 | `shared_alloc.rs` | `SharedAllocator` for zero-copy inter-fiber value exchange |
-| `heap.rs` | `HeapObject` enum, `Cons`, `ThreadHandle`, `BindingInner`, `BindingScope`, `LSet`, `LSetMut` |
+| `arena.rs` | Heap arena: `alloc`, `deref`, `ArenaMark`, `ArenaGuard`, mark/release lifecycle |
+| `heap.rs` | `HeapObject` enum, `Cons`, `ThreadHandle`, `BindingInner`, `BindingScope`, `LSet`, `LSetMut` (re-exports arena functions) |
 | `send.rs` | `SendValue` wrapper for thread-safe transfer |
 | `display.rs` | `Display` implementation for values |
 | `intern.rs` | String interning (used by both strings and keywords) |
@@ -172,7 +173,8 @@ Create values via methods: `Value::int(42)`, `Value::cons(a, b)`,
 | `shared_alloc.rs` | ~180 | SharedAllocator (bump + destructor tracking), teardown, Drop impl |
 | `error.rs` | ~50 | error_val() and format_error() helpers |
 | `ffi.rs` | ~22 | LibHandle |
-| `heap.rs` | ~700 | HeapObject, Cons, ThreadHandle, BindingInner, BindingScope, LSet, LSetMut, `heap_arena_len()`, `heap_arena_capacity()` |
+| `arena.rs` | ~318 | Heap arena: mark/release, alloc, deref, ArenaGuard, ArenaMark |
+| `heap.rs` | ~512 | HeapObject, Cons, ThreadHandle, BindingInner, BindingScope, LSet, LSetMut (re-exports arena functions) |
 | `send.rs` | ~150 | SendValue for thread transfer |
 | `display.rs` | ~100 | Display formatting |
 | `intern.rs` | ~100 | Symbol interning |

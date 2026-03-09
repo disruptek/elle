@@ -77,7 +77,8 @@ This prevents accidental capture in macros while allowing intentional capture vi
 |------|-------|---------|
 | `mod.rs` | ~620 | `Analyzer` struct, scope management, entry point, binding resolution |
 | `forms.rs` | ~725 | Core form analysis: `analyze_expr`, literals, operators, collections |
-| `binding.rs` | ~520 | Binding forms: `let`, `letrec`, `def`/`var`, `set!` |
+| `binding.rs` | ~530 | Binding forms: `let`, `letrec`, `def`/`var`, `set!` |
+| `fileletrec.rs` | ~360 | File-scope letrec compilation for top-level forms |
 | `destructure.rs` | ~415 | Destructuring pattern analysis, define-form detection, rest-pattern splitting |
 | `lambda.rs` | ~160 | Lambda/fn analysis with captures, params, effects, docstrings |
 | `special.rs` | ~345 | Special forms: `match`, `yield`, pattern matching |
