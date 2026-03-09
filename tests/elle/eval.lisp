@@ -16,9 +16,9 @@
   "Assert that (thunk) signals an error containing substring"
   (let ([result (try (begin (thunk) nil)
                   (catch (e) e))])
-    (assert-true (string? (string/repr result))
+    (assert-true (string? (string result))
                  (string/concat msg " — expected error"))
-    (assert-true (string/contains? (string/repr result) substring)
+    (assert-true (string/contains? (string result) substring)
                  (string/concat msg " — expected '" substring "' in error"))))
 
 # ============================================================

@@ -15,7 +15,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module};
 
-use crate::lir::{Label, LirFunction, LirInstr};
+use crate::lir::{Label, LirFunction};
 use crate::value::{Arity, SymbolId};
 
 use super::code::JitCode;

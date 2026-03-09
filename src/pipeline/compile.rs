@@ -30,8 +30,11 @@ pub fn compile(source: &str, symbols: &mut SymbolTable) -> Result<CompileResult,
     let expanded = expander.expand(syntax, symbols, macro_vm)?;
 
     // Phase 3: Analyze to HIR with interprocedural effect and arity tracking
-    let mut analyzer = Analyzer::new_with_primitives(symbols, meta.effects, meta.arities);
+    let mut analyzer =
+        Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
+    analyzer.bind_primitives(&meta);
     let mut analysis = analyzer.analyze(&expanded)?;
+    let prim_values = analyzer.primitive_values().clone();
 
     // Phase 3.5: Mark tail calls
     mark_tail_calls(&mut analysis.hir);
@@ -39,77 +42,25 @@ pub fn compile(source: &str, symbols: &mut SymbolTable) -> Result<CompileResult,
     // Phase 4: Lower to LIR with intrinsic specialization
     let intrinsics = crate::lir::intrinsics::build_intrinsics(symbols);
     let imm_prims = crate::lir::intrinsics::build_immediate_primitives(symbols);
+    let symbol_names = symbols.all_names();
     let mut lowerer = Lowerer::new()
         .with_intrinsics(intrinsics)
-        .with_immediate_primitives(imm_prims);
+        .with_immediate_primitives(imm_prims)
+        .with_primitive_values(prim_values)
+        .with_symbol_names(symbol_names.clone());
     let lir_func = lowerer.lower(&analysis.hir)?;
 
     // Debug: print scope stats
     eprintln!("{}", lowerer.scope_stats());
 
     // Phase 5: Emit bytecode with symbol names for cross-thread portability
-    let symbol_snapshot = symbols.all_names();
-    let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
+    let mut emitter = Emitter::new_with_symbols(symbol_names);
     let (bytecode, _yield_points, _call_sites) = emitter.emit(&lir_func);
 
     Ok(CompileResult {
         bytecode,
         warnings: Vec::new(),
     })
-}
-
-/// Compile multiple top-level forms sequentially.
-///
-/// Each form is compiled independently. Used internally by `init_stdlib`
-/// to load stdlib definitions as globals.
-pub(crate) fn compile_all(
-    source: &str,
-    symbols: &mut SymbolTable,
-) -> Result<Vec<CompileResult>, String> {
-    // Ensure caller's SymbolTable has primitive names interned so that
-    // SymbolIds match the cached PrimitiveMeta.
-    intern_primitive_names(symbols);
-
-    let syntaxes = read_syntax_all(source)?;
-
-    let (macro_vm_ptr, mut expander, meta) = cache::get_compilation_cache();
-    // SAFETY: The cached VM is thread-local and pipeline functions are not
-    // re-entrant. The RefCell borrow was released by get_compilation_cache.
-    let macro_vm = unsafe { &mut *macro_vm_ptr };
-
-    // Expand all forms first (expansion is idempotent)
-    let mut expanded_forms = Vec::new();
-    for syntax in syntaxes {
-        let expanded = expander.expand(syntax, symbols, macro_vm)?;
-        expanded_forms.push(expanded);
-    }
-
-    // Compile each form independently
-    let intrinsics = crate::lir::intrinsics::build_intrinsics(symbols);
-    let mut results = Vec::new();
-    for form in &expanded_forms {
-        let mut analyzer =
-            Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
-        let mut analysis = analyzer.analyze(form)?;
-        mark_tail_calls(&mut analysis.hir);
-
-        let imm_prims = crate::lir::intrinsics::build_immediate_primitives(symbols);
-        let mut lowerer = Lowerer::new()
-            .with_intrinsics(intrinsics.clone())
-            .with_immediate_primitives(imm_prims);
-        let lir_func = lowerer.lower(&analysis.hir)?;
-
-        let symbol_snapshot = symbols.all_names();
-        let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
-        let (bytecode, _yield_points, _call_sites) = emitter.emit(&lir_func);
-
-        results.push(CompileResult {
-            bytecode,
-            warnings: Vec::new(),
-        });
-    }
-
-    Ok(results)
 }
 
 /// Classify an expanded top-level form into a `FileForm`.
@@ -171,6 +122,7 @@ pub fn compile_file(source: &str, symbols: &mut SymbolTable) -> Result<CompileRe
         Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
     analyzer.bind_primitives(&meta);
     let mut hir = analyzer.analyze_file_letrec(forms, span)?;
+    let prim_values = analyzer.primitive_values().clone();
 
     // Mark tail calls
     mark_tail_calls(&mut hir);
@@ -178,19 +130,17 @@ pub fn compile_file(source: &str, symbols: &mut SymbolTable) -> Result<CompileRe
     // Lower to LIR
     let intrinsics = crate::lir::intrinsics::build_intrinsics(symbols);
     let imm_prims = crate::lir::intrinsics::build_immediate_primitives(symbols);
+    let symbol_names = symbols.all_names();
     let mut lowerer = Lowerer::new()
         .with_intrinsics(intrinsics)
-        .with_immediate_primitives(imm_prims);
+        .with_immediate_primitives(imm_prims)
+        .with_primitive_values(prim_values)
+        .with_symbol_names(symbol_names.clone());
     let lir_func = lowerer.lower(&hir)?;
 
-    // Extract local names before emitting (lowerer still has binding_to_slot)
-    let local_names = lowerer.local_names(symbols);
-
     // Emit bytecode
-    let symbol_snapshot = symbols.all_names();
-    let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
-    let mut bytecode = emitter.emit(&lir_func);
-    bytecode.local_names = local_names;
+    let mut emitter = Emitter::new_with_symbols(symbol_names);
+    let (bytecode, _, _) = emitter.emit(&lir_func);
 
     Ok(CompileResult {
         bytecode,

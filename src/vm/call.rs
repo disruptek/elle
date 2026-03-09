@@ -650,7 +650,7 @@ impl VM {
     ) -> Option<Option<SignalBits>> {
         // With globals removed, discover_compilation_group always returns
         // empty — batch JIT requires compile-time peer discovery (future work).
-        let group = crate::jit::discover_compilation_group(lir_func);
+        let group = crate::jit::discover_compilation_group(lir_func, &[]);
         if group.is_empty() {
             return None;
         }

@@ -5,6 +5,19 @@ use crate::hir::expr::CallArg;
 use crate::syntax::{Syntax, SyntaxKind};
 
 impl<'a> Analyzer<'a> {
+    /// Resolve a primitive name to its binding via scope lookup.
+    ///
+    /// Used by collection literal desugaring (Tuple, Array, Struct, Table)
+    /// and qualified symbol desugaring to find the primitive binding
+    /// registered by `bind_primitives`. Falls back to a fresh binding
+    /// if the name isn't in scope (e.g., in tests without primitives).
+    fn resolve_primitive(&mut self, name: &str) -> Binding {
+        self.lookup(name, &[]).unwrap_or_else(|| {
+            let sym = self.symbols.intern(name);
+            Binding::new(sym, BindingScope::Local)
+        })
+    }
+
     pub(crate) fn analyze_expr(&mut self, syntax: &Syntax) -> Result<Hir, String> {
         let span = syntax.span.clone();
 
@@ -28,10 +41,16 @@ impl<'a> Analyzer<'a> {
                 match self.lookup(name, syntax.scopes.as_slice()) {
                     Some(binding) => Ok(Hir::inert(HirKind::Var(binding), span)),
                     None => {
-                        // Treat as global reference
-                        let sym = self.symbols.intern(name);
-                        let binding = Binding::new(sym, BindingScope::Global);
-                        Ok(Hir::inert(HirKind::Var(binding), span))
+                        // Try with empty scopes — catches primitives with
+                        // empty scope sets when the reference has
+                        // macro-introduced scopes
+                        match self.lookup(name, &[]) {
+                            Some(binding) => Ok(Hir::inert(HirKind::Var(binding), span)),
+                            None => {
+                                let binding = self.resolve_primitive(name);
+                                Ok(Hir::inert(HirKind::Var(binding), span))
+                            }
+                        }
                     }
                 }
             }
@@ -46,8 +65,7 @@ impl<'a> Analyzer<'a> {
                     effect = effect.combine(hir.effect);
                     args.push(CallArg { expr: hir, spliced });
                 }
-                let sym = self.symbols.intern("tuple");
-                let binding = Binding::new(sym, BindingScope::Global);
+                let binding = self.resolve_primitive("tuple");
                 let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
                 Ok(Hir::new(
                     HirKind::Call {
@@ -70,8 +88,7 @@ impl<'a> Analyzer<'a> {
                     effect = effect.combine(hir.effect);
                     args.push(CallArg { expr: hir, spliced });
                 }
-                let sym = self.symbols.intern("array");
-                let binding = Binding::new(sym, BindingScope::Global);
+                let binding = self.resolve_primitive("array");
                 let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
                 Ok(Hir::new(
                     HirKind::Call {
@@ -104,8 +121,7 @@ impl<'a> Analyzer<'a> {
                         spliced: false,
                     });
                 }
-                let sym = self.symbols.intern("struct");
-                let binding = Binding::new(sym, BindingScope::Global);
+                let binding = self.resolve_primitive("struct");
                 let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
                 Ok(Hir::new(
                     HirKind::Call {
@@ -138,8 +154,7 @@ impl<'a> Analyzer<'a> {
                         spliced: false,
                     });
                 }
-                let sym = self.symbols.intern("table");
-                let binding = Binding::new(sym, BindingScope::Global);
+                let binding = self.resolve_primitive("table");
                 let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
                 Ok(Hir::new(
                     HirKind::Call {
@@ -756,8 +771,7 @@ impl<'a> Analyzer<'a> {
         let mut result = match self.lookup(first, scopes) {
             Some(binding) => Hir::inert(HirKind::Var(binding), span.clone()),
             None => {
-                let sym = self.symbols.intern(first);
-                let binding = Binding::new(sym, BindingScope::Global);
+                let binding = self.resolve_primitive(first);
                 Hir::inert(HirKind::Var(binding), span.clone())
             }
         };
@@ -765,9 +779,8 @@ impl<'a> Analyzer<'a> {
         // Each subsequent segment: wrap in (get result :segment)
         // Constructs Call nodes directly (not via analyze_call) because
         // get is a pure primitive with known arity Range(2,3).
-        let get_sym = self.symbols.intern("get");
+        let get_binding = self.resolve_primitive("get");
         for segment in &segments[1..] {
-            let get_binding = Binding::new(get_sym, BindingScope::Global);
             let get_func = Hir::inert(HirKind::Var(get_binding), span.clone());
             let key = Hir::inert(HirKind::Keyword(segment.to_string()), span.clone());
             let call_effect = result.effect;

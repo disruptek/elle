@@ -124,7 +124,16 @@ impl Lowerer {
                 }
             }
         } else {
-            Err(format!("Unknown binding: {:?}", binding))
+            // Binding not found in immutable_values or binding_to_slot.
+            // This happens when the analyzer's resolve_primitive fallback
+            // creates a dangling binding for an undefined variable.
+            let sym_id = binding.name();
+            let name = self
+                .symbol_names
+                .get(&sym_id.0)
+                .cloned()
+                .unwrap_or_else(|| format!("symbol #{}", sym_id.0));
+            Err(format!("undefined variable: {}", name))
         }
     }
 

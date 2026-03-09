@@ -221,8 +221,7 @@ impl Emitter {
             LirInstr::StoreLocal { slot, src } => {
                 self.ensure_on_top(*src);
                 self.bytecode.emit(Instruction::StoreLocal);
-                self.bytecode.emit_byte(0); // depth 0
-                self.bytecode.emit_byte(*slot as u8);
+                self.bytecode.emit_u16(*slot);
                 // StoreLocal pops the value, stores it, and pushes it back.
                 // Auto-pop: consume the pushed-back value so stores are pure
                 // side effects from the LIR's perspective.
@@ -263,29 +262,6 @@ impl Emitter {
                     self.bytecode.emit_byte(*index as u8);
                 }
                 // Both StoreLocal and StoreUpvalue pop-then-push-back.
-                // Auto-pop: consume the pushed-back value.
-                self.bytecode.emit(Instruction::Pop);
-                self.pop();
-            }
-
-            LirInstr::LoadGlobal { dst, sym } => {
-                // Add symbol to constants with name for cross-thread portability
-                let name = self.symbol_names.get(&sym.0).cloned().unwrap_or_default();
-                let const_idx = self.bytecode.add_symbol(sym.0, &name);
-                // LoadGlobal reads the symbol index directly from bytecode
-                self.bytecode.emit(Instruction::LoadGlobal);
-                self.bytecode.emit_u16(const_idx);
-                self.push_reg(*dst);
-            }
-
-            LirInstr::StoreGlobal { sym, src } => {
-                self.ensure_on_top(*src);
-                // Add symbol to constants with name for cross-thread portability
-                let name = self.symbol_names.get(&sym.0).cloned().unwrap_or_default();
-                let const_idx = self.bytecode.add_symbol(sym.0, &name);
-                self.bytecode.emit(Instruction::StoreGlobal);
-                self.bytecode.emit_u16(const_idx);
-                // StoreGlobal pops the value, stores it, and pushes it back.
                 // Auto-pop: consume the pushed-back value.
                 self.bytecode.emit(Instruction::Pop);
                 self.pop();

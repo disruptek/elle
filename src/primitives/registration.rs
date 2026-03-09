@@ -164,3 +164,24 @@ pub fn cached_primitive_meta(symbols: &mut SymbolTable) -> PrimitiveMeta {
         }
     })
 }
+
+/// Add stdlib exports to the cached PrimitiveMeta.
+///
+/// Called by `init_stdlib` after stdlib execution. Updates the
+/// PRIMITIVE_META_CACHE so that `cached_primitive_meta` returns
+/// metadata including stdlib exports.
+pub fn update_primitive_meta_cache(
+    exports: &std::collections::HashMap<
+        crate::value::SymbolId,
+        (crate::value::Value, crate::effects::Effect),
+    >,
+) {
+    PRIMITIVE_META_CACHE.with(|cache| {
+        let mut cache_ref = cache.borrow_mut();
+        let meta = cache_ref.get_or_insert_with(PrimitiveMeta::default);
+        for (sym_id, (value, effect)) in exports {
+            meta.effects.insert(*sym_id, *effect);
+            meta.functions.insert(*sym_id, *value);
+        }
+    });
+}

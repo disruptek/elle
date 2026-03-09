@@ -35,14 +35,15 @@ pub fn eval_syntax(
 
     let intrinsics = crate::lir::intrinsics::build_intrinsics(symbols);
     let imm_prims = crate::lir::intrinsics::build_immediate_primitives(symbols);
+    let symbol_names = symbols.all_names();
     let mut lowerer = Lowerer::new()
         .with_intrinsics(intrinsics)
         .with_immediate_primitives(imm_prims)
-        .with_primitive_values(prim_values);
+        .with_primitive_values(prim_values)
+        .with_symbol_names(symbol_names.clone());
     let lir_func = lowerer.lower(&analysis.hir)?;
 
-    let symbol_snapshot = symbols.all_names();
-    let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
+    let mut emitter = Emitter::new_with_symbols(symbol_names);
     let (bytecode, _yield_points, _call_sites) = emitter.emit(&lir_func);
 
     vm.execute(&bytecode).map_err(|e| e.to_string())
@@ -72,14 +73,15 @@ pub fn eval(
 
     let intrinsics = crate::lir::intrinsics::build_intrinsics(symbols);
     let imm_prims = crate::lir::intrinsics::build_immediate_primitives(symbols);
+    let symbol_names = symbols.all_names();
     let mut lowerer = Lowerer::new()
         .with_intrinsics(intrinsics)
         .with_immediate_primitives(imm_prims)
-        .with_primitive_values(prim_values);
+        .with_primitive_values(prim_values)
+        .with_symbol_names(symbol_names.clone());
     let lir_func = lowerer.lower(&analysis.hir)?;
 
-    let symbol_snapshot = symbols.all_names();
-    let mut emitter = Emitter::new_with_symbols(symbol_snapshot);
+    let mut emitter = Emitter::new_with_symbols(symbol_names);
     let (bytecode, _yield_points, _call_sites) = emitter.emit(&lir_func);
 
     vm.execute(&bytecode).map_err(|e| e.to_string())

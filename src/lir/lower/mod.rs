@@ -147,6 +147,8 @@ pub struct Lowerer {
     /// Lazily allocated on first use. Reused across all discards
     /// within the same function, so only one extra local slot.
     discard_slot: Option<u16>,
+    /// Symbol ID → name mapping for error messages.
+    symbol_names: HashMap<u32, String>,
 }
 
 impl Lowerer {
@@ -168,6 +170,7 @@ impl Lowerer {
             region_depth: 0,
             scope_stats: ScopeStats::default(),
             discard_slot: None,
+            symbol_names: HashMap::new(),
         }
     }
 
@@ -180,6 +183,12 @@ impl Lowerer {
     /// Set the whitelist of primitives known to return immediates
     pub fn with_immediate_primitives(mut self, set: FxHashSet<SymbolId>) -> Self {
         self.immediate_primitives = set;
+        self
+    }
+
+    /// Set symbol names for error messages.
+    pub fn with_symbol_names(mut self, names: HashMap<u32, String>) -> Self {
+        self.symbol_names = names;
         self
     }
 

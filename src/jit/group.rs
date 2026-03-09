@@ -114,7 +114,7 @@ pub fn discover_compilation_group(
 /// that defines Reg(5) is the only definition, and any Call using Reg(5)
 /// in any block definitively targets that global.
 fn find_global_call_targets(lir: &LirFunction) -> HashSet<SymbolId> {
-    let mut reg_to_sym: HashMap<Reg, SymbolId> = HashMap::new();
+    let reg_to_sym: HashMap<Reg, SymbolId> = HashMap::new();
     let mut targets: HashSet<SymbolId> = HashSet::new();
 
     for bb in &lir.blocks {

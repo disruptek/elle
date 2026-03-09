@@ -522,6 +522,8 @@ mod tests {
     fn test_analyze_call() {
         let mut symbols = SymbolTable::new();
         let mut analyzer = Analyzer::new(&mut symbols);
+        // Pre-bind "+" so it resolves during analysis
+        analyzer.bind("+", &[], BindingScope::Local);
 
         let syntax = make_list(vec![make_symbol("+"), make_int(1), make_int(2)]);
 

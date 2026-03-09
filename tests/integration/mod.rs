@@ -108,9 +108,6 @@ mod elle_scripts {
 mod allocator {
     include!("allocator.rs");
 }
-mod environment {
-    include!("environment.rs");
-}
 mod parameters {
     include!("parameters.rs");
 }

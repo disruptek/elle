@@ -32,11 +32,10 @@
   (def args @[1 2 3])
   (assert-eq (add3 ;args) 6 "splice with closure"))
 
-(begin
-  (defn sum [& nums] (apply-helper nums))
-  (defn apply-helper [nums]
-    (if (empty? nums) 0
-        (+ (first nums) (apply-helper (rest nums)))))
+(letrec ((apply-helper (fn [nums]
+            (if (empty? nums) 0
+                (+ (first nums) (apply-helper (rest nums))))))
+         (sum (fn [& nums] (apply-helper nums))))
   (assert-eq (sum ;@[1 2 3 4 5]) 15 "splice with variadic fn"))
 
 # ============================================================================

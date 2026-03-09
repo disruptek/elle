@@ -65,7 +65,10 @@ fn is_value_sendable(value: &Value) -> bool {
 
         // Closures are safe if their captured environment is safe
         // Note: Closure uses new Value type
-        HeapObject::Closure(closure) => closure.env.iter().all(is_value_sendable),
+        HeapObject::Closure(closure) => {
+            closure.env.iter().all(is_value_sendable)
+                && closure.template.constants.iter().all(is_value_sendable)
+        }
 
         // Unsafe: mutable tables
         HeapObject::Table(_) => false,

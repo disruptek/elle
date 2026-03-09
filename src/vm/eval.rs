@@ -112,10 +112,13 @@ fn eval_inner(vm: &mut VM, expr_value: Value, symbols: &mut SymbolTable) -> LRes
 
     // Analyze
     let meta = cached_primitive_meta(symbols);
-    let mut analyzer = Analyzer::new_with_primitives(symbols, meta.effects, meta.arities);
+    let mut analyzer =
+        Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
+    analyzer.bind_primitives(&meta);
     let mut analysis = analyzer
         .analyze(&expanded)
         .map_err(|e| LError::generic(format!("eval: analysis failed: {}", e)))?;
+    let prim_values = analyzer.primitive_values().clone();
 
     // Mark tail calls
     mark_tail_calls(&mut analysis.hir);
@@ -125,7 +128,9 @@ fn eval_inner(vm: &mut VM, expr_value: Value, symbols: &mut SymbolTable) -> LRes
     let imm_prims = crate::lir::intrinsics::build_immediate_primitives(symbols);
     let mut lowerer = Lowerer::new()
         .with_intrinsics(intrinsics)
-        .with_immediate_primitives(imm_prims);
+        .with_immediate_primitives(imm_prims)
+        .with_primitive_values(prim_values)
+        .with_symbol_names(symbols.all_names());
     let lir_func = lowerer
         .lower(&analysis.hir)
         .map_err(|e| LError::generic(format!("eval: lowering failed: {}", e)))?;

@@ -219,7 +219,7 @@ impl<'a> Analyzer<'a> {
             if let Some(name) = pair[0].as_symbol() {
                 // Simple binding — bind immediately for mutual recursion.
                 // Marked prebound: may be captured before initialization.
-                let b = self.bind(name, pair[0].scopes.as_slice(), BindingScope::Local);
+                let b = self.bind(name, &[], BindingScope::Local);
                 b.mark_prebound();
                 entries.push(LetrecEntry::Simple(b, &pair[1]));
             } else if Self::is_destructure_pattern(&pair[0]) {
@@ -227,9 +227,9 @@ impl<'a> Analyzer<'a> {
                 let mut names = Vec::new();
                 Self::extract_pattern_names(&pair[0], &mut names);
                 let mut leaf_bindings = HashMap::new();
-                for (name, name_scopes) in &names {
+                for (name, _name_scopes) in &names {
                     if *name != "_" {
-                        let b = self.bind(name, name_scopes, BindingScope::Local);
+                        let b = self.bind(name, &[], BindingScope::Local);
                         b.mark_prebound();
                         leaf_bindings.insert(name.to_string(), b);
                     }
@@ -454,8 +454,13 @@ impl<'a> Analyzer<'a> {
                 Effect::inert(),
             ))
         } else {
-            // At top level, creates a local binding
+            // At top level, creates a local binding.
+            // Mark as prebound so that needs_cell() returns true when
+            // the binding is captured by a lambda in the same begin block.
+            // Without this, an immutable captured local would be captured
+            // by value (nil) before its initializer runs.
             let binding = self.bind(name, &[], BindingScope::Local);
+            binding.mark_prebound();
 
             if immutable {
                 binding.mark_immutable();
@@ -519,7 +524,7 @@ impl<'a> Analyzer<'a> {
         span: Span,
     ) -> Result<Hir, String> {
         if forms.is_empty() {
-            return Ok(Hir::pure(HirKind::Nil, span));
+            return Ok(Hir::inert(HirKind::Nil, span));
         }
 
         self.push_scope(false);
@@ -578,7 +583,7 @@ impl<'a> Analyzer<'a> {
 
         // Pass 2: analyze all initializers sequentially.
         let mut bindings = Vec::new();
-        let mut effect = Effect::none();
+        let mut effect = Effect::inert();
         let mut last_binding: Option<Binding> = None;
         // Track lambda bindings for fixpoint effect propagation (Pass 3).
         // Each entry: (index in `bindings`, binding, reference to value syntax).
@@ -642,17 +647,17 @@ impl<'a> Analyzer<'a> {
                     self.pre_bindings.clear();
 
                     for leaf_binding in &pattern.bindings().bindings {
-                        bindings.push((*leaf_binding, Hir::pure(HirKind::Nil, span.clone())));
+                        bindings.push((*leaf_binding, Hir::inert(HirKind::Nil, span.clone())));
                         last_binding = Some(*leaf_binding);
                     }
 
                     let tmp = self.bind("__destructure_tmp", &[], BindingScope::Local);
                     bindings.push((tmp, value));
 
-                    let destructure_hir = Hir::pure(
+                    let destructure_hir = Hir::inert(
                         HirKind::Destructure {
                             pattern,
-                            value: Box::new(Hir::pure(HirKind::Var(tmp), span.clone())),
+                            value: Box::new(Hir::inert(HirKind::Var(tmp), span.clone())),
                         },
                         span.clone(),
                     );
@@ -689,7 +694,7 @@ impl<'a> Analyzer<'a> {
                         .effect_env
                         .get(&binding)
                         .copied()
-                        .unwrap_or_else(Effect::none);
+                        .unwrap_or_else(Effect::inert);
                     let new_hir = self.analyze_expr(value_syntax)?;
                     if let HirKind::Lambda {
                         inferred_effect, ..
@@ -710,8 +715,8 @@ impl<'a> Analyzer<'a> {
 
         // Body: reference to the last binding (the file's return value).
         let body = match last_binding {
-            Some(binding) => Hir::pure(HirKind::Var(binding), span.clone()),
-            None => Hir::pure(HirKind::Nil, span.clone()),
+            Some(binding) => Hir::inert(HirKind::Var(binding), span.clone()),
+            None => Hir::inert(HirKind::Nil, span.clone()),
         };
 
         self.pop_scope();
@@ -758,7 +763,7 @@ impl<'a> Analyzer<'a> {
         // Seed effect_env and arity_env for lambda forms so self-recursive
         // calls don't default to Yields during analysis.
         if Self::is_lambda_syntax(value_syntax) {
-            self.effect_env.insert(binding, Effect::none());
+            self.effect_env.insert(binding, Effect::inert());
             if let Some(list) = value_syntax.as_list() {
                 if let Some(params_syn) = list.get(1).and_then(|s| s.as_list_or_tuple()) {
                     self.arity_env
