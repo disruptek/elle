@@ -204,9 +204,9 @@
   "split/join roundtrip: pipe")
 
 # split_produces_tuple: split produces a tuple
-(assert-true (tuple? (string/split "a,b" ","))
+(assert-true (array? (string/split "a,b" ","))
   "split produces a tuple")
-(assert-true (tuple? (string/split "hello" "l"))
+(assert-true (array? (string/split "hello" "l"))
   "split produces a tuple (hello)")
 
 # ============================================================================

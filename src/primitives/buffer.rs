@@ -104,15 +104,15 @@ pub(crate) fn prim_buffer_to_string(args: &[Value]) -> (SignalBits, Value) {
 
 pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
-        name: "buffer",
+        name: "@string",
         func: prim_buffer,
         effect: Effect::inert(),
         arity: Arity::AtLeast(0),
-        doc: "Create a mutable buffer from byte arguments.",
+        doc: "Create a mutable string from byte arguments.",
         params: &[],
         category: "buffer",
-        example: "(buffer 72 101 108 108 111)",
-        aliases: &[],
+        example: "(@string 72 101 108 108 111)",
+        aliases: &["buffer"],
     },
     PrimitiveDef {
         name: "string->buffer",

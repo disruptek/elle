@@ -127,24 +127,15 @@
 
 ## === Type predicates for collections ===
 
-(assert-eq (array? @[1 2 3]) true "array? true")
-(assert-eq (array? [1 2 3]) false "array? false tuple")
-(assert-eq (array? 42) false "array? false other")
-(assert-eq (array? "hello") false "array? false string")
+(assert-eq (array? @[1 2 3]) true "array? true for mutable array")
+(assert-eq (array? [1 2 3]) true "array? true for immutable array")
+(assert-eq (array? 42) false "array? false for other")
+(assert-eq (array? "hello") false "array? false for string")
 
-(assert-eq (tuple? [1 2 3]) true "tuple? true")
-(assert-eq (tuple? @[1 2 3]) false "tuple? false array")
-(assert-eq (tuple? 42) false "tuple? false other")
-(assert-eq (tuple? "hello") false "tuple? false string")
-
-(assert-eq (table? @{:a 1 :b 2}) true "table? true")
-(assert-eq (table? {:a 1 :b 2}) false "table? false struct")
-(assert-eq (table? 42) false "table? false other")
-(assert-eq (table? "hello") false "table? false string")
-
-(assert-eq (struct? {:a 1 :b 2}) true "struct? true")
-(assert-eq (struct? @{:a 1 :b 2}) false "struct? false table")
-(assert-eq (struct? 42) false "struct? false other")
+(assert-eq (struct? @{:a 1 :b 2}) true "struct? true for mutable struct")
+(assert-eq (struct? {:a 1 :b 2}) true "struct? true for immutable struct")
+(assert-eq (struct? 42) false "struct? false for other")
+(assert-eq (struct? "hello") false "struct? false for string")
 (assert-eq (struct? "hello") false "struct? false string")
 
 (assert-eq (empty? []) true "empty? tuple true")
@@ -200,9 +191,9 @@
 (assert-eq (rest (list 1)) () "rest single list")
 
 (assert-eq (length (rest [1 2 3])) 2 "rest tuple length")
-(assert-eq (tuple? (rest [1 2 3])) true "rest tuple type")
+(assert-eq (array? (rest [1 2 3])) true "rest tuple type")
 
-(assert-eq (tuple? (rest [])) true "rest empty tuple type")
+(assert-eq (array? (rest [])) true "rest empty tuple type")
 (assert-eq (length (rest [])) 0 "rest empty tuple length")
 
 (assert-eq (length (rest @[1 2 3])) 2 "rest array length")
@@ -222,10 +213,10 @@
 (assert-eq (first (reverse (list 1 2 3))) 3 "reverse list")
 (assert-eq (reverse (list)) () "reverse empty list")
 
-(assert-eq (tuple? (reverse [1 2 3])) true "reverse tuple type")
+(assert-eq (array? (reverse [1 2 3])) true "reverse tuple type")
 (assert-eq (get (reverse [1 2 3]) 0) 3 "reverse tuple first")
 
-(assert-eq (tuple? (reverse [])) true "reverse empty tuple type")
+(assert-eq (array? (reverse [])) true "reverse empty tuple type")
 
 (assert-eq (array? (reverse @[1 2 3])) true "reverse array type")
 (assert-eq (get (reverse @[1 2 3]) 0) 3 "reverse array first")

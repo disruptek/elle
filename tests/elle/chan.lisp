@@ -11,14 +11,14 @@
 # ============================================================================
 
 (let (([s r] (chan)))
-  (assert-true (tuple? [s r]) "chan should return a tuple"))
+  (assert-true (array? [s r]) "chan should return a tuple"))
 
 # ============================================================================
 # Test 2: chan bounded
 # ============================================================================
 
 (let (([s r] (chan 10)))
-  (assert-true (tuple? [s r]) "chan with capacity should return a tuple"))
+  (assert-true (array? [s r]) "chan with capacity should return a tuple"))
 
 # ============================================================================
 # Test 3: chan/send ok
@@ -26,7 +26,7 @@
 
 (let (([s r] (chan)))
   (let ((result (chan/send s 42)))
-    (assert-true (tuple? result) "chan/send should return a tuple")
+    (assert-true (array? result) "chan/send should return a tuple")
     (assert-eq (length result) 1 "send result should have 1 element")
     (assert-eq (get result 0) :ok "send result should be [:ok]")))
 
@@ -37,7 +37,7 @@
 (let (([s r] (chan)))
   (chan/send s 42)
   (let ((result (chan/recv r)))
-    (assert-true (tuple? result) "chan/recv should return a tuple")
+    (assert-true (array? result) "chan/recv should return a tuple")
     (assert-eq (length result) 2 "recv result should have 2 elements")
     (assert-eq (get result 0) :ok "recv status should be :ok")
     (assert-eq (get result 1) 42 "recv message should be 42")))
@@ -48,7 +48,7 @@
 
 (let (([s r] (chan)))
   (let ((result (chan/recv r)))
-    (assert-true (tuple? result) "chan/recv should return a tuple")
+    (assert-true (array? result) "chan/recv should return a tuple")
     (assert-eq (length result) 1 "empty recv result should have 1 element")
     (assert-eq (get result 0) :empty "empty recv should return [:empty]")))
 
@@ -59,7 +59,7 @@
 (let (([s r] (chan 1)))
   (chan/send s 1)
   (let ((result (chan/send s 2)))
-    (assert-true (tuple? result) "chan/send to full should return a tuple")
+    (assert-true (array? result) "chan/send to full should return a tuple")
     (assert-eq (length result) 1 "full send result should have 1 element")
     (assert-eq (get result 0) :full "full send should return [:full]")))
 
@@ -70,7 +70,7 @@
 (let (([s r] (chan)))
   (chan/close-recv r)
   (let ((result (chan/send s 42)))
-    (assert-true (tuple? result) "chan/send to closed receiver should return a tuple")
+    (assert-true (array? result) "chan/send to closed receiver should return a tuple")
     (assert-eq (length result) 1 "disconnected send result should have 1 element")
     (assert-eq (get result 0) :disconnected "disconnected send should return [:disconnected]")))
 
@@ -81,7 +81,7 @@
 (let (([s r] (chan)))
   (chan/close s)
   (let ((result (chan/recv r)))
-    (assert-true (tuple? result) "chan/recv from closed sender should return a tuple")
+    (assert-true (array? result) "chan/recv from closed sender should return a tuple")
     (assert-eq (length result) 1 "disconnected recv result should have 1 element")
     (assert-eq (get result 0) :disconnected "disconnected recv should return [:disconnected]")))
 
@@ -139,7 +139,7 @@
 (let (([s r] (chan)))
   (chan/send s 99)
   (let ((result (chan/select @[r] 1000)))
-    (assert-true (tuple? result) "chan/select should return a tuple")
+    (assert-true (array? result) "chan/select should return a tuple")
     (assert-eq (length result) 2 "select ready result should have 2 elements")
     (assert-eq (get result 0) 0 "select ready should return index 0")
     (assert-eq (get result 1) 99 "select ready should return message 99")))
@@ -150,6 +150,6 @@
 
 (let (([s r] (chan)))
   (let ((result (chan/select @[r] 10)))
-    (assert-true (tuple? result) "chan/select should return a tuple")
+    (assert-true (array? result) "chan/select should return a tuple")
     (assert-eq (length result) 1 "select timeout result should have 1 element")
     (assert-eq (get result 0) :timeout "select timeout should return [:timeout]")))

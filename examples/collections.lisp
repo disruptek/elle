@@ -68,13 +68,13 @@
 #
 # get works on every collection type with the same interface.
 
-# By string key (table)
+# By string key (@struct)
 (assert-eq (get (get book "alice") :name) "Alice" "get: table → struct")
 
 # By keyword (struct)
 (assert-eq (get alice :email) "alice@example.com" "get: struct by keyword")
 
-# By index (tuple)
+# By index (@array)
 (assert-eq (get (get alice :tags) 0) :dev "get: tuple by index")
 
 # By index (string — returns a grapheme cluster)

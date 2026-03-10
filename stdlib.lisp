@@ -8,13 +8,13 @@
 
 (def map (fn (f coll)
   (cond
-    ((or (array? coll) (tuple? coll) (bytes? coll) (blob? coll))
+    ((or (array? coll) (array? coll) (bytes? coll) (bytes? coll))
      (letrec ((loop (fn (i acc)
                       (if (>= i (length coll))
                         (reverse acc)
                         (loop (+ i 1) (cons (f (get coll i)) acc))))))
        (loop 0 ())))
-    ((or (string? coll) (buffer? coll))
+    ((or (string? coll) (string? coll))
      (letrec ((loop (fn (i acc)
                       (if (>= i (length coll))
                         (reverse acc)
@@ -89,7 +89,7 @@
        (if (pred (first coll))
          (all? pred (rest coll))
          false)))
-    ((or (array? coll) (tuple? coll))
+    ((or (array? coll) (array? coll))
      (letrec ((loop (fn (i)
                       (if (>= i (length coll))
                         true
@@ -107,7 +107,7 @@
        (if (pred (first coll))
          true
          (any? pred (rest coll)))))
-    ((or (array? coll) (tuple? coll))
+    ((or (array? coll) (array? coll))
      (letrec ((loop (fn (i)
                       (if (>= i (length coll))
                         false
@@ -125,7 +125,7 @@
        (if (pred (first coll))
          (first coll)
          (find pred (rest coll)))))
-    ((or (array? coll) (tuple? coll))
+    ((or (array? coll) (array? coll))
      (letrec ((loop (fn (i)
                       (if (>= i (length coll))
                         nil
@@ -145,7 +145,7 @@
                         i
                         (go (+ i 1) (rest l)))))))
        (go 0 coll)))
-    ((or (array? coll) (tuple? coll))
+    ((or (array? coll) (array? coll))
      (letrec ((loop (fn (i)
                       (if (>= i (length coll))
                         nil
@@ -159,7 +159,7 @@
   (cond
     ((or (pair? coll) (empty? coll))
      (fold (fn (n x) (if (pred x) (+ n 1) n)) 0 coll))
-    ((or (array? coll) (tuple? coll))
+    ((or (array? coll) (array? coll))
      (letrec ((loop (fn (i n)
                       (if (>= i (length coll))
                         n
@@ -177,7 +177,7 @@
     ((to-list (fn (c)
        (cond
          ((or (pair? c) (empty? c)) c)
-         ((or (array? c) (tuple? c))
+         ((or (array? c) (array? c))
           (letrec ((loop (fn (i acc)
                            (if (>= i (length c))
                              (reverse acc)
@@ -191,7 +191,7 @@
           (let ((arr @[]))
             (each x in lst (push arr x))
             arr))
-         ((tuple? orig) (apply tuple lst)))))
+         ((array? orig) (apply tuple lst)))))
      (zip-lists (fn (lists)
        (if (any? empty? lists)
          ()
@@ -218,7 +218,7 @@
            (cond
              ((pair? x)
               (append (flat x) (flat (rest lst))))
-             ((or (array? x) (tuple? x))
+             ((or (array? x) (array? x))
               (append (flat (to-list x)) (flat (rest lst))))
              (true
               (cons x (flat (rest lst))))))))))
@@ -228,7 +228,7 @@
        (let ((result @[]))
          (each x in (flat (to-list coll)) (push result x))
          result))
-      ((tuple? coll)
+      ((array? coll)
        (apply tuple (flat (to-list coll))))
       (true (error [:type-error "flatten: not a sequence"]))))))
 
@@ -252,7 +252,7 @@
                                 (loop (+ i 1))))))))
            (loop 0))
          result))
-      ((tuple? coll)
+      ((array? coll)
        (let ((lst (tw-list (letrec ((loop (fn (i acc)
                                             (if (>= i (length coll))
                                               (reverse acc)
@@ -286,7 +286,7 @@
                               (loop (+ i 1))))))
              (loop start))
            result)))
-      ((tuple? coll)
+      ((array? coll)
        (let ((lst (dw-list (letrec ((loop (fn (i acc)
                                             (if (>= i (length coll))
                                               (reverse acc)
@@ -314,7 +314,7 @@
                (put seen x true)
                (push result x)))
            result))
-        ((tuple? coll)
+        ((array? coll)
          (let ((lst (dist-list (letrec ((loop (fn (i acc)
                                                (if (>= i (length coll))
                                                  (reverse acc)
@@ -338,7 +338,7 @@
        (each x in coll
          (each y in (f x) (push result y)))
        result))
-    ((tuple? coll)
+    ((array? coll)
      (apply tuple (fold (fn (acc x) (append acc (f x))) ()
                         (letrec ((loop (fn (i acc)
                                          (if (>= i (length coll))
@@ -372,7 +372,7 @@
                           (loop (+ i 1))))))
          (loop 0))
        result))
-    ((tuple? coll)
+    ((array? coll)
      (apply tuple
        (letrec ((go (fn (i)
                       (if (>= i (length coll))
@@ -402,7 +402,7 @@
                             (loop (+ i n)))))))
          (loop 0))
        result))
-    ((tuple? coll)
+    ((array? coll)
      (letrec ((to-list (fn (c)
                           (letrec ((loop (fn (i acc)
                                           (if (>= i (length c))
@@ -437,7 +437,7 @@
                               (loop (+ i 1))))))
              (loop 1))
            result)))
-      ((tuple? coll)
+      ((array? coll)
        (let ((lst (ip-list (letrec ((loop (fn (i acc)
                                            (if (>= i (length coll))
                                              (reverse acc)
@@ -471,7 +471,7 @@
     ((to-list (fn (c)
        (cond
          ((or (pair? c) (empty? c)) c)
-         ((or (array? c) (tuple? c))
+         ((or (array? c) (array? c))
           (letrec ((loop (fn (i acc)
                            (if (>= i (length c))
                              (reverse acc)
@@ -485,7 +485,7 @@
           (let ((arr @[]))
             (each x in lst (push arr x))
             arr))
-         ((tuple? orig) (apply tuple lst)))))
+         ((array? orig) (apply tuple lst)))))
      (merge (fn (a b)
        (cond
          ((empty? a) b)

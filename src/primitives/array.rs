@@ -466,26 +466,26 @@ pub(crate) fn prim_remove(args: &[Value]) -> (SignalBits, Value) {
 
 pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
-        name: "tuple",
+        name: "array",
         func: prim_tuple,
         effect: Effect::inert(),
         arity: Arity::AtLeast(0),
-        doc: "Create an immutable tuple from arguments.",
+        doc: "Create an immutable array from arguments.",
         params: &[],
         category: "array",
-        example: "(tuple 1 2 3) #=> [1 2 3]",
-        aliases: &[],
+        example: "(array 1 2 3) #=> [1 2 3]",
+        aliases: &["tuple"],
     },
     PrimitiveDef {
-        name: "array",
+        name: "@array",
         func: prim_array,
         effect: Effect::inert(),
         arity: Arity::AtLeast(0),
         doc: "Create a mutable array from arguments.",
         params: &[],
         category: "array",
-        example: "(array 1 2 3) #=> @[1 2 3]",
-        aliases: &[],
+        example: "(@array 1 2 3) #=> @[1 2 3]",
+        aliases: &["array"],
     },
     PrimitiveDef {
         name: "array/new",

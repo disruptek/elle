@@ -213,24 +213,24 @@
 # ========================================
 
 # @ is the universal mutability prefix:
-#   [...]  tuple  (immutable)    @[...]  array  (mutable)
-#   {...}  struct (immutable)    @{...}  table  (mutable)
-#   "..."  string (immutable)    @"..."  buffer (mutable)
+#   [...]  array  (immutable)    @[...]  @array  (mutable)
+#   {...}  struct (immutable)    @{...}  @struct (mutable)
+#   "..."  string (immutable)    @"..."  @string (mutable)
 
-(display "  [1 2 3]  → ") (print (type [1 2 3]))     # :tuple
-(display "  @[1 2 3] → ") (print (type @[1 2 3]))    # :array
+(display "  [1 2 3]  → ") (print (type [1 2 3]))     # :array
+(display "  @[1 2 3] → ") (print (type @[1 2 3]))    # :@array
 (display "  {:a 1}   → ") (print (type {:a 1}))      # :struct
-(display "  @{:a 1}  → ") (print (type @{:a 1}))     # :table
-(assert-eq (type [1 2 3]) :tuple "[] is tuple")       # immutable indexed
-(assert-eq (type @[1 2 3]) :array "@[] is array")      # mutable indexed
+(display "  @{:a 1}  → ") (print (type @{:a 1}))     # :@struct
+(assert-eq (type [1 2 3]) :array "[] is array")       # immutable indexed
+(assert-eq (type @[1 2 3]) :@array "@[] is @array")      # mutable indexed
 (assert-eq (type {:a 1}) :struct "{} is struct")       # immutable keyed
-(assert-eq (type @{:a 1}) :table "@{} is table")       # mutable keyed
+(assert-eq (type @{:a 1}) :@struct "@{} is @struct")       # mutable keyed
 (assert-eq (type "hello") :string "\"\" is string")    # immutable text
-(assert-eq (type @"hello") :buffer "@\"\" is buffer")   # mutable text
+(assert-eq (type @"hello") :@string "@\"\" is @string")   # mutable text
 
-# Mutable types are NOT their immutable counterparts
-(assert-false (tuple? @[1 2]) "array is not tuple")
-(assert-false (array? [1 2]) "tuple is not array")
+# Both mutable and immutable arrays are arrays
+(assert-true (array? @[1 2]) "mutable array is an array")
+(assert-true (array? [1 2]) "immutable array is an array")
 
 
 # ========================================
@@ -251,13 +251,13 @@
   (assign byte-sum (+ byte-sum v)))    # 1 + 2 + 3 = 6
 (assert-eq byte-sum 6 "each over bytes sums integers")
 
-# Conversions: string ↔ bytes ↔ blob ↔ buffer
+# Conversions: string ↔ bytes ↔ @bytes ↔ @string
 (def b2 (string->bytes "hi"))        # string → bytes
 (assert-eq (bytes->string b2) "hi" "round-trip string->bytes->string")
-(def bl2 (bytes->blob b2))          # bytes → blob (mutable copy)
-(assert-eq (type bl2) :blob "bytes->blob")
-(def buf (bytes->buffer (string->bytes "test")))  # string → bytes → buffer
-(assert-eq (type buf) :buffer "bytes->buffer")
+(def bl2 (bytes->blob b2))          # bytes → @bytes (mutable copy)
+(assert-eq (type bl2) :@bytes "bytes->@bytes")
+(def buf (bytes->buffer (string->bytes "test")))  # string → bytes → @string
+(assert-eq (type buf) :@string "bytes->@string")
 
 # Slice — half-open range [start, end)
 (def sliced (slice (bytes 10 20 30 40 50) 1 3))  # bytes at index 1,2

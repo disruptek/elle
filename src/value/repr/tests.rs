@@ -246,8 +246,8 @@ fn test_type_name() {
         Value::cons(Value::NIL, Value::EMPTY_LIST).type_name(),
         "list"
     );
-    assert_eq!(Value::array_mut(vec![]).type_name(), "array");
-    assert_eq!(Value::struct_mut().type_name(), "table");
+    assert_eq!(Value::array_mut(vec![]).type_name(), "@array");
+    assert_eq!(Value::struct_mut().type_name(), "@struct");
     assert_eq!(Value::cell(Value::NIL).type_name(), "cell");
 }
 

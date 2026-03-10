@@ -78,9 +78,9 @@
 
 ## === Tables and Structs ===
 
-(assert-true (table? (table)) "table creation empty")
+(assert-true (struct? (@struct)) "table creation empty")
 
-(assert-eq (let ((t (table)))
+(assert-eq (let ((t (@struct)))
              (put t "key" 42)
              (get t "key"))
            42
@@ -88,10 +88,10 @@
 
 (assert-true (struct? (struct)) "struct creation empty")
 
-(assert-eq (= (type-of (table)) :table) true "type-of table")
+(assert-eq (= (type-of (@struct)) :@struct) true "type-of @struct")
 (assert-eq (= (type-of (struct)) :struct) true "type-of struct")
 
-(assert-eq (let ((t (table "a" 1 "b" 2)))
+(assert-eq (let ((t (@struct "a" 1 "b" 2)))
              (+ (get t "a") (get t "b")))
            3
            "table with string keys")
@@ -101,19 +101,19 @@
            30
            "struct with string keys")
 
-(assert-eq (let ((t (table "a" 1)))
+(assert-eq (let ((t (@struct "a" 1)))
              (has? t "a"))
            true
            "table has? true")
 
-(assert-eq (let ((t (table "a" 1)))
+(assert-eq (let ((t (@struct "a" 1)))
              (has? t "b"))
            false
            "table has? missing")
 
 ## === Table Mutation ===
 
-(assert-eq (let ((t (table)))
+(assert-eq (let ((t (@struct)))
              (put t "a" 1)
              (put t "a" 2)
              (get t "a"))
@@ -125,8 +125,8 @@
            42
            "struct immutability")
 
-(assert-eq (let ((outer (table)))
-             (put outer "inner" (table))
+(assert-eq (let ((outer (@struct)))
+             (put outer "inner" (@struct))
              (put (get outer "inner") "value" 42)
              (get (get outer "inner") "value"))
            42
@@ -141,17 +141,17 @@
 (assert-eq (-> 5 (+ 3) (* 2)) 16 "threading macro first")
 (assert-eq (->> 5 (+ 3) (* 2)) 16 "threading macro last")
 
-(assert-eq (let ((t (table "a" 1 "b" 2)))
+(assert-eq (let ((t (@struct "a" 1 "b" 2)))
              (length (keys t)))
            2
            "table keys")
 
-(assert-eq (let ((t (table "a" 1 "b" 2)))
+(assert-eq (let ((t (@struct "a" 1 "b" 2)))
              (length (values t)))
            2
            "table values")
 
-(assert-eq (let ((t (table "a" 1 "b" 2)))
+(assert-eq (let ((t (@struct "a" 1 "b" 2)))
              (del t "a")
              (has? t "a"))
            false
@@ -163,7 +163,7 @@
            (list 1 2)
            "struct put returns new")
 
-(assert-eq (let ((t (table)))
+(assert-eq (let ((t (@struct)))
              (get t "missing" 42))
            42
            "get with default")

@@ -13,15 +13,15 @@ use super::access::{prim_get, prim_put};
 /// Declarative table of table primitives.
 pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
-        name: "table",
+        name: "@struct",
         func: prim_table,
         effect: Effect::inert(),
         arity: Arity::AtLeast(0),
-        doc: "Create a mutable table from key-value pairs",
+        doc: "Create a mutable struct from key-value pairs",
         params: &[],
         category: "table",
-        example: "(table :a 1 :b 2)",
-        aliases: &[],
+        example: "(@struct :a 1 :b 2)",
+        aliases: &["table"],
     },
     PrimitiveDef {
         name: "get",

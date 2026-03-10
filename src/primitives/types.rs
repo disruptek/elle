@@ -116,7 +116,7 @@ pub(crate) fn prim_is_symbol(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::bool(is_symbol))
 }
 
-/// Check if value is a string
+/// Check if value is a string (immutable or mutable)
 pub(crate) fn prim_is_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -127,7 +127,10 @@ pub(crate) fn prim_is_string(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (SIG_OK, Value::bool(args[0].is_string()))
+    (
+        SIG_OK,
+        Value::bool(args[0].is_string() || args[0].is_string_mut()),
+    )
 }
 
 /// Check if value is a boolean
@@ -192,8 +195,8 @@ pub(crate) fn prim_is_pointer(args: &[Value]) -> (SignalBits, Value) {
     )
 }
 
-/// Check if value is an array (mutable indexed sequence)
-pub(crate) fn prim_is_array_mut(args: &[Value]) -> (SignalBits, Value) {
+/// Check if value is an array (immutable or mutable indexed sequence)
+pub(crate) fn prim_is_array(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
@@ -203,52 +206,13 @@ pub(crate) fn prim_is_array_mut(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (SIG_OK, Value::bool(args[0].as_array_mut().is_some()))
+    (
+        SIG_OK,
+        Value::bool(args[0].as_array().is_some() || args[0].as_array_mut().is_some()),
+    )
 }
 
-/// Check if value is a tuple (immutable indexed sequence)
-pub(crate) fn prim_is_array(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() != 1 {
-        return (
-            SIG_ERROR,
-            error_val(
-                "arity-error",
-                format!("tuple?: expected 1 argument, got {}", args.len()),
-            ),
-        );
-    }
-    (SIG_OK, Value::bool(args[0].as_array().is_some()))
-}
-
-/// Check if value is a table (mutable key-value map)
-pub(crate) fn prim_is_table(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() != 1 {
-        return (
-            SIG_ERROR,
-            error_val(
-                "arity-error",
-                format!("table?: expected 1 argument, got {}", args.len()),
-            ),
-        );
-    }
-    (SIG_OK, Value::bool(args[0].as_struct_mut().is_some()))
-}
-
-/// Check if value is a buffer (mutable byte sequence)
-pub(crate) fn prim_is_buffer(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() != 1 {
-        return (
-            SIG_ERROR,
-            error_val(
-                "arity-error",
-                format!("buffer?: expected 1 argument, got {}", args.len()),
-            ),
-        );
-    }
-    (SIG_OK, Value::bool(args[0].is_string_mut()))
-}
-
-/// Check if value is bytes (immutable binary data)
+/// Check if value is bytes (immutable or mutable binary data)
 pub(crate) fn prim_is_bytes(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -259,24 +223,13 @@ pub(crate) fn prim_is_bytes(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (SIG_OK, Value::bool(args[0].is_bytes()))
+    (
+        SIG_OK,
+        Value::bool(args[0].is_bytes() || args[0].is_bytes_mut()),
+    )
 }
 
-/// Check if value is a blob (mutable binary data)
-pub(crate) fn prim_is_blob(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() != 1 {
-        return (
-            SIG_ERROR,
-            error_val(
-                "arity-error",
-                format!("blob?: expected 1 argument, got {}", args.len()),
-            ),
-        );
-    }
-    (SIG_OK, Value::bool(args[0].is_bytes_mut()))
-}
-
-/// Check if value is a struct (immutable key-value map)
+/// Check if value is a struct (immutable or mutable key-value map)
 pub(crate) fn prim_is_struct(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -287,7 +240,10 @@ pub(crate) fn prim_is_struct(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (SIG_OK, Value::bool(args[0].as_struct().is_some()))
+    (
+        SIG_OK,
+        Value::bool(args[0].as_struct().is_some() || args[0].as_struct_mut().is_some()),
+    )
 }
 
 /// Check if value is a function (closure or primitive)
@@ -425,11 +381,12 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_is_string,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Check if value is a string.",
+        doc: "Check if value is a string (immutable or mutable).",
         params: &["value"],
         category: "predicate",
-        example: "(string? \"hello\") #=> true\n(string? 42) #=> false",
-        aliases: &[],
+        example:
+            "(string? \"hello\") #=> true\n(string? @\"hello\") #=> true\n(string? 42) #=> false",
+        aliases: &["buffer?"],
     },
     PrimitiveDef {
         name: "boolean?",
@@ -477,80 +434,36 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     },
     PrimitiveDef {
         name: "array?",
-        func: prim_is_array_mut,
-        effect: Effect::inert(),
-        arity: Arity::Exact(1),
-        doc: "Check if value is an array (mutable indexed sequence).",
-        params: &["value"],
-        category: "predicate",
-        example: "(array? @[1 2 3]) #=> true\n(array? [1 2 3]) #=> false",
-        aliases: &[],
-    },
-    PrimitiveDef {
-        name: "tuple?",
         func: prim_is_array,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Check if value is a tuple (immutable indexed sequence).",
+        doc: "Check if value is an array (immutable or mutable indexed sequence).",
         params: &["value"],
         category: "predicate",
-        example: "(tuple? [1 2 3]) #=> true\n(tuple? @[1 2 3]) #=> false",
-        aliases: &[],
-    },
-    PrimitiveDef {
-        name: "table?",
-        func: prim_is_table,
-        effect: Effect::inert(),
-        arity: Arity::Exact(1),
-        doc: "Check if value is a table (mutable key-value map).",
-        params: &["value"],
-        category: "predicate",
-        example: "(table? @{:a 1}) #=> true\n(table? {:a 1}) #=> false",
-        aliases: &[],
+        example: "(array? [1 2 3]) #=> true\n(array? @[1 2 3]) #=> true\n(array? 42) #=> false",
+        aliases: &["tuple?"],
     },
     PrimitiveDef {
         name: "struct?",
         func: prim_is_struct,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Check if value is a struct (immutable key-value map).",
+        doc: "Check if value is a struct (immutable or mutable key-value map).",
         params: &["value"],
         category: "predicate",
-        example: "(struct? {:a 1}) #=> true\n(struct? @{:a 1}) #=> false",
-        aliases: &[],
-    },
-    PrimitiveDef {
-        name: "buffer?",
-        func: prim_is_buffer,
-        effect: Effect::inert(),
-        arity: Arity::Exact(1),
-        doc: "Check if value is a buffer (mutable byte sequence).",
-        params: &["value"],
-        category: "predicate",
-        example: "(buffer? @\"hello\") #=> true\n(buffer? \"hello\") #=> false",
-        aliases: &[],
+        example: "(struct? {:a 1}) #=> true\n(struct? @{:a 1}) #=> true\n(struct? 42) #=> false",
+        aliases: &["table?"],
     },
     PrimitiveDef {
         name: "bytes?",
         func: prim_is_bytes,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Check if value is bytes (immutable binary data).",
+        doc: "Check if value is bytes (immutable or mutable binary data).",
         params: &["value"],
         category: "predicate",
-        example: "(bytes? (bytes 1 2 3)) ;=> true",
-        aliases: &[],
-    },
-    PrimitiveDef {
-        name: "blob?",
-        func: prim_is_blob,
-        effect: Effect::inert(),
-        arity: Arity::Exact(1),
-        doc: "Check if value is a blob (mutable binary data).",
-        params: &["value"],
-        category: "predicate",
-        example: "(blob? (blob 1 2 3)) ;=> true",
-        aliases: &[],
+        example: "(bytes? (bytes 1 2 3)) #=> true\n(bytes? (@bytes 1 2 3)) #=> true\n(bytes? 42) #=> false",
+        aliases: &["blob?"],
     },
     PrimitiveDef {
         name: "function?",
