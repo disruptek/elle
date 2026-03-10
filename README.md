@@ -386,7 +386,7 @@ Exactly two values are falsy. Everything else is truthy.
 | boolean | `true` / `false` |
 | integer | `42` |
 | float | `3.14` |
-| symbol | `foo` |
+| symbol | `'foo` |
 | keyword | `:foo` |
 | empty list | `()` |
 | string | `hello` (no quotes) |

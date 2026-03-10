@@ -140,7 +140,7 @@ fn format_value(
             HeapObject::FFIType(_) => return "<ffi-type>".to_string(),
             HeapObject::LStringMut(_) => return "@\"...\"".to_string(),
             HeapObject::LBytes(_) => return "#bytes[...]".to_string(),
-            HeapObject::LBytesMut(_) => return "#blob[...]".to_string(),
+            HeapObject::LBytesMut(_) => return "#@bytes[...]".to_string(),
             HeapObject::ManagedPointer(cell) => {
                 return match cell.get() {
                     Some(addr) => format!("<pointer 0x{:x}>", addr),

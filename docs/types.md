@@ -404,7 +404,7 @@ primitives. They need to be added.
 | boolean | `true` / `false` | |
 | integer | `42` | |
 | float | `3.14` | |
-| symbol | `foo` | Looked up in symbol table |
+| symbol | `'foo` | Looked up in symbol table |
 | keyword | `:foo` | |
 | empty list | `()` | |
 | string | `hello` | No quotes in Display |

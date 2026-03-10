@@ -364,7 +364,7 @@ impl std::fmt::Debug for HeapObject {
             }
             HeapObject::LBytesMut(b) => {
                 if let Ok(borrowed) = b.try_borrow() {
-                    write!(f, "#blob[")?;
+                    write!(f, "#@bytes[")?;
                     for (i, byte) in borrowed.iter().enumerate() {
                         if i > 0 {
                             write!(f, " ")?;
@@ -373,7 +373,7 @@ impl std::fmt::Debug for HeapObject {
                     }
                     write!(f, "]")
                 } else {
-                    write!(f, "#blob[<borrowed>]")
+                    write!(f, "#@bytes[<borrowed>]")
                 }
             }
             HeapObject::Cell(_, _) => write!(f, "<cell>"),
