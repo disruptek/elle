@@ -1,4 +1,4 @@
-use crate::value::fiber::{SIG_DEBUG, SIG_ERROR, SIG_FFI, SIG_HALT, SIG_IO, SIG_YIELD};
+use super::{SIG_DEBUG, SIG_ERROR, SIG_FFI, SIG_HALT, SIG_IO, SIG_YIELD};
 /// Signal registry for mapping effect keywords to bit positions.
 ///
 /// The registry maintains a global mapping of effect keywords (`:error`, `:yield`, etc.)
