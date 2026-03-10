@@ -117,11 +117,13 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
   (def t [1 2 3])           # tuple
   (def s {:name "Bob"})     # struct
   (def str "hello")         # string
+  (def s |1 2 3|)           # set
 
   # Mutable
   (def a @[1 2 3])          # array
   (def tbl @{:name "Bob"})  # table
   (def buf @"hello")        # buffer
+  (def ms @|1 2 3|)         # mutable set
 
   # Bytes and blobs (no literal syntax)
   (def b (bytes 1 2 3))     # immutable bytes
@@ -133,7 +135,7 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
   ```janet
   (length "café")           # => 4, not 5 bytes
   (string/char-at "café" 3) # => "é"
-  (string/slice "café" 0 2) # => "ca"
+  (slice "café" 0 2)        # => "ca"
   (first "café")            # => "c"
   (rest "café")             # => "afé"
   (length "👨‍👩‍👧")   # => 1
@@ -182,10 +184,10 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
 
 - **Reader macros for quasiquote and unquote.** `` ` `` for quasiquote, `,` for unquote, `,;` for unquote-splice (inside quasiquote).
 
-- **Parameters for dynamic binding.** `make-parameter` creates a parameter, `parameterize` sets it in a scope, child fibers inherit parent parameter frames.
+- **Parameters for dynamic binding.** `parameter` creates a parameter, `parameterize` sets it in a scope, child fibers inherit parent parameter frames.
 
   ```janet
-  (def *port* (make-parameter :stdout))
+  (def *port* (parameter :stdout))
 
   (parameterize ((*port* :stderr))
     (print "to stderr"))  # uses *port* = :stderr
@@ -207,6 +209,7 @@ Every collection type has an immutable variant and a mutable variant. Bare liter
 | struct | table | `{:a 1}` | `@{:a 1}` |
 | string | buffer | `"hello"` | `@"hello"` |
 | bytes | blob | *(no literal)* | *(no literal)* |
+| set | mutable set | `\|1 2 3\|` | `@\|1 2 3\|` |
 
 The `@` prefix means "mutable version of this literal." The types within each pair share the same logical structure but differ in mutability.
 
@@ -231,6 +234,7 @@ The `@` prefix means "mutable version of this literal." The types within each pa
 {:name "Bob" :age 25}               @{:name "Bob" :age 25}
 "hello"                             @"hello"
 (bytes 1 2 3)                       (blob 1 2 3)
+|1 2 3|                             @|1 2 3|
 ```
 
 **Tuple** — fixed-length immutable sequence. Error values are tuples: `[:division-by-zero "message"]`. Bracket destructuring works on both tuples and arrays.
@@ -239,7 +243,7 @@ The `@` prefix means "mutable version of this literal." The types within each pa
 
 **Struct** — immutable ordered dictionary. `(get s :key)`. Keys are typically keywords.
 
-**Table** — mutable ordered dictionary. `(get t :key)`, `(put t :key val)`, `(del t :key)`, `(keys t)`, `(values t)`, `(has-key? t :key)`.
+**Table** — mutable ordered dictionary. `(get t :key)`, `(put t :key val)`, `(del t :key)`, `(keys t)`, `(values t)`, `(has? t :key)`.
 
 **String** — immutable interned text. Equality is O(1). Indexing and length count grapheme clusters, not bytes.
 
@@ -248,6 +252,10 @@ The `@` prefix means "mutable version of this literal." The types within each pa
 **Bytes** — immutable binary data. No literal syntax; constructed via `(bytes 1 2 3)` or `(string->bytes "hello")`. Displays as `#bytes[hex ...]`.
 
 **Blob** — mutable binary data. No literal syntax; constructed via `(blob 1 2 3)` or `(string->blob "hello")`. Displays as `#blob[hex ...]`.
+
+**Set** — immutable unordered collection of unique values. `|1 2 3|` literal syntax. `(set 1 2 3)` constructor. `(contains? s val)`, `(add s val)`, `(del s val)`, `(union s1 s2)`, `(intersection s1 s2)`, `(difference s1 s2)`. Mutable values are frozen on insertion.
+
+**Mutable set** — mutable unordered collection of unique values. `@|1 2 3|` literal syntax. `(@set 1 2 3)` constructor. Same operations as immutable set but mutates in place.
 
 ### Lists
 
@@ -293,7 +301,7 @@ Lists are linked; tuples and arrays are contiguous in memory. They are not inter
 (fiber/status f)
 ```
 
-**Parameter** — dynamic binding. `(make-parameter default)` creates one; calling it reads the current value. `parameterize` sets it within a scope. Child fibers inherit parent parameter frames.
+**Parameter** — dynamic binding. `(parameter default)` creates one; calling it reads the current value. `parameterize` sets it within a scope. Child fibers inherit parent parameter frames.
 
 **Cell** — mutable box. User cells are explicit (`box`/`unbox`/`set-box!`). Local cells are compiler-created for mutable captures and auto-unwrapped — users never see them.
 
@@ -330,6 +338,7 @@ Exactly two values are falsy. Everything else is truthy.
 | `tuple?` | tuple |
 | `table?` | table |
 | `struct?` | struct |
+| `set?` | set (immutable or mutable) |
 | `buffer?` | buffer |
 | `bytes?` | bytes |
 | `blob?` | blob |
@@ -358,6 +367,8 @@ Exactly two values are falsy. Everything else is truthy.
 | array | `@[1 2 3]` |
 | struct | `{:a 1}` |
 | table | `@{:a 1}` |
+| set | `\|1 2 3\|` |
+| mutable set | `@\|1 2 3\|` |
 | bytes | `#bytes[01 02 03]` |
 | blob | `#blob[01 02 03]` |
 | closure | `<closure>` |
@@ -481,7 +492,7 @@ Exactly two values are falsy. Everything else is truthy.
 
 ## Modules and Plugins
 
-- **Module system is minimal by design.** `import-file` loads a file — Elle source or native `.so` plugin — compiles and executes it, returns the last expression's value. No module declarations, no export lists, no special import form. It's a function call.
+- **Module system is minimal by design.** `import` loads a file — Elle source or native `.so` plugin — compiles and executes it, returns the last expression's value. No module declarations, no export lists, no special import form. It's a function call.
 
 - **Source modules return their last expression.** A module that defines functions via `def` makes them available as globals; a module that ends with a struct or function hands that value back to the caller.
 
@@ -492,14 +503,14 @@ Exactly two values are falsy. Everything else is truthy.
      :mul (fn (a b) (* (* a b) scale))})
 
   # Usage
-  (def {:add add :mul mul} ((import-file "math.lisp") 2))
+  (def {:add add :mul mul} ((import "math.lisp") 2))
   (add 1 2)  # => 6
   ```
 
 - **Native plugins are Rust cdylib crates.** Link against `elle`, export an init function. Plugins register primitives through the same `PrimitiveDef` mechanism as builtins — same effect declarations, same doc strings, same arity checking. Work directly with `Value`. No intermediate serialization format, no separate process, no generated bindings.
 
   ```janet
-  (def re (import-file "target/release/libelle_regex.so"))
+  (def re (import "target/release/libelle_regex.so"))
   (def pat (re:compile "\\d+"))
   (re:find-all pat "a1b2c3")
   # => ({:match "1" ...} {:match "2" ...} ...)
@@ -507,7 +518,7 @@ Exactly two values are falsy. Everything else is truthy.
 
 - **Five plugins ship with Elle:** regex, sqlite, crypto, random, selkie.
 
-- **Module system is user-replaceable.** `import-file` is an ordinary primitive. You can wrap it with caching, path resolution, sandboxing, or shadow it entirely.
+- **Module system is user-replaceable.** `import` is an ordinary primitive. You can wrap it with caching, path resolution, sandboxing, or shadow it entirely.
 
 ## Tooling
 
