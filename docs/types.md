@@ -387,10 +387,8 @@ Created by `ffi/malloc`.
 | `pair?` | cons cell |
 | `list?` | cons cell or empty list |
 | `empty?` | empty list, empty @array, empty array, empty @struct, empty struct |
-| `array?` | @array |
-| `array?` | array |
-| `@struct?` | @struct |
-| `struct?` | struct |
+| `array?` | array (immutable or @array) |
+| `struct?` | struct (immutable or @struct) |
 | `closure?` | closure |
 | `fiber?` | fiber |
 | `pointer?` | raw C pointer or managed pointer |

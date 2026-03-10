@@ -366,14 +366,10 @@ Exactly two values are falsy. Everything else is truthy.
 | `pair?` | cons cell |
 | `list?` | cons cell or empty list |
 | `empty?` | empty list, empty @array, empty array, empty @struct, empty struct, empty @string |
-| `array?` | array |
-| `@array?` | @array |
-| `@struct?` | @struct |
-| `struct?` | struct |
+| `array?` | array (immutable or @array) |
+| `struct?` | struct (immutable or @struct) |
 | `set?` | set (immutable or @set) |
-| `@string?` | @string |
-| `bytes?` | bytes (immutable) |
-| `@bytes?` | @bytes (mutable) |
+| `bytes?` | bytes (immutable or @bytes) |
 | `function?` | closure or native function |
 | `closure?` | closure only |
 | `primitive?` | native function only |

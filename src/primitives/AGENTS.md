@@ -105,7 +105,7 @@ pub fn register_arithmetic(vm: &mut VM, symbols: &mut SymbolTable) {
 | `unix.rs` | `unix/listen`, `unix/accept`, `unix/connect`, `unix/shutdown` |
 | `kwarg.rs` | `extract_keyword_timeout` helper function |
 | `display.rs` | `print`, `println`, `display`, `newline` |
-| `types.rs` | `nil?`, `pair?`, `list?`, `number?`, `integer?`, `float?`, `string?`, `boolean?`, `symbol?`, `keyword?`, `array?`, `@array?`, `@struct?`, `struct?`, `@string?`, `box?`, `bytes?`, `@bytes?`, `set?`, `type-of` |
+| `types.rs` | `nil?`, `pair?`, `list?`, `number?`, `integer?`, `float?`, `string?`, `boolean?`, `symbol?`, `keyword?`, `array?`, `struct?`, `bytes?`, `type-of` |
 | `concurrency.rs` | `spawn`, `join`, `current-thread-id` |
 | `chan.rs` | `chan/new`, `chan/send`, `chan/recv`, `chan/clone`, `chan/close`, `chan/close-recv`, `chan/select` |
 | `coroutines.rs` | `coro/new`, `coro/resume`, `coro/done?`, `coro/status`, `coro/value`, `coro/>iterator` |
