@@ -22,7 +22,7 @@ pub(crate) fn prim_to_int(args: &[Value]) -> (SignalBits, Value) {
     if let Some(f) = args[0].as_float() {
         return (SIG_OK, Value::int(f as i64));
     }
-    if let Some(result) = args[0].with_string(|s| parse_int(s)) {
+    if let Some(result) = args[0].with_string(parse_int) {
         return result;
     }
     if let Some(name) = args[0].as_keyword_name() {
@@ -70,7 +70,7 @@ pub(crate) fn prim_to_float(args: &[Value]) -> (SignalBits, Value) {
     if let Some(f) = args[0].as_float() {
         return (SIG_OK, Value::float(f));
     }
-    if let Some(result) = args[0].with_string(|s| parse_float(s)) {
+    if let Some(result) = args[0].with_string(parse_float) {
         return result;
     }
     if let Some(name) = args[0].as_keyword_name() {

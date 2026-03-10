@@ -344,4 +344,4 @@
 (assert-eq (type-of (thaw (thaw (bytes 1 2 3)))) :@bytes "thaw: idempotent on @bytes")
 
 ## ── freeze @string: invalid UTF-8 ──────────────────────────────────
-(assert-err (fn [] (freeze (@string 0xFF 0xFE))) "freeze @string with invalid UTF-8 signals error")
+(assert-err (fn [] (freeze (@string 255 254))) "freeze @string with invalid UTF-8 signals error")

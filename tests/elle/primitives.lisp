@@ -120,8 +120,8 @@
 
 ## === Alias tests ===
 
-(assert-eq (string->int "42") 42 "string->int alias")
-(assert-eq (int 42) 42 "int alias")
+(assert-eq (integer "42") 42 "integer from string")
+(assert-eq (int 42) 42 "int alias for integer")
 
 ## === Type predicates for collections ===
 
