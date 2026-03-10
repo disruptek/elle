@@ -386,7 +386,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         category: "predicate",
         example:
             "(string? \"hello\") #=> true\n(string? @\"hello\") #=> true\n(string? 42) #=> false",
-        aliases: &["buffer?"],
+        aliases: &[],
     },
     PrimitiveDef {
         name: "boolean?",
@@ -463,7 +463,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["value"],
         category: "predicate",
         example: "(bytes? (bytes 1 2 3)) #=> true\n(bytes? (@bytes 1 2 3)) #=> true\n(bytes? 42) #=> false",
-        aliases: &["blob?"],
+        aliases: &[],
     },
     PrimitiveDef {
         name: "function?",
