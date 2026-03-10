@@ -1,3 +1,4 @@
+use crate::value::fiber::{SIG_DEBUG, SIG_ERROR, SIG_FFI, SIG_HALT, SIG_IO, SIG_YIELD};
 /// Signal registry for mapping effect keywords to bit positions.
 ///
 /// The registry maintains a global mapping of effect keywords (`:error`, `:yield`, etc.)
@@ -46,12 +47,12 @@ impl SignalRegistry {
     pub fn with_builtins() -> Self {
         let mut registry = Self::new();
         // These unwraps are safe because we're registering unique built-in names
-        let _ = registry.register_builtin("error", 0);
-        let _ = registry.register_builtin("yield", 1);
-        let _ = registry.register_builtin("debug", 2);
-        let _ = registry.register_builtin("ffi", 4);
-        let _ = registry.register_builtin("halt", 8);
-        let _ = registry.register_builtin("io", 9);
+        let _ = registry.register_builtin("error", SIG_ERROR.0.trailing_zeros());
+        let _ = registry.register_builtin("yield", SIG_YIELD.0.trailing_zeros());
+        let _ = registry.register_builtin("debug", SIG_DEBUG.0.trailing_zeros());
+        let _ = registry.register_builtin("ffi", SIG_FFI.0.trailing_zeros());
+        let _ = registry.register_builtin("halt", SIG_HALT.0.trailing_zeros());
+        let _ = registry.register_builtin("io", SIG_IO.0.trailing_zeros());
         registry
     }
 
@@ -164,12 +165,12 @@ mod tests {
     #[test]
     fn test_builtin_registration() {
         let registry = SignalRegistry::with_builtins();
-        assert_eq!(registry.lookup("error"), Some(0));
-        assert_eq!(registry.lookup("yield"), Some(1));
-        assert_eq!(registry.lookup("debug"), Some(2));
-        assert_eq!(registry.lookup("ffi"), Some(4));
-        assert_eq!(registry.lookup("halt"), Some(8));
-        assert_eq!(registry.lookup("io"), Some(9));
+        assert_eq!(registry.lookup("error"), Some(SIG_ERROR.0.trailing_zeros()));
+        assert_eq!(registry.lookup("yield"), Some(SIG_YIELD.0.trailing_zeros()));
+        assert_eq!(registry.lookup("debug"), Some(SIG_DEBUG.0.trailing_zeros()));
+        assert_eq!(registry.lookup("ffi"), Some(SIG_FFI.0.trailing_zeros()));
+        assert_eq!(registry.lookup("halt"), Some(SIG_HALT.0.trailing_zeros()));
+        assert_eq!(registry.lookup("io"), Some(SIG_IO.0.trailing_zeros()));
     }
 
     #[test]

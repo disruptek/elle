@@ -3,13 +3,13 @@
 (effect :rate-limit)
 
 # Restricted higher-order function
-(defn apply-pure (f x)
-  "Apply f to x, requiring f to be pure."
+(defn apply-inert (f x)
+  "Apply f to x, requiring f to be inert."
   (restrict f)
   (f x))
 
 # This works: + is inert
-(apply-pure + 42)
+(apply-inert + 42)
 
 # Restricted function
 (defn validate (x)

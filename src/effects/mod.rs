@@ -5,6 +5,8 @@
 //! parameter indices propagate their callee's effects (for higher-order
 //! functions like map/filter/fold).
 
+pub mod registry;
+
 use crate::value::fiber::SignalBits;
 use crate::value::fiber::{SIG_DEBUG, SIG_ERROR, SIG_FFI, SIG_HALT, SIG_IO, SIG_YIELD};
 use std::fmt;
