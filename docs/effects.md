@@ -472,22 +472,22 @@ have) are deferred to a future phase. When needed, they'll be tracked in the
 analysis environment, not on the Effect struct itself — keeping Effect as a
 simple Copy pair.
 
-### Effect Declarations
+### Effect Restrictions
 
-The programmer can declare effects on functions:
+The programmer can restrict effects on functions using the `restrict` form:
 
 ```janet
-(def (query db sql)
-  (declare (effects :io :errors))
+(defn query (db sql)
+  (restrict :io :error)
   ...)
 ```
 
 And effect bounds on parameters:
 
 ```janet
-(def (fast-map f xs)
-  (declare (param-effects f (not :yields :io)))
-  ...)
+(defn fast-map (f xs)
+  (restrict f)
+  (map f xs))
 ```
 
 These are contracts. The system enforces them — statically when possible,
@@ -679,10 +679,14 @@ Declares effect bounds on a function or its parameters. Appears as a preamble de
 - Multiple `restrict` forms allowed in one lambda (one per parameter + one function-level)
 - Keywords must be registered (via `effect` or built-in)
 - Parameter names must match declared parameters
-- Duplicate restrictions for the same parameter: compile-time error
-- Duplicate function-level restrictions: compile-time error
+- Duplicate restrictions for the same parameter: the last one wins
 
-**Outside lambda bodies**, `restrict` is a compile-time error. `restrict` has no meaningful interpretation outside a lambda preamble, and silently treating it as a function call would hide bugs.
+**Outside lambda bodies**, `restrict` is a call to the stdlib `restrict` function, which signals `:error` at runtime. `restrict` is implemented as:
+```
+(defn restrict [& _]
+  (error {:error :invalid-restrict
+          :message "restrict must appear in a function body preamble"}))
+```
 
 **Examples:**
 ```janet
@@ -917,19 +921,19 @@ A struct mapping effect keywords to bit positions. Includes both built-in and us
 (coro/status co) → (fiber/status co)
 ```
 
-### Effect Declarations
+### Effect Restrictions
 
 ```janet
-(def (inert-add x y)
-  (declare (effects))           ;# no effects — inert
+(defn inert-add (x y)
+  (restrict)           ;# no effects — inert
   (+ x y))
 
-(def (may-fail x)
-  (declare (effects :errors))   ;# may error, nothing else
+(defn may-fail (x)
+  (restrict :error)   ;# may error, nothing else
   (/ 1 x))
 
-(def (callback-must-be-inert f xs)
-  (declare (param-effects f ())) ;# f must have no effects
+(defn callback-must-be-inert (f xs)
+  (restrict f) ;# f must have no effects
   (map f xs))
 ```
 
@@ -955,8 +959,7 @@ Steps 1–3 are complete. Steps 4–7 are future work.
 5. ❌ **User-defined signals.** Bit positions 16–31 reserved but no
    allocation API.
 
-6. ❌ **Effect declarations.** `declare` forms for effect contracts not
-   yet implemented.
+6. ✅ **Effect restrictions.** `restrict` forms for effect contracts implemented.
 
 7. ❌ **Erlang-style processes.** Fibers on an event loop with a scheduler.
 

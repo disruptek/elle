@@ -22,7 +22,7 @@ Lists are `EMPTY_LIST`-terminated, not `NIL`-terminated. `(rest (list 1))` retur
 
 ### `restrict` is a preamble declaration, not an expression
 
-`restrict` only appears inside lambda bodies as a preamble declaration (after optional docstring, before first non-declaration expression). It is NOT a general expression form. Using `restrict` outside a lambda body is a compile-time error. `restrict` has no meaningful interpretation outside a lambda preamble, and silently treating it as a function call would hide bugs.
+`restrict` only appears inside lambda bodies as a preamble declaration (after optional docstring, before first non-declaration expression). It is NOT a general expression form. Using `restrict` outside a lambda body is a call to the stdlib `restrict` function, which signals `:error` at runtime.
 
 ```janet
 # Correct: restrict in lambda body preamble
@@ -30,8 +30,8 @@ Lists are `EMPTY_LIST`-terminated, not `NIL`-terminated. `(rest (list 1))` retur
   (restrict f)
   (f x))
 
-# Compile-time error: restrict outside lambda body
-(restrict f)  # Error: restrict outside lambda body preamble
+# Runtime error: restrict outside lambda body
+(restrict f)  # Error: signals :error at runtime
 ```
 
 ### Collection literal mutable/immutable split
