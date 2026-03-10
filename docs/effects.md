@@ -244,8 +244,7 @@ does need FFI, it signals, and the caller handles the denial.
 
 **"This callback must be inert"**: The caller grants *no* capabilities. If the
 callback tries to do anything — yield, error, IO, allocate — it signals.
-The caller treats any signal as a contract violation. (Note: pure functions
-are a subset of inert functions — inert means only that no signals are emitted.)
+The caller treats any signal as a contract violation. (Note: inert functions are a superset of pure functions — inert means only that no signals are emitted, not that there are no side-effects.)
 
 ### Narrowing, Not Widening
 
@@ -683,11 +682,11 @@ Declares effect bounds on a function or its parameters. Appears as a preamble de
 - Duplicate restrictions for the same parameter: compile-time error
 - Duplicate function-level restrictions: compile-time error
 
-**Outside lambda bodies**, `restrict` is a regular function call (not a special form). This is not an error — it's just a function call to a function named `restrict`.
+**Outside lambda bodies**, `restrict` is a compile-time error. `restrict` has no meaningful interpretation outside a lambda preamble, and silently treating it as a function call would hide bugs.
 
 **Examples:**
 ```janet
-# Pure function
+# Inert function
 (defn add (x y)
   (restrict)
   (+ x y))
@@ -721,15 +720,15 @@ Declares effect bounds on a function or its parameters. Appears as a preamble de
 
 ### Effect Inference with Bounds
 
-Every lambda has an `inferred_effect` — the minimum guaranteed set of effects the lambda may produce. It is always present (never Optional) and is accumulated from:
+Every lambda has an `inferred_effects` — the minimum guaranteed set of effects the lambda may produce. It is always present (never Optional) and is accumulated from:
 
 1. **Direct signal emissions** in the body (e.g., `(yield x)`, `(error "msg")`)
-2. **Effects of internal calls** to statically-known functions — their `inferred_effect` bits propagate upward
+2. **Effects of internal calls** to statically-known functions — their `inferred_effects` bits propagate upward
 3. **Effects contributed by parameter calls:**
-   - If a parameter has a `restrict` bound, its bound's bits are included in `inferred_effect`
+   - If a parameter has a `restrict` bound, its bound's bits are included in `inferred_effects`
    - If a parameter has NO bound, it contributes conservatively (Yields)
 
-The `declared_effect: Option<Effects>` is the programmer-supplied ceiling constraint from `(restrict)` or `(restrict :kw ...)`. When present, the compiler checks that `inferred_effect.bits ⊆ declared_effect.bits`. If the check passes, the lambda's final effect is the declared bound (tighter). If it fails, compile-time error.
+The `inferred_effects: Effects` field is always present and contains the minimum guaranteed set of effects the lambda may produce. The programmer-supplied ceiling constraint from `(restrict)` or `(restrict :kw ...)` is a separate concept — the `restrict` form provides a bound that the compiler checks `inferred_effects` against. When a `restrict` bound is present, the compiler checks that `inferred_effects.bits ⊆ bound.bits`. If the check passes, the lambda's final effect is the declared bound (tighter). If it fails, compile-time error.
 
 **Example:**
 ```janet

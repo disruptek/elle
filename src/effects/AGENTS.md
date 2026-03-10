@@ -76,17 +76,17 @@ User effects are allocated bits 16–31 (up to 16 user effects per compilation u
 - `to_signal_bits(&self, name: &str) -> Option<SignalBits>` — Convenience: keyword → SignalBits
 - `format_signal_bits(&self, bits: SignalBits) -> String` — Human-readable representation for error messages
 
-## Inferred vs Declared Effects
+## Inferred Effects
 
-Every lambda has two effect-related fields:
+Every lambda has an effect-related field:
 
-1. **`inferred_effect: Effect`** (always present, never Optional) — The minimum guaranteed set of effects the lambda may produce, accumulated from:
+1. **`inferred_effects: Effects`** (always present, never Optional) — The minimum guaranteed set of effects the lambda may produce, accumulated from:
    - Direct signal emissions in the body
    - Effects of internal calls to statically-known functions
    - Effects contributed by bounded parameters (their bound's bits are included)
    - Unbounded callable parameters contribute conservatively (Yields)
 
-2. **`declared_effect: Option<Effects>`** — The programmer-supplied ceiling constraint from `(restrict)` or `(restrict :kw ...)`. When present, the compiler checks `inferred_effect.bits ⊆ declared_effect.bits`. If the check passes, the lambda's final effect is the declared bound (tighter). If it fails, compile-time error.
+The programmer-supplied ceiling constraint from `(restrict)` or `(restrict :kw ...)` is a separate concept — the `restrict` form provides a bound that the compiler checks `inferred_effects` against. When a `restrict` bound is present, the compiler checks `inferred_effects.bits ⊆ bound.bits`. If the check passes, the lambda's final effect is the declared bound (tighter). If it fails, compile-time error.
 
 ### Parameter Bounds
 

@@ -142,11 +142,11 @@ HIR (bindings are inline — no separate HashMap)
        used by the `(doc name)` primitive and LSP hover.
 
 16. **Effect bounds are declared via `restrict` preambles.**
-       `HirKind::Lambda` has two effect-related fields:
-       - `inferred_effect: Effect` (always present) — the minimum guaranteed set of effects
-       - `declared_effect: Option<Effects>` (from `(restrict)` or `(restrict :kw ...)`) — the programmer-supplied ceiling
-       - `param_bounds: Vec<(Binding, Effects)>` (from `(restrict param :kw ...)`) — bounds on parameters
-       When a parameter has a bound, it is no longer polymorphic — its effect contribution is the bound's bits.
+        `HirKind::Lambda` has effect-related fields:
+        - `inferred_effects: Effects` (always present) — the minimum guaranteed set of effects the lambda may produce
+        - `param_bounds: Vec<(Binding, Effects)>` (from `(restrict param :kw ...)`) — bounds on parameters
+        The programmer-supplied ceiling constraint from `(restrict)` or `(restrict :kw ...)` is a separate concept — the `restrict` form provides a bound that the compiler checks `inferred_effects` against.
+        When a parameter has a bound, it is no longer polymorphic — its effect contribution is the bound's bits.
 
 17. **Set literals are desugared to constructor calls.**
       `SyntaxKind::Set` (immutable set `|1 2 3|`) desugars to `(set ;elems)`.

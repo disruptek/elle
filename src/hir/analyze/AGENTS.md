@@ -140,5 +140,5 @@ This prevents accidental capture in macros while allowing intentional capture vi
 - **Conflating nil and empty list**: Use `HirKind::EmptyList` for `()`, not `HirKind::Nil`
 - **Not propagating effects**: When combining sub-expressions, use `effect.combine()` to merge effects upward
 - **Breaking scope hygiene**: When creating synthetic bindings, use the correct scope set from the original Syntax node
-- **Forgetting to include bounded parameter bits in inferred_effect**: When a parameter has a `restrict` bound, its bits must be included in the lambda's `inferred_effect`, not tracked as polymorphic
+- **Forgetting to include bounded parameter bits in inferred_effects**: When a parameter has a `restrict` bound, its bits must be included in the lambda's `inferred_effects`, not tracked as polymorphic
 - **Not checking effect bounds at call sites**: When a concrete function is passed to a parameter with a bound, the analyzer must check the argument's effect against the bound
