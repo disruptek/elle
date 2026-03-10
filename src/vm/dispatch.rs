@@ -329,7 +329,7 @@ impl VM {
                     panic!("VM bug: DefineLocal is a dead instruction — never emitted");
                 }
 
-                // Cell operations
+                // Box operations
                 Instruction::MakeCell => {
                     cell::handle_make_cell(self);
                 }

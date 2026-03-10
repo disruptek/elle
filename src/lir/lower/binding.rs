@@ -403,7 +403,7 @@ impl Lowerer {
                 Ok(())
             }
             HirPattern::Tuple { elements, rest } => {
-                // Tuples are immutable indexed sequences, like arrays
+                // Arrays are immutable indexed sequences
                 let temp_slot = self.current_func.num_locals;
                 self.current_func.num_locals += 1;
                 self.emit(LirInstr::StoreLocal {
@@ -522,7 +522,7 @@ impl Lowerer {
         } else {
             let needs_cell = binding.needs_cell();
             if needs_cell {
-                // Cell was already created in Begin pre-pass
+                // cell was already created in Begin pre-pass
                 let cell_reg = self.fresh_reg();
                 self.emit(LirInstr::LoadLocal {
                     dst: cell_reg,

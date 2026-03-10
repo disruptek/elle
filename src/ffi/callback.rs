@@ -292,7 +292,7 @@ fn build_callback_env(closure: &Closure, args: &[Value]) -> Vec<Value> {
     }
 
     // Add slots for locally-defined variables.
-    // Cell-wrapped locals get LocalCell(NIL); non-cell locals get bare NIL.
+    // cell-wrapped locals get LocalCell(NIL); non-cell locals get bare NIL.
     // Beyond index 63, conservatively use LocalCell.
     let num_param_slots = match closure.template.arity {
         crate::value::Arity::Exact(n) => n,

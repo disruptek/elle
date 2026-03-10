@@ -117,7 +117,7 @@ impl fmt::Display for Value {
             return write!(f, "<closure>");
         }
 
-        // Cell
+        // Box
         if let Some(cell_ref) = self.as_cell() {
             let val = cell_ref.borrow();
             return write!(f, "<cell {}>", val);
@@ -154,7 +154,7 @@ impl fmt::Display for Value {
             return write!(f, "#<binding>");
         }
 
-        // Buffer
+        // @string
         if let Some(buf_ref) = self.as_string_mut() {
             let borrowed = buf_ref.borrow();
             write!(f, "@\"")?;
@@ -198,7 +198,7 @@ impl fmt::Display for Value {
             return write!(f, "]");
         }
 
-        // Tuple
+        // Array (immutable)
         if let Some(elems) = self.as_array() {
             write!(f, "[")?;
             for (i, v) in elems.iter().enumerate() {
@@ -328,7 +328,7 @@ impl fmt::Debug for Value {
             }
             return write!(f, "]");
         }
-        // Buffer
+        // @string
         if let Some(buf_ref) = self.as_string_mut() {
             let borrowed = buf_ref.borrow();
             write!(f, "@\"")?;
@@ -368,7 +368,7 @@ impl fmt::Debug for Value {
             }
             return write!(f, "]");
         }
-        // Tuple
+        // Array (immutable)
         if let Some(elems) = self.as_array() {
             write!(f, "[")?;
             for (i, v) in elems.iter().enumerate() {

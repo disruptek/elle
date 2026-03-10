@@ -54,7 +54,7 @@ pub extern "C" fn elle_jit_is_pair(a: u64) -> u64 {
 }
 
 // =============================================================================
-// Cell Operations
+// Box Operations
 // =============================================================================
 
 /// Create a LocalCell wrapping a value

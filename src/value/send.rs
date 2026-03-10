@@ -135,14 +135,14 @@ impl SendValue {
                 Ok(SendValue::Struct(copied))
             }
 
-            // Tuples - deep copy all elements
+            // Arrays (immutable) - deep copy all elements
             HeapObject::LArray(elems) => {
                 let copied: Result<Vec<SendValue>, String> =
                     elems.iter().map(|v| SendValue::from_value(*v)).collect();
                 Ok(SendValue::Tuple(copied?))
             }
 
-            // Buffers - deep copy the bytes
+            // @string - deep copy the bytes
             HeapObject::LStringMut(buf_ref) => {
                 let borrowed = buf_ref
                     .try_borrow()
@@ -150,7 +150,7 @@ impl SendValue {
                 Ok(SendValue::Buffer(borrowed.clone()))
             }
 
-            // Cells - deep copy the contents if sendable
+            // Boxes - deep copy the contents if sendable
             HeapObject::Cell(cell_ref, is_local) => {
                 let borrowed = cell_ref
                     .try_borrow()

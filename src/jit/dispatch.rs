@@ -596,7 +596,7 @@ fn build_closure_env_for_jit(
     let num_locally_defined = closure.template.num_locals.saturating_sub(num_params);
 
     // Add slots for locally-defined variables.
-    // Cell-wrapped locals get LocalCell(NIL); non-cell locals get bare NIL.
+    // cell-wrapped locals get LocalCell(NIL); non-cell locals get bare NIL.
     // Beyond index 63, conservatively use LocalCell.
     for i in 0..num_locally_defined {
         if i >= 64 || (closure.template.cell_locals_mask & (1 << i)) != 0 {

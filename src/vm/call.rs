@@ -566,7 +566,7 @@ impl VM {
         }
 
         // Add slots for locally-defined variables.
-        // Cell-wrapped locals (captured by nested closures) get LocalCell(NIL).
+        // cell-wrapped locals (captured by nested closures) get LocalCell(NIL).
         // Non-cell locals get bare NIL — they use stack slots via StoreLocal/LoadLocal
         // and the env slot is never accessed.
         // Beyond index 63, the mask can't represent the local — conservatively

@@ -26,10 +26,10 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
   The compilation pipeline is: Source → Reader → Syntax → Expander → Analyzer → HIR → Lowerer → LIR → Emitter → Bytecode → VM. Each stage infers more than the last. The analyzer resolves all bindings to their definitions, computes which variables each closure captures, infers the effect of every expression, and flags lint violations — all before bytecode is emitted. This is why the linter catches errors at compile time, why the effect system is sound, and why the JIT can make intelligent decisions about what to compile natively.
   </details>
 
-- **A sound effect system, inferred not declared.** Every function is automatically classified as `Inert`, `Yields`, or `Polymorphic`. The compiler enforces this: a pure context cannot call a yielding function. No annotations required. This is what makes the fiber/concurrency story coherent — the compiler knows which functions can suspend.
+- **A sound effect system, inferred not declared.** Every function is automatically classified as `Inert`, `Yields`, or `Polymorphic`. The compiler enforces this:   an inert context cannot call a yielding function. No annotations required. This is what makes the fiber/concurrency story coherent — the compiler knows which functions can suspend.
 
   ```janet
-  # Pure function — inferred automatically
+  # Inert function — inferred automatically
   (defn add (a b) (+ a b))
 
   # Yielding function — inferred from yield call
@@ -44,7 +44,7 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
 
   <details><summary>More: Effect Enforcement</summary>
 
-  The compiler enforces effect contracts: a pure context cannot call a yielding function. This is checked at compile time.
+  The compiler enforces effect contracts: an inert context cannot call a yielding function. This is checked at compile time.
   </details>
 
 - **Fully hygienic macros that operate on syntax objects, not text or s-expressions.** Macros receive and return `Syntax` objects carrying scope information (Racket-style scope sets). Name capture is structurally impossible, not just conventionally avoided. This is stronger than Janet's macros, which are s-expression templates.
@@ -66,7 +66,7 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
 - **Functions are colorless.** Any function can be called from a fiber. There is no `async`/`await` annotation that marks a function as suspending and forces all its callers to be marked too. Whether something runs concurrently is decided at the call site, not baked into the function definition.
 
   ```janet
-  # A pure function
+  # An inert function
   (defn add (a b)
     (+ a b))
 

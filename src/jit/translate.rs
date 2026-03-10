@@ -176,7 +176,7 @@ impl<'a> FunctionTranslator<'a> {
                     if (local_index as u32) < 64
                         && (self.lir.cell_locals_mask & (1 << local_index)) != 0
                     {
-                        // Cell-wrapped: auto-unwrap via load_cell
+                        // cell-wrapped: auto-unwrap via load_cell
                         let result =
                             self.call_helper_unary(builder, self.helpers.load_cell, local_val)?;
                         builder.def_var(var(dst.0), result);
@@ -345,7 +345,7 @@ impl<'a> FunctionTranslator<'a> {
                     if (local_index as u32) < 64
                         && (self.lir.cell_locals_mask & (1 << local_index)) != 0
                     {
-                        // Cell-wrapped: store into the cell
+                        // cell-wrapped: store into the cell
                         let cell_val =
                             builder.use_var(var(self.local_var_base + local_index as u32));
                         let _result = self.call_helper_binary(

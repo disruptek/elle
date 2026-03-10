@@ -336,7 +336,7 @@ pub(crate) fn prim_slice(args: &[Value]) -> (SignalBits, Value) {
         return (SIG_OK, Value::bytes(b[clamped_start..clamped_end].to_vec()));
     }
 
-    // Blob (mutable)
+    // @bytes (mutable)
     if let Some(blob_ref) = args[0].as_bytes_mut() {
         let borrowed = blob_ref.borrow();
         let clamped_start = start.min(borrowed.len());
@@ -350,7 +350,7 @@ pub(crate) fn prim_slice(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    // Tuple (immutable)
+    // Array (immutable)
     if let Some(elems) = args[0].as_array() {
         let clamped_start = start.min(elems.len());
         let clamped_end = end.min(elems.len());
@@ -384,10 +384,10 @@ pub(crate) fn prim_slice(args: &[Value]) -> (SignalBits, Value) {
             .unwrap();
     }
 
-    // Buffer (mutable, grapheme-aware)
+    // @string (mutable, grapheme-aware)
     if let Some(buf_ref) = args[0].as_string_mut() {
         let borrowed = buf_ref.borrow();
-        // Buffer is valid UTF-8 by construction
+        // @string is valid UTF-8 by construction
         let s = unsafe { std::str::from_utf8_unchecked(&borrowed) };
         return slice_graphemes(s, start, end, true);
     }

@@ -429,7 +429,7 @@ pub(crate) fn prim_describe(args: &[Value]) -> (SignalBits, Value) {
         );
     }
 
-    // Cell
+    // Box
     if val.as_cell().is_some() {
         return (SIG_OK, Value::string("<cell>"));
     }

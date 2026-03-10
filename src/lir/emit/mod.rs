@@ -878,7 +878,7 @@ impl Emitter {
                 // Non-cell local: use stack slot
                 Some(index - func.num_captures)
             } else {
-                None // Cell local (or beyond mask range): use env
+                None // cell local (or beyond mask range): use env
             }
         } else {
             None // Capture or parameter: use env

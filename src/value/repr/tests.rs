@@ -301,7 +301,7 @@ fn test_truthiness_semantics() {
     // @struct is truthy
     assert!(Value::struct_mut().is_truthy(), "@struct is truthy");
 
-    // Cell is truthy
+    // Box is truthy
     assert!(Value::cell(Value::int(42)).is_truthy(), "cell is truthy");
 }
 
