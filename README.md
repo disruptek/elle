@@ -125,9 +125,9 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
    (def buf @"hello")        # @string
    (def ms @|1 2 3|)         # @set
 
-   # Bytes and blobs (no literal syntax)
+   # Bytes and @bytes (no literal syntax)
    (def b (bytes 1 2 3))     # bytes
-   (def bl (blob 1 2 3))     # @bytes
+   (def bl (@bytes 1 2 3))   # @bytes
    ```
 
 - **Strings are sequences of grapheme clusters.** `length`, slicing, indexing, and iteration all count grapheme clusters — not bytes, not codepoints.
@@ -224,7 +224,7 @@ Every collection type has an immutable variant and a mutable variant. Bare liter
 | struct | @struct | `{:a 1}` | `@{:a 1}` |
 | string | @string | `"hello"` | `@"hello"` |
 | bytes | @bytes | *(no literal)* | *(no literal)* |
-| set | @set | `\|1 2 3\|` | `@\|1 2 3\|` |
+| set | @set | `|1 2 3|` | `@|1 2 3|` |
 
 The `@` prefix means "mutable version of this literal." The types within each pair share the same logical structure but differ in mutability.
 
@@ -269,11 +269,21 @@ The `@` prefix means "mutable version of this literal." The types within each pa
 (difference |1 2| |2 3|)    # => |1|
 ```
 
-**bytes** — binary data. No literal syntax. Displays as `#bytes[hex ...]`.
+**bytes** — immutable binary data. No literal syntax. Displays as `#bytes[hex ...]`.
 
 ```janet
 (def b (bytes 1 2 3))
 (def b2 (string->bytes "hello"))
+(get b 0)               # => 1
+(length b)              # => 5
+(bytes->hex b2)         # => "68656c6c6f"
+```
+
+**@bytes** — mutable binary data. No literal syntax. Displays as `#@bytes[hex ...]`.
+
+```janet
+(def b (@bytes 1 2 3))
+(def b2 (string->@bytes "hello"))
 (get b 0)               # => 1
 (length b)              # => 5
 (bytes->hex b2)         # => "68656c6c6f"
@@ -362,8 +372,8 @@ Exactly two values are falsy. Everything else is truthy.
 | `struct?` | struct |
 | `set?` | set (immutable or @set) |
 | `@string?` | @string |
-| `bytes?` | bytes |
-| `@bytes?` | @bytes |
+| `bytes?` | bytes (immutable) |
+| `@bytes?` | @bytes (mutable) |
 | `function?` | closure or native function |
 | `closure?` | closure only |
 | `primitive?` | native function only |
@@ -389,8 +399,8 @@ Exactly two values are falsy. Everything else is truthy.
 | @array | `@[1 2 3]` |
 | struct | `{:a 1}` |
 | @struct | `@{:a 1}` |
-| set | `\|1 2 3\|` |
-| @set | `@\|1 2 3\|` |
+| set | `|1 2 3|` |
+| @set | `@|1 2 3|` |
 | bytes | `#bytes[01 02 03]` |
 | @bytes | `#@bytes[01 02 03]` |
 | closure | `<closure>` |

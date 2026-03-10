@@ -1,4 +1,4 @@
-//! Bytes and blob primitives (binary data)
+//! Bytes and @bytes primitives (binary data)
 use crate::effects::Effect;
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
@@ -39,7 +39,7 @@ pub(crate) fn prim_bytes(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::bytes(data))
 }
 
-/// Create mutable blob from integer arguments
+/// Create mutable @bytes from integer arguments
 pub(crate) fn prim_blob(args: &[Value]) -> (SignalBits, Value) {
     let mut data = Vec::with_capacity(args.len());
     for (i, arg) in args.iter().enumerate() {
@@ -99,7 +99,7 @@ pub(crate) fn prim_string_to_bytes(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// string->blob: encode string as UTF-8 blob (mutable)
+/// string->blob: encode string as UTF-8 @bytes (mutable)
 pub(crate) fn prim_string_to_blob(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -152,7 +152,7 @@ pub(crate) fn prim_bytes_to_string(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// blob->string: decode UTF-8 blob to string (fallible)
+/// blob->string: decode UTF-8 @bytes to string (fallible)
 pub(crate) fn prim_blob_to_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -184,7 +184,7 @@ pub(crate) fn prim_blob_to_string(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// blob->bytes: freeze blob to immutable bytes (copies)
+/// blob->bytes: freeze @bytes to immutable bytes (copies)
 pub(crate) fn prim_blob_to_bytes(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -210,7 +210,7 @@ pub(crate) fn prim_blob_to_bytes(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// bytes->blob: thaw bytes to mutable blob (copies)
+/// bytes->blob: thaw bytes to mutable @bytes (copies)
 pub(crate) fn prim_bytes_to_blob(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -259,7 +259,7 @@ pub(crate) fn prim_bytes_to_hex(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// blob->hex: convert blob to lowercase hex string
+/// blob->hex: convert @bytes to lowercase hex string
 pub(crate) fn prim_blob_to_hex(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -292,7 +292,7 @@ pub(crate) fn prim_blob_to_hex(args: &[Value]) -> (SignalBits, Value) {
 /// Slice a sequence. Returns same type as input.
 /// (slice coll start end)
 ///
-/// Supports: bytes, blob, tuple, array, list, string, buffer.
+/// Supports: bytes, @bytes, array, @array, list, string, @string.
 /// Indices are 0-based, clamped to length. start >= end returns empty.
 pub(crate) fn prim_slice(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 3 {
@@ -445,14 +445,14 @@ pub(crate) fn prim_slice(args: &[Value]) -> (SignalBits, Value) {
         error_val(
             "type-error",
             format!(
-                "slice: expected sequence (bytes, blob, tuple, array, list, string, or buffer), got {}",
+                "slice: expected sequence (bytes, @bytes, array, @array, list, string, or @string), got {}",
                 args[0].type_name()
             ),
         ),
     )
 }
 
-/// Grapheme-aware slicing for strings and buffers.
+/// Grapheme-aware slicing for strings and @strings.
 fn slice_graphemes(s: &str, start: usize, end: usize, is_buffer: bool) -> (SignalBits, Value) {
     let graphemes: Vec<&str> = s.graphemes(true).collect();
     let clamped_start = start.min(graphemes.len());
@@ -472,7 +472,7 @@ fn slice_graphemes(s: &str, start: usize, end: usize, is_buffer: bool) -> (Signa
     }
 }
 
-/// buffer->bytes: convert buffer to immutable bytes
+/// buffer->bytes: convert @string to immutable bytes
 pub(crate) fn prim_buffer_to_bytes(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -498,7 +498,7 @@ pub(crate) fn prim_buffer_to_bytes(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// buffer->blob: convert buffer to mutable blob
+/// buffer->blob: convert @string to mutable @bytes
 pub(crate) fn prim_buffer_to_blob(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -521,7 +521,7 @@ pub(crate) fn prim_buffer_to_blob(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// bytes->buffer: convert bytes to buffer. Error on invalid UTF-8.
+/// bytes->buffer: convert bytes to @string. Error on invalid UTF-8.
 pub(crate) fn prim_bytes_to_buffer(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -550,7 +550,7 @@ pub(crate) fn prim_bytes_to_buffer(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// blob->buffer: convert blob to buffer. Error on invalid UTF-8.
+/// blob->buffer: convert @bytes to @string. Error on invalid UTF-8.
 pub(crate) fn prim_blob_to_buffer(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -603,7 +603,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         params: &[],
         category: "bytes",
         example: "(@bytes 72 101 108 108 111)",
-        aliases: &["blob"],
+        aliases: &[],
     },
     PrimitiveDef {
         name: "string->bytes",
@@ -621,7 +621,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_string_to_blob,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Encode a string as a mutable UTF-8 blob.",
+        doc: "Encode a string as mutable UTF-8 @bytes.",
         params: &["str"],
         category: "bytes",
         example: "(string->blob \"hello\")",
@@ -643,7 +643,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_blob_to_string,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Decode a UTF-8 blob to a string. Errors on invalid UTF-8.",
+        doc: "Decode UTF-8 @bytes to a string. Errors on invalid UTF-8.",
         params: &["b"],
         category: "bytes",
         example: "(blob->string (blob 104 105))",
@@ -654,7 +654,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_blob_to_bytes,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Freeze a blob to immutable bytes (copies).",
+        doc: "Freeze @bytes to immutable bytes (copies).",
         params: &["b"],
         category: "bytes",
         example: "(blob->bytes (blob 1 2 3))",
@@ -665,7 +665,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_bytes_to_blob,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Thaw bytes to a mutable blob (copies).",
+        doc: "Thaw bytes to mutable @bytes (copies).",
         params: &["b"],
         category: "bytes",
         example: "(bytes->blob (bytes 1 2 3))",
@@ -687,7 +687,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_blob_to_hex,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert a blob to a lowercase hex string.",
+        doc: "Convert @bytes to a lowercase hex string.",
         params: &["b"],
         category: "bytes",
         example: "(blob->hex (blob 72 101 108)) ;=> \"48656c\"",
@@ -698,7 +698,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_slice,
         effect: Effect::inert(),
         arity: Arity::Exact(3),
-        doc: "Slice a sequence from start to end index. Works on bytes, blob, tuple, array, list, string, and buffer. Returns same type as input.",
+        doc: "Slice a sequence from start to end index. Works on bytes, @bytes, array, @array, list, string, and @string. Returns same type as input.",
         params: &["coll", "start", "end"],
         category: "bytes",
         example: "(slice [1 2 3 4 5] 1 3)",
@@ -709,7 +709,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_buffer_to_bytes,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert buffer to immutable bytes.",
+        doc: "Convert @string to immutable bytes.",
         params: &["buf"],
         category: "bytes",
         example: "(buffer->bytes @\"hello\")",
@@ -720,7 +720,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_buffer_to_blob,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert buffer to mutable blob.",
+        doc: "Convert @string to mutable @bytes.",
         params: &["buf"],
         category: "bytes",
         example: "(buffer->blob @\"hello\")",
@@ -731,7 +731,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_bytes_to_buffer,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert bytes to buffer. Errors on invalid UTF-8.",
+        doc: "Convert bytes to @string. Errors on invalid UTF-8.",
         params: &["b"],
         category: "bytes",
         example: "(bytes->buffer (bytes 104 105))",
@@ -742,7 +742,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_blob_to_buffer,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert blob to buffer. Errors on invalid UTF-8.",
+        doc: "Convert @bytes to @string. Errors on invalid UTF-8.",
         params: &["b"],
         category: "bytes",
         example: "(blob->buffer (blob 104 105))",

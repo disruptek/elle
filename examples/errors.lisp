@@ -19,9 +19,9 @@
 # 1. Raising and catching errors
 # ========================================
 
-# Errors in Elle are values signaled via fibers. By convention, an array
-# [:keyword "message"] is used, but any value works. (error val) is a
-# prelude macro that expands to (fiber/signal 1 val).
+# Errors in Elle are values signaled via fibers. By convention, a struct
+# {:error :keyword :message "message"} is used, but any value works.
+# (error val) is a prelude macro that expands to (fiber/signal 1 val).
 
 # try/catch runs the body; if an error occurs, the catch handler runs
 # with the error bound to the catch variable.
@@ -124,7 +124,7 @@
 (def defer-err (try
   (defer (push err-log :cleanup)
     (push err-log :body)
-    (error [:fail "oops"])
+    (error {:error :fail :message "oops"})
     (push err-log :unreachable))
   (catch e (push err-log :caught) e)))
 (assert-eq err-log @[:body :cleanup :caught] "defer: cleanup before catch")
@@ -172,7 +172,7 @@
 (def with-err (try
   (with f (open-file) close-file
     (push err-res-log :used)
-    (error [:io "write failed"]))
+    (error {:error :io :message "write failed"}))
   (catch e :recovered)))
 
 (assert-eq with-err :recovered "with: error caught after cleanup")
@@ -311,7 +311,7 @@
 
 # Pattern: validate multiple fields, collecting all errors
 (defn validate-config [cfg]
-  "Validate a config table. Returns [:ok cfg] or [:err errors]."
+  "Validate a config @struct. Returns [:ok cfg] or [:err errors]."
   (def errors @[])
   (when (nil? (get cfg :host))
     (push errors "missing :host"))

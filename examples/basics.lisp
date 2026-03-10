@@ -11,7 +11,7 @@
 #   Bitwise          — bit/and, bit/or, bit/xor, bit/not, bit/shl, bit/shr
 #   Type conversions — number->string, string->integer, integer, float, ...
 #   Mutability split — [array] vs @[array], {struct} vs @{struct}, "str" vs @"str"
-#   Bytes and blobs  — immutable/mutable binary data
+#   Bytes and @bytes  — immutable/mutable binary data
 #   Boxes            — first-class mutable cells
 #   Equality         — = does structural equality on data, reference on functions
 
@@ -78,7 +78,7 @@
 (assert-true (if 0 true false) "0 is truthy")           # unlike C/Python
 (assert-true (if "" true false) "empty string is truthy")
 (assert-true (if (list) true false) "empty list () is truthy")  # unlike nil!
-(assert-true (if [] true false) "empty tuple is truthy")
+(assert-true (if [] true false) "empty array is truthy")
 (assert-true (if @[] true false) "empty array is truthy")
 (assert-true (if :keyword true false) "keyword is truthy")
 (assert-true (if 'symbol true false) "symbol is truthy")
@@ -301,7 +301,7 @@
 # ========================================
 
 # = does structural equality on data types
-(assert-true (= [1 2 3] [1 2 3]) "= on equal tuples")          # same contents → equal
+(assert-true (= [1 2 3] [1 2 3]) "= on equal arrays")          # same contents → equal
 (assert-true (= @[1 2 3] @[1 2 3]) "= on equal arrays (structural)")
 (assert-true (= {:a 1 :b 2} {:a 1 :b 2}) "= on equal structs")
 (assert-true (= "hello" "hello") "= on equal strings")
@@ -313,10 +313,10 @@
 (assert-true (= f f) "same closure is equal to itself")
 
 # Destructuring works on any compound type
-(def [a b c] [10 20 30])            # unpack a tuple into bindings
+(def [a b c] [10 20 30])            # unpack an array into bindings
 (display "  [10 20 30] → a=") (display a) (display " b=") (display b) (display " c=") (print c)
-(assert-eq a 10 "tuple destructure: first")
-(assert-eq c 30 "tuple destructure: third")
+(assert-eq a 10 "array destructure: first")
+(assert-eq c 30 "array destructure: third")
 
 (def {:x px :y py} {:x 5 :y 10})    # unpack a struct by key
 (display "  {:x 5 :y 10} → px=") (display px) (display " py=") (print py)

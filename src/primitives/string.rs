@@ -6,8 +6,8 @@ use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 use unicode_segmentation::UnicodeSegmentation;
 
-/// Extract text content from a string or buffer value.
-/// Returns (text, is_buffer). For buffers, validates UTF-8.
+/// Extract text content from a string or @string value.
+/// Returns (text, is_@string). For @strings, validates UTF-8.
 fn as_text(val: &Value, prim_name: &str) -> Result<(String, bool), (SignalBits, Value)> {
     if let Some(s) = val.with_string(|s| s.to_string()) {
         Ok((s, false))
@@ -161,7 +161,7 @@ pub(crate) fn prim_string_find(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// Split string or buffer on delimiter, returning a tuple
+/// Split string or @string on delimiter, returning an array
 pub(crate) fn prim_string_split(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
@@ -585,7 +585,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_string_split,
         effect: Effect::inert(),
         arity: Arity::Exact(2),
-        doc: "Split string by delimiter, returning a tuple of substrings.",
+        doc: "Split string by delimiter, returning an array of substrings.",
         params: &["s", "delim"],
         category: "string",
         example: "(string/split \"a,b,c\" \",\") #=> [\"a\" \"b\" \"c\"]",

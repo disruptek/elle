@@ -24,7 +24,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_freeze,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert a mutable collection to its immutable equivalent (table→struct, @set→set)",
+        doc: "Convert a mutable collection to its immutable equivalent (@struct→struct, @set→set)",
         params: &["collection"],
         category: "struct",
         example: "(freeze @{:a 1 :b 2})",
@@ -35,7 +35,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_thaw,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert an immutable collection to its mutable equivalent (struct→table, set→@set)",
+        doc: "Convert an immutable collection to its mutable equivalent (struct→@struct, set→@set)",
         params: &["collection"],
         category: "struct",
         example: "(thaw {:a 1 :b 2})",
@@ -79,7 +79,7 @@ pub(crate) fn prim_struct(args: &[Value]) -> (SignalBits, Value) {
 
 /// Convert a mutable collection to its immutable equivalent
 /// (freeze collection) -> immutable collection
-/// Handles: table -> struct, @set -> set
+/// Handles: @struct -> struct, @set -> set
 pub(crate) fn prim_freeze(args: &[Value]) -> (SignalBits, Value) {
     // Handle mutable set -> immutable set
     if let Some(s) = args[0].as_set_mut() {
@@ -94,7 +94,7 @@ pub(crate) fn prim_freeze(args: &[Value]) -> (SignalBits, Value) {
     if args[0].is_struct() {
         return (SIG_OK, args[0]);
     }
-    // Handle table -> struct (existing behavior)
+    // Handle @struct -> struct (existing behavior)
     let t = match args[0].as_struct_mut() {
         Some(t) => t,
         None => {
@@ -103,7 +103,7 @@ pub(crate) fn prim_freeze(args: &[Value]) -> (SignalBits, Value) {
                 error_val(
                     "type-error",
                     format!(
-                        "freeze: expected mutable collection (table, @set), got {}",
+                        "freeze: expected mutable collection (@struct, @set), got {}",
                         args[0].type_name()
                     ),
                 ),
@@ -117,7 +117,7 @@ pub(crate) fn prim_freeze(args: &[Value]) -> (SignalBits, Value) {
 
 /// Convert an immutable collection to its mutable equivalent
 /// (thaw collection) -> mutable collection
-/// Handles: struct -> table, set -> @set
+/// Handles: struct -> @struct, set -> @set
 pub(crate) fn prim_thaw(args: &[Value]) -> (SignalBits, Value) {
     // Handle immutable set -> mutable set
     if let Some(s) = args[0].as_set() {
@@ -128,11 +128,11 @@ pub(crate) fn prim_thaw(args: &[Value]) -> (SignalBits, Value) {
     if args[0].is_set_mut() {
         return (SIG_OK, args[0]);
     }
-    // Already mutable table — return as-is
+    // Already mutable @struct — return as-is
     if args[0].is_struct_mut() {
         return (SIG_OK, args[0]);
     }
-    // Handle struct -> table (existing behavior)
+    // Handle struct -> @struct (existing behavior)
     let s = match args[0].as_struct() {
         Some(s) => s,
         None => {

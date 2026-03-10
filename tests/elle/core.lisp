@@ -255,9 +255,9 @@
 # ============================================================================
 
 # test_get_indexed
-(assert-eq (get [10 20 30] 0) 10 "get tuple index 0")
-(assert-eq (get [10 20 30] 1) 20 "get tuple index 1")
-(assert-eq (get [10 20 30] 2) 30 "get tuple index 2")
+(assert-eq (get [10 20 30] 0) 10 "get array index 0")
+(assert-eq (get [10 20 30] 1) 20 "get array index 1")
+(assert-eq (get [10 20 30] 2) 30 "get array index 2")
 
 # ============================================================================
 # List utilities

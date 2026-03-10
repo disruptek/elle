@@ -42,9 +42,9 @@
     result))
 
 (defn build-tokenizer [names]
-  "Build char-level tokenizer. Returns table with :char->id, :id->char, :vocab-size.
-   BOS token is at the last index (also serves as EOS).
-   Characters are sorted to produce a deterministic mapping matching Python."
+   "Build char-level tokenizer. Returns @struct with :char->id, :id->char, :vocab-size.
+    BOS token is at the last index (also serves as EOS).
+    Characters are sorted to produce a deterministic mapping matching Python."
   (let* ([chars @{}])
     # Collect unique chars from all names
     (each name in names

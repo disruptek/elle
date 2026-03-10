@@ -16,7 +16,7 @@
 # ============================================================================
 
 (defn make-matrix [rows cols initial-value]
-  "Create an m×n matrix (@array of tuples, row-major)."
+  "Create an m×n matrix (@array of arrays, row-major)."
   (@array ;(map (fn [_] (@array ;(map (fn [_] initial-value) (range cols))))
                (range rows))))
 

@@ -56,7 +56,7 @@
 ## (error value) => (fiber/signal 1 value)
 (defmacro error (& args)
   (if (> (length args) 1)
-    (fiber/signal 1 [:arity-error "error: expected 0 or 1 arguments"])
+    (fiber/signal 1 {:error :arity-error :message "error: expected 0 or 1 arguments"})
     `(fiber/signal 1 ,(if (empty? args) nil (first args)))))
 
 ## try/catch - error handling via fibers
@@ -140,7 +140,7 @@
              (ffi/call ,ptr-sym ,sig-sym ,;call-args))))))
 
 ## each - iterate over a sequence
-## Dispatches on type: lists use first/rest, indexed types use get/length.
+## Dispatches on type-of: lists use first/rest, indexed types use get/length.
 ## (each x coll body...) or (each x in coll body...)
 (defmacro each (var iter-or-in & forms)
   (let* ((has-in (and (not (empty? forms))
@@ -148,21 +148,28 @@
                       (= (syntax->datum iter-or-in) 'in)))
          (iter (if has-in (first forms) iter-or-in))
          (body (if has-in (rest forms) forms)))
-    `(let ((seq (let ((s ,iter)) (if (set? s) (set->array s) s))))
-       (cond
-         ((empty? seq) nil)
-         ((pair? seq)
-          (var cur seq)
-          (while (pair? cur)
-            (let ((,var (first cur))) ,;body)
-            (assign cur (rest cur))))
-         ((or (array? seq) (string? seq) (bytes? seq))
+    `(let ((seq ,iter))
+       (match (type-of seq)
+         (:list
+          (unless (empty? seq)
+            (var cur seq)
+            (while (pair? cur)
+              (let ((,var (first cur))) ,;body)
+              (assign cur (rest cur)))))
+         ((or :array :@array :string :@string :bytes :@bytes)
           (var idx 0)
           (var len (length seq))
           (while (< idx len)
             (let ((,var (get seq idx))) ,;body)
             (assign idx (+ idx 1))))
-          (true (error [:type-error "each: not a sequence"]))))))
+         ((or :set :@set)
+          (let ((items (set->array seq)))
+            (var idx 0)
+            (var len (length items))
+            (while (< idx len)
+              (let ((,var (get items idx))) ,;body)
+              (assign idx (+ idx 1)))))
+         (_ (error {:error :type-error :message "each: not a sequence"}))))))
 
 ## case - equality dispatch (flat pairs)
 ## (case expr val1 body1 val2 body2 ... [default])

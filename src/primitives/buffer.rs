@@ -1,13 +1,13 @@
-//! Buffer primitives (mutable byte sequences)
+//! @string primitives (mutable strings)
 use crate::effects::Effect;
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
-/// Create a buffer from byte arguments
-/// (buffer) => empty buffer
-/// (buffer 72 101 108) => buffer with those bytes
+/// Create an @string from byte arguments
+/// (@string) => empty @string
+/// (@string 72 101 108) => @string with those bytes
 pub(crate) fn prim_buffer(args: &[Value]) -> (SignalBits, Value) {
     let mut bytes = Vec::with_capacity(args.len());
     for (i, arg) in args.iter().enumerate() {
@@ -40,7 +40,7 @@ pub(crate) fn prim_buffer(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::string_mut(bytes))
 }
 
-/// Convert a string to a buffer (UTF-8 bytes)
+/// Convert a string to an @string (UTF-8 bytes)
 pub(crate) fn prim_string_to_buffer(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -67,7 +67,7 @@ pub(crate) fn prim_string_to_buffer(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// Convert a buffer to a string (UTF-8)
+/// Convert an @string to a string (UTF-8)
 pub(crate) fn prim_buffer_to_string(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -112,14 +112,14 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         params: &[],
         category: "buffer",
         example: "(@string 72 101 108 108 111)",
-        aliases: &["buffer"],
+        aliases: &[],
     },
     PrimitiveDef {
         name: "string->buffer",
         func: prim_string_to_buffer,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert a string to a buffer (UTF-8 bytes).",
+        doc: "Convert a string to an @string (UTF-8 bytes).",
         params: &["str"],
         category: "buffer",
         example: "(string->buffer \"hello\")",
@@ -130,7 +130,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_buffer_to_string,
         effect: Effect::inert(),
         arity: Arity::Exact(1),
-        doc: "Convert a buffer to a string (UTF-8).",
+        doc: "Convert an @string to a string (UTF-8).",
         params: &["buf"],
         category: "buffer",
         example: "(buffer->string @\"hello\")",
