@@ -412,19 +412,6 @@ fn test_effect_pure_primitives() {
 // ============================================================================
 
 #[test]
-fn test_restrict_parses_param_level_inert() {
-    let (mut symbols, mut vm) = setup();
-    let result = analyze(
-        "(fn (f x) (restrict f) (f x))",
-        &mut symbols,
-        &mut vm,
-        "<test>",
-    );
-    // Should parse without error (param_bounds field will be added in implementation)
-    assert!(result.is_ok());
-}
-
-#[test]
 fn test_lambda_body_effect_yields() {
     let (mut symbols, mut vm) = setup();
     let result = analyze("(fn (x) (yield x))", &mut symbols, &mut vm, "<test>").unwrap();
@@ -829,12 +816,7 @@ fn test_polymorphic_inference_pure_function() {
 // CHUNK 2: (effect :keyword) form tests
 // ============================================================================
 
-#[test]
-fn test_effect_declaration_returns_keyword() {
-    use crate::common::eval_source_bare;
-    let result = eval_source_bare("(effect :heartbeat_c2a)").unwrap();
-    assert_eq!(result, elle::Value::keyword("heartbeat_c2a"));
-}
+// test_effect_declaration_returns_keyword: migrated to tests/elle/effects.lisp
 
 #[test]
 fn test_effect_declaration_non_keyword_error() {
@@ -854,12 +836,7 @@ fn test_effect_declaration_builtin_error() {
     assert!(err.contains("error") || err.contains("already"));
 }
 
-#[test]
-fn test_effect_in_expression_position() {
-    use crate::common::eval_source_bare;
-    let result = eval_source_bare("(def x (effect :expr_pos_c2c)) x").unwrap();
-    assert_eq!(result, elle::Value::keyword("expr_pos_c2c"));
-}
+// test_effect_in_expression_position: migrated to tests/elle/effects.lisp
 
 #[test]
 fn test_effect_declaration_duplicate_error() {
@@ -1097,19 +1074,6 @@ fn test_restrict_param_with_user_effect() {
 }
 
 #[test]
-fn test_restrict_parses_param_level_with_keyword() {
-    let (mut symbols, mut vm) = setup();
-    let result = analyze(
-        "(effect :restrict_c3a) (fn (f x) (restrict f :restrict_c3a) (f x))",
-        &mut symbols,
-        &mut vm,
-        "<test>",
-    );
-    // Should parse without error (param_bounds field will be added in implementation)
-    assert!(result.is_ok());
-}
-
-#[test]
 fn test_restrict_ceiling_fails_bounded_param() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
@@ -1127,14 +1091,7 @@ fn test_restrict_ceiling_fails_bounded_param() {
 // CHUNK 5: Runtime effect checking tests
 // ============================================================================
 
-#[test]
-fn test_restrict_runtime_check_passes() {
-    use crate::common::eval_source_bare;
-    let result =
-        eval_source_bare("(def apply-inert (fn (f x) (restrict f) (f x))) (apply-inert + 42)")
-            .unwrap();
-    assert_eq!(result, elle::Value::int(43));
-}
+// test_restrict_runtime_check_passes: migrated to tests/elle/effects.lisp
 
 #[test]
 fn test_restrict_runtime_check_fails() {
@@ -1147,23 +1104,9 @@ fn test_restrict_runtime_check_fails() {
     assert!(err.contains("effect") || err.contains("bound") || err.contains("restrict"));
 }
 
-#[test]
-fn test_restrict_runtime_non_closure_passes() {
-    use crate::common::eval_source_bare;
-    let result =
-        eval_source_bare("(def apply-inert (fn (f x) (restrict f) (f x))) (apply-inert + 42)")
-            .unwrap();
-    assert_eq!(result, elle::Value::int(43));
-}
+// test_restrict_runtime_non_closure_passes: migrated to tests/elle/effects.lisp
 
-#[test]
-fn test_restrict_runtime_bounded_keyword() {
-    use crate::common::eval_source_bare;
-    let result = eval_source_bare(
-        "(effect :rt_c5a) (def apply-bounded (fn (f) (restrict f :rt_c5a) (f))) (apply-bounded (fn () nil))"
-    ).unwrap();
-    assert_eq!(result, elle::Value::nil());
-}
+// test_restrict_runtime_bounded_keyword: migrated to tests/elle/effects.lisp
 
 #[test]
 fn test_restrict_runtime_bounded_keyword_fails() {
@@ -1176,15 +1119,7 @@ fn test_restrict_runtime_bounded_keyword_fails() {
     assert!(err.contains("effect") || err.contains("bound") || err.contains("restrict"));
 }
 
-#[test]
-fn test_restrict_runtime_dynamic_passes() {
-    use crate::common::eval_source_bare;
-    let result = eval_source_bare(
-        "(def apply-inert (fn (f x) (restrict f) (f x))) (var g +) (apply-inert g 42)",
-    )
-    .unwrap();
-    assert_eq!(result, elle::Value::int(43));
-}
+// test_restrict_runtime_dynamic_passes: migrated to tests/elle/effects.lisp
 
 #[test]
 fn test_restrict_runtime_dynamic_fails() {
@@ -1199,26 +1134,9 @@ fn test_restrict_runtime_dynamic_fails() {
 // CHUNK 6: (effects) introspection primitive tests
 // ============================================================================
 
-#[test]
-fn test_effects_primitive_returns_struct() {
-    use crate::common::eval_source_bare;
-    let result = eval_source_bare("(type-of (effects))").unwrap();
-    assert_eq!(result, elle::Value::keyword("struct"));
-}
-
-#[test]
-fn test_effects_primitive_contains_builtins() {
-    use crate::common::eval_source_bare;
-    let result = eval_source_bare("((effects) :error)").unwrap();
-    assert_eq!(result, elle::Value::int(0));
-}
-
-#[test]
-fn test_effects_primitive_contains_user_effects() {
-    use crate::common::eval_source_bare;
-    let result = eval_source_bare("(effect :intro_c6a) ((effects) :intro_c6a)").unwrap();
-    assert_eq!(result, elle::Value::int(16));
-}
+// test_effects_primitive_returns_struct: migrated to tests/elle/effects.lisp
+// test_effects_primitive_contains_builtins: migrated to tests/elle/effects.lisp
+// test_effects_primitive_contains_user_effects: migrated to tests/elle/effects.lisp
 
 #[test]
 fn test_effects_primitive_is_inert() {
