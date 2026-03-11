@@ -119,25 +119,27 @@ Pull specific names into scope:
 (pretty (parse input))
 ```
 
-### Side-effect (flat, implicit)
+### Discarded return value
 
-If a file defines top-level functions without returning a closure, `import`
-executes the file for its side effects. The definitions enter the VM's global
-scope:
+`import` always returns the file's last expression. If the caller ignores it,
+the file runs for its side effects — I/O, registration, printing. But because
+files are compiled as a single letrec, top-level `defn` forms are local to the
+file, not injected into the caller's scope:
 
 ```lisp
 # helpers.lisp
 (defn double [x] (* x 2))
+# last expression is the closure bound to `double`
 ```
 
 ```lisp
 (import "helpers.lisp")
-(double 21)                   # => 42
+(double 21)                   # ✗ compilation error: undefined variable: double
 ```
 
-This is how the microgpt demo loads its helper files. It works, but it pollutes
-the caller's namespace and provides no encapsulation. The closure pattern is
-preferred for library code.
+The only way to use a file's definitions is to have the file return them
+explicitly (closure pattern) and bind the result. There is no implicit
+namespace pollution.
 
 ### Plugin (shared object)
 
@@ -257,20 +259,17 @@ The trade-off is deliberate. Circular dependencies are a design error in any
 module system; Elle detects them at the point of failure rather than at the
 point of declaration.
 
-### Side-effect imports are uncontrolled
+### Discarded imports have limited utility
 
-The "flat" import style (`(import "helpers.lisp")` without binding the result)
-executes the file for its side effects. Top-level `defn` forms define globals.
-This works but provides no encapsulation and no control over what enters the
-caller's namespace.
+Calling `(import "file.lisp")` without binding the result executes the file
+for its side effects — printing, writing files, registering parameters. But
+because files are letrec-wrapped, no definitions leak into the caller's scope.
+The return value (the file's last expression) is simply discarded.
 
-There is no mechanism to prevent a flat import from overwriting an existing
-global. There is no warning when it happens. If two flat imports define the
-same name, the second wins silently.
-
-The closure pattern eliminates this class of problem entirely: nothing enters
-the caller's scope unless the caller explicitly binds it. Flat imports are
-a convenience for scripts and demos, not a foundation for library code.
+This means there is no "flat import" footgun: you cannot accidentally pollute
+the caller's namespace by importing a file. The closure pattern is not a
+discipline imposed on top of a leaky primitive — it is the only way to get
+definitions out of a file.
 
 ### No path resolution
 

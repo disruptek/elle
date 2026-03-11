@@ -50,7 +50,21 @@
   (assert (= (apply-wrap fmt "val") "{val}") "first-class: pass module to function"))
 
 # ============================================================================
-# 6. Existing module fixtures
+# 6. Letrec isolation — defn in imported file does not leak into caller scope
+# ============================================================================
+
+# Files are compiled as a single letrec. Top-level defn forms are local to
+# the file. The only way to get definitions out is via the return value.
+# Importing without binding the result gives you the side effects only.
+
+(let (([ok? _] (protect
+                 (eval '(do
+                   (import-file "tests/modules/counter.lisp")
+                   (inc))))))
+  (assert (not ok?) "defn in imported file is not visible in caller scope"))
+
+# ============================================================================
+# 7. Existing module fixtures
 # ============================================================================
 
 # test.lisp — simple value exports
