@@ -338,26 +338,34 @@ The `run()` function returns only the `SignalBits`. The value is stored on the
 fiber's `signal` field — the canonical location. The fast path (normal return)
 is `bits == 0`, which is a single branch.
 
-### One Signal or Many?
+### Signal Composition
 
-**Open question.** Can a function emit multiple signal bits simultaneously?
+**`SignalBits` is a pure bitmask. Every bit is independent and orthogonal.**
+There are no "types" of signals — only bits. The VM and schedulers check for
+individual bits using `contains()`, never with equality. Any combination of
+bits is valid and meaningful — the caller decides what the combination means.
 
-The argument for single signals: a signal is a suspension point. The function
-stops executing, the handler runs, the function (maybe) resumes. Only one
-thing caused it to stop.
+Examples of valid composed signals:
 
-The argument for compound signals: a function might want to say "I need IO
-AND I'm yielding" or "this is an error AND it's user-signal-5." Compound
-signals carry more information.
+- `|:yield|` — suspend, return a value to the caller
+- `|:yield :io|` — suspend AND request I/O; the scheduler sees both bits and
+  handles accordingly
+- `|:io :error|` — I/O error; a scheduler might log it and halt
+- `|:io :error :halt|` — I/O error, halt the VM; the scheduler interprets all
+  three bits
+- `|:yield :audit|` — suspend AND emit an audit signal; a monitoring fiber
+  catches both
 
-**Current position**: Signals are primarily one-at-a-time because they
-represent suspension points. But we don't foreclose on compound signals. The
-bitfield representation supports them naturally. If we discover a need, we
-can allow them without redesigning.
+No bit has a predetermined relationship with any other bit. The design makes
+no pre-determinations on how bits are mixed. Users and schedulers define the
+semantics of combinations.
 
-The payload value can carry additional context that doesn't need to be in the
-signal bits. "I'm yielding, and here's a struct describing what IO I need" is
-a single yield signal with a rich payload.
+**Fiber masks work the same way.** A fiber mask like `|:yield :io|` catches
+fibers that have either bit set. The mask is a bitmask, not an enum.
+
+**User-defined effects (bits 16–31) compose freely** with built-in bits. A
+user-defined effect can be combined with `:yield`, `:error`, `:io`, or any
+other bit.
 
 ### Terminal vs Resumable Signals
 
@@ -550,9 +558,9 @@ The compiler's effect information guides JIT decisions:
 
 ### SIG_IO and the Scheduler
 
-I/O effects (`SIG_IO`) are distinct from yield effects (`SIG_YIELD`). This
-separation allows the scheduler to intercept I/O requests without interfering
-with coroutines.
+I/O effects use the `:io` signal bit (bit 9). A fiber performing I/O signals
+`|:yield :io|` because it wants to both suspend AND request I/O handling.
+This is a convention, not a language rule — the bits compose freely.
 
 **Signal bit**: Bit 9 (`SIG_IO = 1 << 9`)
 
@@ -569,24 +577,29 @@ Stream primitives (`stream/read-line`, `stream/read`, `stream/read-all`,
 perform I/O themselves. Instead, they:
 
 1. Build an `IoRequest` (typed descriptor of the I/O operation)
-2. Return `(SIG_IO, request)` to suspend the fiber
-3. Let the scheduler catch `SIG_IO` and dispatch to a backend
+2. Return `(|:yield :io|, request)` to suspend the fiber and signal I/O
+3. Let the scheduler catch the fiber (because `:yield` is in its mask), see
+   the `:io` bit, and dispatch the `IoRequest` payload to a backend
 
 The backend (`SyncBackend` in Phase 3) performs the actual I/O and returns
-`(SIG_OK, result)` or `(SIG_ERROR, error)`. The scheduler resumes the fiber
+`(|:ok|, result)` or `(|:error|, error)`. The scheduler resumes the fiber
 with the result.
 
-### Why Separate I/O from Yield?
+### Signal Composition in I/O
 
-Coroutines use `SIG_YIELD` to suspend and resume. I/O uses `SIG_IO` to
-request backend execution. Separating them allows:
+The `:io` bit is just a bit — it has no special relationship with `:yield`.
+A fiber can signal:
 
-- **Transparent I/O**: A function that does I/O can be called from a
-  coroutine without the coroutine seeing the I/O suspension.
-- **Scheduler control**: The scheduler can intercept I/O without intercepting
-  user-level yields.
-- **Capability-based dispatch**: Different schedulers can handle I/O
-  differently (sync, async, mock) without changing the function.
+- `|:yield|` — suspend without I/O
+- `|:yield :io|` — suspend and request I/O (the common case)
+- `|:io :error|` — I/O error; a scheduler might log it and halt
+- `|:yield :io :audit|` — suspend, request I/O, and emit an audit signal
+
+The scheduler's job is to check the bits it cares about. A scheduler that
+catches `:yield` will see fibers signaling `|:yield :io|` and can inspect the
+`:io` bit to decide how to handle the I/O request. A different scheduler might
+catch `|:yield :io|` directly. The semantics of combinations are defined by
+the scheduler, not by the language.
 
 ## Signal Registry
 

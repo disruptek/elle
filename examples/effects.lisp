@@ -19,11 +19,12 @@
 # 1. Declaring user-defined effects
 # ========================================
 
-# Declare three user-defined signal keywords.
+# Declare four user-defined signal keywords.
 # Each becomes a named flow-control interrupt the caller can intercept.
 (effect :abort)    # signals early termination — caller catches and uses the value
 (effect :progress) # signals a progress update — caller can display or collect
 (effect :log)      # signals a log entry — caller decides whether to record it
+(effect :audit)    # signals an audit event — caller can log for compliance
 
 # ========================================
 # 2. Early termination with :abort
@@ -131,11 +132,10 @@
 (forever
   # resume — runs until next fiber/signal :log or completion
   (fiber/resume lf)
-  (if (= (fiber/status lf) :paused)
-    # fiber paused on a :log signal — record the entry
-    (push log-entries (fiber/value lf))
-    # fiber finished — stop
-    (break)))
+  (match (fiber/status lf)
+         # fiber paused on :log — record the entry
+         (:paused (push log-entries (fiber/value lf)))
+         (_ (break))))  # fiber finished — stop driving
 
 (assert (= (length log-entries) 3) "log: 3 entries collected")
 # the fiber's final return value is accessible via fiber/value after completion
@@ -143,9 +143,19 @@
 (display "  log entries: ") # display prompt
 (print log-entries)         # print the entries
 
-# caller 2: ignore :log entirely — just call the function directly
-# signals that aren't caught propagate up and are dropped at the top level
-(def direct-result (compute-with-log 5))  # :log signals go nowhere
+# caller 2: ignore :log entirely — run in a fiber that catches :log but
+# discards the payloads, driving to completion for the return value
+(defn run-logged-ignore []
+  "Entry point: run compute-with-log, ignoring :log signals."
+  (compute-with-log 5))
+
+(def lf2 (fiber/new run-logged-ignore |:log|))
+(forever
+  (fiber/resume lf2)
+  (if (not (= (fiber/status lf2) :paused))
+    (break)))  # keep resuming until done, discarding :log payloads
+
+(def direct-result (fiber/value lf2))
 (assert (= direct-result 20) "log: same result when logs ignored")
 (display "  direct result (logs ignored): ") # display prompt
 (print direct-result)                        # print the result
@@ -189,7 +199,7 @@
 (assert (= (-> err (get :error)) :effect-violation) "safe-map: effect-violation error")
 
 # match on the error kind to handle different violations distinctly
-(match (-> err (get :error))
+(match err:error  # syntax-sugar for (get err :error)
   (:effect-violation (display "  safe-map: callback tried to signal mid-iteration\n"))
   (_ (error err)))
 
@@ -233,9 +243,72 @@
 (assert (= (-> err (get :error)) :effect-violation) "plugin: effect-violation error")
 
 # match on the error kind to handle sandbox escapes distinctly
-(match err:error
+(match err:error  # syntax-sugar for (get err :error)
   (:effect-violation (display "  plugin: attempted to signal outside sandbox\n"))
   (_ (error err)))
+
+# ========================================
+# 7. Signal composition — combining bits
+# ========================================
+
+# sensitive-op performs a sensitive operation and signals both :log and :audit
+# simultaneously — one emission, two bits set in the signal mask.
+(defn sensitive-op [data]
+  "Perform a sensitive operation, signaling both :log and :audit."
+  # emit both bits simultaneously — one signal, two meanings
+  (fiber/signal |:log :audit| {:op :write :data data :user "alice"})
+  (string "processed: " data))  # return a string describing the result
+
+# run-sensitive is the entry point for the sensitive operation fiber
+(defn run-sensitive []
+  "Entry point for the sensitive operation fiber."
+  (sensitive-op "secret"))  # call sensitive-op with demo data
+
+# a monitor fiber whose mask includes :log — it catches any signal with :log set,
+# including composed |:log :audit| signals because the mask check is bitwise
+(def monitor (fiber/new run-sensitive |:log|))
+
+# resume the monitor fiber — runs until it hits the composed signal
+(fiber/resume monitor)
+
+# the fiber paused on the composed signal — inspect the signal payload
+(def sig-val (fiber/value monitor))
+(display "  composed signal payload: ")  # display prompt
+(print sig-val)                           # print the signal payload
+
+# verify the payload contains both the operation and user fields
+(assert (= (-> sig-val (get :op)) :write) "composition: op field present")
+(assert (= (-> sig-val (get :user)) "alice") "composition: user field present")
+(assert (= (-> sig-val (get :data)) "secret") "composition: data field present")
+
+# demonstrate that the same composed signal is caught by different masks.
+# a fiber with mask |:audit| would also catch |:log :audit| because the mask
+# check is: does the signal contain any bit that the mask contains?
+# |:log :audit| contains :audit, so a mask of |:audit| catches it.
+# |:log :audit| contains :log, so a mask of |:log| catches it.
+# |:log :audit| contains both, so a mask of |:log :audit| catches it.
+# this is the power of bitmask composition — one signal, multiple observers.
+
+# run-sensitive-again is another entry point for a second monitor
+(defn run-sensitive-again []
+  "Entry point for a second sensitive operation fiber."
+  (sensitive-op "another-secret"))  # call sensitive-op again
+
+# an audit-focused monitor whose mask includes :audit — it also catches the
+# composed |:log :audit| signal because :audit is in the signal
+(def audit-monitor (fiber/new run-sensitive-again |:audit|))
+
+# resume the audit monitor — runs until it hits the composed signal
+(fiber/resume audit-monitor)
+
+# the audit monitor also paused on the same composed signal
+(def audit-sig-val (fiber/value audit-monitor))
+(display "  audit monitor signal: ")  # display prompt
+(print audit-sig-val)                  # print the audit signal
+
+# verify the audit monitor received the same payload
+(assert (= (-> audit-sig-val (get :op)) :write) "audit: op field present")
+(assert (= (-> audit-sig-val (get :user)) "alice") "audit: user field present")
 
 (print "")                                    # blank line
 (print "all effects tests passed.")           # final message
