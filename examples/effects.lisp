@@ -3,12 +3,13 @@
 # Effects — user-defined signals and effect restrictions
 #
 # Demonstrates:
-#   effect                  — declaring user-defined effects
-#   restrict                — constraining a function's effects
-#   restrict (parameter)    — constraining a parameter's effects
-#   Effect composition      — multiple restrictions on same function
-#   Effect bounds           — last restriction wins for same target
-#   Runtime enforcement     — violations caught at call time
+#   effect              — declaring user-defined signal keywords
+#   restrict            — bounding which signals a function may emit
+#   restrict (param)    — bounding which signals a callback may emit
+#   Progress reporting  — signaling progress from long-running work
+#   Early termination   — signaling :abort to stop a search early
+#   Logging             — signaling :log entries the caller can collect
+#   Plugin sandboxing   — restricting what signals a plugin may emit
 
 (def {:assert-eq assert-eq :assert-equal assert-equal :assert-true assert-true :assert-false assert-false :assert-list-eq assert-list-eq :assert-not-nil assert-not-nil :assert-string-eq assert-string-eq :assert-err assert-err :assert-err-kind assert-err-kind} ((import-file "./examples/assertions.lisp")))
 
@@ -18,170 +19,174 @@
 # ========================================
 
 # effect declares a new user-defined effect that functions can signal.
-# Each effect is a distinct signal type that can be restricted or allowed.
+# Effects are flow-control signals: they interrupt execution and let the
+# caller decide how to respond. They have nothing to do with side-effects
+# (a function can mutate state and still be inert if it emits no signals).
 
-(effect :heartbeat)
-(effect :rate-limit)
-(effect :audit)
+(effect :log)
+(effect :progress)
+(effect :abort)
 
-# :heartbeat — periodic status signals (e.g., "still working")
-# :rate-limit — signals when rate limits are approached
-# :audit — signals for audit logging of sensitive operations
+# :log — a function signals this to request that a log entry be written;
+#        the caller decides whether to handle it or ignore it
+# :progress — a long-running function signals progress updates; the caller
+#             can display them, collect them, or ignore them entirely
+# :abort — a function signals early termination; the caller can catch and
+#          recover, or let it propagate
 
 
 # ========================================
-# 2. Inert higher-order functions
+# 2. Progress reporting
 # ========================================
 
-# A function can restrict its parameters to be inert (emit no signals).
-# This ensures callbacks don't have side effects.
+# A long-running computation signals :progress at each step.
+# The caller intercepts these signals using a fiber and drives the
+# computation forward, collecting progress updates.
 
-(defn transform [f xs]
-  "Map f over xs, requiring f to emit no signals."
+(defn process-items [items]
+  "Process each item, signaling :progress after each one."
+  (map (fn [item]
+         (def result (* item item))
+         (fiber/signal :progress {:item item :result result})
+         result)
+       items))
+
+# Run in a fiber that catches :progress signals
+(def progress-log @[])
+(def f (fiber/new (fn [] (process-items [1 2 3 4 5])) (effect-mask :progress)))
+(var done false)
+(while (not done)
+  (fiber/resume f nil)
+  (if (= (fiber/status f) :paused)
+    (push progress-log (fiber/value f))
+    (assign done true)))
+
+(assert-eq (length progress-log) 5 "progress: 5 updates received")
+(assert-eq (get (get progress-log 0) :result) 1  "progress: 1^2 = 1")
+(assert-eq (get (get progress-log 4) :result) 25 "progress: 5^2 = 25")
+(display "  progress log: ") (print progress-log)
+
+
+# ========================================
+# 3. Early termination with :abort
+# ========================================
+
+# A linear search that signals :abort the moment it finds a match,
+# skipping the rest of the list.
+
+(defn find-first [pred xs]
+  "Scan xs, signaling :abort with the first element satisfying pred."
+  (each x xs
+    (when (pred x)
+      (fiber/signal :abort x)))
+  nil)
+
+# Catch :abort to get the found value
+(def search-fiber (fiber/new
+  (fn [] (find-first even? [1 3 5 4 7 9]))
+  (effect-mask :abort)))
+
+(fiber/resume search-fiber nil)
+(def found (if (= (fiber/status search-fiber) :paused)
+  (fiber/value search-fiber)
+  nil))
+(display "  first even in [1 3 5 4 7 9]: ") (print found)
+(assert-eq found 4 "abort: found first even number, stopped early")
+
+
+# ========================================
+# 4. Logging — caller decides what to do with log entries
+# ========================================
+
+# A computation that signals :log as it works. Show two uses: one that
+# collects logs, one that ignores them.
+
+(defn compute-with-log [x]
+  "Compute a result, signaling :log at each step."
+  (fiber/signal :log {:level :info :msg "starting"})
+  (def step1 (* x 2))
+  (fiber/signal :log {:level :debug :msg (string "doubled to " step1)})
+  (def step2 (+ step1 10))
+  (fiber/signal :log {:level :info :msg "done"})
+  step2)
+
+# Caller 1: collect log entries
+(def log-entries @[])
+(def log-fiber (fiber/new (fn [] (compute-with-log 5)) (effect-mask :log)))
+(var log-done false)
+(while (not log-done)
+  (fiber/resume log-fiber nil)
+  (if (= (fiber/status log-fiber) :paused)
+    (push log-entries (fiber/value log-fiber))
+    (assign log-done true)))
+(display "  log entries: ") (print log-entries)
+(assert-eq (length log-entries) 3 "log: 3 entries collected")
+(assert-eq (fiber/value log-fiber) 20 "log: result is 20")
+
+# Caller 2: ignore log entries entirely — just run it
+(def result (compute-with-log 5))
+(assert-eq result 20 "log: result same when logs ignored")
+
+
+# ========================================
+# 5. restrict — protecting a data structure from signaling callbacks
+# ========================================
+
+# A map-like function that requires its callback to be inert. The comment
+# explains WHY: if the callback could signal mid-iteration, the iteration
+# state would be left inconsistent.
+
+(defn safe-map [f xs]
+  "Map f over xs. f must be inert — a signaling callback would
+   interrupt the iteration and leave results in an inconsistent state."
   (restrict f)
   (map f xs))
 
-# Test with inert functions: + and string/length both emit no signals
-(def result1 (transform + [1 2 3]))
-(display "  transform + [1 2 3]: ") (print result1)
-(assert-list-eq result1 [1 2 3] "transform: + is inert")
+# Works fine with an inert callback
+(def squares (safe-map (fn [x] (* x x)) [1 2 3 4 5]))
+(display "  squares: ") (print squares)
+(assert-list-eq squares [1 4 9 16 25] "safe-map: inert callback works")
 
-(def result2 (transform string/length ["a" "bb" "ccc"]))
-(display "  transform string/length: ") (print result2)
-(assert-list-eq result2 [1 2 3] "transform: string/length is inert")
-
-# Test failure: passing a yielding function violates the restriction
-# We use protect to catch the runtime error
-(defn yielding-fn [x]
-  "A function that yields (not inert)."
-  (yield :signal)
-  x)
-
-(def [ok? err] (protect (transform yielding-fn [1 2 3])))
-(display "  transform with yielding function: ") (print err)
-(assert-false ok? "transform: yielding function rejected at runtime")
-(assert-eq (get err :error) :effect-violation "transform: error kind is :effect-violation")
+# Fails at runtime when callback signals
+(def [ok? err] (protect
+  (safe-map (fn [x] (fiber/signal :log {:msg "oops"}) x) [1 2 3])))
+(assert-false ok? "safe-map: signaling callback rejected")
+(assert-eq (get err :error) :effect-violation "safe-map: effect-violation error")
+(display "  safe-map with signaling callback: ") (print err)
 
 
 # ========================================
-# 3. Restricting a function's own effects
+# 6. restrict — plugin sandboxing
 # ========================================
 
-# A function can restrict itself to emit only specific effects.
-# This is a contract: the function promises not to signal other effects.
+# A plugin runner that allows plugins to emit :log but nothing else.
+# A misbehaving plugin that tries to signal :abort is caught.
 
-(defn validate-positive [x]
-  "Validate that x is positive. May only signal :error."
-  (restrict :error)
-  (if (< x 0)
-    (error {:error :negative :message "expected positive number"})
-    x))
+(defn run-plugin [plugin data]
+  "Run a plugin on data. Plugins may emit :log but nothing else.
+   This prevents plugins from aborting the host, yielding control,
+   or signaling errors that escape the sandbox."
+  (restrict plugin :log)
+  (plugin data))
 
-# Test success: positive input returns the value
-(def valid (validate-positive 42))
-(display "  validate-positive 42: ") (print valid)
-(assert-eq valid 42 "validate-positive: accepts positive")
+# Well-behaved plugin: only logs
+(defn good-plugin [data]
+  (fiber/signal :log {:msg "plugin running"})
+  (* data 2))
 
-# Test failure: negative input signals :error
-(def [ok? err] (protect (validate-positive -5)))
-(display "  validate-positive -5: ") (print err)
-(assert-false ok? "validate-positive: rejects negative")
-(assert-eq (get err :error) :negative "validate-positive: error kind is :negative")
+(def plugin-result (run-plugin good-plugin 21))
+(display "  good plugin result: ") (print plugin-result)
+(assert-eq plugin-result 42 "plugin: well-behaved plugin works")
 
+# Misbehaving plugin: tries to signal :abort
+(defn bad-plugin [data]
+  (fiber/signal :abort :escape-attempt)
+  data)
 
-# ========================================
-# 4. Parameter bounds with user-defined effects
-# ========================================
-
-# A function can restrict a parameter to allow specific effects.
-# This lets the callback emit only certain signals.
-
-(defn monitored-run [f]
-  "Run f, allowing it to emit :heartbeat signals."
-  (restrict f :heartbeat)
-  (f))
-
-# Test success: a function that emits :heartbeat is allowed
-(defn heartbeat-fn []
-  "Emit a heartbeat signal."
-  (fiber/signal :heartbeat :ping)
-  :done)
-
-(def result3 (monitored-run heartbeat-fn))
-(display "  monitored-run with heartbeat: ") (print result3)
-(assert-eq result3 :done "monitored-run: heartbeat allowed")
-
-# Test failure: a function that yields (not :heartbeat) violates the restriction
-(defn other-signal-fn []
-  "Emit a different signal."
-  (yield :other)
-  :done)
-
-(def [ok? err] (protect (monitored-run other-signal-fn)))
-(display "  monitored-run with other signal: ") (print err)
-(assert-false ok? "monitored-run: other signal rejected")
-(assert-eq (get err :error) :effect-violation "monitored-run: error kind is :effect-violation")
-
-
-# ========================================
-# 5. Composed restrictions
-# ========================================
-
-# A function can have both its own restrictions and parameter restrictions.
-# The function restricts itself to :error; it also restricts its parameter f to be inert.
-
-(defn safe-transform [f xs]
-  "Transform xs with f. f must be inert; this function may only error."
-  (restrict :error)
-  (restrict f)
-  (map f xs))
-
-# Test success: inert function, no errors
-(def result4 (safe-transform + [10 20 30]))
-(display "  safe-transform + [10 20 30]: ") (print result4)
-(assert-list-eq result4 [10 20 30] "safe-transform: inert callback succeeds")
-
-# Test failure: callback is not inert
-(def [ok? err] (protect (safe-transform yielding-fn [1 2 3])))
-(display "  safe-transform with yielding callback: ") (print err)
-(assert-false ok? "safe-transform: non-inert callback rejected")
-(assert-eq (get err :error) :effect-violation "safe-transform: error kind is :effect-violation")
-
-
-# ========================================
-# 6. Duplicate restrict — last one wins
-# ========================================
-
-# Multiple restrict forms for the same parameter are allowed.
-# The last one wins: it replaces the previous bound.
-
-(defn flexible [f]
-  "Demonstrate that last restrict wins."
-  (restrict f :heartbeat :error)
-  (restrict f :error)
-  (f))
-
-# Test: f is now restricted to :error only (the second restrict overrides the first)
-(defn error-only-fn []
-  "Emit only :error."
-  (error {:error :demo :message "demo error"})
-  :done)
-
-(def [ok? err] (protect (flexible error-only-fn)))
-(display "  flexible with error-only function: ") (print err)
-(assert-false ok? "flexible: error-only function allowed")
-(assert-eq (get err :error) :demo "flexible: error kind is :demo")
-
-# Test: if we try to emit :heartbeat, it should fail (because last restrict is :error only)
-(defn heartbeat-only-fn []
-  "Emit only :heartbeat."
-  (fiber/signal :heartbeat :ping)
-  :done)
-
-(def [ok? err] (protect (flexible heartbeat-only-fn)))
-(display "  flexible with heartbeat-only function: ") (print err)
-(assert-false ok? "flexible: heartbeat-only function rejected (last restrict wins)")
-(assert-eq (get err :error) :effect-violation "flexible: error kind is :effect-violation")
+(def [ok? err] (protect (run-plugin bad-plugin 21)))
+(display "  bad plugin caught: ") (print err)
+(assert-false ok? "plugin: misbehaving plugin caught")
+(assert-eq (get err :error) :effect-violation "plugin: effect-violation error")
 
 
 (print "")
