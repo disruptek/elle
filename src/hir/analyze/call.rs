@@ -42,6 +42,22 @@ impl<'a> Analyzer<'a> {
         // First, get the raw callee effect (before polymorphic resolution)
         let raw_callee_effect = self.get_raw_callee_effect(&func);
 
+        // Refine fiber/signal effect when first arg is a constant integer.
+        // fiber/signal's registered effect is yields_errors() (conservative),
+        // but when the signal bits are known at compile time, use them directly.
+        let raw_callee_effect = if self.is_fiber_signal(&func) {
+            if let Some(HirKind::Int(bits)) = args.first().map(|a| &a.expr.kind) {
+                Effect {
+                    bits: crate::value::fiber::SignalBits(*bits as u32),
+                    propagates: 0,
+                }
+            } else {
+                raw_callee_effect
+            }
+        } else {
+            raw_callee_effect
+        };
+
         // Track effect sources for polymorphic inference BEFORE resolving
         // This handles the case where we call a polymorphic function with a parameter
         let arg_exprs: Vec<&Hir> = args.iter().map(|a| &a.expr).collect();
@@ -114,6 +130,15 @@ impl<'a> Analyzer<'a> {
             }
             HirKind::Lambda { .. } => "<lambda>".to_string(),
             _ => "<expression>".to_string(),
+        }
+    }
+
+    /// Check if the callee is the `fiber/signal` primitive.
+    fn is_fiber_signal(&self, func: &Hir) -> bool {
+        if let HirKind::Var(binding) = &func.kind {
+            self.symbols.name(binding.name()) == Some("fiber/signal")
+        } else {
+            false
         }
     }
 

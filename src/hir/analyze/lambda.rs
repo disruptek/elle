@@ -212,17 +212,11 @@ impl<'a> Analyzer<'a> {
         let param_bounds: Vec<(Binding, Effect)> = self.current_param_bounds.drain().collect();
         let declared_ceiling = self.current_declared_ceiling.take();
 
-        // Check function-level ceiling if present
+        // Check function-level ceiling if present.
+        // All signals are explicit — no implicit SIG_YIELD additions.
+        // The ceiling check is pure bitmask: excess = inferred & !ceiling.
         if let Some(ceiling) = declared_ceiling {
-            // SIG_YIELD is the delivery mechanism for all suspension signals.
-            // If the ceiling allows ANY signal (ceiling non-zero), implicitly
-            // allow SIG_YIELD. When ceiling is 0 (inert), SIG_YIELD is NOT
-            // added — the body must be truly inert.
-            let mut ceiling_bits = ceiling.bits.0;
-            if ceiling_bits != 0 {
-                ceiling_bits |= crate::value::fiber::SIG_YIELD.0;
-            }
-            let excess_bits = inferred_effects.bits.0 & !ceiling_bits;
+            let excess_bits = inferred_effects.bits.0 & !ceiling.bits.0;
             if excess_bits != 0 {
                 let reg = registry::global_registry().lock().unwrap();
                 let excess = crate::value::fiber::SignalBits(excess_bits);

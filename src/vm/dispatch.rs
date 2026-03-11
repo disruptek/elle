@@ -441,12 +441,7 @@ impl VM {
                     // Read u32 as two u16s (low half first, then high half)
                     let lo = self.read_u16(bc, &mut ip) as u32;
                     let hi = self.read_u16(bc, &mut ip) as u32;
-                    let mut allowed_bits = lo | (hi << 16);
-                    // SIG_YIELD is the delivery mechanism for all signals.
-                    // If the bound allows ANY signal, implicitly allow SIG_YIELD.
-                    if allowed_bits != 0 {
-                        allowed_bits |= SIG_YIELD.0;
-                    }
+                    let allowed_bits = lo | (hi << 16);
                     let val = self.fiber.stack.pop().unwrap_or(Value::NIL);
                     if let Some(closure) = val.as_closure() {
                         let effect_bits = closure.effect().bits.0;
