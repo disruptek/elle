@@ -383,10 +383,9 @@ impl SendValue {
             closures: Vec::new(),
         };
         let sv = from_value_inner(value, &mut ctx)?;
-        debug_assert!(
-            ctx.closures.is_empty(),
-            "from_value produced closures but caller expects a bare SendValue"
-        );
+        if !ctx.closures.is_empty() {
+            panic!("SendValue::from_value cannot serialize closures; use SendBundle::from_value instead");
+        }
         Ok(sv)
     }
 
