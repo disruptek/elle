@@ -50,7 +50,7 @@
 (fiber/resume search-fiber)
 
 # if the fiber paused, it caught an :abort signal; fiber/value holds the payload
-(def found (-> search-fiber fiber/value))
+(def found (fiber/value search-fiber))
 (display "  first even in [1 3 5 4 7 9]: ") # display prompt
 (print found)                                # print the found value
 (assert (= found 4) "abort: found first even, stopped early")
@@ -188,6 +188,11 @@
 (assert (not ok?) "safe-map: signaling callback rejected")
 (assert (= (-> err (get :error)) :effect-violation) "safe-map: effect-violation error")
 
+# match on the error kind to handle different violations distinctly
+(match (-> err (get :error))
+  (:effect-violation (display "  safe-map: callback tried to signal mid-iteration\n"))
+  (_ (error err)))
+
 # ========================================
 # 6. restrict — plugin sandboxing
 # ========================================
@@ -226,6 +231,11 @@
 # err is {:error :effect-violation :message "..."} — inspect with ->
 (assert (not ok?) "plugin: misbehaving plugin caught")
 (assert (= (-> err (get :error)) :effect-violation) "plugin: effect-violation error")
+
+# match on the error kind to handle sandbox escapes distinctly
+(match err:error
+  (:effect-violation (display "  plugin: attempted to signal outside sandbox\n"))
+  (_ (error err)))
 
 (print "")                                    # blank line
 (print "all effects tests passed.")           # final message
