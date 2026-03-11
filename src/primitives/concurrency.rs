@@ -5,111 +5,74 @@ use crate::primitives::registration::register_primitives;
 use crate::symbol::SymbolTable;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use crate::value::types::Arity;
-use crate::value::{error_val, Value};
+use crate::value::{error_val, SendBundle, Value};
 use crate::vm::VM;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-/// Helper function to spawn a closure in a new thread
-/// Extracts closure data, validates sendability, and executes in a fresh VM
+/// Helper function to spawn a closure in a new thread.
+/// Serializes the closure (validates sendability recursively) and executes it
+/// in a fresh VM on a new thread.
 fn spawn_closure_impl(closure: &crate::value::Closure) -> LResult<Value> {
-    use crate::value::SendValue;
+    use crate::value::heap::{alloc, HeapObject, ThreadHandle};
 
-    // Deep-copy environment and constants using SendValue
-    let env_send: Result<Vec<SendValue>, String> = closure
-        .env
-        .iter()
-        .map(|v| SendValue::from_value(*v))
-        .collect();
-    let env_send = env_send
-        .map_err(|e| LError::generic(format!("spawn: failed to copy environment: {}", e)))?;
+    // Serialize the closure (validates sendability recursively).
+    let bundle = SendBundle::from_value(Value::closure(closure.clone()))
+        .map_err(|e| LError::generic(format!("spawn: {}", e)))?;
 
-    let constants_send: Result<Vec<SendValue>, String> = closure
-        .template
-        .constants
-        .iter()
-        .map(|v| SendValue::from_value(*v))
-        .collect();
-    let constants_send = constants_send
-        .map_err(|e| LError::generic(format!("spawn: failed to copy constants: {}", e)))?;
-
-    // Extract the closure bytecode for thread safety
-    let bytecode_data: Vec<u8> = (*closure.template.bytecode).clone();
-
-    // Extract closure metadata needed for proper environment setup
-    let num_locals = closure.template.num_locals;
-    let lbox_locals_mask = closure.template.lbox_locals_mask;
-    let _num_captures = closure.template.num_captures;
-    let arity = match closure.template.arity {
-        crate::value::Arity::Exact(n) => n,
-        crate::value::Arity::AtLeast(n) => n,
-        crate::value::Arity::Range(min, _) => min,
-    };
-
-    // Extract location map for error reporting in the spawned thread
-    let location_map_for_thread: std::collections::HashMap<usize, crate::error::SourceLoc> =
-        (*closure.template.location_map).clone();
-
-    // Create a holder for the result
-    let result_holder: Arc<Mutex<Option<Result<crate::value::SendBundle, String>>>> =
-        Arc::new(Mutex::new(None));
+    let result_holder: Arc<Mutex<Option<Result<SendBundle, String>>>> = Arc::new(Mutex::new(None));
     let result_clone = result_holder.clone();
 
-    // Spawn the thread
     let _handle = std::thread::spawn(move || {
-        // Create a fresh VM with primitives registered
         let mut vm = VM::new();
         let mut symbols = SymbolTable::new();
         // Register primitives so docs are available in the spawned thread.
         // Primitives are in the bytecode constant pool — no globals remapping needed.
         let _effects = register_primitives(&mut vm, &mut symbols);
 
-        // Reconstruct values from SendValue
-        let bytecode_rc = Rc::new(bytecode_data);
-        let mut env_values: Vec<Value> = env_send
-            .into_iter()
-            .map(|sv: SendValue| sv.into_value())
-            .collect();
-        let constants_values: Vec<Value> = constants_send
-            .into_iter()
-            .map(|sv: SendValue| sv.into_value())
-            .collect();
+        // Reconstruct closure from bundle.
+        let closure_val = bundle.into_value();
+        let closure = closure_val
+            .as_closure()
+            .expect("bug: SendBundle root was not a closure")
+            .clone();
 
-        // Add slots for locally-defined variables.
-        // cell-wrapped locals get LocalCell(NIL); non-cell locals get bare NIL.
-        // Beyond index 63, conservatively use LocalCell.
-        let num_params = arity;
-        let num_locally_defined = num_locals.saturating_sub(num_params);
+        // Set location map for error reporting in the spawned thread.
+        vm.set_location_map((*closure.template.location_map).clone());
+
+        // Build execution environment: captured values + NIL slots for locals.
+        // Use num_params directly (not derived from arity.min()) — they differ for
+        // AtLeast/Range closures. The old code had this wrong.
+        let mut env_values: Vec<Value> = closure.env.to_vec();
+        let num_locally_defined = closure
+            .template
+            .num_locals
+            .saturating_sub(closure.template.num_params);
         for i in 0..num_locally_defined {
-            if i >= 64 || (lbox_locals_mask & (1 << i)) != 0 {
+            if i >= 64 || (closure.template.lbox_locals_mask & (1 << i)) != 0 {
                 env_values.push(Value::local_lbox(Value::NIL));
             } else {
                 env_values.push(Value::NIL);
             }
         }
 
-        let env_rc = Rc::new(env_values);
-        let constants_rc = Rc::new(constants_values);
+        let env_rc = std::rc::Rc::new(env_values);
+        let result = vm.execute_bytecode(
+            &closure.template.bytecode,
+            &closure.template.constants,
+            Some(&env_rc),
+        );
 
-        // Set the location map for error reporting in the spawned thread
-        vm.set_location_map(location_map_for_thread);
-
-        let result = vm.execute_bytecode(&bytecode_rc, &constants_rc, Some(&env_rc));
-
-        let send_result: Result<crate::value::SendBundle, String> = match result {
-            Ok(val) => crate::value::SendBundle::from_value(val)
+        let send_result = match result {
+            Ok(val) => SendBundle::from_value(val)
                 .map_err(|e| format!("Failed to serialize result: {}", e)),
             Err(e) => Err(e.to_string()),
         };
 
-        // Store the result
         if let Ok(mut holder) = result_clone.lock() {
             *holder = Some(send_result);
         }
     });
 
-    // Return a thread handle with the result holder
-    use crate::value::heap::{alloc, HeapObject, ThreadHandle};
     let thread_handle_data = ThreadHandle {
         result: result_holder,
     };
