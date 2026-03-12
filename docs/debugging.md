@@ -23,7 +23,7 @@ get information about it. All are `NativeFn`. Primitives that need VM access use
 | Primitive | Signature | Returns | Notes |
 |-----------|-----------|---------|-------|
 | `jit?` | `(jit? value)` | `true` or `false` | True if value is a closure with JIT-compiled native code |
-| `inert?` | `(inert? value)` | `true` or `false` | True if value is a closure with no signal bits set |
+| `silent?` | `(silent? value)` | `true` or `false` | True if value is a closure that does not suspend (no yield/debug/polymorphic signal) |
 | `coro?` | `(coro? value)` | `true` or `false` | True if value is a closure with the yield signal bit set |
 | `mutates-params?` | `(mutates-params? value)` | `true` or `false` | True if value is a closure whose body mutates any of its own parameters (i.e., `lbox_params_mask != 0`) |
 | `closure?` | `(closure? value)` | `true` or `false` | True if value is a closure (bytecode, not native/vm-aware) |
@@ -32,7 +32,7 @@ Implementation: each is a simple predicate that examines the `Value` and,
 for closures, reads fields on the `Closure` struct.
 
 - `jit?` checks `closure.jit_code.is_some()`
-- `inert?` checks `closure.signal.bits == 0` (no signal bits)
+- `silent?` checks `!closure.signal.may_suspend()` (no yield/debug bits and propagates == 0)
 - `coro?` checks `closure.signal.bits & SIG_YIELD != 0`
 - `mutates-params?` checks `closure.lbox_params_mask != 0` (any lbox-wrapped params)
 - `closure?` checks `value.as_closure().is_some()`

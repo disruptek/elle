@@ -38,14 +38,14 @@ pub(crate) fn prim_is_jit(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-/// (pure? value) — true if closure has Pure yield behavior
-pub(crate) fn prim_is_pure(args: &[Value]) -> (SignalBits, Value) {
+/// (silent? value) — true if closure is silent (does not suspend: no yield/debug/polymorphic)
+pub(crate) fn prim_is_silent(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
             SIG_ERROR,
             error_val(
                 "arity-error",
-                format!("pure?: expected 1 argument, got {}", args.len()),
+                format!("silent?: expected 1 argument, got {}", args.len()),
             ),
         );
     }
@@ -289,14 +289,14 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         aliases: &[],
     },
     PrimitiveDef {
-        name: "pure?",
-        func: prim_is_pure,
+        name: "silent?",
+        func: prim_is_silent,
         signal: Signal::inert(),
         arity: Arity::Exact(1),
-        doc: "Returns true if closure has inert signal (does not suspend)",
+        doc: "Returns true if closure is silent (does not suspend: no yield, debug, or polymorphic signal). False for non-closures.",
         params: &["value"],
         category: "predicate",
-        example: "(pure? (fn (x) x))",
+        example: "(silent? (fn (x) x))",
         aliases: &[],
     },
     PrimitiveDef {

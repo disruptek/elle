@@ -20,34 +20,100 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
 
 ## What Makes Elle Different
 
-- **Static analysis is a first-class feature.** The compiler performs full binding resolution, capture analysis, signal inference, and lint passes before any code runs. This is not optional tooling bolted on — it is the compilation pipeline. Most Lisps are dynamic; Elle knows at compile time what every binding refers to, what every closure captures, and what signals every function can emit.
-  <details><summary>More: Compile-Time Analysis</summary>
+- **Fibers are the concurrency primitive.** A fiber is an independent execution context — its own stack, call frames, signal mask, and heap. Fibers are cooperative and explicitly resumed. The parent drives execution by calling `fiber/resume`. When a fiber emits a signal, it suspends and the parent decides what to do next.
 
-  The compilation pipeline is: Source → Reader → Syntax → Expander → Analyzer → HIR → Lowerer → LIR → Emitter → Bytecode → VM. Each stage infers more than the last. The analyzer resolves all bindings to their definitions, computes which variables each closure captures, infers the signal of every expression, and flags lint violations — all before bytecode is emitted. This is why the linter catches errors at compile time, why the signal system is sound, and why the JIT can make intelligent decisions about what to compile natively.
-  </details>
-
-- **A sound signal system, inferred not declared.** Every function is automatically classified as `Inert`, `Yields`, or `Polymorphic`. The compiler enforces this: an inert context cannot call a yielding function. No annotations required. This is what makes the fiber/concurrency story coherent — the compiler knows which functions can suspend.
+  Fibers run as coroutines. A parent spawns a child, drives it step by step, and reads each yielded value:
 
   ```janet
-  # Inert function — inferred automatically
+  (defn produce []
+    (emit :yield 1)
+    (emit :yield 2)
+    (emit :yield 3))
+
+  (def f (fiber/new produce |:yield|))
+
+  (fiber/resume f) (print (fiber/value f))  # => 1
+  (fiber/resume f) (print (fiber/value f))  # => 2
+  (fiber/resume f) (print (fiber/value f))  # => 3
+  ```
+
+  When a fiber finishes, its entire heap is freed in O(1) — no GC pause, no reference counting.
+
+- **Signals are typed, cooperative flow-control interrupts.** A signal is a keyword — `:error`, `:log`, `:abort`, or any user-defined name — that a fiber emits to its parent. The parent's signal mask determines which signals surface; unmasked signals propagate further up. The compiler infers which functions can emit signals and enforces that inert contexts don't call yielding ones.
+
+  **Error handling** — a fiber signals an error; the parent catches it:
+
+  ```janet
+  (defn risky [x]
+    (if (< x 0)
+      (error {:error :bad-input :message "negative input"})
+      (* x x)))
+
+  (def f (fiber/new (fn () (risky -1)) 1))  # mask=1: catch errors
+  (fiber/resume f)
+
+  (if (= (fiber/status f) :paused)
+    (print "caught:" (fiber/value f))   # => caught: {:error :bad-input ...}
+    (print "result:" (fiber/value f)))
+  ```
+
+  **Yielding** — a fiber yields progress updates; the parent drives it to completion:
+
+  ```janet
+  (defn process-items [items]
+    (each item items
+      (emit :progress {:item item :result (* item item)})))
+
+  (def f (fiber/new (fn () (process-items [1 2 3])) |:progress|))
+
+  (forever
+    (fiber/resume f)
+    (if (= (fiber/status f) :paused)
+      (print "progress:" (fiber/value f))
+      (break)))
+  ```
+
+  **Parent/child** — a fiber spawns a child and collects its log signals:
+
+  ```janet
+  (defn child []
+    (emit :log "child starting")
+    (emit :log "child done")
+    42)
+
+  (defn parent []
+    (def f (fiber/new child |:log|))
+    (forever
+      (fiber/resume f)
+      (match (fiber/status f)
+        (:paused (print "log:" (fiber/value f)))
+        (_ (break))))
+    (fiber/value f))  # => 42
+
+  (parent)
+  ```
+
+  See `examples/signals.lisp` for the full signal system: user-defined signals, `silence` for callback sandboxing, and composed signal masks.
+
+- **Static analysis is a first-class feature.** The compiler performs full binding resolution, capture analysis, signal inference, and lint passes before any code runs. This is not optional tooling bolted on — it is the compilation pipeline. Most Lisps are dynamic; Elle knows at compile time what every binding refers to, what every closure captures, and what signals every function can emit.
+
+- **A sound signal system, inferred not declared.** Every function is automatically classified as `Inert`, `Yields`, or `Polymorphic`. The compiler enforces this: an inert context cannot call a yielding function. No annotations required.
+
+  ```janet
+  # Inert — inferred automatically
   (defn add (a b) (+ a b))
 
-  # Yielding function — inferred from yield call
+  # Yields — inferred from emit call
   (defn fetch-data (url)
-    (yield :http-request url)
-    (yield :http-wait))
+    (emit :http-request url)
+    (emit :http-wait))
 
-  # Polymorphic — signal depends on callback
+  # Polymorphic — signal depends on the callback
   (defn map-signal (f xs)
     (map f xs))  # signal = signal of f
   ```
 
-  <details><summary>More: Signal Enforcement</summary>
-
-  The compiler enforces signal contracts: an inert context cannot call a yielding function. This is checked at compile time.
-  </details>
-
-- **Fully hygienic macros that operate on syntax objects, not text or s-expressions.** Macros receive and return `Syntax` objects carrying scope information (Racket-style scope sets). Name capture is structurally impossible, not just conventionally avoided. This is stronger than Janet's macros, which are s-expression templates.
+- **Fully hygienic macros that operate on syntax objects, not text or s-expressions.** Macros receive and return `Syntax` objects carrying scope information (Racket-style scope sets). Name capture is structurally impossible, not just conventionally avoided.
 
   ```janet
   (defmacro my-swap (a b)
@@ -58,51 +124,9 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
     tmp)  # => 100, not 1
   ```
 
-  <details><summary>More: Scope Sets</summary>
+  The `tmp` introduced by the macro does not shadow the caller's `tmp`. This is guaranteed by scope sets, not by convention.
 
-  The `tmp` binding introduced by the macro does not shadow the caller's `tmp`. This is guaranteed by the scope set mechanism, not by convention.
-  </details>
-
-- **Functions are colorless.** Any function can be called from a fiber. There is no `async`/`await` annotation that marks a function as suspending and forces all its callers to be marked too. Whether something runs concurrently is decided at the call site, not baked into the function definition.
-
-  ```janet
-  # An inert function
-  (defn add (a b)
-    (+ a b))
-
-  # A yielding function — suspends to fetch a value
-  (defn fetch (key)
-    (yield :get key))
-
-  # Both called identically — compute is not marked async/await
-  (defn compute (a b key)
-    (+ (add a b) (fetch key)))
-  ```
-
-  <details><summary>More: Colorless Functions</summary>
-
-  In Rust/JS/Python, `fetch` would be `async fn`/`async def`, forcing `compute` to be `async` too, and every caller to `await` it. In Elle, the signal is inferred by the compiler, not declared by the programmer. Callers are unaffected.
-  </details>
-
-- **Structured concurrency via fibers with per-fiber memory.** Each fiber has its own heap arena. When a fiber finishes, its memory is reclaimed in O(1) — no GC pause, no reference counting. The compiler's escape analysis drives scope-level reclamation within fibers.
-
-  ```janet
-  (defn make-producer []
-    (coro/new (fn []
-      (each i in (range 5)
-        (yield i)))))
-
-  (def co (make-producer))
-  (forever
-    (if (coro/done? co)
-      (break)
-      (print (coro/resume co))))
-  ```
-
-  <details><summary>More: Fiber Memory</summary>
-
-  Fibers are independent execution contexts. Each has its own stack, call frames, and heap. When a fiber finishes, its entire heap is freed in O(1). No garbage collection, no reference counting, no pause.
-  </details>
+- **Functions are colorless.** Any function can be called from a fiber. There is no `async`/`await` annotation that marks a function as suspending and forces all its callers to be marked too. Whether something runs concurrently is decided at the call site, not baked into the function definition. In Rust/JS/Python, a suspending `fetch` forces every caller to be `async` too; in Elle, the signal is inferred by the compiler and callers are unaffected.
 
 - **The Rust ecosystem.** FFI without ceremony. Native plugins as Rust cdylib crates. Values are marshalled directly to C types via libffi — no intermediate serialization format, no separate process, no generated bindings.
 
@@ -335,7 +359,7 @@ Lists are linked; tuples and arrays are contiguous in memory. They are not inter
 
 **Parameter** — dynamic binding. `(parameter default)` creates one; calling it reads the current value. `parameterize` sets it within a scope. Child fibers inherit parent parameter frames.
 
-**Box** — mutable box. User boxes are explicit (`box`/`unbox`/`rebox`). Local lboxes are compiler-created for mutable captures and auto-unwrapped — users never see them.
+**Box** — mutable box. User boxes are explicit (`box`/`unbox`/`rebox`). Local boxes are compiler-created for mutable captures and auto-unwrapped — users never see them.
 
 ### Truthiness
 
