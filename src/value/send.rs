@@ -108,7 +108,7 @@ pub enum SendValue {
     /// Deep copy of a closure (template + captured environment).
     /// Only appears as an entry in `SendBundle::closures`.
     /// The root `SendValue` tree and closure envs reference closures via `Ref(idx)`.
-    Closure(SendableClosure),
+    Closure(Box<SendableClosure>),
 
     /// Back-reference into `SendBundle::closures` by index.
     /// Meaningful only within a `SendBundle`; a bare `Ref` without a bundle is invalid.
@@ -437,7 +437,7 @@ impl SendValue {
                 alloc(HeapObject::LSetMut(std::cell::RefCell::new(set)))
             }
             SendValue::NativeFn(f) => Value::native_fn(f),
-            SendValue::Closure(_) => {
+            SendValue::Closure(_box_val) => {
                 panic!("bug: bare SendValue::Closure; use SendBundle::into_value")
             }
             SendValue::Ref(_) => panic!("bug: bare SendValue::Ref; use SendBundle::into_value"),
@@ -552,7 +552,7 @@ fn into_value_inner(sv: SendValue, ctx: &mut DeserContext) -> Value {
         // Closure variant: only appears stored directly in SendBundle::closures.
         // At the top-level call it means the bundle was constructed incorrectly.
         // In practice root is always a Ref when the value is a closure.
-        SendValue::Closure(_) => panic!("bug: bare Closure in SendValue tree; use Ref"),
+        SendValue::Closure(_box_val) => panic!("bug: bare Closure in SendValue tree; use Ref"),
 
         SendValue::Ref(idx) => {
             if let ReconState::Done(v) = ctx.states[idx] {
