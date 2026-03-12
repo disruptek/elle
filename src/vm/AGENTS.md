@@ -195,7 +195,7 @@ same fiber (same heap, globals, parameter frames).
 If the inner closure yields (`SIG_YIELD`), the saved outer stack is restored but
 the fiber is suspended mid-inner-execution. Callers that invoke user-provided
 closures (`eval`, `arena/allocs`) do not handle yield — they propagate the signal
-upward. Closures passed to these must be non-yielding (Pure effect). This is not
+upward. Closures passed to these must be non-yielding (inert signal). This is not
 currently enforced at the call site.
 
 See `execute.rs` module doc for the full rules on what is preserved, what is
@@ -226,7 +226,7 @@ Key methods:
   installs the child fiber's `FiberHeap`, executes, then restores the saved
   pointer on swap-back. Root fibers have no heap installed (allocate to the
   global `HEAP_ARENA`); only child fibers get per-fiber heap routing.
-  For yielding fibers (`Effect::Yields`), also provisions a shared allocator
+  For yielding fibers (signal includes `SIG_YIELD`), also provisions a shared allocator
   via a three-way branch (step 3b): (a) parent has shared_alloc → propagate
   down, (b) root parent → child creates its own, (c) non-root parent →
   create on parent's heap. Cleared on swap-back (step 7a).
@@ -301,7 +301,7 @@ execution route to this shared allocator instead of the child's private bump.
 3. **Non-root parent, no shared_alloc** (case c): Create a new shared allocator
    on the parent's FiberHeap's `owned_shared`.
 
-**Effect gate (M1)**: Fibers whose closure has `Effect::Yields` or `Effect::io()`
+**Signal gate (M1)**: Fibers whose closure has signal bits `SIG_YIELD` or `SIG_IO`
 (checked via `may_yield() || may_io()`) get shared allocators. I/O fibers yield
 `SIG_IO` requests that the parent (scheduler) must read, requiring a shared
 allocator for value exchange. Non-yielding, non-I/O fibers skip step 3b entirely.

@@ -186,21 +186,21 @@
 # noisy-double signals :log mid-iteration — violates the silence bound
 (defn noisy-double [x]
   "Double x, but also signal :log — not inert."
-  # this signal will be caught by silence and turned into :effect-violation
+  # this signal will be caught by silence and turned into :signal-violation
   (emit :log {:msg "doubling"})
   (* x 2))  # the multiplication never completes
 
-# protect catches the :effect-violation error as data
+# protect catches the :signal-violation error as data
 (def [ok? err] (protect (safe-map noisy-double [1 2 3])))
-(display "  effect violation: ") # display prompt
+(display "  signal violation: ") # display prompt
 (print err)                       # print the error
-# err is {:error :effect-violation :message "..."} — inspect with ->
+# err is {:error :signal-violation :message "..."} — inspect with ->
 (assert (not ok?) "safe-map: signaling callback rejected")
-(assert (= (-> err (get :error)) :effect-violation) "safe-map: effect-violation error")
+(assert (= (-> err (get :error)) :signal-violation) "safe-map: signal-violation error")
 
 # match on the error kind to handle different violations distinctly
 (match err:error  # syntax-sugar for (get err :error)
-  (:effect-violation (display "  safe-map: callback tried to signal mid-iteration\n"))
+  (:signal-violation (display "  safe-map: callback tried to signal mid-iteration\n"))
   (_ (error err)))
 
 # ========================================
@@ -230,15 +230,15 @@
   (yield :escape-attempt)
   data)  # never reached
 
-# protect catches the :effect-violation error as data
+# protect catches the :signal-violation error as data
 (def [ok? err] (protect (run-pure bad-plugin 21)))
 (display "  sandbox violation: ") # display prompt
 (print err)                        # print the error
 (assert (not ok?) "plugin: yielding plugin caught")
-(assert (= (-> err (get :error)) :effect-violation) "plugin: effect-violation error")
+(assert (= (-> err (get :error)) :signal-violation) "plugin: signal-violation error")
 
 (match err:error
-  (:effect-violation (display "  plugin: callback tried to yield — rejected by silence\n"))
+  (:signal-violation (display "  plugin: callback tried to yield — rejected by silence\n"))
   (_ (error err)))
 
 # ========================================

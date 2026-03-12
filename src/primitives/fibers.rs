@@ -49,7 +49,7 @@ fn resolve_keyword_slice(
                 SIG_ERROR,
                 error_val(
                     "error",
-                    format!("{}: unknown effect keyword :{}", context, name),
+                    format!("{}: unknown signal keyword :{}", context, name),
                 ),
             )
         })?;
@@ -73,7 +73,7 @@ fn resolve_signal_bits(val: &Value, context: &str) -> Result<SignalBits, (Signal
                 SIG_ERROR,
                 error_val(
                     "error",
-                    format!("{}: unknown effect keyword :{}", context, name),
+                    format!("{}: unknown signal keyword :{}", context, name),
                 ),
             )),
         };
@@ -102,7 +102,7 @@ fn resolve_signal_bits(val: &Value, context: &str) -> Result<SignalBits, (Signal
                     SIG_ERROR,
                     error_val(
                         "error",
-                        format!("{}: unknown effect keyword :{}", context, name),
+                        format!("{}: unknown signal keyword :{}", context, name),
                     ),
                 )
             })?;
@@ -146,7 +146,7 @@ fn resolve_signal_bits(val: &Value, context: &str) -> Result<SignalBits, (Signal
                     SIG_ERROR,
                     error_val(
                         "error",
-                        format!("{}: unknown effect keyword :{}", context, name),
+                        format!("{}: unknown signal keyword :{}", context, name),
                     ),
                 )
             })?;
@@ -360,7 +360,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/new",
         func: prim_fiber_new,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(2),
         doc: "Create a fiber from a closure with a signal mask",
         params: &["closure", "mask"],
@@ -371,7 +371,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/resume",
         func: prim_fiber_resume,
-        effect: Signal::yields_errors(),
+        signal: Signal::yields_errors(),
         arity: Arity::Range(1, 2),
         doc: "Resume a fiber, optionally delivering a value",
         params: &["fiber", "value"],
@@ -382,7 +382,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/emit",
         func: prim_emit,
-        effect: Signal::yields_errors(),
+        signal: Signal::yields_errors(),
         arity: Arity::Exact(2),
         doc: "Emit a signal from the current fiber",
         params: &["bits", "value"],
@@ -393,7 +393,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/status",
         func: prim_fiber_status,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Get the fiber's lifecycle status (:new, :alive, :suspended, :dead, :error)",
         params: &["fiber"],
@@ -404,7 +404,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/value",
         func: prim_fiber_value,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Get the signal payload from the fiber's last signal",
         params: &["fiber"],

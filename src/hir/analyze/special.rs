@@ -144,7 +144,7 @@ impl<'a> Analyzer<'a> {
         Ok(Hir::new(
             HirKind::Yield(Box::new(value)),
             span,
-            Signal::yields(), // Yield always has Yields effect
+            Signal::yields(), // Yield always has Yields signal
         ))
     }
 
@@ -157,7 +157,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let value = self.analyze_expr(&items[1])?;
-        let mut effect = value.signal;
+        let mut signal = value.signal;
         let mut arms = Vec::new();
 
         for arm in &items[2..] {
@@ -185,14 +185,14 @@ impl<'a> Analyzer<'a> {
             // Check for guard
             let (guard, body_idx) = if parts.len() >= 3 && parts[1].as_symbol() == Some("when") {
                 let guard_expr = self.analyze_expr(&parts[2])?;
-                effect = effect.combine(guard_expr.signal);
+                signal = signal.combine(guard_expr.signal);
                 (Some(guard_expr), 3)
             } else {
                 (None, 1)
             };
 
             let body = self.analyze_body(&parts[body_idx..], span.clone())?;
-            effect = effect.combine(body.signal);
+            signal = signal.combine(body.signal);
             self.pop_scope();
 
             arms.push((pattern, guard, body));
@@ -212,7 +212,7 @@ impl<'a> Analyzer<'a> {
                 arms,
             },
             span,
-            effect,
+            signal,
         ))
     }
 

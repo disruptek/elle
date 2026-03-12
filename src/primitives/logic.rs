@@ -110,7 +110,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "not",
         func: prim_not,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Logical NOT operation",
         params: &["x"],
@@ -121,7 +121,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "and",
         func: prim_and,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::AtLeast(0),
         doc: "Logical AND operation",
         params: &[],
@@ -132,7 +132,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "or",
         func: prim_or,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::AtLeast(0),
         doc: "Logical OR operation",
         params: &[],
@@ -143,7 +143,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "xor",
         func: prim_xor,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::AtLeast(0),
         doc: "Logical XOR operation",
         params: &[],
@@ -154,7 +154,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "assert",
         func: prim_assert,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Range(1, 2),
         doc: "Assert that value is truthy. Signals {:error :failed-assertion :message msg} if not. Returns value if truthy.",
         params: &["value", "message?"],

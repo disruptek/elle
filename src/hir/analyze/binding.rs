@@ -31,7 +31,7 @@ impl<'a> Analyzer<'a> {
             Destructure(&'s Syntax, Hir),
         }
         let mut analyzed = Vec::new();
-        let mut effect = Signal::inert();
+        let mut signal = Signal::inert();
 
         for binding in bindings_syntax {
             let pair = binding
@@ -42,7 +42,7 @@ impl<'a> Analyzer<'a> {
             }
 
             let value = self.analyze_expr(&pair[1])?;
-            effect = effect.combine(value.signal);
+            signal = signal.combine(value.signal);
 
             if let Some(name) = pair[0].as_symbol() {
                 analyzed.push(LetBinding::Simple(name, pair[0].scopes.clone(), value));
@@ -66,7 +66,7 @@ impl<'a> Analyzer<'a> {
             match item {
                 LetBinding::Simple(name, name_scopes, value) => {
                     let binding = self.bind(name, &name_scopes, BindingScope::Local);
-                    // Track effect and arity for interprocedural analysis
+                    // Track signal and arity for interprocedural analysis
                     if let HirKind::Lambda {
                         params: lambda_params,
                         num_required,
@@ -107,7 +107,7 @@ impl<'a> Analyzer<'a> {
         } else {
             Hir::inert(HirKind::Nil, span.clone())
         };
-        effect = effect.combine(body.signal);
+        signal = signal.combine(body.signal);
 
         self.pop_scope();
 
@@ -128,7 +128,7 @@ impl<'a> Analyzer<'a> {
                 })
                 .collect();
             exprs.push(body);
-            Hir::new(HirKind::Begin(exprs), span.clone(), effect)
+            Hir::new(HirKind::Begin(exprs), span.clone(), signal)
         };
 
         Ok(Hir::new(
@@ -137,7 +137,7 @@ impl<'a> Analyzer<'a> {
                 body: Box::new(final_body),
             },
             span,
-            effect,
+            signal,
         ))
     }
 
@@ -232,14 +232,14 @@ impl<'a> Analyzer<'a> {
         // update the leaf binding slots.
         let mut bindings = Vec::new();
         let mut destructures = Vec::new();
-        let mut effect = Signal::inert();
+        let mut signal = Signal::inert();
 
         for entry in &entries {
             match entry {
                 LetrecEntry::Simple(binding, value_syntax) => {
                     let value = self.analyze_expr(value_syntax)?;
-                    effect = effect.combine(value.signal);
-                    // Track effect and arity for interprocedural analysis
+                    signal = signal.combine(value.signal);
+                    // Track signal and arity for interprocedural analysis
                     if let HirKind::Lambda {
                         params: lambda_params,
                         num_required,
@@ -264,7 +264,7 @@ impl<'a> Analyzer<'a> {
                     leaf_bindings,
                 } => {
                     let value = self.analyze_expr(value_syntax)?;
-                    effect = effect.combine(value.signal);
+                    signal = signal.combine(value.signal);
                     // Create a temp binding for the value in the Letrec bindings
                     let tmp = self.bind("__destructure_tmp", &[], BindingScope::Local);
                     bindings.push((tmp, value));
@@ -289,7 +289,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let body = self.analyze_body(&items[2..], span.clone())?;
-        effect = effect.combine(body.signal);
+        signal = signal.combine(body.signal);
 
         self.pop_scope();
 
@@ -310,7 +310,7 @@ impl<'a> Analyzer<'a> {
                 })
                 .collect();
             exprs.push(body);
-            Hir::new(HirKind::Begin(exprs), span.clone(), effect)
+            Hir::new(HirKind::Begin(exprs), span.clone(), signal)
         };
 
         Ok(Hir::new(
@@ -319,7 +319,7 @@ impl<'a> Analyzer<'a> {
                 body: Box::new(final_body),
             },
             span,
-            effect,
+            signal,
         ))
     }
 
@@ -349,14 +349,14 @@ impl<'a> Analyzer<'a> {
             let pattern =
                 self.analyze_destructure_pattern(&items[1], BindingScope::Local, immutable, &span)?;
             let value = self.analyze_expr(&items[2])?;
-            let effect = value.signal;
+            let signal = value.signal;
             return Ok(Hir::new(
                 HirKind::Destructure {
                     pattern,
                     value: Box::new(value),
                 },
                 span,
-                effect,
+                signal,
             ));
         }
 
@@ -389,7 +389,7 @@ impl<'a> Analyzer<'a> {
                 binding.mark_immutable();
             }
 
-            // Seed effect_env and arity_env for lambda forms so self-recursive calls
+            // Seed signal_env and arity_env for lambda forms so self-recursive calls
             // don't default to Yields during analysis
             if is_lambda_form {
                 self.signal_env.insert(binding, Signal::inert());
@@ -405,7 +405,7 @@ impl<'a> Analyzer<'a> {
             // Now analyze the value (which can reference the binding)
             let value = self.analyze_expr(&items[2])?;
 
-            // Update effect_env and arity_env with the actual inferred values
+            // Update signal_env and arity_env with the actual inferred values
             if let HirKind::Lambda {
                 params: lambda_params,
                 num_required,
@@ -441,7 +441,7 @@ impl<'a> Analyzer<'a> {
                 binding.mark_immutable();
             }
 
-            // Seed effect_env and arity_env for lambda forms so self-recursive calls
+            // Seed signal_env and arity_env for lambda forms so self-recursive calls
             // don't default to Yields during analysis
             if is_lambda_form {
                 self.signal_env.insert(binding, Signal::inert());
@@ -457,7 +457,7 @@ impl<'a> Analyzer<'a> {
             // Now analyze the value
             let value = self.analyze_expr(&items[2])?;
 
-            // Update effect_env and arity_env with the actual inferred values
+            // Update signal_env and arity_env with the actual inferred values
             if let HirKind::Lambda {
                 params: lambda_params,
                 num_required,
@@ -510,13 +510,13 @@ impl<'a> Analyzer<'a> {
         // Mark as mutated
         target.mark_mutated();
 
-        // Invalidate effect and arity tracking for this binding since it's being mutated
-        // The binding's effect and arity are now uncertain
+        // Invalidate signal and arity tracking for this binding since it's being mutated
+        // The binding's signal and arity are now uncertain
         self.signal_env.remove(&target);
         self.arity_env.remove(&target);
 
         let value = self.analyze_expr(&items[2])?;
-        let effect = value.signal;
+        let signal = value.signal;
 
         Ok(Hir::new(
             HirKind::Assign {
@@ -524,7 +524,7 @@ impl<'a> Analyzer<'a> {
                 value: Box::new(value),
             },
             span,
-            effect,
+            signal,
         ))
     }
 }

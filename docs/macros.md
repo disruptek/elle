@@ -290,9 +290,9 @@ These were open during design# now answered by the implementation:
 2. **Analysis-only paths.** Both `lsp/` and `lint/cli` already
     create VMs. `analyze`/`analyze_all` take `&mut VM`.
 
-3. **Effect system interaction.** Effect inference happens after
-   expansion, so macros that expand to effectful code get correct
-   effect annotations. No changes needed.
+3. **Signal system interaction.** Signal inference happens after
+   expansion, so macros that expand to signalling code get correct
+   signal annotations. No changes needed.
 
 
 ## Hygiene Escape Hatch: `datum->syntax`

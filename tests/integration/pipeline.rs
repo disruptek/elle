@@ -6,7 +6,7 @@ use elle::{register_primitives, SymbolTable, Value, VM};
 fn setup() -> (SymbolTable, VM) {
     let mut symbols = SymbolTable::new();
     let mut vm = VM::new();
-    let _effects = register_primitives(&mut vm, &mut symbols);
+    let _signals = register_primitives(&mut vm, &mut symbols);
     (symbols, vm)
 }
 
@@ -663,7 +663,7 @@ fn test_analyze_with_let() {
 }
 
 #[test]
-fn test_mutual_recursion_effect_inference() {
+fn test_mutual_recursion_signal_inference() {
     // Test that mutually recursive functions are inferred as Pure
     // when they only call each other and pure primitives
     let (mut symbols, _) = setup();
@@ -694,7 +694,7 @@ fn test_mutual_recursion_execution() {
 }
 
 #[test]
-fn test_mutual_recursion_effects_are_pure() {
+fn test_mutual_recursion_signals_are_pure() {
     // Test that mutually recursive functions are inferred as Pure
     let (mut symbols, _) = setup();
     let source = r#"

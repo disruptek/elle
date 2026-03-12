@@ -63,7 +63,7 @@ pub struct Closure {
 }
 
 impl Closure {
-    /// Get the effect of this closure
+    /// Get the signal of this closure
     pub fn signal(&self) -> Signal {
         self.template.signal
     }
@@ -126,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn test_closure_effect() {
+    fn test_closure_signal() {
         let closure = Closure {
             template: make_template(),
             env: Rc::new(vec![]),

@@ -230,7 +230,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "bit/and",
         func: prim_bit_and,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::AtLeast(2),
         doc: "Bitwise AND of all arguments",
         params: &["xs"],
@@ -241,7 +241,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "bit/or",
         func: prim_bit_or,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::AtLeast(2),
         doc: "Bitwise OR of all arguments",
         params: &["xs"],
@@ -252,7 +252,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "bit/xor",
         func: prim_bit_xor,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::AtLeast(2),
         doc: "Bitwise XOR of all arguments",
         params: &["xs"],
@@ -263,7 +263,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "bit/not",
         func: prim_bit_not,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Bitwise NOT of argument",
         params: &["x"],
@@ -274,7 +274,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "bit/shl",
         func: prim_bit_shift_left,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(2),
         doc: "Left shift first argument by second argument (clamped to 0-63).",
         params: &["x", "n"],
@@ -285,7 +285,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "bit/shr",
         func: prim_bit_shift_right,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(2),
         doc: "Arithmetic right shift first argument by second argument (clamped to 0-63).",
         params: &["x", "n"],

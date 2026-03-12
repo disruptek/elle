@@ -475,7 +475,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "array",
         func: prim_tuple,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::AtLeast(0),
         doc: "Create an immutable array from arguments.",
         params: &[],
@@ -486,7 +486,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "@array",
         func: prim_array,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::AtLeast(0),
         doc: "Create a mutable array from arguments.",
         params: &[],
@@ -497,7 +497,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "array/new",
         func: prim_array_new,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(2),
         doc: "Create array of n elements, all set to fill value.",
         params: &["n", "fill"],
@@ -508,7 +508,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "push",
         func: prim_push,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(2),
         doc: "Append element to end of array. Mutates in place, returns the same array.",
         params: &["arr", "val"],
@@ -519,7 +519,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "pop",
         func: prim_pop,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Remove and return last element from array. Mutates in place.",
         params: &["arr"],
@@ -530,7 +530,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "popn",
         func: prim_popn,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(2),
         doc: "Remove and return last n elements from array as a new array. Mutates original.",
         params: &["arr", "n"],
@@ -541,7 +541,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "insert",
         func: prim_insert,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(3),
         doc: "Insert element at index in array. Mutates in place, returns the same array.",
         params: &["arr", "idx", "val"],
@@ -552,7 +552,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "remove",
         func: prim_remove,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Range(2, 3),
         doc: "Remove element(s) at index from array. Mutates in place, returns the same array.",
         params: &["arr", "idx", "count"],

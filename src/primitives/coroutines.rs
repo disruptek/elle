@@ -274,7 +274,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "coro/new",
         func: prim_make_coroutine,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Create a coroutine (fiber with SIG_YIELD mask) from a closure",
         params: &["closure"],
@@ -285,7 +285,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "coro/status",
         func: prim_coroutine_status,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Get the status of a coroutine (:new, :alive, :paused, :dead, :error)",
         params: &["coroutine"],
@@ -296,7 +296,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "coro/done?",
         func: prim_coroutine_done,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Check if a coroutine is done (dead or errored)",
         params: &["coroutine"],
@@ -307,7 +307,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "coro/value",
         func: prim_coroutine_value,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Get the signal payload from a coroutine's last signal",
         params: &["coroutine"],
@@ -318,7 +318,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "coro/resume",
         func: prim_coroutine_resume,
-        effect: Signal::yields_errors(),
+        signal: Signal::yields_errors(),
         arity: Arity::Range(1, 2),
         doc: "Resume a coroutine, optionally delivering a value",
         params: &["coroutine", "value"],
@@ -329,7 +329,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "coro/>iterator",
         func: prim_coroutine_to_iterator,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Convert a coroutine to an iterator (identity — fibers are iterable)",
         params: &["coroutine"],

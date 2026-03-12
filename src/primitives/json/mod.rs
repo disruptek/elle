@@ -86,7 +86,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "json/parse",
         func: prim_json_parse,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Parse a JSON string into Elle values",
         params: &["json-string"],
@@ -97,7 +97,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "json/serialize",
         func: prim_json_serialize,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Serialize an Elle value to compact JSON",
         params: &["value"],
@@ -108,7 +108,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "json/pretty",
         func: prim_json_serialize_pretty,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Serialize an Elle value to pretty-printed JSON with 2-space indentation",
         params: &["value"],

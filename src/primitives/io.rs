@@ -250,7 +250,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io-request?",
         func: prim_is_io_request,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Check if value is an I/O request.",
         params: &["value"],
@@ -261,7 +261,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io-backend?",
         func: prim_is_io_backend,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Check if value is an I/O backend.",
         params: &["value"],
@@ -272,7 +272,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io/backend",
         func: prim_io_backend,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Create an I/O backend. :sync for synchronous, :async for asynchronous.",
         params: &["kind"],
@@ -283,7 +283,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io/execute",
         func: prim_io_execute,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Execute an I/O request on a backend. Blocking.",
         params: &["backend", "request"],
@@ -294,7 +294,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io/submit",
         func: prim_io_submit,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Submit an I/O request to an async backend. Returns submission ID.",
         params: &["backend", "request"],
@@ -305,7 +305,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io/reap",
         func: prim_io_reap,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Non-blocking poll for async I/O completions. Returns array of completion structs.",
         params: &["backend"],
@@ -316,7 +316,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io/wait",
         func: prim_io_wait,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Wait for async I/O completions. timeout-ms: negative=forever, 0=poll, positive=ms. Returns array of completion structs.",
         params: &["backend", "timeout-ms"],

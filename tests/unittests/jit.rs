@@ -326,10 +326,10 @@ mod jit_tests {
     // =========================================================================
     // Fiber + JIT verification tests
     //
-    // The effect system prevents suspending closures from being JIT-compiled.
+    // The signal system prevents suspending closures from being JIT-compiled.
     // Non-suspending fiber primitives (fiber/new, fiber?, fiber/status, etc.)
     // return SIG_OK/SIG_ERROR which the JIT handles. Suspending primitives
-    // (fiber/resume, fiber/signal) propagate may_suspend through the effect
+    // (fiber/resume, fiber/signal) propagate may_suspend through the signal
     // system, so closures calling them are never JIT candidates.
     // =========================================================================
 

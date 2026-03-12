@@ -375,7 +375,7 @@ impl Lowerer {
         self.current_func.num_locals += 1;
         let done_label = self.fresh_label();
 
-        // Guard effect safety valve: if any guard may suspend, the decision
+        // Guard signal safety valve: if any guard may suspend, the decision
         // tree cannot safely backtrack past the guard (it may have yielded).
         // Fall back to sequential matching which doesn't share tests.
         let any_guard_yields = arms

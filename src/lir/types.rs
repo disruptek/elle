@@ -69,7 +69,7 @@ pub struct LirFunction {
     /// Empty for non-yielding functions.
     pub yield_points: Vec<YieldPointInfo>,
     /// Call site metadata, populated during bytecode emission.
-    /// Only populated for functions where `effect.may_suspend()`.
+    /// Only populated for functions where `signal.may_suspend()`.
     /// Indexed by call instruction order (0, 1, 2, ...).
     pub call_sites: Vec<CallSiteInfo>,
 }
@@ -98,7 +98,7 @@ pub struct YieldPointInfo {
 /// The JIT reads this to know the bytecode IP at each call instruction,
 /// which is needed to build SuspendedFrames for yield-through-call.
 ///
-/// Only populated for functions where `effect.may_suspend()`.
+/// Only populated for functions where `signal.may_suspend()`.
 #[derive(Debug, Clone)]
 pub struct CallSiteInfo {
     /// Bytecode IP after the Call instruction and its operands.
@@ -334,11 +334,11 @@ pub enum LirInstr {
     PopParamFrame,
 
     // === Signal Checking ===
-    /// Check that a closure's effect satisfies a bound.
-    /// If the value in `src` is a closure whose `effect.bits & !allowed_bits != 0`,
+    /// Check that a closure's signal satisfies a bound.
+    /// If the value in `src` is a closure whose `signal.bits & !allowed_bits != 0`,
     /// signal `:error`. If the value is not a closure, signal `:error`.
     /// If the check passes, execution continues.
-    CheckEffectBound { src: Reg, allowed_bits: u32 },
+    CheckSignalBound { src: Reg, allowed_bits: u32 },
 }
 
 /// Binary operations

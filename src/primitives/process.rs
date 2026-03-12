@@ -85,7 +85,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "sys/exit",
         func: prim_exit,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Range(0, 1),
         doc: "Exit the process with an optional exit code (0-255)",
         params: &["code"],
@@ -96,7 +96,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "sys/halt",
         func: prim_halt,
-        effect: Signal::halts(),
+        signal: Signal::halts(),
         arity: Arity::Range(0, 1),
         doc: "Halt the VM gracefully, returning a value to the host",
         params: &["value"],
@@ -107,7 +107,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "sys/args",
         func: prim_sys_args,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return command-line arguments as an array (excluding interpreter and script path)",
         params: &[],

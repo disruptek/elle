@@ -21,7 +21,7 @@ Source locations flow through the entire pipeline, enabling precise error messag
 | `compiler` | Bytecode instruction definitions and debug formatting |
 | `vm` | Bytecode execution engine and builtin documentation |
 | `value` | Runtime value representation (NaN-boxed 8-byte values): LArray, LArrayMut, LStruct, LStructMut, LString, LStringMut, LBytes, LBytesMut, LSet, LSetMut |
-| `effects` | Signal type system (`Inert`, `Yields`, `Polymorphic`) — pending rename to `signals` |
+| `signals` | Signal type system (`Signal` struct with `bits` and `propagates`) |
 | `lint` | Diagnostic types and static analysis rules |
 | `symbols` | Symbol table and IDE feature support |
 | `error` | Error types and source location mapping |

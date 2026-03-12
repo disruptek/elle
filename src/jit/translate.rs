@@ -648,9 +648,9 @@ impl<'a> FunctionTranslator<'a> {
                     instr
                 )));
             }
-            LirInstr::CheckEffectBound { .. } => {
+            LirInstr::CheckSignalBound { .. } => {
                 return Err(JitError::UnsupportedInstruction(
-                    "CheckEffectBound".to_string(),
+                    "CheckSignalBound".to_string(),
                 ));
             }
         }

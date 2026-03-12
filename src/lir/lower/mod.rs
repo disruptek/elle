@@ -223,7 +223,7 @@ impl Lowerer {
 
         self.current_func.entry = Label(0);
         self.current_func.num_regs = self.next_reg;
-        // Propagate effect from HIR to top-level LIR function
+        // Propagate signal from HIR to top-level LIR function
         self.current_func.signal = hir.signal;
 
         Ok(std::mem::replace(
@@ -349,7 +349,7 @@ impl Lowerer {
     ///
     /// Returns `true` when ALL six conditions hold:
     /// 1. No binding is captured by a nested lambda (captured values escape)
-    /// 2. Body cannot suspend (yield/debug/polymorphic effects prevent cleanup)
+    /// 2. Body cannot suspend (yield/debug/polymorphic signals prevent cleanup)
     /// 3. Body result is provably a NaN-boxed immediate (not heap-allocated)
     /// 4. Body contains no dangerous outward `set` (set to outer binding
     ///    with a value that could be heap-allocated inside the scope)

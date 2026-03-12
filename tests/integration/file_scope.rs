@@ -482,11 +482,11 @@ fn test_file_destructure_eval_with_macro() {
 }
 
 // ============================================================================
-// Fixpoint effect propagation for mutually recursive file-scope lambdas
+// Fixpoint signal propagation for mutually recursive file-scope lambdas
 // ============================================================================
 
 #[test]
-fn test_mutual_recursion_effect_propagation() {
+fn test_mutual_recursion_signal_propagation() {
     // foo calls bar; bar yields; foo must also be inferred as Yields.
     // Without the fixpoint loop, foo is analyzed first and sees bar's
     // stale seed (Pure), so foo is incorrectly inferred as Pure.
@@ -502,9 +502,9 @@ fn test_mutual_recursion_effect_propagation() {
 }
 
 #[test]
-fn test_mutual_recursion_effect_propagation_reverse_order() {
+fn test_mutual_recursion_signal_propagation_reverse_order() {
     // Same as above but bar is defined first — bar directly yields,
-    // so foo should see bar's Yields effect even in a single pass.
+    // so foo should see bar's Yields signal even in a single pass.
     // This test ensures the fixpoint doesn't break the already-correct case.
     let result = eval_file_source(
         r#"
@@ -517,7 +517,7 @@ fn test_mutual_recursion_effect_propagation_reverse_order() {
 }
 
 #[test]
-fn test_mutual_recursion_three_way_effect_propagation() {
+fn test_mutual_recursion_three_way_signal_propagation() {
     // Three-way mutual recursion: a -> b -> c -> yield.
     // All three should be inferred as Yields.
     let result = eval_file_source(

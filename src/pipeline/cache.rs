@@ -114,8 +114,8 @@ pub fn update_cache_with_stdlib(
                 .expect("prelude loading must succeed");
             CompilationCache { vm, expander, meta }
         });
-        for (sym_id, (value, effect)) in &exports {
-            c.meta.signals.insert(*sym_id, *effect);
+        for (sym_id, (value, signal)) in &exports {
+            c.meta.signals.insert(*sym_id, *signal);
             c.meta.functions.insert(*sym_id, *value);
         }
     });

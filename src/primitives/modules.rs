@@ -160,7 +160,7 @@ pub(crate) fn prim_import_file(args: &[Value]) -> (SignalBits, Value) {
 pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[PrimitiveDef {
     name: "import",
     func: prim_import_file,
-    effect: Signal::errors(),
+    signal: Signal::errors(),
     arity: Arity::Exact(1),
     doc: "Import a module file and execute it in the current context",
     params: &["path"],

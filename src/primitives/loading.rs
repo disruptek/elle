@@ -347,7 +347,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "ffi/native",
         func: prim_ffi_native,
-        effect: Signal::ffi_errors(),
+        signal: Signal::ffi_errors(),
         arity: Arity::Exact(1),
         doc: "Load a shared library. Pass nil for the current process.",
         params: &["path"],
@@ -358,7 +358,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "ffi/lookup",
         func: prim_ffi_lookup,
-        effect: Signal::ffi_errors(),
+        signal: Signal::ffi_errors(),
         arity: Arity::Exact(2),
         doc: "Look up a symbol in a loaded library.",
         params: &["lib", "name"],
@@ -369,7 +369,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "ffi/signature",
         func: prim_ffi_signature,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Range(2, 3),
         doc: "Create a reified function signature. Optional third arg for variadic functions.",
         params: &["return-type", "arg-types", "fixed-args"],
@@ -380,7 +380,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "ffi/callback",
         func: prim_ffi_callback,
-        effect: Signal::ffi_errors(),
+        signal: Signal::ffi_errors(),
         arity: Arity::Exact(2),
         doc: "Create a C function pointer from an Elle closure. Returns a pointer.",
         params: &["sig", "closure"],
@@ -391,7 +391,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "ffi/callback-free",
         func: prim_ffi_callback_free,
-        effect: Signal::ffi_errors(),
+        signal: Signal::ffi_errors(),
         arity: Arity::Exact(1),
         doc: "Free a callback created by ffi/callback.",
         params: &["ptr"],

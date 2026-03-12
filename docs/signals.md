@@ -12,7 +12,7 @@ questions that led to them. Future readers should be able to understand the
 - [The Core Insight](#the-core-insight)
 - [Capabilities Down, Signals Up](#capabilities-down-signals-up)
 - [The Signal Protocol](#the-signal-protocol)
-- [The Effect System](#the-effect-system)
+- [The Signal System](#the-signal-system)
 - [JIT Integration](#jit-integration)
 - [Surface Syntax](#surface-syntax)
 - [Migration Status](#migration-status)
@@ -27,11 +27,11 @@ trade-offs and pick up where we left off.
 
 Elle previously had separate mechanisms for coroutines (continuation
 capture/replay), exception handling (handler stack with unwind semantics),
-and effect inference (boolean fields for yields and errors). The JIT could
+and signal inference (boolean fields for yields and errors). The JIT could
 only compile inert functions.
 
 These have been unified into a single mechanism: **fibers with signals**.
-Coroutines are fibers that yield. Errors are signals. The effect system
+Coroutines are fibers that yield. Errors are signals. The signal system
 tracks signal bits. See `docs/fibers.md` for the implementation reference.
 
 
@@ -66,7 +66,7 @@ Key insights from Janet:
    `propagate`. One runtime primitive# the language provides sugar.
 
 Janet's limitation: signals are a single integer (one thing happened), and
-there's no static tracking of effects. You can't look at a function and know
+there's no static tracking of signals. You can't look at a function and know
 what signals it might emit. Optimization opportunities that depend on static
 knowledge are unavailable.
 
@@ -105,7 +105,7 @@ copy." But it's a hint, not a guarantee. The compiler may or may not be able
 to exploit it depending on downstream usage. Code changes can silently add
 copies. The programmer gets a hopeful suggestion, not a contract.
 
-**Lesson**: Effect declarations should be contracts. If you say "this callback
+**Lesson**: Signal declarations should be contracts. If you say "this callback
 must not yield," the system guarantees it — by static proof or runtime check.
 The programmer gets a real promise.
 
@@ -177,8 +177,8 @@ fibers.
 static signal is a runtime signal that hasn't been emitted yet. A runtime signal is a static
 signal that just happened. The bitfield is the same for both.
 
-Whether a particular effect requires the caller's attention is determined by
-the fiber's mask, not by the effect itself. If the mask says "catch IO," then
+Whether a particular signal requires the caller's attention is determined by
+the fiber's mask, not by the signal itself. If the mask says "catch IO," then
 IO is a signal — the function suspends and the handler runs. If the mask
 doesn't mention IO, the function just does the IO and continues.
 
@@ -190,7 +190,7 @@ This means:
 - The programmer decides, at fiber creation time, what to intercept
 
 This is algebraic effects without the type-theoretic baggage. The mechanism
-is Janet's signals# the static analysis is Koka's effect tracking# the
+is Janet's signals# the static analysis is Koka's signal tracking# the
 programmer interface is "create a fiber with a mask."
 
 
@@ -222,7 +222,7 @@ This is capability-based security applied to control flow:
   something it wasn't granted. The handler decides what happens next.
 
 **Note on implementation phases**: Phases 1–5 of the migration (below) implement
-signal routing and effect tracking. Capability enforcement — checking what a
+signal routing and signal tracking. Capability enforcement — checking what a
 fiber is allowed to do and signaling when it exceeds its grant — is future work
 requiring a different mechanism (likely a capability field on fibers and checks
 at signal emission points). The vision is complete, but the early phases focus
@@ -364,8 +364,8 @@ semantics of combinations.
 **Fiber masks work the same way.** A fiber mask like `|:yield :io|` catches
 fibers that have either bit set. The mask is a bitmask, not an enum.
 
-**User-defined effects (bits 16–31) compose freely** with built-in bits. A
-user-defined effect can be combined with `:yield`, `:error`, `:io`, or any
+**User-defined signals (bits 16–31) compose freely** with built-in bits. A
+user-defined signal can be combined with `:yield`, `:error`, `:io`, or any
 other bit.
 
 ### Terminal vs Resumable Signals
@@ -415,9 +415,9 @@ Fiber {
 }
 ```
 
-The closure carries its effect bits. The fiber's mask determines which
-signals it catches from children. There is no `effects` field on the Fiber
-— effects are a compile-time property of the closure, not the fiber.
+The closure carries its signal bits. The fiber's mask determines which
+signals it catches from children. There is no `signals` field on the Fiber
+— signals are a compile-time property of the closure, not the fiber.
 
 See `docs/fibers.md` for the full Fiber, SuspendedFrame, and FiberHandle
 documentation.
@@ -436,9 +436,9 @@ type SignalBits = SignalBits  -- same bitfield type, same bit positions
 
 Operations:
 
-- **Combine**: `a | b` (union — a block's effect is the union of its parts)
-- **Check**: `actual & ~permitted == 0` (subset — are all actual effects permitted?)
-- **Inert**: `bits == 0` (no effects)
+- **Combine**: `a | b` (union — a block's signal is the union of its parts)
+- **Check**: `actual & ~permitted == 0` (subset — are all actual signals permitted?)
+- **Inert**: `bits == 0` (no signals)
 - **Has**: `bits & YIELD != 0` (membership test)
 
 ### Compile-Time Inference
@@ -574,7 +574,7 @@ This is a convention, not a language rule — the bits compose freely.
 ### Stream Primitives and I/O Requests
 
 Stream primitives (`stream/read-line`, `stream/read`, `stream/read-all`,
-`stream/write`, `stream/flush`) have effect `io_errors()`. They do not
+`stream/write`, `stream/flush`) have signal `io_errors()`. They do not
 perform I/O themselves. Instead, they:
 
 1. Build an `IoRequest` (typed descriptor of the I/O operation)

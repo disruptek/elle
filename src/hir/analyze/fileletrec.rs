@@ -35,7 +35,7 @@ impl<'a> Analyzer<'a> {
     /// `Expr` (gensym-named dummy binding). Three-pass analysis:
     /// - Pass 1: pre-bind all names (enables mutual recursion)
     /// - Pass 2: analyze initializers sequentially
-    /// - Pass 3: fixpoint loop for effect propagation through mutual recursion
+    /// - Pass 3: fixpoint loop for signal propagation through mutual recursion
     ///
     /// Returns a single `HirKind::Letrec` node. The body is a reference
     /// to the last binding (the file's return value).
@@ -132,9 +132,9 @@ impl<'a> Analyzer<'a> {
 
         // Pass 2: analyze all initializers sequentially.
         let mut bindings = Vec::new();
-        let mut effect = Signal::inert();
+        let mut signal = Signal::inert();
         let mut last_binding: Option<Binding> = None;
-        // Track lambda bindings for fixpoint effect propagation (Pass 3).
+        // Track lambda bindings for fixpoint signal propagation (Pass 3).
         // Each entry: (index in `bindings`, binding, reference to value syntax).
         let mut lambda_entries: Vec<(usize, Binding, &Syntax)> = Vec::new();
 
@@ -149,7 +149,7 @@ impl<'a> Analyzer<'a> {
                         self.register_binding(name, scopes, *binding);
                     }
                     let value = self.analyze_expr(value_syntax)?;
-                    effect = effect.combine(value.signal);
+                    signal = signal.combine(value.signal);
 
                     let bindings_idx = bindings.len();
                     if let HirKind::Lambda {
@@ -184,7 +184,7 @@ impl<'a> Analyzer<'a> {
                         self.register_binding(name, scopes, *binding);
                     }
                     let value = self.analyze_expr(value_syntax)?;
-                    effect = effect.combine(value.signal);
+                    signal = signal.combine(value.signal);
 
                     self.pre_bindings.clone_from(leaf_bindings);
                     let pattern = self.analyze_destructure_pattern(
@@ -218,19 +218,19 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        // Pass 3: fixpoint loop for effect propagation through mutual recursion.
+        // Pass 3: fixpoint loop for signal propagation through mutual recursion.
         //
         // Pass 2 analyzes bindings sequentially, so a lambda analyzed early may
-        // see stale (optimistic) effects for lambdas analyzed later. For mutually
-        // recursive functions, this means effects don't propagate through cycles:
+        // see stale (optimistic) signals for lambdas analyzed later. For mutually
+        // recursive functions, this means signals don't propagate through cycles:
         //
         //   (def foo (fn [] (bar)))    # analyzed first, sees bar as Pure (stale)
         //   (def bar (fn [] (yield 1) (foo)))  # analyzed second, correctly Yields
         //
         // foo stays Pure even though it calls a Yields function. Fix: re-analyze
-        // lambda bindings until effect_env stabilizes.
+        // lambda bindings until signal_env stabilizes.
         //
-        // Re-analysis side effects are benign: the side effects of re-analyzing
+        // Re-analysis side signals are benign: the side signals of re-analyzing
         // a lambda (additional `mark_captured()`, `mark_mutated()` calls on
         // bindings) are monotonic — they only add flags, never remove them.
         // Re-analysis can only make the result more conservative, never incorrect.
@@ -239,7 +239,7 @@ impl<'a> Analyzer<'a> {
             for _ in 0..MAX_FIXPOINT_ITERS {
                 let mut changed = false;
                 for &(idx, binding, value_syntax) in &lambda_entries {
-                    let old_effect = self
+                    let old_signal = self
                         .signal_env
                         .get(&binding)
                         .copied()
@@ -249,7 +249,7 @@ impl<'a> Analyzer<'a> {
                         inferred_signals, ..
                     } = &new_hir.kind
                     {
-                        if *inferred_signals != old_effect {
+                        if *inferred_signals != old_signal {
                             self.signal_env.insert(binding, *inferred_signals);
                             changed = true;
                         }
@@ -276,13 +276,13 @@ impl<'a> Analyzer<'a> {
                 body: Box::new(body),
             },
             span,
-            effect,
+            signal,
         ))
     }
 
     /// Pass 1 helper: pre-bind a simple (non-destructuring) name for file-scope letrec.
     ///
-    /// Creates the binding and seeds effect/arity tracking for lambda forms.
+    /// Creates the binding and seeds signal/arity tracking for lambda forms.
     /// Duplicate names are deferred to Pass 2 for sequential shadowing.
     fn prebind_simple<'s>(
         &mut self,
@@ -309,7 +309,7 @@ impl<'a> Analyzer<'a> {
             binding.mark_immutable();
         }
 
-        // Seed effect_env and arity_env for lambda forms so self-recursive
+        // Seed signal_env and arity_env for lambda forms so self-recursive
         // calls don't default to Yields during analysis.
         if Self::is_lambda_syntax(value_syntax) {
             self.signal_env.insert(binding, Signal::inert());

@@ -16,7 +16,7 @@ non-local control flow — errors, yields, coroutines, cancellation — is
 - [Coroutines](#coroutines)
 - [Error Handling](#error-handling)
 - [Terminal vs. Resumable Signals](#terminal-vs-resumable-signals)
-- [Effect System Integration](#effect-system-integration)
+- [Signal System Integration](#signal-system-integration)
 - [What's Not Implemented Yet](#whats-not-implemented-yet)
 implemented as signals propagating through a fiber chain.
 

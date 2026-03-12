@@ -113,7 +113,7 @@ pub enum HirKind {
         /// Declared signal bounds for parameters (from `(silence param :kw ...)`).
         /// Only parameters with explicit bounds appear here. These bounds feed
         /// into inferred_signals computation (bounded param's bits are included)
-        /// and into runtime checking (CheckEffectBound instruction).
+        /// and into runtime checking (CheckSignalBound instruction).
         param_bounds: Vec<(Binding, Signal)>,
         /// Optional docstring extracted from the lambda body
         doc: Option<Value>,

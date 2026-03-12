@@ -1,6 +1,6 @@
 # HIR Analysis
 
-The analysis phase transforms expanded `Syntax` trees into `HIR` by resolving all variable references, computing closure captures, and inferring effects.
+The analysis phase transforms expanded `Syntax` trees into `HIR` by resolving all variable references, computing closure captures, and inferring signals.
 
 ## What Analysis Does
 

@@ -20,8 +20,8 @@ pub struct PrimitiveDef {
     pub name: &'static str,
     /// The Rust implementation.
     pub func: NativeFn,
-    /// Signal effects (errors, yields, etc.).
-    pub effect: Signal,
+    /// Signal (errors, yields, etc.).
+    pub signal: Signal,
     /// Argument count constraint.
     pub arity: Arity,
     /// One-line description for help/hover/docs.
@@ -46,7 +46,7 @@ impl PrimitiveDef {
     pub const DEFAULT: PrimitiveDef = PrimitiveDef {
         name: "",
         func: _default_prim,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "",
         params: &[],
@@ -71,7 +71,7 @@ pub struct Doc {
     pub doc: &'static str,
     pub params: &'static [&'static str],
     pub arity: Arity,
-    pub effect: Signal,
+    pub signal: Signal,
     pub category: &'static str,
     pub example: &'static str,
     pub aliases: &'static [&'static str],

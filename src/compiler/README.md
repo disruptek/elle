@@ -40,7 +40,7 @@ resolution, capture analysis, and source location tracking.
 
 ## Signals (Static)
 
-The `Signal` type (currently `Effect` in `src/effects/` — pending module rename) tracks static signals:
+The `Signal` type (in `src/signals/`) tracks static signals:
 
 - `Inert` - no signals emitted, can be optimized
 - `Yields` - may yield (for coroutines)

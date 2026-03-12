@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/elle-lisp/elle/actions/workflows/main.yml/badge.svg)](https://github.com/elle-lisp/elle/actions/workflows/main.yml)
 
-Elle is a Lisp. What separates it from other Lisps is the depth of its static analysis: full binding resolution, capture analysis, and effect inference happen at compile time, before any code runs. This gives Elle a sound effect system, fully hygienic macros, colorless concurrency via fibers, and deterministic memory management — all derived from the same analysis pass.
+Elle is a Lisp. What separates it from other Lisps is the depth of its static analysis: full binding resolution, capture analysis, and signal inference happen at compile time, before any code runs. This gives Elle a sound signal system, fully hygienic macros, colorless concurrency via fibers, and deterministic memory management — all derived from the same analysis pass.
 
 ## Contents
 
@@ -20,13 +20,13 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
 
 ## What Makes Elle Different
 
-- **Static analysis is a first-class feature.** The compiler performs full binding resolution, capture analysis, effect inference, and lint passes before any code runs. This is not optional tooling bolted on — it is the compilation pipeline. Most Lisps are dynamic; Elle knows at compile time what every binding refers to, what every closure captures, and what effects every function can produce.
+- **Static analysis is a first-class feature.** The compiler performs full binding resolution, capture analysis, signal inference, and lint passes before any code runs. This is not optional tooling bolted on — it is the compilation pipeline. Most Lisps are dynamic; Elle knows at compile time what every binding refers to, what every closure captures, and what signals every function can emit.
   <details><summary>More: Compile-Time Analysis</summary>
 
-  The compilation pipeline is: Source → Reader → Syntax → Expander → Analyzer → HIR → Lowerer → LIR → Emitter → Bytecode → VM. Each stage infers more than the last. The analyzer resolves all bindings to their definitions, computes which variables each closure captures, infers the effect of every expression, and flags lint violations — all before bytecode is emitted. This is why the linter catches errors at compile time, why the effect system is sound, and why the JIT can make intelligent decisions about what to compile natively.
+  The compilation pipeline is: Source → Reader → Syntax → Expander → Analyzer → HIR → Lowerer → LIR → Emitter → Bytecode → VM. Each stage infers more than the last. The analyzer resolves all bindings to their definitions, computes which variables each closure captures, infers the signal of every expression, and flags lint violations — all before bytecode is emitted. This is why the linter catches errors at compile time, why the signal system is sound, and why the JIT can make intelligent decisions about what to compile natively.
   </details>
 
-- **A sound effect system, inferred not declared.** Every function is automatically classified as `Inert`, `Yields`, or `Polymorphic`. The compiler enforces this: an inert context cannot call a yielding function. No annotations required. This is what makes the fiber/concurrency story coherent — the compiler knows which functions can suspend.
+- **A sound signal system, inferred not declared.** Every function is automatically classified as `Inert`, `Yields`, or `Polymorphic`. The compiler enforces this: an inert context cannot call a yielding function. No annotations required. This is what makes the fiber/concurrency story coherent — the compiler knows which functions can suspend.
 
   ```janet
   # Inert function — inferred automatically
@@ -37,14 +37,14 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
     (yield :http-request url)
     (yield :http-wait))
 
-  # Polymorphic — effect depends on callback
-  (defn map-effect (f xs)
-    (map f xs))  # effect = effect of f
+  # Polymorphic — signal depends on callback
+  (defn map-signal (f xs)
+    (map f xs))  # signal = signal of f
   ```
 
-  <details><summary>More: Effect Enforcement</summary>
+  <details><summary>More: Signal Enforcement</summary>
 
-  The compiler enforces effect contracts: an inert context cannot call a yielding function. This is checked at compile time.
+  The compiler enforces signal contracts: an inert context cannot call a yielding function. This is checked at compile time.
   </details>
 
 - **Fully hygienic macros that operate on syntax objects, not text or s-expressions.** Macros receive and return `Syntax` objects carrying scope information (Racket-style scope sets). Name capture is structurally impossible, not just conventionally avoided. This is stronger than Janet's macros, which are s-expression templates.
@@ -81,7 +81,7 @@ Elle is a Lisp. What separates it from other Lisps is the depth of its static an
 
   <details><summary>More: Colorless Functions</summary>
 
-  In Rust/JS/Python, `fetch` would be `async fn`/`async def`, forcing `compute` to be `async` too, and every caller to `await` it. In Elle, the effect is inferred by the compiler, not declared by the programmer. Callers are unaffected.
+  In Rust/JS/Python, `fetch` would be `async fn`/`async def`, forcing `compute` to be `async` too, and every caller to `await` it. In Elle, the signal is inferred by the compiler, not declared by the programmer. Callers are unaffected.
   </details>
 
 - **Structured concurrency via fibers with per-fiber memory.** Each fiber has its own heap arena. When a fiber finishes, its memory is reclaimed in O(1) — no GC pause, no reference counting. The compiler's escape analysis drives scope-level reclamation within fibers.
@@ -484,7 +484,7 @@ Exactly two values are falsy. Everything else is truthy.
 
 ## JIT
 
-- **JIT compilation is fully automatic.** Pure, non-suspending functions are compiled to native code via Cranelift at runtime. No annotations, no opt-in. The compiler's effect system identifies eligible functions; the JIT fires transparently.
+- **JIT compilation is fully automatic.** Pure, non-suspending functions are compiled to native code via Cranelift at runtime. No annotations, no opt-in. The compiler's signal system identifies eligible functions; the JIT fires transparently.
 
 ## FFI
 
@@ -519,7 +519,7 @@ Exactly two values are falsy. Everything else is truthy.
   (ffi/callback-free cmp)
   ```
 
-- **FFI calls are tagged in the effect system.** Compiler knows where Elle's safety guarantees end and C's begin.
+- **FFI calls are tagged in the signal system.** Compiler knows where Elle's safety guarantees end and C's begin.
 
 ## Modules and Plugins
 
@@ -538,7 +538,7 @@ Exactly two values are falsy. Everything else is truthy.
   (add 1 2)  # => 6
   ```
 
-- **Native plugins are Rust cdylib crates.** Link against `elle`, export an init function. Plugins register primitives through the same `PrimitiveDef` mechanism as builtins — same effect declarations, same doc strings, same arity checking. Work directly with `Value`. No intermediate serialization format, no separate process, no generated bindings.
+- **Native plugins are Rust cdylib crates.** Link against `elle`, export an init function. Plugins register primitives through the same `PrimitiveDef` mechanism as builtins — same signal declarations, same doc strings, same arity checking. Work directly with `Value`. No intermediate serialization format, no separate process, no generated bindings.
 
   ```janet
   (def re (import "target/release/libelle_regex.so"))
@@ -555,7 +555,7 @@ Exactly two values are falsy. Everything else is truthy.
 
 - **Language server (LSP) for IDE integration.** Real-time diagnostics, hover documentation, jump-to-definition, refactoring support.
 
-- **Static linter catches errors at compile time.** Wrong arity, unused bindings, effect violations, type mismatches in patterns, duplicate pattern variables.
+- **Static linter catches errors at compile time.** Wrong arity, unused bindings, signal violations, type mismatches in patterns, duplicate pattern variables.
 
   ```janet
   # Compile-time errors caught by elle lint:

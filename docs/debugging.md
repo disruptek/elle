@@ -5,7 +5,7 @@
 - [Overview](#overview)
 - [1. Introspection Primitives](#1-introspection-primitives)
 - [2. Time API](#2-time-api)
-- [3. Effect System: Signals](#3-effect-system-signals)
+- [3. Signal System](#3-signal-system)
 
 ## Overview
 
@@ -23,8 +23,8 @@ get information about it. All are `NativeFn`. Primitives that need VM access use
 | Primitive | Signature | Returns | Notes |
 |-----------|-----------|---------|-------|
 | `jit?` | `(jit? value)` | `true` or `false` | True if value is a closure with JIT-compiled native code |
-| `inert?` | `(inert? value)` | `true` or `false` | True if value is a closure with `Effect::Inert` |
-| `coro?` | `(coro? value)` | `true` or `false` | True if value is a closure with `Effect::Yields` |
+| `inert?` | `(inert? value)` | `true` or `false` | True if value is a closure with no signal bits set |
+| `coro?` | `(coro? value)` | `true` or `false` | True if value is a closure with the yield signal bit set |
 | `mutates-params?` | `(mutates-params? value)` | `true` or `false` | True if value is a closure whose body mutates any of its own parameters (i.e., `lbox_params_mask != 0`) |
 | `closure?` | `(closure? value)` | `true` or `false` | True if value is a closure (bytecode, not native/vm-aware) |
 
@@ -32,8 +32,8 @@ Implementation: each is a simple predicate that examines the `Value` and,
 for closures, reads fields on the `Closure` struct.
 
 - `jit?` checks `closure.jit_code.is_some()`
-- `inert?` checks `closure.effect == Effect::Inert`
-- `coro?` checks `closure.effect == Effect::Yields`
+- `inert?` checks `closure.signal.bits == 0` (no signal bits)
+- `coro?` checks `closure.signal.bits & SIG_YIELD != 0`
 - `mutates-params?` checks `closure.lbox_params_mask != 0` (any lbox-wrapped params)
 - `closure?` checks `value.as_closure().is_some()`
 - `global?` takes a symbol, checks `vm.get_global(sym_id).is_some()`
@@ -71,11 +71,11 @@ Two namespaces separate concerns: `clock/` for point-in-time readings,
 
 ### 2.1 Clock primitives (Rust)
 
-| Primitive | Signature | Returns | Effect | Backing |
+| Primitive | Signature | Returns | Signal | Backing |
 |-----------|-----------|---------|--------|---------|
-| `clock/monotonic` | `(clock/monotonic)` | float | `Effect::inert()` | `std::time::Instant` relative to a process-global epoch |
-| `clock/realtime` | `(clock/realtime)` | float | `Effect::inert()` | `std::time::SystemTime::UNIX_EPOCH` |
-| `clock/cpu` | `(clock/cpu)` | float | `Effect::inert()` | `libc::clock_gettime(CLOCK_THREAD_CPUTIME_ID)` |
+| `clock/monotonic` | `(clock/monotonic)` | float | `Signal::inert()` | `std::time::Instant` relative to a process-global epoch |
+| `clock/realtime` | `(clock/realtime)` | float | `Signal::inert()` | `std::time::SystemTime::UNIX_EPOCH` |
+| `clock/cpu` | `(clock/cpu)` | float | `Signal::inert()` | `libc::clock_gettime(CLOCK_THREAD_CPUTIME_ID)` |
 
 `clock/monotonic` uses a `OnceLock<Instant>` initialized on first call.
 All readings are relative to this epoch, keeping values small and maximizing
@@ -90,9 +90,9 @@ Use it when you need to distinguish computation time from I/O wait.
 
 ### 2.2 Time utilities (Elle)
 
-| Primitive | Signature | Returns | Effect | Implementation |
+| Primitive | Signature | Returns | Signal | Implementation |
 |-----------|-----------|---------|--------|----------------|
-| `time/sleep` | `(time/sleep seconds)` | nil | `Effect::errors()` | `std::thread::sleep` (Rust primitive) |
+| `time/sleep` | `(time/sleep seconds)` | nil | `Signal::errors()` | `std::thread::sleep` (Rust primitive) |
 | `time/stopwatch` | `(time/stopwatch)` | coroutine | yields | Elle: coroutine over `clock/monotonic` |
 | `time/elapsed` | `(time/elapsed thunk)` | `(result seconds)` | polymorphic | Elle: wraps thunk with clock reads |
 
@@ -145,26 +145,25 @@ variants. The float approach is simpler and better:
 - **Precedent.** Lua's `os.clock()`, Common Lisp's `get-internal-real-time`,
   JavaScript's `performance.now()` — all return numbers, not opaque types.
 
-## 3. Effect System: Signals
+## 3. Signal System
 
 ### 3.1 Design
 
-The `Effect` struct tracks which signals a function may emit via a `bits`
+The `Signal` struct tracks which signals a function may emit via a `bits`
 field (bitmask of `SIG_ERROR`, `SIG_YIELD`, `SIG_DEBUG`, `SIG_FFI`) and
-which parameter indices propagate their callee's effects via a `propagates`
-bitmask. This is more general than the original `YieldBehavior` + `may_error`
-proposal — it handles error, yield, debug, and FFI effects uniformly.
+which parameter indices propagate their callee's signals via a `propagates`
+bitmask. This handles error, yield, debug, and FFI signals uniformly.
 
 ```rust
-pub struct Effect {
+pub struct Signal {
     pub bits: SignalBits,    // which signals this function itself might emit
-    pub propagates: u32,     // bitmask of parameter indices whose effects flow through
+    pub propagates: u32,     // bitmask of parameter indices whose signals flow through
 }
 ```
 
-Constructors: `Effect::inert()`, `Effect::errors()`, `Effect::yields()`,
-`Effect::yields_errors()`, `Effect::ffi()`, `Effect::polymorphic(n)`,
-`Effect::polymorphic_errors(n)`.
+Constructors: `Signal::inert()`, `Signal::errors()`, `Signal::yields()`,
+`Signal::yields_errors()`, `Signal::ffi()`, `Signal::polymorphic(n)`,
+`Signal::polymorphic_errors(n)`.
 
 Predicates: `may_error()`, `may_yield()`, `may_suspend()`, `may_ffi()`,
 `is_polymorphic()`.
@@ -196,14 +195,14 @@ non-error-signalling functions.
 
 ### 3.4 Propagation during fixpoint iteration
 
-Error effects propagate exactly like yield effects during the cross-form
+Error signals propagate exactly like yield signals during the cross-form
 fixpoint iteration in `compile_all`. Self-recursive functions start
 with `may_error = false` (optimistic) and iterate until stable.
 
 ### 3.5 Runtime query
 
-`(fn/errors? value)` reads `closure.effect.may_error()` (checks `SIG_ERROR`
-in the effect's signal bits). Returns `true` if the closure may signal an error,
+`(fn/errors? value)` reads `closure.signal.may_error()` (checks `SIG_ERROR`
+in the signal's bits). Returns `true` if the closure may signal an error,
 `false` otherwise.
 
 ## 4. Docgen Site

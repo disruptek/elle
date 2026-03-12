@@ -31,8 +31,8 @@ impl<'a> Analyzer<'a> {
         let saved_captures = std::mem::take(&mut self.current_captures);
         let saved_parent_captures = std::mem::take(&mut self.parent_captures);
 
-        // Save and reset effect sources for polymorphic inference
-        let saved_effect_sources = std::mem::take(&mut self.current_signal_sources);
+        // Save and reset signal sources for polymorphic inference
+        let saved_signal_sources = std::mem::take(&mut self.current_signal_sources);
         let saved_lambda_params = std::mem::take(&mut self.current_lambda_params);
 
         // Save and reset restrict accumulators
@@ -160,7 +160,7 @@ impl<'a> Analyzer<'a> {
             None => (None, VarargKind::List), // default; irrelevant when no rest_param
         };
 
-        // Set current lambda params for effect source tracking
+        // Set current lambda params for signal source tracking
         self.current_lambda_params = params.clone();
 
         // Analyze body
@@ -184,7 +184,7 @@ impl<'a> Analyzer<'a> {
         let body = if param_destructures.is_empty() {
             body
         } else {
-            let body_effect = body.signal;
+            let body_signal = body.signal;
             let mut exprs: Vec<Hir> = param_destructures
                 .into_iter()
                 .map(|(pattern, tmp)| {
@@ -198,14 +198,14 @@ impl<'a> Analyzer<'a> {
                 })
                 .collect();
             exprs.push(body);
-            Hir::new(HirKind::Begin(exprs), span.clone(), body_effect)
+            Hir::new(HirKind::Begin(exprs), span.clone(), body_signal)
         };
 
         let num_locals = self.current_local_count();
 
-        // Compute the inferred effect based on effect sources.
+        // Compute the inferred signal based on signal sources.
         // Must happen before draining current_param_bounds, since
-        // compute_inferred_effect reads them for bounded params.
+        // compute_inferred_signal reads them for bounded params.
         let inferred_signals = self.compute_inferred_signal(&body, &params);
 
         // Read restrict accumulators (populated by analyze_restrict during body analysis)
@@ -234,8 +234,8 @@ impl<'a> Analyzer<'a> {
         let captures = std::mem::replace(&mut self.current_captures, saved_captures);
         self.parent_captures = saved_parent_captures;
 
-        // Restore effect sources and restrict accumulators
-        self.current_signal_sources = saved_effect_sources;
+        // Restore signal sources and restrict accumulators
+        self.current_signal_sources = saved_signal_sources;
         self.current_lambda_params = saved_lambda_params;
         self.current_param_bounds = saved_param_bounds;
         self.current_declared_ceiling = saved_declared_ceiling;
@@ -272,7 +272,7 @@ impl<'a> Analyzer<'a> {
             span.clone(),
         )));
 
-        // Lambda itself is pure, but captures the body's effect
+        // Lambda itself is pure, but captures the body's signal
         Ok(Hir::new(
             HirKind::Lambda {
                 params,

@@ -22,14 +22,14 @@ Design documents, language references, and contributor guides for Elle.
 | `cookbook.md` | Step-by-step recipes for common changes: new primitives, heap types, bytecode instructions, special forms, lint rules, macros | Root AGENTS.md |
 | `testing.md` | Testing strategy: decision tree, test categories, property tests, CI structure, running tests | Root AGENTS.md |
 | `pipeline.md` | Compilation pipeline: entry points, VM ownership, expander lifecycle, fixpoint loop, caching | Root AGENTS.md |
-| `debugging.md` | Debugging toolkit: introspection primitives, time API, effect system, memory profiling | Root AGENTS.md |
+| `debugging.md` | Debugging toolkit: introspection primitives, time API, signal system, memory profiling | Root AGENTS.md |
 | `oddities.md` | Intentional design choices that look wrong: nil vs empty list, comment/splice syntax, mutation, collection literals | Root AGENTS.md |
 
 ### Design Documents
 
 | File | Description | Referenced from |
 |------|-------------|-----------------|
-| `signals.md` | Signal system design: motivation, signal protocol, error signalling, effect inference, JIT integration | Root AGENTS.md |
+| `signals.md` | Signal system design: motivation, signal protocol, error signalling, signal inference, JIT integration | Root AGENTS.md |
 | `fibers.md` | Fiber architecture: execution contexts, signals, suspension/resumption, parent/child chains | Root AGENTS.md |
 | `ffi.md` | FFI design: type descriptors, signatures, calling C functions, callbacks, marshalling | Root AGENTS.md |
 
@@ -72,7 +72,7 @@ These documents are authoritative and should be kept in sync with implementation
 - `language.md` — language reference
 - `types.md` — type system
 - `semantics.md` — semantic definitions
-- `signals.md` — signal system and effect design
+- `signals.md` — signal system design
 - `fibers.md` — fiber architecture
 - `ffi.md` — FFI design
 - `pipeline.md` — compilation pipeline
@@ -90,7 +90,7 @@ Root AGENTS.md references these docs:
 - `pipeline.md` — compilation pipeline architecture
 - `language.md` — language reference
 - `types.md` — type system
-- `signals.md` — signal system and effect inference
+- `signals.md` — signal system and signal inference
 - `fibers.md` — fiber concurrency
 - `macros.md` — macro system
 - `ffi.md` — foreign function interface
@@ -105,7 +105,7 @@ Root AGENTS.md references these docs:
 `cookbook.md` references:
 - `language.md` — for syntax examples
 - `types.md` — for type system details
-- `effects.md` — for effect annotations
+- `signals.md` — for signal annotations
 - `testing.md` — for test organization
 
 ## Files
@@ -124,7 +124,6 @@ Root AGENTS.md references these docs:
 | `pipeline.md` | 256 | Compilation pipeline |
 | `debugging.md` | 220 | Debugging toolkit |
 | `oddities.md` | 280 | Intentional design oddities |
-| `effects.md` | 761 | Effect system design |
 | `fibers.md` | 312 | Fiber architecture |
 | `ffi.md` | 455 | FFI design |
 | `modules.md` | ~240 | Module system design |

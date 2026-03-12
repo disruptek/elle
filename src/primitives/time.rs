@@ -139,7 +139,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "clock/monotonic",
         func: prim_clock_monotonic,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return seconds elapsed since process start (monotonic clock)",
         params: &[],
@@ -150,7 +150,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "clock/realtime",
         func: prim_clock_realtime,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return seconds since Unix epoch (wall clock)",
         params: &[],
@@ -161,7 +161,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "clock/cpu",
         func: prim_clock_cpu,
-        effect: Signal::inert(),
+        signal: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return thread CPU time in seconds",
         params: &[],
@@ -172,7 +172,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "time/sleep",
         func: prim_sleep,
-        effect: Signal::errors(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Sleep for the specified number of seconds",
         params: &["seconds"],

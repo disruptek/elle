@@ -87,7 +87,7 @@ pub(crate) fn prim_ffi_call(args: &[Value]) -> (SignalBits, Value) {
 pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[PrimitiveDef {
     name: "ffi/call",
     func: prim_ffi_call,
-    effect: Signal::ffi_errors(),
+    signal: Signal::ffi_errors(),
     arity: Arity::AtLeast(2),
     doc: "Call a C function through libffi.",
     params: &["fn-ptr", "sig"],

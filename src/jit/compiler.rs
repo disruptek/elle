@@ -327,7 +327,7 @@ impl JitCompiler {
         lir: &LirFunction,
         self_sym: Option<SymbolId>,
     ) -> Result<JitCode, JitError> {
-        // Only reject polymorphic effects (effect depends on arguments).
+        // Only reject polymorphic signals (signal depends on arguments).
         // Yielding functions are now supported via side-exit.
         if lir.signal.propagates != 0 {
             return Err(JitError::Polymorphic);

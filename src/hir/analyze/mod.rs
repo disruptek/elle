@@ -3,16 +3,16 @@
 //! This module converts expanded Syntax trees into HIR by:
 //! 1. Resolving all variable references to Bindings
 //! 2. Computing captures for closures
-//! 3. Inferring effects (including interprocedural effect tracking)
+//! 3. Inferring signals (including interprocedural signal tracking)
 //! 4. Validating scope rules
 //!
 //! ## Interprocedural Signal Tracking
 //!
-//! The analyzer tracks effects across function boundaries:
-//! - When a binding is defined with a lambda, we record the lambda body's effect
-//! - When a call is analyzed, we look up the callee's effect and propagate it
-//! - Polymorphic effects (like `map`) are resolved by examining the argument's effect
-//! - `set!` invalidates effect tracking for the mutated binding
+//! The analyzer tracks signals across function boundaries:
+//! - When a binding is defined with a lambda, we record the lambda body's signal
+//! - When a call is analyzed, we look up the callee's signal and propagate it
+//! - Polymorphic signals (like `map`) are resolved by examining the argument's signal
+//! - `set!` invalidates signal tracking for the mutated binding
 
 mod binding;
 mod call;
@@ -63,11 +63,11 @@ pub struct AnalysisResult {
     pub hir: Hir,
 }
 
-/// Tracks the sources of Yields effects within a lambda body.
-/// Used to infer Polymorphic effects for higher-order functions.
+/// Tracks the sources of Yields signals within a lambda body.
+/// Used to infer Polymorphic signals for higher-order functions.
 #[derive(Debug, Clone, Default)]
 struct SignalSources {
-    /// Parameters whose calls contribute Yields effects
+    /// Parameters whose calls contribute Yields signals
     param_calls: HashSet<Binding>,
     /// Whether there's a direct yield (not from calling a parameter)
     has_direct_yield: bool,
@@ -160,12 +160,12 @@ pub struct Analyzer<'a> {
 }
 
 impl<'a> Analyzer<'a> {
-    /// Create a new analyzer without primitive effects or arities
+    /// Create a new analyzer without primitive signals or arities
     pub fn new(symbols: &'a mut SymbolTable) -> Self {
         Self::new_with_primitives(symbols, HashMap::new(), HashMap::new())
     }
 
-    /// Create a new analyzer with primitive effects for interprocedural tracking
+    /// Create a new analyzer with primitive signals for interprocedural tracking
     /// (convenience wrapper that passes empty arities)
     pub fn new_with_primitive_signals(
         symbols: &'a mut SymbolTable,
@@ -174,7 +174,7 @@ impl<'a> Analyzer<'a> {
         Self::new_with_primitives(symbols, primitive_signals, HashMap::new())
     }
 
-    /// Create a new analyzer with primitive effects and arities
+    /// Create a new analyzer with primitive signals and arities
     pub fn new_with_primitives(
         symbols: &'a mut SymbolTable,
         primitive_signals: HashMap<SymbolId, Signal>,
@@ -222,10 +222,10 @@ impl<'a> Analyzer<'a> {
     /// bindings — the `NativeFn` values are baked into the constant pool.
     /// No slot allocation is needed.
     pub fn bind_primitives(&mut self, meta: &PrimitiveMeta) {
-        for (&sym_id, &effect) in &meta.signals {
+        for (&sym_id, &signal) in &meta.signals {
             let binding = self.bind_by_sym(sym_id, BindingScope::Local);
             binding.mark_immutable();
-            self.signal_env.insert(binding, effect);
+            self.signal_env.insert(binding, signal);
             if let Some(&arity) = meta.arities.get(&sym_id) {
                 self.arity_env.insert(binding, arity);
             }

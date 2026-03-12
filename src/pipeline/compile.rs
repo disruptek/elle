@@ -33,7 +33,7 @@ pub fn compile(
     let macro_vm = unsafe { &mut *macro_vm_ptr };
     let expanded = expander.expand(syntax, symbols, macro_vm)?;
 
-    // Phase 3: Analyze to HIR with interprocedural effect and arity tracking
+    // Phase 3: Analyze to HIR with interprocedural signal and arity tracking
     let mut analyzer =
         Analyzer::new_with_primitives(symbols, meta.signals.clone(), meta.arities.clone());
     analyzer.bind_primitives(&meta);

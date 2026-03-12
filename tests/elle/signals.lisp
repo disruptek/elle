@@ -1,7 +1,7 @@
 ## Signal System Tests
 ##
 ## Tests for the signal declaration, silence, and signals introspection
-## features. Migrated from tests/integration/effect_enforcement.rs
+## features. Migrated from tests/integration/signal_enforcement.rs
 ## (language behaviour tests that evaluate Elle source and check values).
 
 (def {:assert-eq assert-eq :assert-true assert-true :assert-false assert-false :assert-list-eq assert-list-eq :assert-equal assert-equal :assert-not-nil assert-not-nil :assert-string-eq assert-string-eq :assert-err assert-err :assert-err-kind assert-err-kind} ((import-file "tests/elle/assert.lisp")))
@@ -69,16 +69,16 @@
 (defn apply-inert4 (f x) (silence f) (f x))
 (def [ok4? err4] (protect (apply-inert4 (fn (x) (yield x)) 42)))
 (assert-false ok4? "silence runtime: yielding closure fails")
-(assert-eq (get err4 :error) :effect-violation
-  "silence runtime: yielding closure is effect-violation")
+(assert-eq (get err4 :error) :signal-violation
+  "silence runtime: yielding closure is signal-violation")
 
 # silence with bounded keyword fails for yielding closure
 (signal :rt_c5b2)
 (defn apply-bounded2 (f) (silence f :rt_c5b2) (f))
 (def [ok5? err5] (protect (apply-bounded2 (fn () (yield 1)))))
 (assert-false ok5? "silence runtime: bounded keyword fails for yielding closure")
-(assert-eq (get err5 :error) :effect-violation
-  "silence runtime: bounded keyword is effect-violation")
+(assert-eq (get err5 :error) :signal-violation
+  "silence runtime: bounded keyword is signal-violation")
 
 # silence with dynamic variable fails for yielding closure
 (defn apply-inert5 (f x) (silence f) (f x))

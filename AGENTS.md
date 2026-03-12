@@ -4,7 +4,7 @@ Elle is a Lisp. Source text becomes bytecode; bytecode runs on a register-based 
 
 This is not a toy. The implementation targets correctness, performance, and
 clarity — in that order. We compile through multiple IRs, we have proper
-lexical scoping with closure capture analysis, and we have an effect system.
+lexical scoping with closure capture analysis, and we have a signal system.
 
 You are an LLM. You will make mistakes. The test suite will catch them. Run the
 tests. Read the error messages. They are designed to be helpful.
@@ -42,7 +42,7 @@ bytecode. Error messages include file:line:col information.
 | `compiler` | Bytecode instruction definitions, debug formatting |
 | `vm` | Bytecode execution, builtin documentation storage |
 | `value` | Runtime value representation (NaN-boxed) |
-| `effects` | Signal type (`Inert`, `Yields`, `Polymorphic`), signal registry for keyword-to-bit mapping |
+| `signals` | Signal type (`Inert`, `Yields`, `Polymorphic`), signal registry for keyword-to-bit mapping |
 | `io` | I/O request types, backends, timeout handling |
 | `lint` | Diagnostic types and lint rules |
 | `symbols` | Symbol index types for IDE features |

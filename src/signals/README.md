@@ -2,8 +2,6 @@
 
 The signal system tracks what operations a function can perform, enabling the compiler to make safe optimizations and the runtime to enforce constraints.
 
-**Note:** This module is named `effects` for historical reasons; it will be renamed to `signals` in a future chunk.
-
 ## The Three Signal Types
 
 | Signal | Meaning | Examples |

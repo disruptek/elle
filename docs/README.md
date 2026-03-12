@@ -19,7 +19,7 @@ This directory contains design documents, language references, and contributor g
 | [cookbook.md](cookbook.md) | Step-by-step recipes for common changes: new primitives, heap types, bytecode instructions, special forms, lint rules, macros |
 | [testing.md](testing.md) | Testing strategy: decision tree, test categories, property tests, CI structure, running tests |
 | [pipeline.md](pipeline.md) | Compilation pipeline: entry points, VM ownership, expander lifecycle, fixpoint loop, caching |
-| [debugging.md](debugging.md) | Debugging toolkit: introspection primitives, time API, effect system, memory profiling |
+| [debugging.md](debugging.md) | Debugging toolkit: introspection primitives, time API, signal system, memory profiling |
 
 ## Design Documents
 
