@@ -388,14 +388,14 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         aliases: &[],
     },
     PrimitiveDef {
-        name: "effects",
+        name: "signals",
         func: prim_effects,
         effect: Effect::inert(),
         arity: Arity::Exact(0),
-        doc: "Return the effect registry as a struct mapping keywords to bit positions.",
+        doc: "Return the signal registry as a struct mapping keywords to bit positions.",
         params: &[],
         category: "meta",
-        example: "(effects)",
+        example: "(signals)",
         aliases: &[],
     },
     PrimitiveDef {

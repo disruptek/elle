@@ -44,7 +44,7 @@ the closure captures mutable bindings from an outer scope. Those are
 `LocalLBox` values in the closure's `env` vector — detecting them would
 require scanning `env`, which is a different (and more expensive) operation.
 
-### 1.2 Exception tracking: `fn/errors?`
+### 1.2 Error signal tracking: `fn/errors?`
 
 | Primitive | Signature | Returns | Notes |
 |-----------|-----------|---------|-------|
@@ -169,16 +169,13 @@ Constructors: `Effect::inert()`, `Effect::errors()`, `Effect::yields()`,
 Predicates: `may_error()`, `may_yield()`, `may_suspend()`, `may_ffi()`,
 `is_polymorphic()`.
 
-We do NOT attempt to track specific exception types. Any `throw` is
-conservatively marked as "signals."
-
 ### 3.2 Inference rules
 
 | Form | Signals |
 |------|--------|
-| `(throw expr)` | `true` — always, regardless of argument |
-| `(try body (catch exception e ...))` | `false` — exception is the root type, catches everything |
-| `(try body (catch error e ...))` | body.signals — catching a subtype doesn't guarantee all exceptions are caught |
+| `(error val)` | `true` — always signals `:error` |
+| `(emit bits val)` | `true` — always |
+| `(try body (catch e ...))` | `false` — catches all `:error` signals |
 | `(begin a b)` | a.signals ∨ b.signals |
 | `(if c t e)` | c.signals ∨ t.signals ∨ e.signals |
 | `(f args...)` | args.signals ∨ f.may_error |
@@ -187,18 +184,15 @@ conservatively marked as "signals."
 
 ### 3.3 Key principle: conservative and correct
 
-Every `throw` is an unknown exception. We don't peek into the argument to
-determine the type — `(throw (error "x"))` and `(throw some-variable)` both
-produce `signals = true`.
+Every `error` or `emit` call with the `:error` bit is conservatively marked
+as "signals." The analyzer doesn't peek into the argument.
 
-The only way to clear `signals` is `try`/`catch` catching `exception` (ID 1),
-which is the root of the hierarchy and catches everything. Catching a specific
-subtype like `error` does NOT clear `signals` because the throw could be a
-`warning` or any other type.
+`try`/`catch` clears the error signal because it catches `:error` unconditionally.
 
 This is genuinely useful: it tells you which functions are **guaranteed** to
-never throw. The set of non-signaling functions is exactly the set where every
-code path avoids `throw` and calls only non-signaling functions.
+never signal an error. The set of non-error-signalling functions is exactly
+the set where every code path avoids `error`/`emit` and calls only
+non-error-signalling functions.
 
 ### 3.4 Propagation during fixpoint iteration
 

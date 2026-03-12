@@ -203,14 +203,14 @@ overwritten, and how to add new callers.
 
 ## Suspension mechanism
 
-When a fiber suspends (via yield instruction or `fiber/signal`):
+When a fiber suspends (via yield instruction or `emit`):
 
 1. **Yield instruction** (`handle_yield`): captures innermost frame as a
    `SuspendedFrame` with bytecode (Rc clone), constants (Rc clone), env
    (Rc clone), IP (after yield), and operand stack. Stored in `fiber.suspended`.
 2. **Call handler** (if yield propagates through a call): appends caller's
    frame to `fiber.suspended` vec.
-3. **Signal suspension** (`fiber/signal`): single `SuspendedFrame` with empty
+3. **Signal suspension** (`emit`): single `SuspendedFrame` with empty
    stack, stored in `fiber.suspended` by the resume handler.
 4. **Frame ordering**: innermost (yielder/signaler) at index 0, outermost
    (caller) at last index.
@@ -344,7 +344,7 @@ to see parent-established parameter bindings.
 | `execute.rs` | ~250 | `execute_bytecode_from_ip`, `execute_bytecode_saving_stack`, re-entrancy documentation |
 | `core.rs` | ~456 | VM struct, `resume_suspended`, stack trace helpers |
 | `stack.rs` | ~100 | Stack operations: LoadConst, Pop, Dup |
-| `variables.rs` | ~150 | LoadGlobal, StoreGlobal, LoadUpvalue, etc. |
+| `variables.rs` | ~150 | LoadUpvalue, StoreUpvalue, LoadLocal, StoreLocal, LoadCapture, etc. (`LoadGlobal`/`StoreGlobal` are dead instructions — unreachable in dispatch) |
 | `parameters.rs` | ~50 | Parameter resolution: `resolve_parameter` helper |
 | `control.rs` | ~100 | Jump, JumpIfFalse, Return |
 | `closure.rs` | ~100 | MakeClosure |

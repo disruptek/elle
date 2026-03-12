@@ -63,7 +63,7 @@ The JIT was built incrementally:
 |-------|-------|
 | Phase 1 | Constants, arithmetic, comparison, variables, terminators. Capture-free functions only. |
 | Phase 2 | Closures with captures: `LoadCapture`, `LoadCaptureRaw`, `StoreCapture`. |
-| Phase 3 | Data structures (`Cons`, `Car`, `Cdr`, `MakeVector`, `IsPair`), lboxes (`MakeLBox`, `LoadLBox`, `StoreLBox`), globals (`LoadGlobal`, `StoreGlobal`), function calls (`Call`, `TailCall`). VM pointer parameter replaced `globals` pointer. |
+| Phase 3 | Data structures (`Cons`, `Car`, `Cdr`, `MakeVector`, `IsPair`), lboxes (`MakeLBox`, `LoadLBox`, `StoreLBox`), function calls (`Call`, `TailCall`). VM pointer parameter replaced `globals` pointer. (`LoadGlobal`/`StoreGlobal` were included at this phase but have since been removed — globals are now depth-0 upvalues.) |
 | Phase 4 | Self-tail-call optimization, JIT-to-JIT calling, batch compilation, `ValueConst`. |
 
 ## Phase 4 Scope (Current)
@@ -75,7 +75,7 @@ Supported instructions:
 - **Variables**: `Move`, `Dup`, `LoadLocal`, `StoreLocal`, `LoadCapture`, `LoadCaptureRaw`
 - **Data structures**: `Cons`, `Car`, `Cdr`, `MakeVector`, `IsPair`
 - **LBoxes**: `MakeLBox`, `LoadLBox`, `StoreLBox`, `StoreCapture`
-- **Globals**: `LoadGlobal`, `StoreGlobal`
+- **Globals**: Accessed as depth-0 upvalues via `LoadCapture`/`LoadCaptureRaw`; `LoadGlobal`/`StoreGlobal` are dead instructions (unreachable in VM dispatch)
 - **Function calls**: `Call`, `TailCall` (self-calls become native loops; non-self calls use `elle_jit_tail_call` trampoline)
 - **Terminators**: `Return`, `Jump`, `Branch`
 
@@ -216,7 +216,7 @@ The effect system and JIT side-exit mechanism enable fibers and JIT to coexist:
   `Effect::inert()`. These all return `SIG_OK` or `SIG_ERROR`, which
   `jit_handle_primitive_signal` handles.
 
-- **JIT-excluded fiber primitives**: `fiber/resume` and `fiber/signal` have
+- **JIT-excluded fiber primitives**: `fiber/resume` and `emit` have
   `Effect::yields_errors()` — `may_suspend()` is true. Any closure calling
   them transitively inherits this effect, so the JIT gate rejects them.
 
@@ -270,9 +270,9 @@ Key details:
 ## Error Handling in Dispatch
 
 All dispatch helpers (`elle_jit_call`, `elle_jit_tail_call`,
-`elle_jit_load_global`) set `vm.fiber.signal` to `(SIG_ERROR, condition)` on
-error and return `TAG_NIL`. The JIT checks for pending errors after each call
-via `elle_jit_has_exception` (which checks `fiber.signal` for `SIG_ERROR`).
+`elle_jit_load_global`) set `vm.fiber.signal` to `(SIG_ERROR, error_value)` on
+error and return `TAG_NIL`. The JIT checks for pending error signals after each
+call via `elle_jit_has_exception` (which checks `fiber.signal` for `SIG_ERROR`).
 No errors are silently swallowed.
 
 ## Invariants
@@ -398,5 +398,5 @@ resume IP and stack state.
 
 - Phase 5:
    - Inline type checks for arithmetic fast paths
-   - JIT-native exception handling (setjmp/longjmp or Cranelift exception tables)
+   - JIT-native signal handling (setjmp/longjmp or Cranelift exception tables)
    - Benchmarks and profiling

@@ -93,7 +93,7 @@ impl<'a> Analyzer<'a> {
                         crate::syntax::SyntaxKind::Keyword(k) => k.clone(),
                         _ => {
                             return Err(format!(
-                                "{}: effect requires a keyword argument, got {}",
+                                "{}: signal requires a keyword argument, got {}",
                                 keyword_syntax.span,
                                 keyword_syntax.kind_label()
                             ));
@@ -104,9 +104,9 @@ impl<'a> Analyzer<'a> {
                         .unwrap()
                         .register(&keyword)
                         .map_err(|e| format!("{}: {}", keyword_syntax.span, e))?;
-                    // Effect declarations produce the keyword value.
+                    // Signal declarations produce the keyword value.
                     // Create a gensym binding whose initializer is the keyword literal.
-                    let gensym_name = format!("__effect_{}", gensym_counter);
+                    let gensym_name = format!("__signal_{}", gensym_counter);
                     gensym_counter += 1;
                     let binding = self.bind(&gensym_name, &[], BindingScope::Local);
                     binding.mark_prebound();

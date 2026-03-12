@@ -292,12 +292,12 @@ impl<'a> Analyzer<'a> {
                         "eval" => return self.analyze_eval(items, span),
                         "parameterize" => return self.analyze_parameterize(items, span),
 
-                        "restrict" => return self.analyze_restrict(items, span),
+                        "silence" => return self.analyze_restrict(items, span),
 
-                        "effect" => {
+                        "signal" => {
                             if items.len() != 2 {
                                 return Err(format!(
-                                    "{}: effect requires exactly 1 argument",
+                                    "{}: signal requires exactly 1 argument",
                                     span
                                 ));
                             }
@@ -305,7 +305,7 @@ impl<'a> Analyzer<'a> {
                                 SyntaxKind::Keyword(k) => k.clone(),
                                 _ => {
                                     return Err(format!(
-                                        "{}: effect requires a keyword argument, got {}",
+                                        "{}: signal requires a keyword argument, got {}",
                                         items[1].span,
                                         items[1].kind_label()
                                     ));

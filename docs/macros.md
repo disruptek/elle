@@ -250,7 +250,7 @@ Features that are now possible with VM-based macros:
 
 | Feature | Defined in | Status |
 |---------|-----------|--------|
-| `try`/`catch` | `docs/except.md` | Ready to implement |
+| `try`/`catch` | `docs/signals.md` | Ready to implement |
 | `defer` | `docs/janet.md` | Ready to implement |
 | `with` | `docs/janet.md` | Ready to implement |
 | `protect` | `docs/janet.md` | Ready to implement |

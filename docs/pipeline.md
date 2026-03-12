@@ -93,7 +93,7 @@ preserving the current expansion context (macro registry, scope state). Nested
 macro calls work because the same Expander is threaded through.
 
 **Primitive metadata divergence**: `compile`/`compile_file` call
-`register_primitives()` which returns effect and arity metadata as a side
+`register_primitives()` which returns signal and arity metadata as a side
 effect of registration. `eval`/`analyze` and friends call `build_primitive_meta()`
 instead, which builds the same metadata without registering anything (the
 caller's VM already has primitives registered). This is why `compile` can work
@@ -135,8 +135,8 @@ count of 10 within phase 4):
    `run_fixpoint`.)
 
 2. **Pre-scan for `(def name (fn ...))` patterns** via `prescan_forms()`.
-   For each match, seed `global_effects` with `Effect::inert()` (optimistic —
-   assume inert) and extract syntactic arity into `global_arities`.
+    For each match, seed `global_signals` with `Signal::inert()` (optimistic —
+    assume inert) and extract syntactic arity into `global_arities`.
 
 3. **Pre-scan for `(def name ...)` patterns** via `prescan_forms()`. Track all
    `def` bindings as immutable globals for cross-form immutability checking.
@@ -161,9 +161,9 @@ count of 10 within phase 4):
 
 ### Convergence
 
-The algorithm converges because effects form a lattice: `Inert` < `Yields` <
-`Polymorphic`. Each iteration can only move effects upward (from the optimistic
-`Inert` seed toward the true effect). Once no effect changes, the fixpoint is
+The algorithm converges because signals form a lattice: `Inert` < `Yields` <
+`Polymorphic`. Each iteration can only move signals upward (from the optimistic
+`Inert` seed toward the true signal). Once no signal changes, the fixpoint is
 reached. The max of 10 iterations is a safety bound — in practice, convergence
 happens in 1–3 iterations.
 
@@ -182,12 +182,12 @@ duplicated logic and makes the algorithm easier to maintain.
 pub(super) fn prescan_forms(
     forms: &[Syntax],
     symbols: &mut SymbolTable,
-) -> (HashMap<SymbolId, Effect>, HashMap<SymbolId, Arity>, HashSet<SymbolId>)
+) -> (HashMap<SymbolId, Signal>, HashMap<SymbolId, Arity>, HashSet<SymbolId>)
 ```
 
 Unified pre-scan that processes all forms in a single pass, calling both
 `scan_define_lambda` and `scan_const_binding` for each form. Returns:
-- `global_effects`: `(def name (fn ...))` patterns seeded with `Effect::inert()`
+- `global_signals`: `(def name (fn ...))` patterns seeded with `Signal::inert()`
 - `global_arities`: syntactic arities from lambda parameter lists
 - `immutable_globals`: all `(def name ...)` patterns
 
@@ -203,7 +203,7 @@ pub(super) fn scan_define_lambda(
 Matches expanded syntax of the form `(var/def name (fn ...))`. Returns the
 interned `SymbolId` and the syntactic arity (number of parameters, if the
 parameter list is a simple list). Used to seed the fixpoint loop with
-optimistic `Effect::inert()` and known arities before analysis begins.
+optimistic `Signal::inert()` and known arities before analysis begins.
 
 This operates on **expanded** syntax — `defn` has already been desugared to
 `(def name (fn ...))` by the Expander.

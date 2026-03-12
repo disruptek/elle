@@ -1,28 +1,30 @@
 # effects
 
-Effect system for tracking which signals a function may emit. Includes the global signal registry for mapping effect keywords to bit positions.
+Signal system for tracking which signals a function may emit. Includes the global signal registry for mapping signal keywords to bit positions.
+
+**Note:** This module is named `effects` for historical reasons; it will be renamed to `signals` in a future chunk. The language forms and concepts now use "signal" terminology.
 
 ## Responsibility
 
-1. Define the `Effect` type and provide effect inference for the fiber/signal system
-2. Maintain the global signal registry mapping effect keywords to bit positions
+1. Define the `Signal` type (currently named `Effect` — pending rename) and provide signal inference for the emit/fiber system
+2. Maintain the global signal registry mapping signal keywords to bit positions
 3. Track which signals a function might emit (error, yield, debug, ffi, io, halt, user-defined)
-4. Track which parameter indices propagate their callee's effects
-5. Support effect bounds on functions and parameters via `restrict` declarations
+4. Track which parameter indices propagate their callee's signals
+5. Support signal bounds on functions and parameters via `silence` declarations
 
 ## Interface
 
 | Type/Function | Purpose |
 |---------------|---------|
-| `Effect` | `{ bits: SignalBits, propagates: u32 }` — Copy, const fn constructors |
-| `Effect::inert()` | No effects |
+| `Effect` | `{ bits: SignalBits, propagates: u32 }` — Copy, const fn constructors (will be renamed `Signal`) |
+| `Effect::inert()` | No signals |
 | `Effect::errors()` | May error (SIG_ERROR) |
 | `Effect::yields()` | May yield (SIG_YIELD) |
 | `Effect::yields_errors()` | May yield and error |
 | `Effect::ffi()` | Calls foreign code (SIG_FFI) |
 | `Effect::ffi_errors()` | FFI + may error |
 | `Effect::halts()` | May halt (SIG_HALT) |
-| `Effect::polymorphic(n)` | Effect depends on parameter n |
+| `Effect::polymorphic(n)` | Signal depends on parameter n |
 | `Effect::polymorphic_errors(n)` | Polymorphic + may error |
 
 
@@ -37,7 +39,7 @@ Each predicate asks a specific question. No vague "is_inert".
 | `may_error()` | Can signal an error? (SIG_ERROR) |
 | `may_ffi()` | Calls foreign code? (SIG_FFI) |
 | `may_halt()` | Can halt? (SIG_HALT) |
-| `is_polymorphic()` | Effect depends on arguments? (propagates != 0) |
+| `is_polymorphic()` | Signal depends on arguments? (propagates != 0) |
 | `propagated_params()` | Iterator over propagated parameter indices |
 
 ## Constants
@@ -49,13 +51,13 @@ Each predicate asks a specific question. No vague "is_inert".
 
 ## Signal Registry
 
-The global signal registry maps effect keywords to bit positions. It is a process-global singleton initialized with built-in effects and extended with user-defined effects via `(effect :keyword)` forms.
+The global signal registry maps signal keywords to bit positions. It is a process-global singleton initialized with built-in signals and extended with user-defined signals via `(signal :keyword)` forms.
 
-### Built-in Effects
+### Built-in Signals
 
 | Keyword | Bit | Meaning |
 |---------|-----|---------|
-| `:error` | 0 | Error/exception |
+| `:error` | 0 | Error signal |
 | `:yield` | 1 | Cooperative suspension |
 | `:debug` | 2 | Breakpoint/trace |
 | `:ffi` | 4 | Calls foreign code |
@@ -64,76 +66,76 @@ The global signal registry maps effect keywords to bit positions. It is a proces
 
 Bits 3, 5, 6, 7, 10–15 are reserved for VM-internal use.
 
-### User-Defined Effects
+### User-Defined Signals
 
-User effects are allocated bits 16–31 (up to 16 user effects per compilation unit). The registry is append-only — once a keyword is registered, its bit position is fixed for the lifetime of the process.
+User signals are allocated bits 16–31 (up to 16 user signals per compilation unit). The registry is append-only — once a keyword is registered, its bit position is fixed for the lifetime of the process.
 
 ### Registry Interface
 
 - `global_registry()` — Access the process-global registry
-- `register(&mut self, name: &str) -> Result<u32, String>` — Register a new effect, returns bit position
+- `register(&mut self, name: &str) -> Result<u32, String>` — Register a new signal, returns bit position
 - `lookup(&self, name: &str) -> Option<u32>` — Look up bit position for a keyword
 - `to_signal_bits(&self, name: &str) -> Option<SignalBits>` — Convenience: keyword → SignalBits
 - `format_signal_bits(&self, bits: SignalBits) -> String` — Human-readable representation for error messages
 
-## Inferred Effects
+## Inferred Signals
 
-Every lambda has an effect-related field:
+Every lambda has a signal-related field:
 
-1. **`inferred_effects: Effects`** (always present, never Optional) — The minimum guaranteed set of effects the lambda may produce, accumulated from:
+1. **`inferred_signals: Signal`** (always present, never Optional) — The minimum guaranteed set of signals the lambda may produce, accumulated from:
    - Direct signal emissions in the body
-   - Effects of internal calls to statically-known functions
-   - Effects contributed by bounded parameters (their bound's bits are included)
+   - Signals of internal calls to statically-known functions
+   - Signals contributed by bounded parameters (their bound's bits are included)
    - Unbounded callable parameters contribute conservatively (Yields)
 
-The programmer-supplied ceiling constraint from `(restrict)` or `(restrict :kw ...)` is a separate concept — the `restrict` form provides a bound that the compiler checks `inferred_effects` against. When a `restrict` bound is present, the compiler checks `inferred_effects.bits ⊆ bound.bits`. If the check passes, the lambda's final effect is the declared bound (tighter). If it fails, compile-time error.
+The programmer-supplied ceiling constraint from `(silence)` or `(silence :kw ...)` is a separate concept — the `silence` form provides a bound that the compiler checks `inferred_signals` against. When a `silence` bound is present, the compiler checks `inferred_signals.bits ⊆ bound.bits`. If the check passes, the lambda's final signal is the declared bound (tighter). If it fails, compile-time error.
 
 ### Parameter Bounds
 
-Parameter bounds are stored as `param_bounds: Vec<(Binding, Effects)>` on the Lambda node. When a parameter has a bound, it is no longer polymorphic — its effect contribution to the lambda is the bound's bits, not a polymorphic reference.
+Parameter bounds are stored as `param_bounds: Vec<(Binding, Signal)>` on the Lambda node. When a parameter has a bound, it is no longer polymorphic — its signal contribution to the lambda is the bound's bits, not a polymorphic reference.
 
-## Interprocedural Effect Tracking
+## Interprocedural Signal Tracking
 
-The analyzer performs interprocedural effect tracking:
+The analyzer performs interprocedural signal tracking:
 
-1. **effect_env**: Maps `Binding` → `Effect` for locally-defined functions
-2. **primitive_effects**: Maps `SymbolId` → `Effect` for primitive functions
-3. **current_param_bounds**: Maps `Binding` → `Effects` for parameters with declared bounds (during lambda analysis)
-4. **param_bounds_env**: Maps `Binding` → `Vec<(usize, Effects)>` for call-site checking of bounded parameters
+1. **signal_env**: Maps `Binding` → `Signal` for locally-defined functions
+2. **primitive_signals**: Maps `SymbolId` → `Signal` for primitive functions
+3. **current_param_bounds**: Maps `Binding` → `Signal` for parameters with declared bounds (during lambda analysis)
+4. **param_bounds_env**: Maps `Binding` → `Vec<(usize, Signal)>` for call-site checking of bounded parameters
 
 When analyzing a call:
-- Direct fn calls: use the fn body's effect
-- Variable calls: look up in `effect_env` (local) or `primitive_effects` (global)
-- Polymorphic effects: resolve by examining the argument's effect via `propagated_params()` iterator over the `propagates` bitmask
-- Bounded parameters: their effect contribution is the bound's bits, not polymorphic
+- Direct fn calls: use the fn body's signal
+- Variable calls: look up in `signal_env` (local) or `primitive_signals` (global)
+- Polymorphic signals: resolve by examining the argument's signal via `propagated_params()` iterator over the `propagates` bitmask
+- Bounded parameters: their signal contribution is the bound's bits, not polymorphic
 
 ### Limitations
 
-- Effects are tracked within a single compilation unit
-- Cross-unit effect tracking is not implemented
-- `set` invalidates effect tracking for the mutated binding
-- Mutual recursion in `letrec` may have incomplete effect information
+- Signals are tracked within a single compilation unit
+- Cross-unit signal tracking is not implemented
+- `set` invalidates signal tracking for the mutated binding
+- Mutual recursion in `letrec` may have incomplete signal information
 
-## I/O Effects
+## I/O Signals
 
-I/O is no longer tracked in the effect system. Stream primitives use
+I/O is no longer tracked in the signal system. Stream primitives use
 `Effect::errors()` (they may error on invalid ports, EOF, etc.). The I/O
 mechanism (SIG_IO, IoRequest) still exists at the runtime/scheduler level
-but is not reflected in static effect annotations.
+but is not reflected in static signal annotations.
 
 Stream primitives (`stream/read-line`, `stream/read`, `stream/read-all`,
-`stream/write`, `stream/flush`) have effect `errors()`. They return
+`stream/write`, `stream/flush`) have signal `errors()`. They return
 `(SIG_IO, IoRequest)` to suspend the fiber and let the scheduler dispatch
 to a backend.
 
 ## Dependents
 
 Used across the pipeline and the runtime:
-- `hir/analyze/call.rs` — infers effects during analysis, resolves polymorphic via `propagates` bitmask
-- `hir/expr.rs` — `Hir` carries an `Effect`
-- `lir/emit.rs` — emits effect metadata on closures
-- `value/closure.rs` — `Closure` stores its `Effect`
-- `pipeline.rs` — builds primitive effects map, passes to Analyzer
+- `hir/analyze/call.rs` — infers signals during analysis, resolves polymorphic via `propagates` bitmask
+- `hir/expr.rs` — `Hir` carries a `Signal` (currently `Effect`)
+- `lir/emit.rs` — emits signal metadata on closures
+- `value/closure.rs` — `Closure` stores its `Signal` (currently `Effect`)
+- `pipeline.rs` — builds primitive signals map, passes to Analyzer
 - `jit/compiler.rs` — JIT gate checks `!effect.may_suspend()`
 - `vm/call.rs` — call dispatch checks `!effect.may_suspend()`
 - `primitives/coroutines.rs` — coroutine warnings check `!effect.may_yield()`
@@ -145,11 +147,11 @@ Used across the pipeline and the runtime:
 | File | Lines | Content |
 |------|-------|---------|
 | `mod.rs` | ~350 | `Effect` struct, constructors, predicates, Display, combine, tests |
-| `registry.rs` | ~200 | `SignalRegistry` struct, global singleton, built-in registration, user effect allocation |
+| `registry.rs` | ~200 | `SignalRegistry` struct, global singleton, built-in registration, user signal allocation |
 
 ## Invariants
 
-1. **Effect::inert() is the default.** Unknown effects start as inert. This is
+1. **Effect::inert() is the default.** Unknown signals start as inert. This is
    conservative — we may miss some suspension propagation but never produce
    false positives.
 
@@ -158,10 +160,10 @@ Used across the pipeline and the runtime:
    propagates suspension.
 
 3. **Polymorphic uses a bitmask.** `propagates` is a u32 bitmask where bit i
-   set means parameter i's effects flow through. Higher-order functions like
+   set means parameter i's signals flow through. Higher-order functions like
    `map`, `filter`, `fold` use this. `propagated_params()` iterates the set bits.
 
 4. **set invalidates tracking.** When a binding is mutated via `set`, its
-   effect becomes uncertain and is removed from `effect_env`.
+   signal becomes uncertain and is removed from `signal_env`.
 
 5. **Effect is Copy.** No allocation, no cloning needed. `const fn` constructors.

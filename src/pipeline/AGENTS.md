@@ -7,7 +7,7 @@ Compilation entry points: source text → bytecode or HIR.
 Orchestrate the full compilation pipeline:
 - Reader: source text → Syntax
 - Expander: Syntax → expanded Syntax (macro expansion)
-- Analyzer: expanded Syntax → HIR (binding resolution, effect inference)
+- Analyzer: expanded Syntax → HIR (binding resolution, signal inference)
 - Lowerer: HIR → LIR (register allocation, basic blocks)
 - Emitter: LIR → Bytecode (instruction encoding)
 - VM: Bytecode → Value (execution)

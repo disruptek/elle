@@ -58,7 +58,7 @@ at the bottom of the file):
 
 ```rust
 use crate::primitives::def::PrimitiveDef;
-use crate::effects::Effect;
+use crate::effects::Effect;  // Note: will be crate::signals::Signal after module rename
 use crate::value::types::Arity;
 
 pub const PRIMITIVES: &[PrimitiveDef] = &[
@@ -103,7 +103,7 @@ each `PrimitiveDef`, it:
 - Records effect and arity in `PrimitiveMeta`
 - Registers aliases identically
 
-At runtime, `LoadGlobal` fetches the `NativeFn` value, and `Call`
+At runtime, the VM fetches the `NativeFn` value from globals and `Call`
 dispatches it via `handle_primitive_signal()` in `src/vm/signal.rs`.
 
 ### Key types
@@ -114,7 +114,7 @@ dispatches it via `handle_primitive_signal()` in `src/vm/signal.rs`.
 | `PrimitiveDef` | `src/primitives/def.rs` | Declarative metadata struct |
 | `PrimitiveMeta` | `src/primitives/def.rs` | Collected effects/arities maps |
 | `Arity` | `src/value/types.rs` | `Exact(n)`, `AtLeast(n)`, `Range(min, max)` |
-| `Effect` | `src/effects/` | `Effect::inert()`, `Effect::yields()` |
+| `Effect` | `src/effects/` | `Effect::inert()`, `Effect::yields()` (pending rename to `Signal`) |
 
 ### Conventions
 

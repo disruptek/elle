@@ -73,7 +73,7 @@ pub(super) fn classify_form(syntax: &Syntax) -> FileForm<'_> {
     if let SyntaxKind::List(items) = &syntax.kind {
         if items.len() == 2 {
             if let Some(head) = items[0].as_symbol() {
-                if head == "effect" {
+                if head == "signal" {
                     return FileForm::Effect(&items[1]);
                 }
             }

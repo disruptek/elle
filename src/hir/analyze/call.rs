@@ -133,10 +133,10 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    /// Check if the callee is the `fiber/signal` primitive.
+    /// Check if the callee is the `emit` primitive.
     fn is_fiber_signal(&self, func: &Hir) -> bool {
         if let HirKind::Var(binding) = &func.kind {
-            self.symbols.name(binding.name()) == Some("fiber/signal")
+            self.symbols.name(binding.name()) == Some("emit")
         } else {
             false
         }

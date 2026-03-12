@@ -265,7 +265,7 @@ pub(crate) fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
     (SIG_RESUME, args[0])
 }
 
-/// (fiber/signal bits value) → suspends
+/// (emit bits value) → suspends
 ///
 /// Emit a signal from the current fiber. The signal bits and value are
 /// returned directly — the VM's dispatch loop stores them in fiber.signal
@@ -276,12 +276,12 @@ pub(crate) fn prim_fiber_signal(args: &[Value]) -> (SignalBits, Value) {
             SIG_ERROR,
             error_val(
                 "arity-error",
-                format!("fiber/signal: expected 2 arguments, got {}", args.len()),
+                format!("emit: expected 2 arguments, got {}", args.len()),
             ),
         );
     }
 
-    let bits = match resolve_signal_bits(&args[0], "fiber/signal") {
+    let bits = match resolve_signal_bits(&args[0], "emit") {
         Ok(bits) => bits,
         Err(err) => return err,
     };
@@ -380,14 +380,14 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         aliases: &[],
     },
     PrimitiveDef {
-        name: "fiber/signal",
+        name: "emit",
         func: prim_fiber_signal,
         effect: Effect::yields_errors(),
         arity: Arity::Exact(2),
         doc: "Emit a signal from the current fiber",
         params: &["bits", "value"],
         category: "fiber",
-        example: "(fiber/signal 2 42)",
+        example: "(emit 2 42)",
         aliases: &[],
     },
     PrimitiveDef {

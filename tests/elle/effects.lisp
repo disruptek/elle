@@ -1,108 +1,108 @@
-## Effect System Tests
+## Signal System Tests
 ##
-## Tests for the effect declaration, restrict, and effects introspection
+## Tests for the signal declaration, silence, and signals introspection
 ## features. Migrated from tests/integration/effect_enforcement.rs
 ## (language behaviour tests that evaluate Elle source and check values).
 
 (def {:assert-eq assert-eq :assert-true assert-true :assert-false assert-false :assert-list-eq assert-list-eq :assert-equal assert-equal :assert-not-nil assert-not-nil :assert-string-eq assert-string-eq :assert-err assert-err :assert-err-kind assert-err-kind} ((import-file "tests/elle/assert.lisp")))
 
 # ============================================================================
-# (effect :keyword) declaration
+# (signal :keyword) declaration
 # ============================================================================
 
-# effect declaration returns the keyword
-(assert-eq (effect :heartbeat_c2a) :heartbeat_c2a
-  "effect declaration returns keyword")
+# signal declaration returns the keyword
+(assert-eq (signal :heartbeat_c2a) :heartbeat_c2a
+  "signal declaration returns keyword")
 
-# effect in expression position
-(def x (effect :expr_pos_c2c))
+# signal in expression position
+(def x (signal :expr_pos_c2c))
 (assert-eq x :expr_pos_c2c
-  "effect in expression position")
+  "signal in expression position")
 
-# effect declaration with non-keyword argument errors
-(assert-err (fn () (eval '(effect heartbeat_c2b)))
-  "effect declaration requires keyword")
+# signal declaration with non-keyword argument errors
+(assert-err (fn () (eval '(signal heartbeat_c2b)))
+  "signal declaration requires keyword")
 
-# effect declaration of builtin keyword errors
-(assert-err (fn () (eval '(effect :error)))
-  "effect declaration of builtin errors")
+# signal declaration of builtin keyword errors
+(assert-err (fn () (eval '(signal :error)))
+  "signal declaration of builtin errors")
 
-# duplicate effect declaration errors
-(assert-err (fn () (eval '(begin (effect :dup_c2d) (effect :dup_c2d))))
-  "duplicate effect declaration errors")
+# duplicate signal declaration errors
+(assert-err (fn () (eval '(begin (signal :dup_c2d) (signal :dup_c2d))))
+  "duplicate signal declaration errors")
 
 # ============================================================================
-# restrict runtime checks — passing cases
+# silence runtime checks — passing cases
 # ============================================================================
 
-# restrict with inert function passes at runtime
+# silence with inert function passes at runtime
 (begin
-  (def apply-inert (fn (f x y) (restrict f) (f x y)))
+  (def apply-inert (fn (f x y) (silence f) (f x y)))
   (assert-eq (apply-inert + 42 1) 43
-    "restrict runtime: inert function passes"))
+    "silence runtime: inert function passes"))
 
-# restrict with non-closure (primitive) passes at runtime
+# silence with non-closure (primitive) passes at runtime
 (begin
-  (def apply-inert2 (fn (f x y) (restrict f) (f x y)))
+  (def apply-inert2 (fn (f x y) (silence f) (f x y)))
   (assert-eq (apply-inert2 + 42 1) 43
-    "restrict runtime: non-closure passes"))
+    "silence runtime: non-closure passes"))
 
-# restrict with bounded keyword passes for inert closure
+# silence with bounded keyword passes for inert closure
 (begin
-  (effect :rt_c5a)
-  (def apply-bounded (fn (f) (restrict f :rt_c5a) (f)))
+  (signal :rt_c5a)
+  (def apply-bounded (fn (f) (silence f :rt_c5a) (f)))
   (assert-eq (apply-bounded (fn () nil)) nil
-    "restrict runtime: bounded keyword passes"))
+    "silence runtime: bounded keyword passes"))
 
-# restrict with dynamic variable passes for inert function
+# silence with dynamic variable passes for inert function
 (begin
-  (def apply-inert3 (fn (f x y) (restrict f) (f x y)))
+  (def apply-inert3 (fn (f x y) (silence f) (f x y)))
   (var g +)
   (assert-eq (apply-inert3 g 42 1) 43
-    "restrict runtime: dynamic inert passes"))
+    "silence runtime: dynamic inert passes"))
 
 # ============================================================================
-# restrict runtime checks — failing cases
+# silence runtime checks — failing cases
 # ============================================================================
 
-# restrict with yielding closure fails at runtime
-(defn apply-inert4 (f x) (restrict f) (f x))
+# silence with yielding closure fails at runtime
+(defn apply-inert4 (f x) (silence f) (f x))
 (def [ok4? err4] (protect (apply-inert4 (fn (x) (yield x)) 42)))
-(assert-false ok4? "restrict runtime: yielding closure fails")
+(assert-false ok4? "silence runtime: yielding closure fails")
 (assert-eq (get err4 :error) :effect-violation
-  "restrict runtime: yielding closure is effect-violation")
+  "silence runtime: yielding closure is effect-violation")
 
-# restrict with bounded keyword fails for yielding closure
-(effect :rt_c5b2)
-(defn apply-bounded2 (f) (restrict f :rt_c5b2) (f))
+# silence with bounded keyword fails for yielding closure
+(signal :rt_c5b2)
+(defn apply-bounded2 (f) (silence f :rt_c5b2) (f))
 (def [ok5? err5] (protect (apply-bounded2 (fn () (yield 1)))))
-(assert-false ok5? "restrict runtime: bounded keyword fails for yielding closure")
+(assert-false ok5? "silence runtime: bounded keyword fails for yielding closure")
 (assert-eq (get err5 :error) :effect-violation
-  "restrict runtime: bounded keyword is effect-violation")
+  "silence runtime: bounded keyword is effect-violation")
 
-# restrict with dynamic variable fails for yielding closure
-(defn apply-inert5 (f x) (restrict f) (f x))
+# silence with dynamic variable fails for yielding closure
+(defn apply-inert5 (f x) (silence f) (f x))
 (var g2 (fn (x) (yield x)))
 (def [ok6? _] (protect (apply-inert5 g2 42)))
-(assert-false ok6? "restrict runtime: dynamic yielding closure fails")
+(assert-false ok6? "silence runtime: dynamic yielding closure fails")
 
 # ============================================================================
-# (effects) introspection primitive
+# (signals) introspection primitive
 # ============================================================================
 
-# effects returns a struct
-(assert-eq (type-of (effects)) :struct
-  "effects primitive returns struct")
+# signals returns a struct
+(assert-eq (type-of (signals)) :struct
+  "signals primitive returns struct")
 
-# effects contains builtin :error at bit 0
-(def registry (effects))
+# signals contains builtin :error at bit 0
+(def registry (signals))
 (assert-eq (get registry :error) 0
-  "effects contains builtin :error")
+  "signals contains builtin :error")
 
-# effects contains user-defined effects
+# signals contains user-defined signals
 (begin
-  (effect :intro_c6a)
-  (def reg2 (effects))
-  # bit position depends on how many user effects were registered before this one
+  (signal :intro_c6a)
+  (def reg2 (signals))
+  # bit position depends on how many user signals were registered before this one
   (assert-true (>= (get reg2 :intro_c6a) 16)
-    "effects contains user-defined effect at bit >= 16"))
+    "signals contains user-defined signal at bit >= 16"))

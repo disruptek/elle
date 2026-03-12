@@ -1,4 +1,4 @@
-//! Special forms: yield, match, restrict
+//! Special forms: yield, match, silence
 
 use super::*;
 use crate::effects::registry;
@@ -11,22 +11,22 @@ type ResolveVar<'a> =
     dyn Fn(&mut Analyzer<'_>, &str, &[ScopeId], &Span) -> Result<HirPattern, String> + 'a;
 
 impl<'a> Analyzer<'a> {
-    /// Analyze a `(restrict ...)` form.
+    /// Analyze a `(silence ...)` form.
     ///
-    /// restrict is a declaration, not an expression. It must appear inside
+    /// silence is a declaration, not an expression. It must appear inside
     /// a lambda body. It accumulates into `current_param_bounds` and
     /// `current_declared_ceiling`, which `analyze_lambda` reads after
     /// analyzing the body.
     ///
     /// Forms:
-    /// - `(restrict)` — function-level ceiling = inert
-    /// - `(restrict :kw ...)` — function-level ceiling with specific signals
-    /// - `(restrict param)` — parameter bound = inert
-    /// - `(restrict param :kw ...)` — parameter bound with specific signals
+    /// - `(silence)` — function-level ceiling = inert
+    /// - `(silence :kw ...)` — function-level ceiling with specific signals
+    /// - `(silence param)` — parameter bound = inert
+    /// - `(silence param :kw ...)` — parameter bound with specific signals
     pub(crate) fn analyze_restrict(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
         if self.fn_depth == 0 {
             return Err(format!(
-                "{}: restrict must appear inside a function body",
+                "{}: silence must appear inside a function body",
                 span
             ));
         }
@@ -40,14 +40,14 @@ impl<'a> Analyzer<'a> {
 
         match &args[0].kind {
             SyntaxKind::Keyword(_) => {
-                // (restrict :kw1 :kw2 ...) — function-level ceiling
+                // (silence :kw1 :kw2 ...) — function-level ceiling
                 let mut bits = 0u32;
                 for arg in args {
                     let kw = match &arg.kind {
                         SyntaxKind::Keyword(k) => k,
                         _ => {
                             return Err(format!(
-                                "{}: restrict: expected keyword, got {}",
+                                "{}: silence: expected keyword, got {}",
                                 arg.span,
                                 arg.kind_label()
                             ));
@@ -56,7 +56,7 @@ impl<'a> Analyzer<'a> {
                     let reg = registry::global_registry().lock().unwrap();
                     let bit_pos = reg.lookup(kw).ok_or_else(|| {
                         format!(
-                            "{}: restrict: effect :{} not registered (unknown effect keyword)",
+                            "{}: silence: signal :{} not registered (unknown signal keyword)",
                             arg.span, kw
                         )
                     })?;
@@ -68,12 +68,12 @@ impl<'a> Analyzer<'a> {
                 });
             }
             SyntaxKind::Symbol(param_name) => {
-                // (restrict param :kw1 :kw2 ...) — parameter-level bound
+                // (silence param :kw1 :kw2 ...) — parameter-level bound
                 let binding = self.find_current_param_binding(param_name, &args[0].span)?;
 
                 let keywords = &args[1..];
                 let bound = if keywords.is_empty() {
-                    // (restrict param) — bound is inert
+                    // (silence param) — bound is inert
                     Effect::inert()
                 } else {
                     let mut bits = 0u32;
@@ -82,7 +82,7 @@ impl<'a> Analyzer<'a> {
                             SyntaxKind::Keyword(k) => k,
                             _ => {
                                 return Err(format!(
-                                    "{}: restrict: expected keyword after parameter name, got {}",
+                                    "{}: silence: expected keyword after parameter name, got {}",
                                     kw_syntax.span,
                                     kw_syntax.kind_label()
                                 ));
@@ -91,7 +91,7 @@ impl<'a> Analyzer<'a> {
                         let reg = registry::global_registry().lock().unwrap();
                         let bit_pos = reg.lookup(kw).ok_or_else(|| {
                             format!(
-                                "{}: restrict: effect :{} not registered (unknown effect keyword)",
+                                "{}: silence: signal :{} not registered (unknown signal keyword)",
                                 kw_syntax.span, kw
                             )
                         })?;
@@ -108,7 +108,7 @@ impl<'a> Analyzer<'a> {
             }
             _ => {
                 return Err(format!(
-                    "{}: restrict: expected keyword or parameter name, got {}",
+                    "{}: silence: expected keyword or parameter name, got {}",
                     args[0].span,
                     args[0].kind_label()
                 ));
@@ -126,7 +126,7 @@ impl<'a> Analyzer<'a> {
             }
         }
         Err(format!(
-            "{}: restrict: '{}' is not a parameter of this function",
+            "{}: silence: '{}' is not a parameter of this function",
             span, name
         ))
     }
