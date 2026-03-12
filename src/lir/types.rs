@@ -1,6 +1,6 @@
 //! LIR type definitions
 
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::syntax::Span;
 use crate::value::{Arity, SymbolId, Value};
 
@@ -52,8 +52,8 @@ pub struct LirFunction {
     /// Variables without the bit set are stored directly without cell wrapping,
     /// avoiding heap allocation on every function call.
     pub lbox_locals_mask: u64,
-    /// Effect of this function (Pure, Yields, or Polymorphic)
-    pub effect: Effect,
+    /// Signal of this function (Pure, Yields, or Polymorphic)
+    pub signal: Signal,
     /// Optional docstring from the source lambda
     pub doc: Option<Value>,
     /// Original lambda Syntax node for eval environment reconstruction
@@ -131,7 +131,7 @@ impl LirFunction {
             num_captures: 0,
             lbox_params_mask: 0,
             lbox_locals_mask: 0,
-            effect: Effect::inert(),
+            signal: Signal::inert(),
             doc: None,
             syntax: None,
             vararg_kind: crate::hir::VarargKind::List,
@@ -333,7 +333,7 @@ pub enum LirInstr {
     /// No registers produced or consumed.
     PopParamFrame,
 
-    // === Effect Checking ===
+    // === Signal Checking ===
     /// Check that a closure's effect satisfies a bound.
     /// If the value in `src` is a closure whose `effect.bits & !allowed_bits != 0`,
     /// signal `:error`. If the value is not a closure, signal `:error`.

@@ -1,4 +1,4 @@
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::error::{LError, LResult};
 use crate::primitives::def::PrimitiveDef;
 use crate::primitives::registration::register_primitives;
@@ -200,7 +200,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "sys/spawn",
         func: prim_spawn,
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Spawn a new thread that executes a closure with captured immutable values",
         params: &["closure"],
@@ -211,7 +211,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "sys/join",
         func: prim_join,
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Wait for a thread to complete and return its result",
         params: &["thread-handle"],
@@ -222,7 +222,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "sys/thread-id",
         func: prim_current_thread_id,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return the ID of the current thread",
         params: &[],

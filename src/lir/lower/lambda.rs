@@ -16,8 +16,8 @@ impl Lowerer {
         captures: &[CaptureInfo],
         body: &Hir,
         num_locals: u16,
-        inferred_effect: &crate::effects::Effect,
-        param_bounds: &[(Binding, crate::effects::Effect)],
+        inferred_effect: &crate::signals::Signal,
+        param_bounds: &[(Binding, crate::signals::Signal)],
         doc: Option<crate::value::Value>,
         syntax: Option<std::rc::Rc<crate::syntax::Syntax>>,
     ) -> Result<Reg, String> {
@@ -126,8 +126,8 @@ impl Lowerer {
         captures: &[CaptureInfo],
         body: &Hir,
         _num_locals: u16,
-        inferred_effect: crate::effects::Effect,
-        param_bounds: &[(Binding, crate::effects::Effect)],
+        inferred_effect: crate::signals::Signal,
+        param_bounds: &[(Binding, crate::signals::Signal)],
         doc: Option<crate::value::Value>,
         syntax: Option<std::rc::Rc<crate::syntax::Syntax>>,
     ) -> Result<LirFunction, String> {
@@ -218,7 +218,7 @@ impl Lowerer {
         self.current_func.entry = Label(0);
         self.current_func.num_regs = self.next_reg;
         // Propagate inferred effect to LIR function
-        self.current_func.effect = inferred_effect;
+        self.current_func.signal = inferred_effect;
 
         let func = std::mem::replace(&mut self.current_func, saved_func);
 

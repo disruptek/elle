@@ -380,7 +380,7 @@ impl Lowerer {
         // Fall back to sequential matching which doesn't share tests.
         let any_guard_yields = arms
             .iter()
-            .any(|(_pat, guard, _body)| guard.as_ref().is_some_and(|g| g.effect.may_suspend()));
+            .any(|(_pat, guard, _body)| guard.as_ref().is_some_and(|g| g.signal.may_suspend()));
 
         if any_guard_yields {
             self.lower_match_sequential(arms, scrutinee_slot, result_slot, result_reg, done_label)?;

@@ -1,6 +1,6 @@
 //! Port primitives — lifecycle management for file descriptors.
 
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::port::{Direction, Encoding, Port};
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
@@ -333,7 +333,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/open",
         func: prim_port_open,
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Open a file as a text (UTF-8) port.",
         params: &["path", "mode"],
@@ -344,7 +344,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/open-bytes",
         func: prim_port_open_bytes,
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Open a file as a binary port.",
         params: &["path", "mode"],
@@ -355,7 +355,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/close",
         func: prim_port_close,
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Close a port. Idempotent.",
         params: &["port"],
@@ -366,7 +366,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/stdin",
         func: prim_port_stdin,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return a port for standard input.",
         params: &[],
@@ -377,7 +377,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/stdout",
         func: prim_port_stdout,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return a port for standard output.",
         params: &[],
@@ -388,7 +388,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/stderr",
         func: prim_port_stderr,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return a port for standard error.",
         params: &[],
@@ -399,7 +399,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port?",
         func: prim_is_port,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Check if value is a port.",
         params: &["value"],
@@ -410,7 +410,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/open?",
         func: prim_is_port_open,
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Check if a port is open. Signals :type-error on non-port.",
         params: &["port"],
@@ -421,7 +421,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/set-options",
         func: prim_port_set_options,
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         arity: Arity::AtLeast(1),
         doc: "Set port options. Currently: :timeout ms (nil clears).",
         params: &["port"],

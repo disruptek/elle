@@ -35,7 +35,7 @@ pub fn compile(
 
     // Phase 3: Analyze to HIR with interprocedural effect and arity tracking
     let mut analyzer =
-        Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
+        Analyzer::new_with_primitives(symbols, meta.signals.clone(), meta.arities.clone());
     analyzer.bind_primitives(&meta);
     let mut analysis = analyzer.analyze(&expanded)?;
     let prim_values = analyzer.primitive_values().clone();
@@ -74,7 +74,7 @@ pub(super) fn classify_form(syntax: &Syntax) -> FileForm<'_> {
         if items.len() == 2 {
             if let Some(head) = items[0].as_symbol() {
                 if head == "signal" {
-                    return FileForm::Effect(&items[1]);
+                    return FileForm::Signal(&items[1]);
                 }
             }
         }
@@ -131,7 +131,7 @@ pub fn compile_file(
 
     // Analyze
     let mut analyzer =
-        Analyzer::new_with_primitives(symbols, meta.effects.clone(), meta.arities.clone());
+        Analyzer::new_with_primitives(symbols, meta.signals.clone(), meta.arities.clone());
     analyzer.bind_primitives(&meta);
     let mut hir = analyzer.analyze_file_letrec(forms, span)?;
     let prim_values = analyzer.primitive_values().clone();

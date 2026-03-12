@@ -88,7 +88,7 @@ impl<'a> Analyzer<'a> {
                         ));
                     }
                 }
-                FileForm::Effect(keyword_syntax) => {
+                FileForm::Signal(keyword_syntax) => {
                     let keyword = match &keyword_syntax.kind {
                         crate::syntax::SyntaxKind::Keyword(k) => k.clone(),
                         _ => {
@@ -99,7 +99,7 @@ impl<'a> Analyzer<'a> {
                             ));
                         }
                     };
-                    crate::effects::registry::global_registry()
+                    crate::signals::registry::global_registry()
                         .lock()
                         .unwrap()
                         .register(&keyword)
@@ -132,7 +132,7 @@ impl<'a> Analyzer<'a> {
 
         // Pass 2: analyze all initializers sequentially.
         let mut bindings = Vec::new();
-        let mut effect = Effect::inert();
+        let mut effect = Signal::inert();
         let mut last_binding: Option<Binding> = None;
         // Track lambda bindings for fixpoint effect propagation (Pass 3).
         // Each entry: (index in `bindings`, binding, reference to value syntax).
@@ -149,18 +149,18 @@ impl<'a> Analyzer<'a> {
                         self.register_binding(name, scopes, *binding);
                     }
                     let value = self.analyze_expr(value_syntax)?;
-                    effect = effect.combine(value.effect);
+                    effect = effect.combine(value.signal);
 
                     let bindings_idx = bindings.len();
                     if let HirKind::Lambda {
                         params: lambda_params,
                         num_required,
                         rest_param,
-                        inferred_effects,
+                        inferred_signals,
                         ..
                     } = &value.kind
                     {
-                        self.effect_env.insert(*binding, *inferred_effects);
+                        self.signal_env.insert(*binding, *inferred_signals);
                         let arity = Arity::for_lambda(
                             rest_param.is_some(),
                             *num_required,
@@ -184,7 +184,7 @@ impl<'a> Analyzer<'a> {
                         self.register_binding(name, scopes, *binding);
                     }
                     let value = self.analyze_expr(value_syntax)?;
-                    effect = effect.combine(value.effect);
+                    effect = effect.combine(value.signal);
 
                     self.pre_bindings.clone_from(leaf_bindings);
                     let pattern = self.analyze_destructure_pattern(
@@ -240,17 +240,17 @@ impl<'a> Analyzer<'a> {
                 let mut changed = false;
                 for &(idx, binding, value_syntax) in &lambda_entries {
                     let old_effect = self
-                        .effect_env
+                        .signal_env
                         .get(&binding)
                         .copied()
-                        .unwrap_or_else(Effect::inert);
+                        .unwrap_or_else(Signal::inert);
                     let new_hir = self.analyze_expr(value_syntax)?;
                     if let HirKind::Lambda {
-                        inferred_effects, ..
+                        inferred_signals, ..
                     } = &new_hir.kind
                     {
-                        if *inferred_effects != old_effect {
-                            self.effect_env.insert(binding, *inferred_effects);
+                        if *inferred_signals != old_effect {
+                            self.signal_env.insert(binding, *inferred_signals);
                             changed = true;
                         }
                     }
@@ -312,7 +312,7 @@ impl<'a> Analyzer<'a> {
         // Seed effect_env and arity_env for lambda forms so self-recursive
         // calls don't default to Yields during analysis.
         if Self::is_lambda_syntax(value_syntax) {
-            self.effect_env.insert(binding, Effect::inert());
+            self.signal_env.insert(binding, Signal::inert());
             if let Some(list) = value_syntax.as_list() {
                 if let Some(params_syn) = list.get(1).and_then(|s| s.as_list_or_tuple()) {
                     self.arity_env

@@ -1,6 +1,6 @@
 //! Bytecode and JIT disassembly primitives
 
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::lir::{terminator_kind, Terminator};
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK, SIG_QUERY};
@@ -360,7 +360,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fn/disasm",
         func: prim_disbit,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Disassemble a closure's bytecode into a list of instruction strings.",
         params: &["closure"],
@@ -371,7 +371,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fn/disasm-jit",
         func: prim_disjit,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Disassemble a closure's JIT-compiled Cranelift IR, or nil if not JIT'd.",
         params: &["closure"],
@@ -382,7 +382,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fn/flow",
         func: prim_fn_flow,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Return the LIR control flow graph of a closure or fiber as structured data.",
         params: &["closure-or-fiber"],
@@ -393,7 +393,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "vm/list-primitives",
         func: prim_list_primitives,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Range(0, 1),
         doc: "List registered names as a sorted list of strings. Optional category filter.",
         params: &["category?"],
@@ -404,7 +404,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "vm/primitive-meta",
         func: prim_primitive_meta,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Get structured metadata for a primitive as a struct.",
         params: &["name"],

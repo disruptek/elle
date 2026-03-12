@@ -709,9 +709,9 @@ fn test_mutual_recursion_effects_are_pure() {
     for constant in &result.bytecode.constants {
         if let Some(closure) = constant.as_closure() {
             assert!(
-                !closure.effect().may_suspend(),
+                !closure.signal().may_suspend(),
                 "Closure should not suspend, got {:?}",
-                closure.effect()
+                closure.signal()
             );
         }
     }
@@ -762,9 +762,9 @@ fn test_nqueens_functions_are_pure() {
         if let Some(closure) = constant.as_closure() {
             found_closures += 1;
             assert!(
-                !closure.effect().may_suspend(),
+                !closure.signal().may_suspend(),
                 "Closure should not suspend, got {:?}",
-                closure.effect()
+                closure.signal()
             );
         }
     }

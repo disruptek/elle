@@ -7,14 +7,14 @@ use crate::syntax::{Syntax, SyntaxKind};
 impl<'a> Analyzer<'a> {
     pub(crate) fn analyze_call(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
         let func = self.analyze_expr(&items[0])?;
-        let mut effect = func.effect;
+        let mut effect = func.signal;
 
         let mut args = Vec::new();
         let mut has_splice = false;
         for arg in &items[1..] {
             let (inner, spliced) = Self::unwrap_splice(arg);
             let hir = self.analyze_expr(inner)?;
-            effect = effect.combine(hir.effect);
+            effect = effect.combine(hir.signal);
             if spliced {
                 has_splice = true;
             }
@@ -40,14 +40,14 @@ impl<'a> Analyzer<'a> {
 
         // Interprocedural effect tracking: what effect does CALLING this function have?
         // First, get the raw callee effect (before polymorphic resolution)
-        let raw_callee_effect = self.get_raw_callee_effect(&func);
+        let raw_callee_effect = self.get_raw_callee_signal(&func);
 
         // Refine fiber/signal effect when first arg is a constant integer.
         // fiber/signal's registered effect is yields_errors() (conservative),
         // but when the signal bits are known at compile time, use them directly.
-        let raw_callee_effect = if self.is_fiber_signal(&func) {
+        let raw_callee_effect = if self.is_emit(&func) {
             if let Some(HirKind::Int(bits)) = args.first().map(|a| &a.expr.kind) {
-                Effect {
+                Signal {
                     bits: crate::value::fiber::SignalBits(*bits as u32),
                     propagates: 0,
                 }
@@ -61,10 +61,10 @@ impl<'a> Analyzer<'a> {
         // Track effect sources for polymorphic inference BEFORE resolving
         // This handles the case where we call a polymorphic function with a parameter
         let arg_exprs: Vec<&Hir> = args.iter().map(|a| &a.expr).collect();
-        self.track_effect_source_with_args(&func, &raw_callee_effect, &arg_exprs);
+        self.track_signal_source_with_args(&func, &raw_callee_effect, &arg_exprs);
 
         // Now resolve the polymorphic effect
-        let callee_effect = self.resolve_polymorphic_effect(&raw_callee_effect, &arg_exprs);
+        let callee_effect = self.resolve_polymorphic_signal(&raw_callee_effect, &arg_exprs);
 
         effect = effect.combine(callee_effect);
 
@@ -134,7 +134,7 @@ impl<'a> Analyzer<'a> {
     }
 
     /// Check if the callee is the `emit` primitive.
-    fn is_fiber_signal(&self, func: &Hir) -> bool {
+    fn is_emit(&self, func: &Hir) -> bool {
         if let HirKind::Var(binding) = &func.kind {
             self.symbols.name(binding.name()) == Some("emit")
         } else {
@@ -143,32 +143,32 @@ impl<'a> Analyzer<'a> {
     }
 
     /// Get the raw callee effect without resolving polymorphic effects.
-    pub(crate) fn get_raw_callee_effect(&self, func: &Hir) -> Effect {
+    pub(crate) fn get_raw_callee_signal(&self, func: &Hir) -> Signal {
         match &func.kind {
             HirKind::Lambda {
-                inferred_effects, ..
-            } => *inferred_effects,
+                inferred_signals, ..
+            } => *inferred_signals,
             HirKind::Var(binding) => {
-                if let Some(effect) = self.effect_env.get(binding) {
+                if let Some(effect) = self.signal_env.get(binding) {
                     *effect
                 } else {
-                    self.primitive_effects
+                    self.primitive_signals
                         .get(&binding.name())
                         .cloned()
-                        .unwrap_or(Effect::yields())
+                        .unwrap_or(Signal::yields())
                 }
             }
-            _ => Effect::yields(),
+            _ => Signal::yields(),
         }
     }
 
     /// Track the source of a suspending effect for polymorphic inference.
     /// This handles both direct parameter calls and calls to polymorphic functions
     /// with parameters as arguments.
-    pub(crate) fn track_effect_source_with_args(
+    pub(crate) fn track_signal_source_with_args(
         &mut self,
         func: &Hir,
-        raw_effect: &Effect,
+        raw_effect: &Signal,
         args: &[&Hir],
     ) {
         // Case 1: Direct call to a parameter
@@ -176,7 +176,7 @@ impl<'a> Analyzer<'a> {
             if matches!(binding.scope(), BindingScope::Parameter)
                 && self.current_lambda_params.contains(binding)
             {
-                self.current_effect_sources.param_calls.insert(*binding);
+                self.current_signal_sources.param_calls.insert(*binding);
                 return;
             }
         }
@@ -191,7 +191,7 @@ impl<'a> Analyzer<'a> {
                             && self.current_lambda_params.contains(arg_binding)
                         {
                             // The polymorphic effect depends on a parameter
-                            self.current_effect_sources.param_calls.insert(*arg_binding);
+                            self.current_signal_sources.param_calls.insert(*arg_binding);
                             found_param = true;
                         }
                     }
@@ -204,22 +204,22 @@ impl<'a> Analyzer<'a> {
 
         // Case 3: Suspension from a non-parameter source
         // Only mark as non-param yield if the resolved effect may suspend
-        let resolved_effect = self.resolve_polymorphic_effect(raw_effect, args);
+        let resolved_effect = self.resolve_polymorphic_signal(raw_effect, args);
         if resolved_effect.may_suspend() {
-            self.current_effect_sources.has_non_param_yield = true;
+            self.current_signal_sources.has_non_param_yield = true;
         }
     }
 
     /// Resolve a polymorphic effect by examining the arguments at the specified indices.
-    pub(crate) fn resolve_polymorphic_effect(&self, effect: &Effect, args: &[&Hir]) -> Effect {
+    pub(crate) fn resolve_polymorphic_signal(&self, effect: &Signal, args: &[&Hir]) -> Signal {
         if effect.is_polymorphic() {
-            let mut resolved = Effect::inert();
+            let mut resolved = Signal::inert();
             for param_idx in effect.propagated_params() {
                 if param_idx < args.len() {
-                    resolved = resolved.combine(self.resolve_arg_effect(args[param_idx]));
+                    resolved = resolved.combine(self.resolve_arg_signal(args[param_idx]));
                 } else {
                     // Parameter index out of bounds - conservatively Yields
-                    return Effect::yields();
+                    return Signal::yields();
                 }
             }
             resolved
@@ -231,48 +231,48 @@ impl<'a> Analyzer<'a> {
     /// Resolve the effect of an argument (used for polymorphic effect resolution).
     /// When the polymorphic parameter is itself a lambda or known function,
     /// we can determine its effect.
-    pub(crate) fn resolve_arg_effect(&self, arg: &Hir) -> Effect {
+    pub(crate) fn resolve_arg_signal(&self, arg: &Hir) -> Signal {
         match &arg.kind {
             HirKind::Lambda {
-                inferred_effects, ..
-            } => *inferred_effects,
+                inferred_signals, ..
+            } => *inferred_signals,
             HirKind::Var(binding) => self
-                .effect_env
+                .signal_env
                 .get(binding)
                 .cloned()
-                .or_else(|| self.primitive_effects.get(&binding.name()).cloned())
-                .unwrap_or(Effect::yields()),
+                .or_else(|| self.primitive_signals.get(&binding.name()).cloned())
+                .unwrap_or(Signal::yields()),
             // Unknown argument effect - conservatively Yields for soundness
-            _ => Effect::yields(),
+            _ => Signal::yields(),
         }
     }
 
     /// Compute the inferred effect for a lambda based on effect sources.
     /// This enables polymorphic effect inference: if the only sources of
     /// suspension are calling parameters, we infer Polymorphic over them.
-    pub(crate) fn compute_inferred_effect(&self, body: &Hir, params: &[Binding]) -> Effect {
+    pub(crate) fn compute_inferred_signal(&self, body: &Hir, params: &[Binding]) -> Signal {
         // If body doesn't suspend, lambda doesn't suspend
-        if !body.effect.may_suspend() {
-            return Effect::inert();
+        if !body.signal.may_suspend() {
+            return Signal::inert();
         }
 
         // If there's a direct yield or non-parameter yield, it's Yields
-        if self.current_effect_sources.has_direct_yield
-            || self.current_effect_sources.has_non_param_yield
+        if self.current_signal_sources.has_direct_yield
+            || self.current_signal_sources.has_non_param_yield
         {
-            return Effect::yields();
+            return Signal::yields();
         }
 
         // If param_calls is empty but body suspends, fall back to body's effect
-        if self.current_effect_sources.param_calls.is_empty() {
-            return body.effect;
+        if self.current_signal_sources.param_calls.is_empty() {
+            return body.signal;
         }
 
         // All suspension comes from parameter calls - infer Polymorphic over them.
         // Bounded parameters contribute their bound's bits directly (not polymorphic).
         let mut propagates: u32 = 0;
         let mut bound_bits: u32 = 0;
-        for binding_id in &self.current_effect_sources.param_calls {
+        for binding_id in &self.current_signal_sources.param_calls {
             if let Some(bound) = self.current_param_bounds.get(binding_id) {
                 // Bounded: contribute bound's bits directly (not polymorphic)
                 bound_bits |= bound.bits.0;
@@ -282,7 +282,7 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        Effect {
+        Signal {
             bits: crate::value::fiber::SignalBits(bound_bits),
             propagates,
         }

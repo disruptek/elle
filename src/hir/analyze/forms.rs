@@ -58,15 +58,15 @@ impl<'a> Analyzer<'a> {
             // Immutable array literal [...] - call array primitive
             SyntaxKind::Array(items) => {
                 let mut args = Vec::new();
-                let mut effect = Effect::inert();
+                let mut effect = Signal::inert();
                 for item in items {
                     let (inner, spliced) = Self::unwrap_splice(item);
                     let hir = self.analyze_expr(inner)?;
-                    effect = effect.combine(hir.effect);
+                    effect = effect.combine(hir.signal);
                     args.push(CallArg { expr: hir, spliced });
                 }
                 let binding = self.resolve_primitive("array");
-                let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
+                let func = Hir::new(HirKind::Var(binding), span.clone(), Signal::inert());
                 Ok(Hir::new(
                     HirKind::Call {
                         func: Box::new(func),
@@ -81,15 +81,15 @@ impl<'a> Analyzer<'a> {
             // Mutable array literal @[...] - call @array primitive
             SyntaxKind::ArrayMut(items) => {
                 let mut args = Vec::new();
-                let mut effect = Effect::inert();
+                let mut effect = Signal::inert();
                 for item in items {
                     let (inner, spliced) = Self::unwrap_splice(item);
                     let hir = self.analyze_expr(inner)?;
-                    effect = effect.combine(hir.effect);
+                    effect = effect.combine(hir.signal);
                     args.push(CallArg { expr: hir, spliced });
                 }
                 let binding = self.resolve_primitive("@array");
-                let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
+                let func = Hir::new(HirKind::Var(binding), span.clone(), Signal::inert());
                 Ok(Hir::new(
                     HirKind::Call {
                         func: Box::new(func),
@@ -104,7 +104,7 @@ impl<'a> Analyzer<'a> {
             // Struct literal {...} - call struct primitive
             SyntaxKind::Struct(items) => {
                 let mut args = Vec::new();
-                let mut effect = Effect::inert();
+                let mut effect = Signal::inert();
                 for item in items {
                     if matches!(&item.kind, SyntaxKind::Splice(_))
                         || (matches!(&item.kind, SyntaxKind::List(elems) if elems.first().is_some_and(|e| e.as_symbol() == Some("splice"))))
@@ -115,14 +115,14 @@ impl<'a> Analyzer<'a> {
                         ));
                     }
                     let hir = self.analyze_expr(item)?;
-                    effect = effect.combine(hir.effect);
+                    effect = effect.combine(hir.signal);
                     args.push(CallArg {
                         expr: hir,
                         spliced: false,
                     });
                 }
                 let binding = self.resolve_primitive("struct");
-                let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
+                let func = Hir::new(HirKind::Var(binding), span.clone(), Signal::inert());
                 Ok(Hir::new(
                     HirKind::Call {
                         func: Box::new(func),
@@ -137,7 +137,7 @@ impl<'a> Analyzer<'a> {
             // Mutable struct literal @{...} - call @struct primitive
             SyntaxKind::StructMut(items) => {
                 let mut args = Vec::new();
-                let mut effect = Effect::inert();
+                let mut effect = Signal::inert();
                 for item in items {
                     if matches!(&item.kind, SyntaxKind::Splice(_))
                         || (matches!(&item.kind, SyntaxKind::List(elems) if elems.first().is_some_and(|e| e.as_symbol() == Some("splice"))))
@@ -148,14 +148,14 @@ impl<'a> Analyzer<'a> {
                         ));
                     }
                     let hir = self.analyze_expr(item)?;
-                    effect = effect.combine(hir.effect);
+                    effect = effect.combine(hir.signal);
                     args.push(CallArg {
                         expr: hir,
                         spliced: false,
                     });
                 }
                 let binding = self.resolve_primitive("@struct");
-                let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
+                let func = Hir::new(HirKind::Var(binding), span.clone(), Signal::inert());
                 Ok(Hir::new(
                     HirKind::Call {
                         func: Box::new(func),
@@ -193,7 +193,7 @@ impl<'a> Analyzer<'a> {
             // Set literal |...| - call set constructor primitive
             SyntaxKind::Set(items) => {
                 let mut args = Vec::new();
-                let mut effect = Effect::inert();
+                let mut effect = Signal::inert();
                 for item in items {
                     if matches!(&item.kind, SyntaxKind::Splice(_))
                         || (matches!(&item.kind, SyntaxKind::List(elems) if elems.first().is_some_and(|e| e.as_symbol() == Some("splice"))))
@@ -204,14 +204,14 @@ impl<'a> Analyzer<'a> {
                         ));
                     }
                     let hir = self.analyze_expr(item)?;
-                    effect = effect.combine(hir.effect);
+                    effect = effect.combine(hir.signal);
                     args.push(CallArg {
                         expr: hir,
                         spliced: false,
                     });
                 }
                 let binding = self.resolve_primitive("set");
-                let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
+                let func = Hir::new(HirKind::Var(binding), span.clone(), Signal::inert());
                 Ok(Hir::new(
                     HirKind::Call {
                         func: Box::new(func),
@@ -226,7 +226,7 @@ impl<'a> Analyzer<'a> {
             // Mutable set literal @|...| - call mutable-set constructor primitive
             SyntaxKind::SetMut(items) => {
                 let mut args = Vec::new();
-                let mut effect = Effect::inert();
+                let mut effect = Signal::inert();
                 for item in items {
                     if matches!(&item.kind, SyntaxKind::Splice(_))
                         || (matches!(&item.kind, SyntaxKind::List(elems) if elems.first().is_some_and(|e| e.as_symbol() == Some("splice"))))
@@ -237,14 +237,14 @@ impl<'a> Analyzer<'a> {
                         ));
                     }
                     let hir = self.analyze_expr(item)?;
-                    effect = effect.combine(hir.effect);
+                    effect = effect.combine(hir.signal);
                     args.push(CallArg {
                         expr: hir,
                         spliced: false,
                     });
                 }
                 let binding = self.resolve_primitive("@set");
-                let func = Hir::new(HirKind::Var(binding), span.clone(), Effect::inert());
+                let func = Hir::new(HirKind::Var(binding), span.clone(), Signal::inert());
                 Ok(Hir::new(
                     HirKind::Call {
                         func: Box::new(func),
@@ -292,7 +292,7 @@ impl<'a> Analyzer<'a> {
                         "eval" => return self.analyze_eval(items, span),
                         "parameterize" => return self.analyze_parameterize(items, span),
 
-                        "silence" => return self.analyze_restrict(items, span),
+                        "silence" => return self.analyze_silence(items, span),
 
                         "signal" => {
                             if items.len() != 2 {
@@ -311,7 +311,7 @@ impl<'a> Analyzer<'a> {
                                     ));
                                 }
                             };
-                            crate::effects::registry::global_registry()
+                            crate::signals::registry::global_registry()
                                 .lock()
                                 .unwrap()
                                 .register(&keyword)
@@ -373,9 +373,9 @@ impl<'a> Analyzer<'a> {
         };
 
         let effect = cond
-            .effect
-            .combine(then_branch.effect)
-            .combine(else_branch.effect);
+            .signal
+            .combine(then_branch.signal)
+            .combine(else_branch.signal);
 
         Ok(Hir::new(
             HirKind::If {
@@ -411,11 +411,11 @@ impl<'a> Analyzer<'a> {
 
             // Pass 2: Analyze all expressions (all bindings now visible)
             let mut exprs = Vec::new();
-            let mut effect = Effect::inert();
+            let mut effect = Signal::inert();
 
             for item in items {
                 let hir = self.analyze_expr(item)?;
-                effect = effect.combine(hir.effect);
+                effect = effect.combine(hir.signal);
                 exprs.push(hir);
             }
 
@@ -423,11 +423,11 @@ impl<'a> Analyzer<'a> {
         } else {
             // At top level, sequential semantics are fine
             let mut exprs = Vec::new();
-            let mut effect = Effect::inert();
+            let mut effect = Signal::inert();
 
             for item in items {
                 let hir = self.analyze_expr(item)?;
-                effect = effect.combine(hir.effect);
+                effect = effect.combine(hir.signal);
                 exprs.push(hir);
             }
 
@@ -462,7 +462,7 @@ impl<'a> Analyzer<'a> {
 
         self.block_contexts.pop();
 
-        let effect = result.effect;
+        let effect = result.signal;
         Ok(Hir::new(
             HirKind::Block {
                 name,
@@ -534,7 +534,7 @@ impl<'a> Analyzer<'a> {
             Hir::inert(HirKind::Nil, span.clone())
         };
 
-        let effect = value.effect;
+        let effect = value.signal;
         Ok(Hir::new(
             HirKind::Break {
                 block_id,
@@ -574,10 +574,10 @@ impl<'a> Analyzer<'a> {
         } else {
             // Multiple body forms: wrap in implicit begin
             let mut exprs = Vec::new();
-            let mut effect = Effect::inert();
+            let mut effect = Signal::inert();
             for item in &items[2..] {
                 let hir = self.analyze_expr(item)?;
-                effect = effect.combine(hir.effect);
+                effect = effect.combine(hir.signal);
                 exprs.push(hir);
             }
             Hir::new(HirKind::Begin(exprs), span.clone(), effect)
@@ -585,7 +585,7 @@ impl<'a> Analyzer<'a> {
 
         self.block_contexts.pop();
 
-        let effect = cond.effect.combine(body.effect);
+        let effect = cond.signal.combine(body.signal);
 
         let while_node = Hir::new(
             HirKind::While {
@@ -613,11 +613,11 @@ impl<'a> Analyzer<'a> {
         }
 
         let mut exprs = Vec::new();
-        let mut effect = Effect::inert();
+        let mut effect = Signal::inert();
 
         for item in items {
             let hir = self.analyze_expr(item)?;
-            effect = effect.combine(hir.effect);
+            effect = effect.combine(hir.signal);
             exprs.push(hir);
         }
 
@@ -630,11 +630,11 @@ impl<'a> Analyzer<'a> {
         }
 
         let mut exprs = Vec::new();
-        let mut effect = Effect::inert();
+        let mut effect = Signal::inert();
 
         for item in items {
             let hir = self.analyze_expr(item)?;
-            effect = effect.combine(hir.effect);
+            effect = effect.combine(hir.signal);
             exprs.push(hir);
         }
 
@@ -656,7 +656,7 @@ impl<'a> Analyzer<'a> {
         } else {
             Hir::inert(HirKind::Nil, span.clone())
         };
-        let effect = Effect::yields().combine(expr.effect).combine(env.effect);
+        let effect = Signal::yields().combine(expr.signal).combine(env.signal);
         Ok(Hir::new(
             HirKind::Eval {
                 expr: Box::new(expr),
@@ -693,7 +693,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let mut bindings = Vec::new();
-        let mut effect = Effect::inert();
+        let mut effect = Signal::inert();
 
         for pair_syntax in bindings_syntax {
             let pair = pair_syntax.as_list_or_tuple().ok_or_else(|| {
@@ -712,12 +712,12 @@ impl<'a> Analyzer<'a> {
             }
             let param = self.analyze_expr(&pair[0])?;
             let value = self.analyze_expr(&pair[1])?;
-            effect = effect.combine(param.effect).combine(value.effect);
+            effect = effect.combine(param.signal).combine(value.signal);
             bindings.push((param, value));
         }
 
         let body = self.analyze_body(&items[2..], span.clone())?;
-        effect = effect.combine(body.effect);
+        effect = effect.combine(body.signal);
 
         Ok(Hir::new(
             HirKind::Parameterize {
@@ -736,7 +736,7 @@ impl<'a> Analyzer<'a> {
 
         let mut clauses = Vec::new();
         let mut else_branch = None;
-        let mut effect = Effect::inert();
+        let mut effect = Signal::inert();
 
         for clause in &items[1..] {
             let parts = clause.as_list_or_tuple().ok_or_else(|| {
@@ -759,14 +759,14 @@ impl<'a> Analyzer<'a> {
 
             if parts[0].as_symbol() == Some("else") {
                 let body = self.analyze_body(&parts[1..], span.clone())?;
-                effect = effect.combine(body.effect);
+                effect = effect.combine(body.signal);
                 else_branch = Some(Box::new(body));
                 break;
             }
 
             let test = self.analyze_expr(&parts[0])?;
             let body = self.analyze_body(&parts[1..], span.clone())?;
-            effect = effect.combine(test.effect).combine(body.effect);
+            effect = effect.combine(test.signal).combine(body.signal);
             clauses.push((test, body));
         }
 
@@ -817,7 +817,7 @@ impl<'a> Analyzer<'a> {
         for segment in &segments[1..] {
             let get_func = Hir::inert(HirKind::Var(get_binding), span.clone());
             let key = Hir::inert(HirKind::Keyword(segment.to_string()), span.clone());
-            let call_effect = result.effect;
+            let call_effect = result.signal;
             result = Hir::new(
                 HirKind::Call {
                     func: Box::new(get_func),

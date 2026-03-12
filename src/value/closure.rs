@@ -4,7 +4,7 @@
 //! `ClosureTemplate` holds per-definition data (shared across all instances
 //! of the same lambda). `Closure` pairs a template with a captured environment.
 
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::error::LocationMap;
 use crate::value::types::Arity;
 use crate::value::Value;
@@ -26,8 +26,8 @@ pub struct ClosureTemplate {
     pub num_params: usize,
     /// Constant pool for this closure
     pub constants: Rc<Vec<Value>>,
-    /// Effect of the closure body
-    pub effect: Effect,
+    /// Signal of the closure body
+    pub signal: Signal,
     /// Bitmask indicating which parameters need box wrapping.
     /// Bit i set means parameter i is mutated and needs a LocalLBox.
     pub lbox_params_mask: u64,
@@ -64,8 +64,8 @@ pub struct Closure {
 
 impl Closure {
     /// Get the effect of this closure
-    pub fn effect(&self) -> Effect {
-        self.template.effect
+    pub fn signal(&self) -> Signal {
+        self.template.signal
     }
 
     /// Calculate the total environment capacity needed for a call.
@@ -87,7 +87,7 @@ impl PartialEq for Closure {
             && self.template.num_locals == other.template.num_locals
             && self.template.num_captures == other.template.num_captures
             && self.template.constants == other.template.constants
-            && self.template.effect == other.template.effect
+            && self.template.signal == other.template.signal
             && self.template.lbox_params_mask == other.template.lbox_params_mask
             && self.template.lbox_locals_mask == other.template.lbox_locals_mask
             && self.template.symbol_names == other.template.symbol_names
@@ -111,7 +111,7 @@ mod tests {
             num_captures: 0,
             num_params: 0,
             constants: Rc::new(vec![]),
-            effect: Effect::inert(),
+            signal: Signal::inert(),
             lbox_params_mask: 0,
             lbox_locals_mask: 0,
             symbol_names: Rc::new(HashMap::new()),
@@ -131,7 +131,7 @@ mod tests {
             template: make_template(),
             env: Rc::new(vec![]),
         };
-        assert_eq!(closure.effect(), Effect::inert());
+        assert_eq!(closure.signal(), Signal::inert());
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod tests {
             num_captures: 2,
             num_params: 3,
             constants: Rc::new(vec![]),
-            effect: Effect::inert(),
+            signal: Signal::inert(),
             lbox_params_mask: 0,
             lbox_locals_mask: 0,
             symbol_names: Rc::new(HashMap::new()),
@@ -168,7 +168,7 @@ mod tests {
             num_captures: 1,
             num_params: 3,
             constants: Rc::new(vec![]),
-            effect: Effect::inert(),
+            signal: Signal::inert(),
             lbox_params_mask: 0,
             lbox_locals_mask: 0,
             symbol_names: Rc::new(HashMap::new()),
@@ -193,7 +193,7 @@ mod tests {
             num_captures: 0,
             num_params: 3,
             constants: Rc::new(vec![]),
-            effect: Effect::inert(),
+            signal: Signal::inert(),
             lbox_params_mask: 0,
             lbox_locals_mask: 0,
             symbol_names: Rc::new(HashMap::new()),

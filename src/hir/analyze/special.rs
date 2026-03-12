@@ -1,8 +1,8 @@
 //! Special forms: yield, match, silence
 
 use super::*;
-use crate::effects::registry;
 use crate::hir::pattern::{HirPattern, PatternKey, PatternLiteral};
+use crate::signals::registry;
 use crate::syntax::{Syntax, SyntaxKind};
 
 /// Callback type for resolving variable patterns.
@@ -23,7 +23,7 @@ impl<'a> Analyzer<'a> {
     /// - `(silence :kw ...)` — function-level ceiling with specific signals
     /// - `(silence param)` — parameter bound = inert
     /// - `(silence param :kw ...)` — parameter bound with specific signals
-    pub(crate) fn analyze_restrict(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
+    pub(crate) fn analyze_silence(&mut self, items: &[Syntax], span: Span) -> Result<Hir, String> {
         if self.fn_depth == 0 {
             return Err(format!(
                 "{}: silence must appear inside a function body",
@@ -33,8 +33,8 @@ impl<'a> Analyzer<'a> {
 
         let args = &items[1..];
         if args.is_empty() {
-            // (restrict) — function-level ceiling = inert
-            self.current_declared_ceiling = Some(Effect::inert());
+            // (silence) — function-level ceiling = inert
+            self.current_declared_ceiling = Some(Signal::inert());
             return Ok(Hir::inert(HirKind::Nil, span));
         }
 
@@ -62,7 +62,7 @@ impl<'a> Analyzer<'a> {
                     })?;
                     bits |= 1 << bit_pos;
                 }
-                self.current_declared_ceiling = Some(Effect {
+                self.current_declared_ceiling = Some(Signal {
                     bits: crate::value::fiber::SignalBits(bits),
                     propagates: 0,
                 });
@@ -74,7 +74,7 @@ impl<'a> Analyzer<'a> {
                 let keywords = &args[1..];
                 let bound = if keywords.is_empty() {
                     // (silence param) — bound is inert
-                    Effect::inert()
+                    Signal::inert()
                 } else {
                     let mut bits = 0u32;
                     for kw_syntax in keywords {
@@ -97,7 +97,7 @@ impl<'a> Analyzer<'a> {
                         })?;
                         bits |= 1 << bit_pos;
                     }
-                    Effect {
+                    Signal {
                         bits: crate::value::fiber::SignalBits(bits),
                         propagates: 0,
                     }
@@ -139,12 +139,12 @@ impl<'a> Analyzer<'a> {
         let value = self.analyze_expr(&items[1])?;
 
         // Track that this lambda has a direct yield (not from calling a parameter)
-        self.current_effect_sources.has_direct_yield = true;
+        self.current_signal_sources.has_direct_yield = true;
 
         Ok(Hir::new(
             HirKind::Yield(Box::new(value)),
             span,
-            Effect::yields(), // Yield always has Yields effect
+            Signal::yields(), // Yield always has Yields effect
         ))
     }
 
@@ -157,7 +157,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let value = self.analyze_expr(&items[1])?;
-        let mut effect = value.effect;
+        let mut effect = value.signal;
         let mut arms = Vec::new();
 
         for arm in &items[2..] {
@@ -185,14 +185,14 @@ impl<'a> Analyzer<'a> {
             // Check for guard
             let (guard, body_idx) = if parts.len() >= 3 && parts[1].as_symbol() == Some("when") {
                 let guard_expr = self.analyze_expr(&parts[2])?;
-                effect = effect.combine(guard_expr.effect);
+                effect = effect.combine(guard_expr.signal);
                 (Some(guard_expr), 3)
             } else {
                 (None, 1)
             };
 
             let body = self.analyze_body(&parts[body_idx..], span.clone())?;
-            effect = effect.combine(body.effect);
+            effect = effect.combine(body.signal);
             self.pop_scope();
 
             arms.push((pattern, guard, body));

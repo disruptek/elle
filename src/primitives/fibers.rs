@@ -4,7 +4,7 @@
 //! value extraction. Introspection and management primitives (bits, mask,
 //! parent, child, propagate, cancel, fiber?) are in `fiber_introspect.rs`.
 
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{Fiber, FiberStatus, SignalBits, SIG_ERROR, SIG_OK, SIG_RESUME};
 use crate::value::types::Arity;
@@ -28,7 +28,7 @@ fn resolve_keyword_slice(
     elems: &[Value],
     context: &str,
 ) -> Result<SignalBits, (SignalBits, Value)> {
-    let reg = crate::effects::registry::global_registry().lock().unwrap();
+    let reg = crate::signals::registry::global_registry().lock().unwrap();
     let mut bits = SignalBits::new(0);
     for elem in elems {
         let name = elem.as_keyword_name().ok_or_else(|| {
@@ -66,7 +66,7 @@ fn resolve_signal_bits(val: &Value, context: &str) -> Result<SignalBits, (Signal
 
     // 2. Single keyword
     if let Some(name) = val.as_keyword_name() {
-        let reg = crate::effects::registry::global_registry().lock().unwrap();
+        let reg = crate::signals::registry::global_registry().lock().unwrap();
         return match reg.to_signal_bits(name) {
             Some(bits) => Ok(bits),
             None => Err((
@@ -81,7 +81,7 @@ fn resolve_signal_bits(val: &Value, context: &str) -> Result<SignalBits, (Signal
 
     // 3. Set of keywords
     if let Some(set) = val.as_set() {
-        let reg = crate::effects::registry::global_registry().lock().unwrap();
+        let reg = crate::signals::registry::global_registry().lock().unwrap();
         let mut bits = SignalBits::new(0);
         for elem in set.iter() {
             let name = elem.as_keyword_name().ok_or_else(|| {
@@ -124,7 +124,7 @@ fn resolve_signal_bits(val: &Value, context: &str) -> Result<SignalBits, (Signal
 
     // 6. List of keywords (cons chain)
     if val.as_cons().is_some() {
-        let reg = crate::effects::registry::global_registry().lock().unwrap();
+        let reg = crate::signals::registry::global_registry().lock().unwrap();
         let mut bits = SignalBits::new(0);
         let mut current = *val;
         while let Some(cons) = current.as_cons() {
@@ -270,7 +270,7 @@ pub(crate) fn prim_fiber_resume(args: &[Value]) -> (SignalBits, Value) {
 /// Emit a signal from the current fiber. The signal bits and value are
 /// returned directly — the VM's dispatch loop stores them in fiber.signal
 /// and suspends the fiber.
-pub(crate) fn prim_fiber_signal(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_emit(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 2 {
         return (
             SIG_ERROR,
@@ -360,7 +360,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/new",
         func: prim_fiber_new,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(2),
         doc: "Create a fiber from a closure with a signal mask",
         params: &["closure", "mask"],
@@ -371,7 +371,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/resume",
         func: prim_fiber_resume,
-        effect: Effect::yields_errors(),
+        effect: Signal::yields_errors(),
         arity: Arity::Range(1, 2),
         doc: "Resume a fiber, optionally delivering a value",
         params: &["fiber", "value"],
@@ -381,8 +381,8 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     },
     PrimitiveDef {
         name: "fiber/emit",
-        func: prim_fiber_signal,
-        effect: Effect::yields_errors(),
+        func: prim_emit,
+        effect: Signal::yields_errors(),
         arity: Arity::Exact(2),
         doc: "Emit a signal from the current fiber",
         params: &["bits", "value"],
@@ -393,7 +393,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/status",
         func: prim_fiber_status,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Get the fiber's lifecycle status (:new, :alive, :suspended, :dead, :error)",
         params: &["fiber"],
@@ -404,7 +404,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/value",
         func: prim_fiber_value,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Get the signal payload from the fiber's last signal",
         params: &["fiber"],
@@ -417,7 +417,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::effects::Effect;
+    use crate::signals::Signal;
     use crate::error::LocationMap;
     use crate::value::fiber::{SIG_ERROR as FIBER_SIG_ERROR, SIG_YIELD};
     use crate::value::{Arity, Closure};
@@ -441,7 +441,7 @@ mod tests {
             num_captures: 0,
             num_params: 0,
             constants: Rc::new(vec![Value::int(42)]),
-            effect: Effect::inert(),
+            signal: Signal::inert(),
             lbox_params_mask: 0,
             lbox_locals_mask: 0,
             symbol_names: Rc::new(HashMap::new()),
@@ -537,14 +537,14 @@ mod tests {
     fn test_fiber_signal() {
         let bits = Value::int(SIG_YIELD.bits() as i64);
         let value = Value::int(42);
-        let (sig, val) = prim_fiber_signal(&[bits, value]);
+        let (sig, val) = prim_emit(&[bits, value]);
         assert_eq!(sig, SIG_YIELD);
         assert_eq!(val, Value::int(42));
     }
 
     #[test]
     fn test_fiber_signal_wrong_arity() {
-        let (sig, _) = prim_fiber_signal(&[Value::int(0)]);
+        let (sig, _) = prim_emit(&[Value::int(0)]);
         assert_eq!(sig, SIG_ERROR);
     }
 

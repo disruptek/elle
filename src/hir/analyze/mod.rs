@@ -6,7 +6,7 @@
 //! 3. Inferring effects (including interprocedural effect tracking)
 //! 4. Validating scope rules
 //!
-//! ## Interprocedural Effect Tracking
+//! ## Interprocedural Signal Tracking
 //!
 //! The analyzer tracks effects across function boundaries:
 //! - When a binding is defined with a lambda, we record the lambda body's effect
@@ -24,8 +24,8 @@ mod special;
 
 use super::binding::{Binding, CaptureInfo, CaptureKind};
 use super::expr::{BlockId, Hir, HirKind};
-use crate::effects::Effect;
 use crate::primitives::def::PrimitiveMeta;
+use crate::signals::Signal;
 use crate::symbol::SymbolTable;
 use crate::syntax::{ScopeId, Span, Syntax};
 use crate::value::heap::BindingScope;
@@ -42,8 +42,8 @@ pub enum FileForm<'a> {
     Def(&'a Syntax, &'a Syntax),
     /// `(var name value)` or `(var pattern value)` — mutable binding
     Var(&'a Syntax, &'a Syntax),
-    /// `(effect :keyword)` — user-defined effect declaration
-    Effect(&'a Syntax),
+    /// `(signal :keyword)` — user-defined signal declaration
+    Signal(&'a Syntax),
     /// Bare expression — gets a gensym name
     Expr(&'a Syntax),
 }
@@ -66,7 +66,7 @@ pub struct AnalysisResult {
 /// Tracks the sources of Yields effects within a lambda body.
 /// Used to infer Polymorphic effects for higher-order functions.
 #[derive(Debug, Clone, Default)]
-struct EffectSources {
+struct SignalSources {
     /// Parameters whose calls contribute Yields effects
     param_calls: HashSet<Binding>,
     /// Whether there's a direct yield (not from calling a parameter)
@@ -116,21 +116,21 @@ pub struct Analyzer<'a> {
     current_captures: Vec<CaptureInfo>,
     /// Captures from the parent function (for nested closures)
     parent_captures: Vec<CaptureInfo>,
-    /// Maps Binding -> known effect of the bound value (if it's a callable)
-    /// This enables interprocedural effect tracking: when we call a function,
-    /// we can look up its effect and propagate it to the call site.
-    effect_env: HashMap<Binding, Effect>,
-    /// Maps SymbolId -> Effect for primitive functions
-    /// Built from `register_primitive_effects` and passed in at construction
-    primitive_effects: HashMap<SymbolId, Effect>,
+    /// Maps Binding -> known signal of the bound value (if it's a callable)
+    /// This enables interprocedural signal tracking: when we call a function,
+    /// we can look up its signal and propagate it to the call site.
+    signal_env: HashMap<Binding, Signal>,
+    /// Maps SymbolId -> Signal for primitive functions
+    /// Built from `register_primitive_signals` and passed in at construction
+    primitive_signals: HashMap<SymbolId, Signal>,
     /// Arity environment: maps local function bindings to their arity.
     /// Populated by `bind_primitives` for primitive bindings; user
     /// shadows create new bindings that won't be in this map,
     /// correctly disabling the primitive arity check.
     arity_env: HashMap<Binding, Arity>,
 
-    /// Tracks effect sources within the current lambda body for polymorphic inference
-    current_effect_sources: EffectSources,
+    /// Tracks signal sources within the current lambda body for polymorphic inference
+    current_signal_sources: SignalSources,
     /// Parameters of the current lambda being analyzed (for polymorphic inference)
     current_lambda_params: Vec<Binding>,
     /// Stack of active blocks for `break` targeting
@@ -151,12 +151,12 @@ pub struct Analyzer<'a> {
     /// emit `LoadConst` instead of `LoadGlobal`.
     /// No slot allocation is needed.
     primitive_values: HashMap<Binding, Value>,
-    /// Accumulated parameter bounds from restrict forms in current lambda.
-    /// Populated by `analyze_restrict`, consumed by `analyze_lambda`.
-    current_param_bounds: HashMap<Binding, Effect>,
-    /// Accumulated function-level ceiling from restrict forms in current lambda.
-    /// Populated by `analyze_restrict`, consumed by `analyze_lambda`.
-    current_declared_ceiling: Option<Effect>,
+    /// Accumulated parameter bounds from silence forms in current lambda.
+    /// Populated by `analyze_silence`, consumed by `analyze_lambda`.
+    current_param_bounds: HashMap<Binding, Signal>,
+    /// Accumulated function-level ceiling from silence forms in current lambda.
+    /// Populated by `analyze_silence`, consumed by `analyze_lambda`.
+    current_declared_ceiling: Option<Signal>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -167,17 +167,17 @@ impl<'a> Analyzer<'a> {
 
     /// Create a new analyzer with primitive effects for interprocedural tracking
     /// (convenience wrapper that passes empty arities)
-    pub fn new_with_primitive_effects(
+    pub fn new_with_primitive_signals(
         symbols: &'a mut SymbolTable,
-        primitive_effects: HashMap<SymbolId, Effect>,
+        primitive_signals: HashMap<SymbolId, Signal>,
     ) -> Self {
-        Self::new_with_primitives(symbols, primitive_effects, HashMap::new())
+        Self::new_with_primitives(symbols, primitive_signals, HashMap::new())
     }
 
     /// Create a new analyzer with primitive effects and arities
     pub fn new_with_primitives(
         symbols: &'a mut SymbolTable,
-        primitive_effects: HashMap<SymbolId, Effect>,
+        primitive_signals: HashMap<SymbolId, Signal>,
         _primitive_arities: HashMap<SymbolId, Arity>,
     ) -> Self {
         let mut analyzer = Analyzer {
@@ -185,11 +185,11 @@ impl<'a> Analyzer<'a> {
             scopes: Vec::new(),
             current_captures: Vec::new(),
             parent_captures: Vec::new(),
-            effect_env: HashMap::new(),
-            primitive_effects,
+            signal_env: HashMap::new(),
+            primitive_signals,
             arity_env: HashMap::new(),
 
-            current_effect_sources: EffectSources::default(),
+            current_signal_sources: SignalSources::default(),
             current_lambda_params: Vec::new(),
             block_contexts: Vec::new(),
             next_block_id: 0,
@@ -222,10 +222,10 @@ impl<'a> Analyzer<'a> {
     /// bindings — the `NativeFn` values are baked into the constant pool.
     /// No slot allocation is needed.
     pub fn bind_primitives(&mut self, meta: &PrimitiveMeta) {
-        for (&sym_id, &effect) in &meta.effects {
+        for (&sym_id, &effect) in &meta.signals {
             let binding = self.bind_by_sym(sym_id, BindingScope::Local);
             binding.mark_immutable();
-            self.effect_env.insert(binding, effect);
+            self.signal_env.insert(binding, effect);
             if let Some(&arity) = meta.arities.get(&sym_id) {
                 self.arity_env.insert(binding, arity);
             }

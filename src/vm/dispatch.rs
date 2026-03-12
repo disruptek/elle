@@ -444,11 +444,11 @@ impl VM {
                     let allowed_bits = lo | (hi << 16);
                     let val = self.fiber.stack.pop().unwrap_or(Value::NIL);
                     if let Some(closure) = val.as_closure() {
-                        let effect_bits = closure.effect().bits.0;
+                        let effect_bits = closure.signal().bits.0;
                         let excess = effect_bits & !allowed_bits;
                         if excess != 0 {
                             let registry =
-                                crate::effects::registry::global_registry().lock().unwrap();
+                                crate::signals::registry::global_registry().lock().unwrap();
                             let excess_str = registry
                                 .format_signal_bits(crate::value::fiber::SignalBits(excess));
                             let allowed_str = registry

@@ -1,7 +1,7 @@
 //! Lambda analysis: (fn (params...) body...)
 
 use super::*;
-use crate::effects::registry;
+use crate::signals::registry;
 use crate::syntax::{Syntax, SyntaxKind};
 use crate::value::Value;
 use std::rc::Rc;
@@ -32,7 +32,7 @@ impl<'a> Analyzer<'a> {
         let saved_parent_captures = std::mem::take(&mut self.parent_captures);
 
         // Save and reset effect sources for polymorphic inference
-        let saved_effect_sources = std::mem::take(&mut self.current_effect_sources);
+        let saved_effect_sources = std::mem::take(&mut self.current_signal_sources);
         let saved_lambda_params = std::mem::take(&mut self.current_lambda_params);
 
         // Save and reset restrict accumulators
@@ -184,7 +184,7 @@ impl<'a> Analyzer<'a> {
         let body = if param_destructures.is_empty() {
             body
         } else {
-            let body_effect = body.effect;
+            let body_effect = body.signal;
             let mut exprs: Vec<Hir> = param_destructures
                 .into_iter()
                 .map(|(pattern, tmp)| {
@@ -206,17 +206,17 @@ impl<'a> Analyzer<'a> {
         // Compute the inferred effect based on effect sources.
         // Must happen before draining current_param_bounds, since
         // compute_inferred_effect reads them for bounded params.
-        let inferred_effects = self.compute_inferred_effect(&body, &params);
+        let inferred_signals = self.compute_inferred_signal(&body, &params);
 
         // Read restrict accumulators (populated by analyze_restrict during body analysis)
-        let param_bounds: Vec<(Binding, Effect)> = self.current_param_bounds.drain().collect();
+        let param_bounds: Vec<(Binding, Signal)> = self.current_param_bounds.drain().collect();
         let declared_ceiling = self.current_declared_ceiling.take();
 
         // Check function-level ceiling if present.
         // All signals are explicit — no implicit SIG_YIELD additions.
         // The ceiling check is pure bitmask: excess = inferred & !ceiling.
         if let Some(ceiling) = declared_ceiling {
-            let excess_bits = inferred_effects.bits.0 & !ceiling.bits.0;
+            let excess_bits = inferred_signals.bits.0 & !ceiling.bits.0;
             if excess_bits != 0 {
                 let reg = registry::global_registry().lock().unwrap();
                 let excess = crate::value::fiber::SignalBits(excess_bits);
@@ -235,7 +235,7 @@ impl<'a> Analyzer<'a> {
         self.parent_captures = saved_parent_captures;
 
         // Restore effect sources and restrict accumulators
-        self.current_effect_sources = saved_effect_sources;
+        self.current_signal_sources = saved_effect_sources;
         self.current_lambda_params = saved_lambda_params;
         self.current_param_bounds = saved_param_bounds;
         self.current_declared_ceiling = saved_declared_ceiling;
@@ -282,13 +282,13 @@ impl<'a> Analyzer<'a> {
                 captures,
                 body: Box::new(body),
                 num_locals,
-                inferred_effects,
+                inferred_signals,
                 param_bounds,
                 doc,
                 syntax: original_syntax,
             },
             span,
-            Effect::inert(),
+            Signal::inert(),
         ))
     }
 }

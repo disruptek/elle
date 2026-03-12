@@ -89,7 +89,7 @@ impl Emitter {
         self.yield_stack_state.clear();
         self.yield_points.clear();
         self.call_sites.clear();
-        self.current_func_may_suspend = func.effect.may_suspend();
+        self.current_func_may_suspend = func.signal.may_suspend();
         self.current_func_num_locals = func.num_locals;
 
         // First pass: record label offsets (simplified - emit all blocks in order)
@@ -307,7 +307,7 @@ impl Emitter {
                     num_captures: captures.len(),
                     num_params: func.num_params,
                     constants: Rc::new(nested_bytecode.constants),
-                    effect: func.effect,
+                    signal: func.signal,
                     lbox_params_mask: func.lbox_params_mask,
                     lbox_locals_mask: func.lbox_locals_mask,
                     symbol_names: Rc::new(nested_bytecode.symbol_names),

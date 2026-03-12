@@ -1,5 +1,5 @@
 //! Read primitives (string → value)
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::primitives::def::PrimitiveDef;
 use crate::reader::{read_syntax, read_syntax_all};
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
@@ -116,7 +116,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "read",
         func: prim_read,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Parse the first form from a string, returning a value",
         params: &["str"],
@@ -127,7 +127,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "read-all",
         func: prim_read_all,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Parse all forms from a string, returning a list of values",
         params: &["str"],

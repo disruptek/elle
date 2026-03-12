@@ -70,7 +70,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> PrimitiveM
         for def in *table {
             let sym_id = symbols.intern(def.name);
             let native_val = Value::native_fn(def.func);
-            meta.effects.insert(sym_id, def.effect);
+            meta.signals.insert(sym_id, def.effect);
             meta.arities.insert(sym_id, def.arity);
             meta.functions.insert(sym_id, native_val);
 
@@ -89,7 +89,7 @@ pub fn register_primitives(vm: &mut VM, symbols: &mut SymbolTable) -> PrimitiveM
             for alias in def.aliases {
                 let alias_id = symbols.intern(alias);
                 let alias_val = Value::native_fn(def.func);
-                meta.effects.insert(alias_id, def.effect);
+                meta.signals.insert(alias_id, def.effect);
                 meta.arities.insert(alias_id, def.arity);
                 meta.functions.insert(alias_id, alias_val);
                 vm.docs.insert((*alias).to_string(), doc.clone());
@@ -113,13 +113,13 @@ pub fn build_primitive_meta(symbols: &mut SymbolTable) -> PrimitiveMeta {
     for table in ALL_TABLES {
         for def in *table {
             let sym_id = symbols.intern(def.name);
-            meta.effects.insert(sym_id, def.effect);
+            meta.signals.insert(sym_id, def.effect);
             meta.arities.insert(sym_id, def.arity);
             meta.functions.insert(sym_id, Value::native_fn(def.func));
 
             for alias in def.aliases {
                 let alias_id = symbols.intern(alias);
-                meta.effects.insert(alias_id, def.effect);
+                meta.signals.insert(alias_id, def.effect);
                 meta.arities.insert(alias_id, def.arity);
                 meta.functions.insert(alias_id, Value::native_fn(def.func));
             }
@@ -180,14 +180,14 @@ pub fn cached_primitive_meta(symbols: &mut SymbolTable) -> PrimitiveMeta {
 pub(crate) fn update_primitive_meta_cache(
     exports: &std::collections::HashMap<
         crate::value::SymbolId,
-        (crate::value::Value, crate::effects::Effect),
+        (crate::value::Value, crate::signals::Signal),
     >,
 ) {
     PRIMITIVE_META_CACHE.with(|cache| {
         let mut cache_ref = cache.borrow_mut();
         let meta = cache_ref.get_or_insert_with(PrimitiveMeta::default);
         for (sym_id, (value, effect)) in exports {
-            meta.effects.insert(*sym_id, *effect);
+            meta.signals.insert(*sym_id, *effect);
             meta.functions.insert(*sym_id, *value);
         }
     });

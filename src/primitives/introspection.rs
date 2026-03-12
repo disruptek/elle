@@ -1,6 +1,6 @@
 //! Function introspection primitives
 
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK, SIG_QUERY};
 use crate::value::types::Arity;
@@ -50,7 +50,7 @@ pub(crate) fn prim_is_pure(args: &[Value]) -> (SignalBits, Value) {
         );
     }
     if let Some(closure) = args[0].as_closure() {
-        (SIG_OK, Value::bool(!closure.effect().may_suspend()))
+        (SIG_OK, Value::bool(!closure.signal().may_suspend()))
     } else {
         (SIG_OK, Value::FALSE)
     }
@@ -86,7 +86,7 @@ pub(crate) fn prim_errors(args: &[Value]) -> (SignalBits, Value) {
         );
     }
     if let Some(closure) = args[0].as_closure() {
-        (SIG_OK, Value::bool(closure.template.effect.may_error()))
+        (SIG_OK, Value::bool(closure.template.signal.may_error()))
     } else {
         (SIG_OK, Value::FALSE)
     }
@@ -219,7 +219,7 @@ pub(crate) fn prim_vm_query(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (effects) — return the effect registry as a struct mapping keywords to bit positions
-pub(crate) fn prim_effects(args: &[Value]) -> (SignalBits, Value) {
+pub(crate) fn prim_signals(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
             SIG_ERROR,
@@ -229,7 +229,7 @@ pub(crate) fn prim_effects(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    let reg = crate::effects::registry::global_registry().lock().unwrap();
+    let reg = crate::signals::registry::global_registry().lock().unwrap();
     let mut map = std::collections::BTreeMap::new();
     for entry in reg.entries() {
         let key = crate::value::TableKey::from_value(&Value::keyword(&entry.name)).unwrap();
@@ -269,7 +269,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "closure?",
         func: prim_is_closure,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns true if value is a bytecode closure",
         params: &["value"],
@@ -280,7 +280,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "jit?",
         func: prim_is_jit,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns true if closure has JIT-compiled code",
         params: &["value"],
@@ -291,7 +291,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "pure?",
         func: prim_is_pure,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns true if closure has Pure effect (does not suspend)",
         params: &["value"],
@@ -302,7 +302,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "coroutine?",
         func: crate::primitives::coroutines::prim_is_coroutine,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns true if value is a coroutine (fiber-based)",
         params: &["value"],
@@ -313,7 +313,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fn/mutates-params?",
         func: prim_mutates_params,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns true if closure mutates any parameters",
         params: &["value"],
@@ -324,7 +324,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fn/errors?",
         func: prim_errors,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns true if closure may error",
         params: &["value"],
@@ -335,7 +335,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fn/arity",
         func: prim_arity,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns closure arity as int, pair, or nil",
         params: &["value"],
@@ -346,7 +346,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fn/captures",
         func: prim_captures,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns number of captured variables, or nil",
         params: &["value"],
@@ -357,7 +357,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fn/bytecode-size",
         func: prim_bytecode_size,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Returns size of bytecode in bytes, or nil",
         params: &["value"],
@@ -368,7 +368,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "doc",
         func: prim_doc,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Look up documentation for a closure (by value) or a builtin (by name string).",
         params: &["target"],
@@ -379,7 +379,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "vm/query",
         func: prim_vm_query,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(2),
         doc: "Query VM state (call-count, doc, global?, fiber/self)",
         params: &["op", "arg"],
@@ -389,8 +389,8 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     },
     PrimitiveDef {
         name: "signals",
-        func: prim_effects,
-        effect: Effect::inert(),
+        func: prim_signals,
+        effect: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Return the signal registry as a struct mapping keywords to bit positions.",
         params: &[],
@@ -401,7 +401,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "keyword",
         func: prim_keyword,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Convert a string to a keyword.",
         params: &["str"],

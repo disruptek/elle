@@ -1,4 +1,4 @@
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{SignalBits, SIG_OK};
 use crate::value::types::Arity;
@@ -26,7 +26,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "elle/version",
         func: prim_package_version,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Get the current package version",
         params: &[],
@@ -37,7 +37,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "elle/info",
         func: prim_package_info,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(0),
         doc: "Get package information (name, version, description)",
         params: &[],

@@ -1,6 +1,6 @@
 //! Unix domain socket primitives.
 
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::io::request::{ConnectAddr, IoOp, IoRequest};
 use crate::port::{Port, PortKind};
 use crate::primitives::def::PrimitiveDef;
@@ -171,7 +171,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "unix/listen",
         func: prim_unix_listen,
         arity: Arity::Exact(1),
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         doc: "Listen on a Unix domain socket. Returns a listener port.",
         params: &["path"],
         category: "unix",
@@ -182,7 +182,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "unix/accept",
         func: prim_unix_accept,
         arity: Arity::AtLeast(1),
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         doc: "Accept a connection on a Unix listener. Returns a stream port.",
         params: &["listener"],
         category: "unix",
@@ -193,7 +193,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "unix/connect",
         func: prim_unix_connect,
         arity: Arity::AtLeast(1),
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         doc: "Connect to a Unix domain socket. Returns a stream port.",
         params: &["path"],
         category: "unix",
@@ -204,7 +204,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "unix/shutdown",
         func: prim_unix_shutdown,
         arity: Arity::Exact(2),
-        effect: Effect::errors(),
+        effect: Signal::errors(),
         doc: "Shutdown a Unix stream. how: :read, :write, or :read-write.",
         params: &["port", "how"],
         category: "unix",

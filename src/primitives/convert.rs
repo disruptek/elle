@@ -1,5 +1,5 @@
 //! Type conversion primitives
-use crate::effects::Effect;
+use crate::signals::Signal;
 use crate::primitives::def::PrimitiveDef;
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use crate::value::types::Arity;
@@ -269,7 +269,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "integer",
         func: prim_to_int,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Convert value to integer (48-bit signed). Accepts int, float, string, or keyword.",
         params: &["x"],
@@ -280,7 +280,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "float",
         func: prim_to_float,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::Exact(1),
         doc: "Convert value to float. Accepts int, float, string, or keyword.",
         params: &["x"],
@@ -291,7 +291,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string",
         func: prim_to_string,
-        effect: Effect::inert(),
+        effect: Signal::inert(),
         arity: Arity::AtLeast(0),
         doc: "Convert values to string. Multiple arguments are concatenated.",
         params: &["values"],
