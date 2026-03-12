@@ -380,7 +380,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         aliases: &[],
     },
     PrimitiveDef {
-        name: "emit",
+        name: "fiber/emit",
         func: prim_fiber_signal,
         effect: Effect::yields_errors(),
         arity: Arity::Exact(2),
@@ -388,7 +388,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["bits", "value"],
         category: "fiber",
         example: "(emit 2 42)",
-        aliases: &[],
+        aliases: &["emit"],
     },
     PrimitiveDef {
         name: "fiber/status",
