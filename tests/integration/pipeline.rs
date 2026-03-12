@@ -829,12 +829,12 @@ fn test_fiber_resume_dead_status() {
 }
 
 #[test]
-fn test_fiber_signal_and_resume() {
-    // A fiber that signals, then is resumed to completion
+fn test_fiber_emit_and_resume() {
+    // A fiber that emits, then is resumed to completion
     let (mut symbols, mut vm) = setup();
     // SIG_YIELD = 2, mask catches it
     let result = eval(
-        r#"(let ((f (fiber/new (fn () (fiber/signal 2 99) 42) 2)))
+        r#"(let ((f (fiber/new (fn () (emit 2 99) 42) 2)))
              (fiber/resume f)
              (fiber/value f))"#,
         &mut symbols,
@@ -848,11 +848,11 @@ fn test_fiber_signal_and_resume() {
 }
 
 #[test]
-fn test_fiber_signal_resume_continues() {
-    // Resume after signal should continue execution and return final value
+fn test_fiber_emit_resume_continues() {
+    // Resume after emit should continue execution and return final value
     let (mut symbols, mut vm) = setup();
     let result = eval(
-        r#"(let ((f (fiber/new (fn () (fiber/signal 2 99) 42) 2)))
+        r#"(let ((f (fiber/new (fn () (emit 2 99) 42) 2)))
              (fiber/resume f)
              (fiber/resume f))"#,
         &mut symbols,
@@ -891,13 +891,13 @@ fn test_fiber_not_fiber() {
 }
 
 #[test]
-fn test_fiber_signal_through_nested_call() {
-    // A fiber whose body calls a function that signals.
+fn test_fiber_emit_through_nested_call() {
+    // A fiber whose body calls a function that emits.
     // This tests yield propagation through nested calls.
     let (mut symbols, mut vm) = setup();
     let result = eval(
         r#"(begin
-             (defn inner () (fiber/signal 2 99))
+             (defn inner () (emit 2 99))
              (let ((f (fiber/new (fn () (inner) 42) 2)))
                (fiber/resume f)
                (fiber/value f)))"#,

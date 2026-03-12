@@ -813,67 +813,67 @@ fn test_polymorphic_inference_pure_function() {
 // the nqueens effect test.
 
 // ============================================================================
-// CHUNK 2: (effect :keyword) form tests
+// CHUNK 2: (signal :keyword) form tests
 // ============================================================================
 
-// test_effect_declaration_returns_keyword: migrated to tests/elle/effects.lisp
+// test_signal_declaration_returns_keyword: migrated to tests/elle/effects.lisp
 
-// test_effect_declaration_non_keyword_error: migrated to tests/elle/effects.lisp
+// test_signal_declaration_non_keyword_error: migrated to tests/elle/effects.lisp
 
-// test_effect_declaration_builtin_error: migrated to tests/elle/effects.lisp
+// test_signal_declaration_builtin_error: migrated to tests/elle/effects.lisp
 
-// test_effect_in_expression_position: migrated to tests/elle/effects.lisp
+// test_signal_in_expression_position: migrated to tests/elle/effects.lisp
 
-// test_effect_declaration_duplicate_error: migrated to tests/elle/effects.lisp
+// test_signal_declaration_duplicate_error: migrated to tests/elle/effects.lisp
 
 // ============================================================================
-// CHUNK 3: restrict form parsing tests
+// CHUNK 3: silence form parsing tests
 // ============================================================================
 
 #[test]
-fn test_restrict_parses_function_level_inert() {
+fn test_silence_parses_function_level_inert() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (x) (restrict) (+ x 1))",
+        "(fn (x) (silence) (+ x 1))",
         &mut symbols,
         &mut vm,
         "<test>",
     );
-    // Should parse without error (restrict preamble parsing will be added in implementation)
+    // Should parse without error
     assert!(result.is_ok());
 }
 
 #[test]
-fn test_restrict_parses_param_level_inert() {
+fn test_silence_parses_param_level_inert() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (f x) (restrict f) (f x))",
+        "(fn (f x) (silence f) (f x))",
         &mut symbols,
         &mut vm,
         "<test>",
     );
-    // Should parse without error (param_bounds field will be added in implementation)
+    // Should parse without error
     assert!(result.is_ok());
 }
 
 #[test]
-fn test_restrict_parses_param_level_with_keyword() {
+fn test_silence_parses_param_level_with_keyword() {
     let (mut symbols, mut vm) = setup();
     let result = analyze_file(
-        "(effect :restrict_c3a) (def _ (fn (f x) (restrict f :restrict_c3a) (f x)))",
+        "(signal :restrict_c3a) (def _ (fn (f x) (silence f :restrict_c3a) (f x)))",
         &mut symbols,
         &mut vm,
         "<test>",
     );
-    // Should parse without error (param_bounds field will be added in implementation)
+    // Should parse without error
     assert!(result.is_ok(), "expected ok, got: {:?}", result.err());
 }
 
 #[test]
-fn test_restrict_unknown_keyword_error() {
+fn test_silence_unknown_keyword_error() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (f) (restrict f :nonexistent_c3b) (f))",
+        "(fn (f) (silence f :nonexistent_c3b) (f))",
         &mut symbols,
         &mut vm,
         "<test>",
@@ -884,31 +884,31 @@ fn test_restrict_unknown_keyword_error() {
 }
 
 #[test]
-fn test_restrict_unknown_param_error() {
+fn test_silence_unknown_param_error() {
     let (mut symbols, mut vm) = setup();
-    let result = analyze("(fn (f) (restrict g) (f))", &mut symbols, &mut vm, "<test>");
+    let result = analyze("(fn (f) (silence g) (f))", &mut symbols, &mut vm, "<test>");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.contains("not a parameter") || err.contains("unknown parameter"));
 }
 
 #[test]
-fn test_restrict_duplicate_param_last_wins() {
+fn test_silence_duplicate_param_last_wins() {
     let (mut symbols, mut vm) = setup();
     let result = analyze_file(
-        "(effect :dup_p_c3c) (def _ (fn (f) (restrict f) (restrict f :dup_p_c3c) (f)))",
+        "(signal :dup_p_c3c) (def _ (fn (f) (silence f) (silence f :dup_p_c3c) (f)))",
         &mut symbols,
         &mut vm,
         "<test>",
     );
-    // Should parse without error (param_bounds field will be added in implementation)
+    // Should parse without error
     assert!(result.is_ok(), "expected ok, got: {:?}", result.err());
 }
 
 #[test]
-fn test_restrict_outside_lambda_not_special() {
+fn test_silence_outside_lambda_not_special() {
     let (mut symbols, mut vm) = setup();
-    let result = analyze("(restrict f)", &mut symbols, &mut vm, "<test>");
+    let result = analyze("(silence f)", &mut symbols, &mut vm, "<test>");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(
@@ -919,10 +919,10 @@ fn test_restrict_outside_lambda_not_special() {
 }
 
 #[test]
-fn test_restrict_function_level_with_keywords() {
+fn test_silence_function_level_with_keywords() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (x) (restrict :error) (error \"boom\"))",
+        "(fn (x) (silence :error) (error \"boom\"))",
         &mut symbols,
         &mut vm,
         "<test>",
@@ -932,10 +932,10 @@ fn test_restrict_function_level_with_keywords() {
 }
 
 #[test]
-fn test_restrict_after_docstring() {
+fn test_silence_after_docstring() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (f x) \"Apply f.\" (restrict f) (f x))",
+        "(fn (f x) \"Apply f.\" (silence f) (f x))",
         &mut symbols,
         &mut vm,
         "<test>",
@@ -954,36 +954,36 @@ fn test_restrict_after_docstring() {
 // ============================================================================
 
 #[test]
-fn test_restrict_param_eliminates_polymorphism() {
+fn test_silence_param_eliminates_polymorphism() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(def apply-inert (fn (f x) (restrict f) (f x)))",
+        "(def apply-inert (fn (f x) (silence f) (f x)))",
         &mut symbols,
         &mut vm,
         "<test>",
     );
-    // Should parse without error (effect inference with bounds will be added in implementation)
+    // Should parse without error
     assert!(result.is_ok());
 }
 
 #[test]
-fn test_restrict_param_contributes_bound_bits() {
+fn test_silence_param_contributes_bound_bits() {
     let (mut symbols, mut vm) = setup();
     let result = analyze_file(
-        "(effect :bound_c4a) (def apply-bounded (fn (f x) (restrict f :bound_c4a) (f x)))",
+        "(signal :bound_c4a) (def apply-bounded (fn (f x) (silence f :bound_c4a) (f x)))",
         &mut symbols,
         &mut vm,
         "<test>",
     );
-    // Should parse without error (effect inference with bounds will be added in implementation)
+    // Should parse without error
     assert!(result.is_ok(), "expected ok, got: {:?}", result.err());
 }
 
 #[test]
-fn test_restrict_function_ceiling_passes() {
+fn test_silence_function_ceiling_passes() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (x) (restrict) (+ x 1))",
+        "(fn (x) (silence) (+ x 1))",
         &mut symbols,
         &mut vm,
         "<test>",
@@ -992,10 +992,10 @@ fn test_restrict_function_ceiling_passes() {
 }
 
 #[test]
-fn test_restrict_function_ceiling_fails() {
+fn test_silence_function_ceiling_fails() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (x) (restrict) (yield x))",
+        "(fn (x) (silence) (yield x))",
         &mut symbols,
         &mut vm,
         "<test>",
@@ -1006,10 +1006,10 @@ fn test_restrict_function_ceiling_fails() {
 }
 
 #[test]
-fn test_restrict_function_ceiling_error_passes() {
+fn test_silence_function_ceiling_error_passes() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (x) (restrict :error) (error \"boom\"))",
+        "(fn (x) (silence :error) (error \"boom\"))",
         &mut symbols,
         &mut vm,
         "<test>",
@@ -1018,10 +1018,10 @@ fn test_restrict_function_ceiling_error_passes() {
 }
 
 #[test]
-fn test_restrict_function_ceiling_error_fails_yield() {
+fn test_silence_function_ceiling_error_fails_yield() {
     let (mut symbols, mut vm) = setup();
     let result = analyze(
-        "(fn (x) (restrict :error) (yield x))",
+        "(fn (x) (silence :error) (yield x))",
         &mut symbols,
         &mut vm,
         "<test>",
@@ -1030,36 +1030,36 @@ fn test_restrict_function_ceiling_error_fails_yield() {
 }
 
 #[test]
-fn test_restrict_callsite_concrete_fails() {
-    // Compile-time callsite checking is not yet implemented — restrict bounds
+fn test_silence_callsite_concrete_fails() {
+    // Compile-time callsite checking is not yet implemented — silence bounds
     // are enforced at runtime via CheckEffectBound. Use eval_source to verify
     // the runtime check catches the violation.
     let result = crate::common::eval_source(
-        "(begin (def apply-inert (fn (f x) (restrict f) (f x))) (apply-inert (fn (x) (yield x)) 42))",
+        "(begin (def apply-inert (fn (f x) (silence f) (f x))) (apply-inert (fn (x) (yield x)) 42))",
     );
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.contains("effect-violation") || err.contains("restrict") || err.contains("bound"));
+    assert!(err.contains("effect-violation") || err.contains("silence") || err.contains("bound"));
 }
 
 #[test]
-fn test_restrict_param_with_user_effect() {
+fn test_silence_param_with_user_effect() {
     let (mut symbols, mut vm) = setup();
     let result = analyze_file(
-        "(effect :user_c4b) (def apply-user (fn (f) (restrict f :user_c4b) (f)))",
+        "(signal :user_c4b) (def apply-user (fn (f) (silence f :user_c4b) (f)))",
         &mut symbols,
         &mut vm,
         "<test>",
     );
-    // Should parse without error (effect inference with bounds will be added in implementation)
+    // Should parse without error
     assert!(result.is_ok(), "expected ok, got: {:?}", result.err());
 }
 
 #[test]
-fn test_restrict_ceiling_fails_bounded_param() {
+fn test_silence_ceiling_fails_bounded_param() {
     let (mut symbols, mut vm) = setup();
     let result = analyze_file(
-        "(effect :ceil_c4c) (def bad (fn (f x) (restrict f :ceil_c4c) (restrict) (f x)))",
+        "(signal :ceil_c4c) (def bad (fn (f x) (silence f :ceil_c4c) (silence) (f x)))",
         &mut symbols,
         &mut vm,
         "<test>",
@@ -1073,32 +1073,32 @@ fn test_restrict_ceiling_fails_bounded_param() {
 // CHUNK 5: Runtime effect checking tests
 // ============================================================================
 
-// test_restrict_runtime_check_passes: migrated to tests/elle/effects.lisp
+// test_silence_runtime_check_passes: migrated to tests/elle/effects.lisp
 
-// test_restrict_runtime_check_fails: migrated to tests/elle/effects.lisp
+// test_silence_runtime_check_fails: migrated to tests/elle/effects.lisp
 
-// test_restrict_runtime_non_closure_passes: migrated to tests/elle/effects.lisp
+// test_silence_runtime_non_closure_passes: migrated to tests/elle/effects.lisp
 
-// test_restrict_runtime_bounded_keyword: migrated to tests/elle/effects.lisp
+// test_silence_runtime_bounded_keyword: migrated to tests/elle/effects.lisp
 
-// test_restrict_runtime_bounded_keyword_fails: migrated to tests/elle/effects.lisp
+// test_silence_runtime_bounded_keyword_fails: migrated to tests/elle/effects.lisp
 
-// test_restrict_runtime_dynamic_passes: migrated to tests/elle/effects.lisp
+// test_silence_runtime_dynamic_passes: migrated to tests/elle/effects.lisp
 
-// test_restrict_runtime_dynamic_fails: migrated to tests/elle/effects.lisp
+// test_silence_runtime_dynamic_fails: migrated to tests/elle/effects.lisp
 
 // ============================================================================
-// CHUNK 6: (effects) introspection primitive tests
+// CHUNK 6: (signals) introspection primitive tests
 // ============================================================================
 
-// test_effects_primitive_returns_struct: migrated to tests/elle/effects.lisp
-// test_effects_primitive_contains_builtins: migrated to tests/elle/effects.lisp
-// test_effects_primitive_contains_user_effects: migrated to tests/elle/effects.lisp
+// test_signals_primitive_returns_struct: migrated to tests/elle/effects.lisp
+// test_signals_primitive_contains_builtins: migrated to tests/elle/effects.lisp
+// test_signals_primitive_contains_user_effects: migrated to tests/elle/effects.lisp
 
 #[test]
-fn test_effects_primitive_is_inert() {
+fn test_signals_primitive_is_inert() {
     let (mut symbols, mut vm) = setup();
-    let result = analyze("(fn () (effects))", &mut symbols, &mut vm, "<test>");
-    // Should parse without error (effects primitive will be added in implementation)
+    let result = analyze("(fn () (signals))", &mut symbols, &mut vm, "<test>");
+    // Should parse without error
     assert!(result.is_ok());
 }
