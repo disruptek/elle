@@ -133,6 +133,8 @@ Things that look wrong but aren't. The 4 most critical (agents get these wrong):
 
 - **Elle has no `-e` flag.** To run one-liners, use `echo '(expr)' | elle`.
 
+- **Elle has no `-` flags at all.** See `elle --help`.
+
 - **`nil` vs `()` are distinct.** `nil` is falsy (absence). `()` is truthy (empty list).
   Lists terminate with `EMPTY_LIST`. Use `empty?` (not `nil?`) for end-of-list.
   **Getting this wrong causes infinite recursion.**
