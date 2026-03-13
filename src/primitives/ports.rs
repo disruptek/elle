@@ -460,7 +460,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "port/path",
         func: prim_port_path,
-        effect: Effect::errors(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Return the path or address the port was opened on, or nil for stdio ports.",
         params: &["port"],
