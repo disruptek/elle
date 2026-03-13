@@ -114,6 +114,7 @@ pub(super) fn submit_uring_connect(
     addr: &ConnectAddr,
     timeout: Option<Duration>,
     buffer_pool: &mut BufferPool,
+    buf_handle: BufferHandle,
 ) -> Result<RawFd, String> {
     use io_uring::opcode;
     use io_uring::types::Fd;
@@ -227,8 +228,8 @@ pub(super) fn submit_uring_connect(
         }
     };
 
-    // Stash the sockaddr in a buffer so it lives until the CQE completes.
-    let buf_handle = buffer_pool.alloc(sockaddr_buf.len());
+    // Stash the sockaddr in the caller's buffer so it lives until the CQE
+    // completes. The caller passes its buf_handle — no second allocation.
     let buf = buffer_pool.get_mut(buf_handle);
     buf.extend_from_slice(&sockaddr_buf);
 
@@ -298,33 +299,54 @@ pub(super) fn submit_uring_sendto(
     // Parse address
     match addr_str.parse::<std::net::SocketAddr>() {
         Ok(dest) => {
-            let (sockaddr, sockaddr_len) = match dest {
+            let (sockaddr_bytes, sockaddr_len) = match dest {
                 std::net::SocketAddr::V4(v4) => {
                     let mut sin: libc::sockaddr_in = unsafe { std::mem::zeroed() };
                     sin.sin_family = libc::AF_INET as libc::sa_family_t;
                     sin.sin_port = v4.port().to_be();
                     sin.sin_addr.s_addr = u32::from(*v4.ip()).to_be();
-                    let ptr = &sin as *const libc::sockaddr_in as *const libc::sockaddr;
-                    let len = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
-                    (ptr, len)
+                    let bytes = unsafe {
+                        std::slice::from_raw_parts(
+                            &sin as *const _ as *const u8,
+                            std::mem::size_of::<libc::sockaddr_in>(),
+                        )
+                        .to_vec()
+                    };
+                    (
+                        bytes,
+                        std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+                    )
                 }
                 std::net::SocketAddr::V6(v6) => {
                     let mut sin6: libc::sockaddr_in6 = unsafe { std::mem::zeroed() };
                     sin6.sin6_family = libc::AF_INET6 as libc::sa_family_t;
                     sin6.sin6_port = v6.port().to_be();
                     sin6.sin6_addr.s6_addr = v6.ip().octets();
-                    let ptr = &sin6 as *const libc::sockaddr_in6 as *const libc::sockaddr;
-                    let len = std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t;
-                    (ptr, len)
+                    let bytes = unsafe {
+                        std::slice::from_raw_parts(
+                            &sin6 as *const _ as *const u8,
+                            std::mem::size_of::<libc::sockaddr_in6>(),
+                        )
+                        .to_vec()
+                    };
+                    (
+                        bytes,
+                        std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t,
+                    )
                 }
             };
 
-            let buf_handle = buffer_pool.alloc(data.len());
+            // Pack sockaddr + payload into one buffer so both survive until
+            // the CQE completes.  sockaddr at offset 0, payload after it.
+            let buf_handle = buffer_pool.alloc(0);
             let buf = buffer_pool.get_mut(buf_handle);
+            buf.extend_from_slice(&sockaddr_bytes);
             buf.extend_from_slice(data);
 
-            let sendto_sqe = opcode::Send::new(Fd(fd), buf.as_ptr(), buf.len() as u32)
-                .dest_addr(sockaddr)
+            let sockaddr_ptr = buf.as_ptr() as *const libc::sockaddr;
+            let payload_ptr = unsafe { buf.as_ptr().add(sockaddr_bytes.len()) };
+            let sendto_sqe = opcode::Send::new(Fd(fd), payload_ptr, data.len() as u32)
+                .dest_addr(sockaddr_ptr)
                 .dest_addr_len(sockaddr_len)
                 .build()
                 .user_data(id);
@@ -363,6 +385,10 @@ pub(super) fn submit_uring_sendto(
     }
 }
 
+/// Buffer layout for RecvMsg: `[msghdr | iovec | sockaddr_storage | data(count)]`
+///
+/// The msghdr, iovec, sockaddr_storage, and data buffer are all packed into
+/// one contiguous allocation so they stay pinned until the CQE completes.
 pub(super) fn submit_uring_recvfrom(
     ring: &mut io_uring::IoUring,
     id: u64,
@@ -374,11 +400,35 @@ pub(super) fn submit_uring_recvfrom(
     use io_uring::opcode;
     use io_uring::types::Fd;
 
-    let buf_handle = buffer_pool.alloc(count + std::mem::size_of::<libc::sockaddr_storage>() + 4);
-    let buf = buffer_pool.get_mut(buf_handle);
-    buf.resize(count, 0);
+    let msghdr_size = std::mem::size_of::<libc::msghdr>();
+    let iovec_size = std::mem::size_of::<libc::iovec>();
+    let sockaddr_size = std::mem::size_of::<libc::sockaddr_storage>();
+    let total = msghdr_size + iovec_size + sockaddr_size + count;
 
-    let recvfrom_sqe = opcode::Recv::new(Fd(fd), buf.as_mut_ptr(), buf.len() as u32)
+    let buf_handle = buffer_pool.alloc(0);
+    let buf = buffer_pool.get_mut(buf_handle);
+    buf.resize(total, 0);
+
+    let buf_ptr = buf.as_mut_ptr();
+
+    unsafe {
+        // iovec at offset msghdr_size
+        let iov_ptr = buf_ptr.add(msghdr_size) as *mut libc::iovec;
+        (*iov_ptr).iov_base = buf_ptr.add(msghdr_size + iovec_size + sockaddr_size) as *mut _;
+        (*iov_ptr).iov_len = count;
+
+        // msghdr at offset 0
+        let msg_ptr = buf_ptr as *mut libc::msghdr;
+        (*msg_ptr).msg_name = buf_ptr.add(msghdr_size + iovec_size) as *mut _;
+        (*msg_ptr).msg_namelen = sockaddr_size as libc::socklen_t;
+        (*msg_ptr).msg_iov = iov_ptr;
+        (*msg_ptr).msg_iovlen = 1;
+        (*msg_ptr).msg_control = std::ptr::null_mut();
+        (*msg_ptr).msg_controllen = 0;
+        (*msg_ptr).msg_flags = 0;
+    }
+
+    let recvfrom_sqe = opcode::RecvMsg::new(Fd(fd), buf_ptr as *mut libc::msghdr)
         .build()
         .user_data(id);
 
@@ -483,63 +533,80 @@ pub(super) fn submit_uring_sleep(
     Ok(())
 }
 
-pub(super) fn wait_uring(
+/// Drain all available CQEs from the completion ring.
+///
+/// This is the **single** CQE processing path — used by both poll (non-blocking)
+/// and wait (after blocking). Handles:
+/// - Timeout CQE filtering (high-bit user_data tag)
+/// - Connect fd cleanup on error
+/// - IoOp-aware buffer extraction (only reads buffer for stream reads)
+pub(super) fn drain_cqes(
     ring: &mut io_uring::IoUring,
-    timeout: Option<u64>,
     pending: &mut HashMap<u64, PendingOp>,
     buffer_pool: &mut BufferPool,
     fd_states: &mut HashMap<PortKey, FdState>,
     completions: &mut VecDeque<Completion>,
-) -> Result<(), String> {
-    // Wait for at least one CQE
-    match timeout {
-        Some(0) => {} // poll only
-        Some(ms) => {
-            let ts = io_uring::types::Timespec::new()
-                .sec(ms / 1000)
-                .nsec(((ms % 1000) * 1_000_000) as u32);
-            let args = io_uring::types::SubmitArgs::new().timespec(&ts);
-            let _ = ring.submitter().submit_with_args(1, &args);
-        }
-        None => {
-            ring.submit_and_wait(1)
-                .map_err(|e| format!("io/wait: io_uring wait failed: {}", e))?;
-        }
-    }
-
-    // Drain all available CQEs
+) {
     for cqe in ring.completion() {
         let user_data = cqe.user_data();
         let result_code = cqe.result();
 
-        // Skip timeout CQEs (they have the high bit set)
+        // Timeout CQEs have the high bit set — skip them.
         if user_data & TIMEOUT_USER_DATA_TAG != 0 {
             continue;
         }
 
         let id = user_data;
         if let Some(mut pending_op) = pending.remove(&id) {
-            // io_uring Connect: CQE result is 0 on success, negative errno on failure.
-            // On failure, close the pre-created socket. connect_fd stays set so the
-            // error path in process_raw_completion won't try to use it.
+            // Connect: on failure, close the pre-created socket.
             if let Some(fd) = pending_op.connect_fd {
                 if result_code < 0 {
                     unsafe { libc::close(fd) };
                     pending_op.connect_fd = None;
                 }
-                // On success, connect_fd is already correct — the completion handler
-                // reads it directly.
             }
 
-            // Only read CQE data from the buffer for stream I/O ops where
-            // result_code is a byte count. For Accept (result_code = new fd),
-            // Connect (result_code = 0), Sleep, Shutdown, Flush — no buffer data.
+            // Only read from the buffer for stream I/O ops where result_code
+            // is a byte count. Accept (result = new fd), Connect (result = 0),
+            // Sleep, Shutdown, Flush — no buffer data.
+            //
+            // RecvFrom uses RecvMsg with a packed buffer layout:
+            //   [msghdr | iovec | sockaddr_storage | data]
+            // Extract the sockaddr and payload, encode as:
+            //   addr_len(4 LE) + sockaddr_storage + payload
+            // to match the thread pool format expected by completion.rs.
             let data = match &pending_op.op {
+                IoOp::RecvFrom { .. } if result_code > 0 => {
+                    let msghdr_size = std::mem::size_of::<libc::msghdr>();
+                    let iovec_size = std::mem::size_of::<libc::iovec>();
+                    let sockaddr_size = std::mem::size_of::<libc::sockaddr_storage>();
+                    let buf = buffer_pool.get_mut(pending_op.buffer_handle);
+
+                    // Read actual address length from msghdr (kernel updates msg_namelen)
+                    let addr_len = unsafe {
+                        let msg_ptr = buf.as_ptr() as *const libc::msghdr;
+                        (*msg_ptr).msg_namelen
+                    };
+
+                    // Extract sockaddr_storage bytes
+                    let sa_start = msghdr_size + iovec_size;
+                    let sa_bytes = buf[sa_start..sa_start + sockaddr_size].to_vec();
+
+                    // Extract payload bytes (result_code = bytes received)
+                    let data_start = msghdr_size + iovec_size + sockaddr_size;
+                    let payload = buf[data_start..data_start + result_code as usize].to_vec();
+
+                    // Encode in thread pool format: addr_len(4 LE) + sockaddr_storage + payload
+                    let mut encoded = Vec::with_capacity(4 + sockaddr_size + payload.len());
+                    encoded.extend_from_slice(&addr_len.to_le_bytes());
+                    encoded.extend_from_slice(&sa_bytes);
+                    encoded.extend_from_slice(&payload);
+                    encoded
+                }
                 IoOp::ReadLine | IoOp::Read { .. } | IoOp::ReadAll if result_code > 0 => {
                     let buf = buffer_pool.get_mut(pending_op.buffer_handle);
                     buf[..result_code as usize].to_vec()
                 }
-                IoOp::Write { .. } | IoOp::SendTo { .. } => Vec::new(),
                 _ => Vec::new(),
             };
             let completion = process_raw_completion(
@@ -554,5 +621,32 @@ pub(super) fn wait_uring(
             completions.push_back(completion);
         }
     }
+}
+
+pub(super) fn wait_uring(
+    ring: &mut io_uring::IoUring,
+    timeout: Option<u64>,
+    pending: &mut HashMap<u64, PendingOp>,
+    buffer_pool: &mut BufferPool,
+    fd_states: &mut HashMap<PortKey, FdState>,
+    completions: &mut VecDeque<Completion>,
+) -> Result<(), String> {
+    // Block until at least one CQE is available (or timeout).
+    match timeout {
+        Some(0) => {} // poll only — no wait
+        Some(ms) => {
+            let ts = io_uring::types::Timespec::new()
+                .sec(ms / 1000)
+                .nsec(((ms % 1000) * 1_000_000) as u32);
+            let args = io_uring::types::SubmitArgs::new().timespec(&ts);
+            let _ = ring.submitter().submit_with_args(1, &args);
+        }
+        None => {
+            ring.submit_and_wait(1)
+                .map_err(|e| format!("io/wait: io_uring wait failed: {}", e))?;
+        }
+    }
+
+    drain_cqes(ring, pending, buffer_pool, fd_states, completions);
     Ok(())
 }

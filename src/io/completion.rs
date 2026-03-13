@@ -69,9 +69,24 @@ pub(super) fn process_raw_completion(
         // Success
         let value = match &pending.op {
             IoOp::ReadLine => {
-                let s = String::from_utf8_lossy(&data);
-                let trimmed = s.trim_end_matches('\n').trim_end_matches('\r');
-                Value::string(trimmed)
+                // Per-fd buffering: append raw data, extract one line.
+                let state = fd_states
+                    .entry(pending.port_key.clone())
+                    .or_insert_with(FdState::new);
+                state.buffer.extend_from_slice(&data);
+
+                if let Some(pos) = state.buffer.iter().position(|&b| b == b'\n') {
+                    let line_bytes: Vec<u8> = state.buffer.drain(..=pos).collect();
+                    let s = String::from_utf8_lossy(&line_bytes);
+                    let trimmed = s.trim_end_matches('\n').trim_end_matches('\r');
+                    Value::string(trimmed)
+                } else {
+                    // No newline — partial line at EOF. Drain everything.
+                    let all: Vec<u8> = state.buffer.drain(..).collect();
+                    let s = String::from_utf8_lossy(&all);
+                    let trimmed = s.trim_end_matches('\n').trim_end_matches('\r');
+                    Value::string(trimmed)
+                }
             }
             IoOp::Read { .. } | IoOp::ReadAll => {
                 // Check port encoding
