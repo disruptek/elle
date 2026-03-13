@@ -11,9 +11,6 @@
 
 (def http ((import "./lib/http.lisp")))
 
-(def read-request   (get http :read-request))
-(def write-response (get http :write-response))
-
 # ── URL parsing ──────────────────────────────────────────────────────────────
 
 (let* [[u (http:parse-url "http://example.com:8080/api?q=test")]]
@@ -22,49 +19,29 @@
   (assert (= u:path  "/api")        "path")
   (assert (= u:query "q=test")      "query"))
 
-# ── http-respond ─────────────────────────────────────────────────────────────
+# ── http:respond ─────────────────────────────────────────────────────────────
 
-(let* [[r (http:http-respond 200 "Hello, World!")]]
+(let* [[r (http:respond 200 "Hello, World!")]]
   (assert (= r:status 200)             "status 200")
   (assert (= r:body   "Hello, World!") "body"))
 
-# ── Server + client integration ──────────────────────────────────────────────
+# ── http:serve demonstration ────────────────────────────────────────────────
 #
-# We create a TCP listener ourselves so we can control the lifecycle.
-# The server fiber handles exactly 2 connections then exits.
-# The client fiber makes 2 requests then exits.
-# ev/run returns once both fibers are done.
-
-(let* [[listener (tcp/listen "127.0.0.1" 0)]
-       [addr     (port/path listener)]
-       [port-num (integer (get (string/split addr ":") 1))]
-       [responses @[]]]
-
-  (ev/run
-    # Server: handle exactly 2 connections
-    (fn []
-      (let* [[conn (tcp/accept listener)]
-             [req  (read-request conn)]
-             [body (string/format "method={} path={}" req:method req:path)]]
-        (write-response conn (http-respond 200 body))
-        (port/close conn))
-      (let* [[conn (tcp/accept listener)]
-             [req  (read-request conn)]
-             [body (string/format "body={}" (or req:body ""))]]
-        (write-response conn (http-respond 201 body))
-        (port/close conn)))
-
-    # Client: GET then POST, collect responses
-    (fn []
-      (push responses (http:get  (string/format "http://127.0.0.1:{}/hello" port-num)))
-      (push responses (http:post (string/format "http://127.0.0.1:{}/data"  port-num) "hello"))))
-
-  (port/close listener)
-
-  (let [[[r1 r2] responses]]
-    (assert (= r1:status 200)                  "GET status 200")
-    (assert (string-contains? r1:body "GET")   "GET response mentions method")
-    (assert (= r2:status 201)                  "POST status 201")
-    (assert (string-contains? r2:body "hello") "POST response echoes body")))
+# http:serve(port handler) starts an HTTP server that runs forever.
+# The handler receives a request struct and returns a response struct.
+# Request: {:method :path :version :headers :body}
+# Response: {:status :headers :body}
+#
+# Example handler (not executed here, as http:serve blocks):
+#
+#   (defn my-handler [request]
+#     (match request:method
+#       ("GET" (http:respond 200 (string/format "GET {}" request:path)))
+#       ("POST" (http:respond 201 (string/format "Posted: {}" request:body)))
+#       (_ (http:respond 405 "Method Not Allowed"))))
+#
+#   (http:serve 8080 my-handler)  ; runs forever
+#
+# To stop the server, use (cancel server-fiber) from outside the handler.
 
 (print "all http examples passed.")

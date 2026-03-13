@@ -88,7 +88,7 @@
     (when (< (length parts) 3)
       (error {:error :http-error :message "malformed request line"
               :line line}))
-    (let [[method path version] parts]
+    (let [[[method path version] parts]]
       (unless (string/starts-with? version "HTTP/")
         (error {:error :http-error :message "invalid HTTP version"
                 :version version}))
