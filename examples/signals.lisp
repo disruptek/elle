@@ -48,7 +48,7 @@
 (def search-fiber (fiber/new drive-search |:abort|))
 
 # resume once — the fiber runs until it hits emit :abort
-(fiber/resume search-fiber)
+(resume search-fiber)
 
 # if the fiber paused, it caught an :abort signal; fiber/value holds the payload
 (def found (fiber/value search-fiber))
@@ -86,7 +86,7 @@
 # drive the fiber until it finishes, collecting each :progress signal
 (forever
   # resume the fiber — runs until next emit or completion
-  (fiber/resume pf)
+  (resume pf)
   (if (= (fiber/status pf) :paused)
     # fiber paused on a :progress signal — collect the payload
     (push progress-log (fiber/value pf))
@@ -131,7 +131,7 @@
 # drive the fiber, collecting each :log signal
 (forever
   # resume — runs until next emit :log or completion
-  (fiber/resume lf)
+  (resume lf)
   (match (fiber/status lf)
          # fiber paused on :log — record the entry
          (:paused (push log-entries (fiber/value lf)))
@@ -151,7 +151,7 @@
 
 (def lf2 (fiber/new run-logged-ignore |:log|))
 (forever
-  (fiber/resume lf2)
+  (resume lf2)
   (if (not (= (fiber/status lf2) :paused))
     (break)))  # keep resuming until done, discarding :log payloads
 
@@ -263,7 +263,7 @@
 (def monitor (fiber/new run-sensitive |:log|))
 
 # resume the monitor fiber — runs until it hits the composed signal
-(fiber/resume monitor)
+(resume monitor)
 
 # the fiber paused on the composed signal — inspect the signal payload
 (def sig-val (fiber/value monitor))
@@ -293,7 +293,7 @@
 (def audit-monitor (fiber/new run-sensitive-again |:audit|))
 
 # resume the audit monitor — runs until it hits the composed signal
-(fiber/resume audit-monitor)
+(resume audit-monitor)
 
 # the audit monitor also paused on the same composed signal
 (def audit-sig-val (fiber/value audit-monitor))
