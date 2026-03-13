@@ -59,3 +59,80 @@
   (fn () (parse-url "https://example.com/"))
   :http-error
   "https signals :http-error")
+
+# ============================================================================
+# Chunk 2: Header parsing and serialization
+# ============================================================================
+
+(def header-name->keyword (get http :header-name->keyword))
+(def keyword->header-name (get http :keyword->header-name))
+(def read-headers  (get http :read-headers))
+(def write-headers (get http :write-headers))
+
+# header-name->keyword
+(assert-eq (header-name->keyword "Content-Type") :content-type
+  "Content-Type -> :content-type")
+(assert-eq (header-name->keyword "Host") :host
+  "Host -> :host")
+(assert-eq (header-name->keyword "X-Custom-Header") :x-custom-header
+  "X-Custom-Header -> :x-custom-header")
+(assert-eq (header-name->keyword "content-type") :content-type
+  "already lowercase: content-type -> :content-type")
+
+# keyword->header-name
+(assert-eq (keyword->header-name :content-type) "Content-Type"
+  ":content-type -> Content-Type")
+(assert-eq (keyword->header-name :host) "Host"
+  ":host -> Host")
+(assert-eq (keyword->header-name :x-custom-header) "X-Custom-Header"
+  ":x-custom-header -> X-Custom-Header")
+(assert-eq (keyword->header-name :content-length) "Content-Length"
+  ":content-length -> Content-Length")
+
+# Round-trip: header-name->keyword -> keyword->header-name
+(assert-eq (keyword->header-name (header-name->keyword "Content-Type")) "Content-Type"
+  "round-trip Content-Type")
+(assert-eq (keyword->header-name (header-name->keyword "Host")) "Host"
+  "round-trip Host")
+
+# read-headers: parse from a file used as port
+(spit "/tmp/elle-http-test-headers"
+  "Content-Type: text/plain\r\nHost: example.com\r\nContent-Length: 42\r\n\r\n")
+(let ((p (port/open "/tmp/elle-http-test-headers" :read)))
+  (let ((h (ev/spawn (fn [] (read-headers p)))))
+    (port/close p)
+    (assert-eq (get h :content-type)   "text/plain"   "content-type header")
+    (assert-eq (get h :host)           "example.com"  "host header")
+    (assert-eq (get h :content-length) "42"            "content-length header")))
+
+# read-headers: whitespace trimmed from values
+(spit "/tmp/elle-http-test-headers-ws"
+  "X-Foo:   bar baz   \r\n\r\n")
+(let ((p (port/open "/tmp/elle-http-test-headers-ws" :read)))
+  (let ((h (ev/spawn (fn [] (read-headers p)))))
+    (port/close p)
+    (assert-eq (get h :x-foo) "bar baz" "leading/trailing whitespace trimmed")))
+
+# read-headers: malformed line signals :http-error
+(spit "/tmp/elle-http-test-headers-bad" "no-colon-here\r\n\r\n")
+(assert-err-kind
+  (fn ()
+    (let ((p (port/open "/tmp/elle-http-test-headers-bad" :read)))
+      (let ((result (ev/spawn (fn [] (read-headers p)))))
+        (port/close p)
+        result)))
+  :http-error
+  "malformed header line signals :http-error")
+
+# write-headers: verify format
+(let ((p (port/open "/tmp/elle-http-test-write-headers" :write)))
+  (ev/spawn (fn []
+    (write-headers p {:content-type "text/plain" :content-length "11"})
+    (stream/write p "\r\n")
+    (stream/flush p)))
+  (port/close p))
+(let ((content (slurp "/tmp/elle-http-test-write-headers")))
+  (assert-true (string-contains? content "Content-Type: text/plain")
+    "write-headers: content-type line present")
+  (assert-true (string-contains? content "Content-Length: 11")
+    "write-headers: content-length line present"))
