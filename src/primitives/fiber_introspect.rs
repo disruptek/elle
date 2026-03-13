@@ -332,6 +332,17 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         aliases: &[],
     },
     PrimitiveDef {
+        name: "fiber/parent",
+        func: prim_fiber_parent,
+        signal: Signal::inert(),
+        arity: Arity::Exact(1),
+        doc: "Get the parent fiber, or nil if this is a top-level fiber",
+        params: &["fiber"],
+        category: "fiber",
+        example: "(fiber/parent f)",
+        aliases: &[],
+    },
+    PrimitiveDef {
         name: "fiber/propagate",
         func: prim_fiber_propagate,
         signal: Signal::yields_errors(),
