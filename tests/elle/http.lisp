@@ -136,3 +136,120 @@
     "write-headers: content-type line present")
   (assert-true (string-contains? content "Content-Length: 11")
     "write-headers: content-length line present"))
+
+# ============================================================================
+# Chunk 3: Request and response wire format
+# ============================================================================
+
+(def read-request-line  (get http :read-request-line))
+(def write-request-line (get http :write-request-line))
+(def read-status-line   (get http :read-status-line))
+(def write-status-line  (get http :write-status-line))
+(def read-body          (get http :read-body))
+
+# --- read-request-line ---
+
+# Valid GET request line
+(spit "/tmp/elle-http-test-req-line" "GET /path HTTP/1.1\r\n")
+(let ((p (port/open "/tmp/elle-http-test-req-line" :read)))
+  (let ((rl (ev/spawn (fn [] (read-request-line p)))))
+    (port/close p)
+    (assert-eq (get rl :method)  "GET"      "request-line: method")
+    (assert-eq (get rl :path)    "/path"    "request-line: path")
+    (assert-eq (get rl :version) "HTTP/1.1" "request-line: version")))
+
+# POST with query string in path
+(spit "/tmp/elle-http-test-req-line-post" "POST /api/data?x=1 HTTP/1.1\r\n")
+(let ((p (port/open "/tmp/elle-http-test-req-line-post" :read)))
+  (let ((rl (ev/spawn (fn [] (read-request-line p)))))
+    (port/close p)
+    (assert-eq (get rl :method) "POST"           "request-line: POST method")
+    (assert-eq (get rl :path)   "/api/data?x=1"  "request-line: path with query")))
+
+# Malformed request line (no spaces)
+(spit "/tmp/elle-http-test-req-line-bad" "MALFORMED\r\n")
+(assert-err-kind
+  (fn ()
+    (let ((p (port/open "/tmp/elle-http-test-req-line-bad" :read)))
+      (let ((result (ev/spawn (fn [] (read-request-line p)))))
+        (port/close p)
+        result)))
+  :http-error
+  "malformed request line signals :http-error")
+
+# --- read-status-line ---
+
+# Standard 200 OK
+(spit "/tmp/elle-http-test-status-200" "HTTP/1.1 200 OK\r\n")
+(let ((p (port/open "/tmp/elle-http-test-status-200" :read)))
+  (let ((sl (ev/spawn (fn [] (read-status-line p)))))
+    (port/close p)
+    (assert-eq (get sl :version) "HTTP/1.1" "status-line: version")
+    (assert-eq (get sl :status)  200         "status-line: status integer")
+    (assert-eq (get sl :reason)  "OK"        "status-line: reason")))
+
+# Multi-word reason phrase
+(spit "/tmp/elle-http-test-status-404" "HTTP/1.1 404 Not Found\r\n")
+(let ((p (port/open "/tmp/elle-http-test-status-404" :read)))
+  (let ((sl (ev/spawn (fn [] (read-status-line p)))))
+    (port/close p)
+    (assert-eq (get sl :status) 404         "multi-word reason: status")
+    (assert-eq (get sl :reason) "Not Found" "multi-word reason: reason")))
+
+# Status 500 Internal Server Error
+(spit "/tmp/elle-http-test-status-500" "HTTP/1.1 500 Internal Server Error\r\n")
+(let ((p (port/open "/tmp/elle-http-test-status-500" :read)))
+  (let ((sl (ev/spawn (fn [] (read-status-line p)))))
+    (port/close p)
+    (assert-eq (get sl :status) 500                     "500 status")
+    (assert-eq (get sl :reason) "Internal Server Error"  "500 reason")))
+
+# Malformed status line
+(spit "/tmp/elle-http-test-status-bad" "NOTHTTP\r\n")
+(assert-err-kind
+  (fn ()
+    (let ((p (port/open "/tmp/elle-http-test-status-bad" :read)))
+      (let ((result (ev/spawn (fn [] (read-status-line p)))))
+        (port/close p)
+        result)))
+  :http-error
+  "malformed status line signals :http-error")
+
+# --- read-body ---
+
+# With Content-Length
+(spit "/tmp/elle-http-test-body" "hello world")
+(let ((p (port/open "/tmp/elle-http-test-body" :read)))
+  (let ((body (ev/spawn (fn [] (read-body p {:content-length "11"})))))
+    (port/close p)
+    (assert-eq body "hello world" "read-body with content-length")))
+
+# Without Content-Length -> nil
+(spit "/tmp/elle-http-test-body-no-cl" "ignored content")
+(let ((p (port/open "/tmp/elle-http-test-body-no-cl" :read)))
+  (let ((body (ev/spawn (fn [] (read-body p {})))))
+    (port/close p)
+    (assert-true (nil? body) "read-body without content-length is nil")))
+
+# Full request parse: request line + headers + body via file port.
+# All reads in a single ev/spawn fiber to share port position.
+# Use a mutable array defined outside the fiber to capture values:
+# strings from I/O become invalid after the next I/O yield inside
+# the fiber, but writes to an outer @array survive.
+(spit "/tmp/elle-http-test-full-req"
+  "POST /submit HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4\r\n\r\ndata")
+(let ((out @[nil nil nil nil]))
+  (let ((p (port/open "/tmp/elle-http-test-full-req" :read)))
+    (ev/spawn (fn []
+      (let ((rl (read-request-line p)))
+        (put out 0 (get rl :method))
+        (put out 1 (get rl :path))
+        (let ((h (read-headers p)))
+          (put out 2 (get h :host))
+          (let ((body (read-body p h)))
+            (put out 3 body))))))
+    (port/close p))
+  (assert-eq (get out 0) "POST"      "full req: method")
+  (assert-eq (get out 1) "/submit"   "full req: path")
+  (assert-eq (get out 2) "localhost" "full req: host header")
+  (assert-eq (get out 3) "data"      "full req: body"))

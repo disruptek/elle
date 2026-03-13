@@ -112,6 +112,56 @@
         (get headers k)))))
 
 # ============================================================================
+# Chunk 3: Request and response wire format
+# ============================================================================
+
+(defn read-request-line [port]
+  "Read and parse HTTP request line: 'GET /path HTTP/1.1'.
+   Returns {:method :path :version} (all strings).
+   Signals :http-error on malformed input."
+  (let ((line (stream/read-line port)))
+    (let ((parts (string/split line " ")))
+      (when (< (length parts) 3)
+        (error {:error :http-error
+                :message (string/format "read-request-line: malformed: {}" line)}))
+      {:method  (get parts 0)
+       :path    (get parts 1)
+       :version (get parts 2)})))
+
+(defn write-request-line [port method path]
+  "Write HTTP request line: 'METHOD path HTTP/1.1\\r\\n'."
+  (stream/write port (string/format "{} {} HTTP/1.1\r\n" method path)))
+
+(defn read-status-line [port]
+  "Read and parse HTTP status line: 'HTTP/1.1 200 OK'.
+   Returns {:version :status :reason} where :status is an integer.
+   Signals :http-error on malformed input."
+  (let ((line (stream/read-line port)))
+    (let ((parts (string/split line " ")))
+      (when (< (length parts) 2)
+        (error {:error :http-error
+                :message (string/format "read-status-line: malformed: {}" line)}))
+      (let ((version (get parts 0))
+            (status  (integer (get parts 1)))
+            # Reason phrase may be multi-word or absent; join remaining parts.
+            (reason  (if (> (length parts) 2)
+                         (string/join (slice parts 2 (length parts)) " ")
+                         "")))
+        {:version version :status status :reason reason}))))
+
+(defn write-status-line [port status reason]
+  "Write HTTP status line: 'HTTP/1.1 status reason\\r\\n'."
+  (stream/write port (string/format "HTTP/1.1 {} {}\r\n" status reason)))
+
+(defn read-body [port headers]
+  "Read request/response body based on Content-Length header.
+   Returns body string, or nil if Content-Length is absent."
+  (let ((cl (get headers :content-length)))
+    (if (nil? cl)
+        nil
+        (stream/read port (integer cl)))))
+
+# ============================================================================
 # Module export closure
 # ============================================================================
 
@@ -120,4 +170,9 @@
    :header-name->keyword header-name->keyword
    :keyword->header-name keyword->header-name
    :read-headers         read-headers
-   :write-headers        write-headers})
+   :write-headers        write-headers
+   :read-request-line    read-request-line
+   :write-request-line   write-request-line
+   :read-status-line     read-status-line
+   :write-status-line    write-status-line
+   :read-body            read-body})
