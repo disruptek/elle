@@ -266,3 +266,94 @@
 (assert-err
   (fn () (ev/spawn (fn () (http-get "http://127.0.0.1:1/"))))
   "http-get: connection refused signals error")
+
+# ============================================================================
+# Chunk 5: Server + Client integration
+# ============================================================================
+
+(def http-respond    (get http :http-respond))
+(def http-serve      (get http :http-serve))
+(def read-request    (get http :read-request))
+(def write-response  (get http :write-response))
+
+# Helper: start a one-shot server and make one request.
+# Uses ev/run with two thunks: server accepts one connection, client connects.
+# Results captured via a shared mutable array.
+
+(defn run-one-request [handler request-fn]
+  "Start a one-shot server, connect once, return [request response].
+   handler: (fn [request]) -> response
+   request-fn: (fn [port-num]) -> result — the client action"
+  (let ((listener (tcp/listen "127.0.0.1" 0)))
+    (let ((addr (port/path listener)))
+      (let ((port-num (integer (get (string/split addr ":") 1))))
+        (let ((result @[nil nil]))
+          (ev/run
+            (fn ()  # server fiber: accept one connection
+              (let ((conn (tcp/accept listener)))
+                (defer (port/close conn)
+                  (let ((req (read-request conn)))
+                    (put result 0 req)
+                    (write-response conn (handler req))))))
+            (fn ()  # client fiber
+              (put result 1 (request-fn port-num))))
+          (port/close listener)
+          result)))))
+
+# Test 1: GET returns 200 with body
+(let ((result (run-one-request
+                (fn (req) (http-respond 200 "hello"))
+                (fn (port-num)
+                  (http-get (string/format "http://127.0.0.1:{}/test" port-num))))))
+  (let ((req  (get result 0))
+        (resp (get result 1)))
+    (assert-eq (get req  :method) "GET"   "server received GET")
+    (assert-eq (get req  :path)   "/test" "server received correct path")
+    (assert-eq (get resp :status) 200     "client got 200")
+    (assert-eq (get resp :body)   "hello" "client got body")))
+
+# Test 2: POST with body reaches server
+(let ((result (run-one-request
+                (fn (req) (http-respond 201 (string/format "echo:{}" (get req :body))))
+                (fn (port-num)
+                  (http-post (string/format "http://127.0.0.1:{}/data" port-num)
+                             "payload")))))
+  (let ((req  (get result 0))
+        (resp (get result 1)))
+    (assert-eq (get req  :method) "POST"         "server received POST")
+    (assert-eq (get req  :body)   "payload"      "server received body")
+    (assert-eq (get resp :status) 201             "client got 201")
+    (assert-eq (get resp :body)   "echo:payload" "client got echoed body")))
+
+# Test 3: http-respond sets Content-Length correctly
+(let ((resp (http-respond 200 "hello")))
+  (assert-eq (get (get resp :headers) :content-length) "5"
+    "http-respond: content-length is 5 for 'hello'")
+  (assert-eq (get (get resp :headers) :content-type) "text/plain"
+    "http-respond: content-type is text/plain"))
+
+# Test 4: custom headers override defaults
+(let ((resp (http-respond 200 "data"
+              :headers {:content-type "application/json"})))
+  (assert-eq (get (get resp :headers) :content-type) "application/json"
+    "http-respond: custom content-type overrides default"))
+
+# Test 5: handler error results in 500
+(let ((result (run-one-request
+                (fn (req) (error {:error :boom :message "handler failed"}))
+                (fn (port-num)
+                  (http-get (string/format "http://127.0.0.1:{}/crash" port-num))))))
+  (let ((resp (get result 1)))
+    (assert-eq (get resp :status) 500
+      "handler error produces 500 response")))
+
+# Test 6: server sends correct Content-Length
+(let ((result (run-one-request
+                (fn (req) (http-respond 200 "12345"))
+                (fn (port-num)
+                  (http-get (string/format "http://127.0.0.1:{}/len" port-num))))))
+  (let ((resp (get result 1)))
+    (assert-eq (get (get resp :headers) :content-length) "5"
+      "server Content-Length is 5 for '12345'")
+    (assert-eq (get resp :body) "12345"
+      "client received full body")))

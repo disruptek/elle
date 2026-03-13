@@ -171,6 +171,67 @@ impl AsyncBackend {
 
         let buf_handle = inner.buffer_pool.alloc(4096);
 
+        // Flush on socket ports is a no-op: fsync(2) returns EINVAL on sockets.
+        // Return an immediate successful completion rather than submitting to the pool.
+        if matches!(&request.op, IoOp::Flush)
+            && matches!(
+                port.kind(),
+                PortKind::TcpStream | PortKind::UnixStream | PortKind::UdpSocket
+            )
+        {
+            inner.buffer_pool.release(buf_handle);
+            inner.completions.push_back(Completion {
+                id,
+                result: Ok(Value::NIL),
+            });
+            return Ok(id);
+        }
+
+        // ReadLine / Read: check per-fd buffer first.
+        // When a previous raw libc::read returned more data than one line (common
+        // with TCP), the excess is stored in fd_states[port_key].buffer.
+        // Serve subsequent reads from the buffer before submitting to the pool.
+        {
+            let state = inner
+                .fd_states
+                .entry(port_key.clone())
+                .or_insert_with(FdState::new);
+            match &request.op {
+                IoOp::ReadLine => {
+                    if let Some(pos) = state.buffer.iter().position(|&b| b == b'\n') {
+                        let line_bytes: Vec<u8> = state.buffer.drain(..=pos).collect();
+                        let s = String::from_utf8_lossy(&line_bytes);
+                        let trimmed = s.trim_end_matches('\n').trim_end_matches('\r');
+                        inner.buffer_pool.release(buf_handle);
+                        inner.completions.push_back(Completion {
+                            id,
+                            result: Ok(Value::string(trimmed)),
+                        });
+                        return Ok(id);
+                    }
+                }
+                IoOp::Read { count } => {
+                    if !state.buffer.is_empty() {
+                        let n = (*count).min(state.buffer.len());
+                        let chunk: Vec<u8> = state.buffer.drain(..n).collect();
+                        let value = match port.encoding() {
+                            Encoding::Text => {
+                                Value::string(String::from_utf8_lossy(&chunk).as_ref())
+                            }
+                            Encoding::Binary => Value::bytes(chunk),
+                        };
+                        inner.buffer_pool.release(buf_handle);
+                        inner.completions.push_back(Completion {
+                            id,
+                            result: Ok(value),
+                        });
+                        return Ok(id);
+                    }
+                }
+                _ => {}
+            }
+        }
+
         // Dispatch by operation type
         match &request.op {
             IoOp::Accept => {
@@ -515,6 +576,7 @@ impl AsyncBackend {
         {
             let AsyncBackendInner {
                 ref mut platform,
+                ref mut network_pool,
                 ref mut pending,
                 ref mut buffer_pool,
                 ref mut fd_states,
@@ -535,78 +597,59 @@ impl AsyncBackend {
                     )?;
                 }
                 PlatformBackend::ThreadPool(pool) => {
-                    let raw_completions = pool.wait(timeout)?;
+                    // If platform pool has in-flight ops, wait on it.
+                    // If only network pool has in-flight ops, wait on network pool.
+                    // If both have ops, use select across both receivers.
+                    let raw_completions = if pool.has_in_flight() && !network_pool.has_in_flight() {
+                        pool.wait(timeout)?
+                    } else if !pool.has_in_flight() && network_pool.has_in_flight() {
+                        network_pool.wait(timeout)?
+                    } else if pool.has_in_flight() && network_pool.has_in_flight() {
+                        // Both have in-flight ops: select across both receivers.
+                        let timeout_dur = timeout.map(std::time::Duration::from_millis);
+                        let mut results = Vec::new();
+                        // Try non-blocking drain first
+                        results.extend(pool.poll());
+                        results.extend(network_pool.poll());
+                        if results.is_empty() {
+                            // Block waiting for either
+                            crossbeam_channel::select! {
+                                recv(pool.receiver()) -> msg => {
+                                    if let Ok(item) = msg {
+                                        pool.record_completion();
+                                        results.push(item);
+                                        // Drain any extras
+                                        results.extend(pool.poll());
+                                        results.extend(network_pool.poll());
+                                    }
+                                }
+                                recv(network_pool.receiver()) -> msg => {
+                                    if let Ok(item) = msg {
+                                        network_pool.record_completion();
+                                        results.push(item);
+                                        // Drain any extras
+                                        results.extend(pool.poll());
+                                        results.extend(network_pool.poll());
+                                    }
+                                }
+                                default(timeout_dur.unwrap_or(std::time::Duration::MAX)) => {}
+                            }
+                        }
+                        results
+                    } else {
+                        // Neither has in-flight ops — nothing to wait for.
+                        Vec::new()
+                    };
                     for (id, result_code, data) in raw_completions {
                         if let Some(pending_op) = pending.remove(&id) {
-                            let buf_handle = pending_op.buffer_handle;
-                            // Release buffer first
-                            buffer_pool.release(buf_handle);
-
-                            // Process completion
-                            let c = if result_code < 0 {
-                                let errno = -result_code;
-                                let msg = format!("I/O error: errno {}", errno);
-                                let state = fd_states
-                                    .entry(pending_op.port_key.clone())
-                                    .or_insert_with(FdState::new);
-                                state.status = FdStatus::Error(msg.clone());
-                                Completion {
-                                    id,
-                                    result: Err(error_val("io-error", msg)),
-                                }
-                            } else if result_code == 0
-                                && matches!(
-                                    pending_op.op,
-                                    IoOp::ReadLine | IoOp::Read { .. } | IoOp::ReadAll
-                                )
-                            {
-                                let state = fd_states
-                                    .entry(pending_op.port_key.clone())
-                                    .or_insert_with(FdState::new);
-                                state.status = FdStatus::Eof;
-                                Completion {
-                                    id,
-                                    result: Ok(Value::NIL),
-                                }
-                            } else {
-                                let value = match &pending_op.op {
-                                    IoOp::ReadLine => {
-                                        let s = String::from_utf8_lossy(&data);
-                                        let trimmed =
-                                            s.trim_end_matches('\n').trim_end_matches('\r');
-                                        Value::string(trimmed)
-                                    }
-                                    IoOp::Read { .. } | IoOp::ReadAll => {
-                                        if let Some(port) = pending_op.port.as_external::<Port>() {
-                                            match port.encoding() {
-                                                Encoding::Text => {
-                                                    let s = String::from_utf8_lossy(&data);
-                                                    Value::string(s.as_ref())
-                                                }
-                                                Encoding::Binary => Value::bytes(data),
-                                            }
-                                        } else {
-                                            Value::string(String::from_utf8_lossy(&data).as_ref())
-                                        }
-                                    }
-                                    IoOp::Write { .. } | IoOp::SendTo { .. } => {
-                                        Value::int(result_code as i64)
-                                    }
-                                    IoOp::Flush | IoOp::Shutdown { .. } => Value::NIL,
-                                    IoOp::RecvFrom { .. } => {
-                                        // Raw bytes from recvfrom — placeholder
-                                        Value::bytes(data)
-                                    }
-                                    IoOp::Accept | IoOp::Connect { .. } => {
-                                        // Network ops not yet routed through async
-                                        Value::NIL
-                                    }
-                                };
-                                Completion {
-                                    id,
-                                    result: Ok(value),
-                                }
-                            };
+                            let c = AsyncBackendInner::process_with_buffer(
+                                id,
+                                result_code,
+                                data,
+                                &pending_op,
+                                fd_states,
+                                buffer_pool,
+                            );
                             completions.push_back(c);
                         }
                     }
@@ -683,18 +726,92 @@ impl AsyncBackendInner {
                 let raw = pool.poll();
                 for (id, result_code, data) in raw {
                     if let Some(pending) = self.pending.remove(&id) {
-                        let c = completion::process_raw_completion(
+                        let c = Self::process_with_buffer(
                             id,
                             result_code,
                             data,
                             &pending,
                             &mut self.fd_states,
                             &mut self.buffer_pool,
-                            pending.buffer_handle,
                         );
                         self.completions.push_back(c);
                     }
                 }
+            }
+        }
+        // Also drain network pool (Accept, Connect, SendTo, RecvFrom, Shutdown).
+        self.drain_network_completions();
+    }
+
+    /// Process a raw completion, handling ReadLine with per-fd buffering.
+    ///
+    /// For ReadLine operations the thread pool returns all bytes read in one
+    /// `libc::read` call (up to 4096). This helper splits at the first `\n`,
+    /// returns the line, and stores the remainder in `fd_states` for future reads.
+    fn process_with_buffer(
+        id: u64,
+        result_code: i32,
+        data: Vec<u8>,
+        pending: &PendingOp,
+        fd_states: &mut HashMap<PortKey, FdState>,
+        buffer_pool: &mut BufferPool,
+    ) -> Completion {
+        if matches!(pending.op, IoOp::ReadLine) && result_code > 0 {
+            // Append raw data to the per-fd buffer
+            let state = fd_states
+                .entry(pending.port_key.clone())
+                .or_insert_with(FdState::new);
+            state.buffer.extend_from_slice(&data);
+            buffer_pool.release(pending.buffer_handle);
+
+            // Find first newline in buffer
+            if let Some(pos) = state.buffer.iter().position(|&b| b == b'\n') {
+                let line_bytes: Vec<u8> = state.buffer.drain(..=pos).collect();
+                let s = String::from_utf8_lossy(&line_bytes);
+                let trimmed = s.trim_end_matches('\n').trim_end_matches('\r');
+                return Completion {
+                    id,
+                    result: Ok(Value::string(trimmed)),
+                };
+            }
+            // No newline yet — this shouldn't normally happen for HTTP responses
+            // because the server sends complete lines. Return what we have (trimmed).
+            let all: Vec<u8> = state.buffer.drain(..).collect();
+            let s = String::from_utf8_lossy(&all);
+            let trimmed = s.trim_end_matches('\n').trim_end_matches('\r');
+            return Completion {
+                id,
+                result: Ok(Value::string(trimmed)),
+            };
+        }
+        // For all other ops, use the standard completion processor.
+        completion::process_raw_completion(
+            id,
+            result_code,
+            data,
+            pending,
+            fd_states,
+            buffer_pool,
+            pending.buffer_handle,
+        )
+    }
+
+    /// Drain completions from the network thread pool into self.completions.
+    /// The network pool handles Accept, Connect, SendTo, RecvFrom, Shutdown.
+    fn drain_network_completions(&mut self) {
+        let raw = self.network_pool.poll();
+        for (id, result_code, data) in raw {
+            if let Some(pending) = self.pending.remove(&id) {
+                let c = completion::process_raw_completion(
+                    id,
+                    result_code,
+                    data,
+                    &pending,
+                    &mut self.fd_states,
+                    &mut self.buffer_pool,
+                    pending.buffer_handle,
+                );
+                self.completions.push_back(c);
             }
         }
     }

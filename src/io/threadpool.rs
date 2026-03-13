@@ -336,6 +336,23 @@ impl ThreadPoolBackend {
         results
     }
 
+    /// Returns true if this pool has any in-flight operations.
+    pub(super) fn has_in_flight(&self) -> bool {
+        self.in_flight > 0
+    }
+
+    /// Expose the receiver for cross-pool select in async wait.
+    pub(super) fn receiver(&self) -> &crossbeam_channel::Receiver<(u64, i32, Vec<u8>)> {
+        &self.receiver
+    }
+
+    /// Record one completion received externally (via select).
+    pub(super) fn record_completion(&mut self) {
+        if self.in_flight > 0 {
+            self.in_flight -= 1;
+        }
+    }
+
     /// Blocking wait for at least one completion.
     /// `timeout_ms`: None = wait forever, Some(0) = poll, Some(n) = wait up to n ms.
     pub(super) fn wait(

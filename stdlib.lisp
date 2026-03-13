@@ -3,6 +3,14 @@
 ## Loaded at startup after primitives are registered.
 ## Unlike the prelude (which is macro-only), these define
 ## runtime functions that need the full pipeline.
+##
+## Exported functions:
+## - Higher-order: map, filter, fold, reduce, keep
+## - Combinators: identity, complement, constantly, compose, comp, partial, juxt
+## - Predicates: all?, any?, some, none?
+## - Search: find, find-index, index-of, last-index-of
+## - Transformation: flatten, group-by, partition, take-while, drop-while
+## - Struct operations: merge
 
 ## ── Higher-order functions ──────────────────────────────────────────
 
@@ -699,6 +707,18 @@
                            (append "\n"))))))
        result)))
 
+## ── Struct operations ───────────────────────────────────────────────
+
+(def merge (fn (a b)
+  "Merge struct b into struct a, returning the same mutability as a.
+   Keys in b override keys in a. Signals :type-error if a is not a struct."
+  (if (not (struct? a))
+    (error {:error :type-error :message "merge: first argument must be a struct"})
+    (let ((result (@struct)))
+      (each k in (keys a) (put result k (get a k)))
+      (each k in (keys b) (put result k (get b k)))
+      (if (mutable? a) result (freeze result))))))
+
 ## ── Standard port parameters ────────────────────────────────────────
 
 (def *stdin*  (parameter (port/stdin)))
@@ -823,4 +843,5 @@
    :*stdin* *stdin* :*stdout* *stdout* :*stderr* *stderr*
    :sync-scheduler sync-scheduler :*scheduler* *scheduler*
    :ev/spawn ev/spawn :make-async-scheduler make-async-scheduler
-   :ev/run ev/run})
+   :ev/run ev/run
+   :merge merge})

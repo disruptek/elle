@@ -4,19 +4,6 @@
 ## Usage:      (http:get "http://example.com/")
 
 # ============================================================================
-# Internal helpers
-# ============================================================================
-
-(defn merge-structs [base override]
-  "Merge two immutable structs. Keys in override win."
-  (let ((result (@struct)))
-    (each k in (keys base)
-      (put result k (get base k)))
-    (each k in (keys override)
-      (put result k (get override k)))
-    result))
-
-# ============================================================================
 # Chunk 1: URL parsing
 # ============================================================================
 
@@ -186,10 +173,8 @@
   "Make an HTTP/1.1 request. Returns {:status :headers :body}.
    method: string (\"GET\", \"POST\", etc.)
    url: string parsed by parse-url
-   :body optional string body
-   :headers optional struct of extra headers to send
-   # NOTE: Content-Length computed via (length body) — correct for ASCII,
-   # wrong for non-ASCII. v1 limitation."
+    :body optional string body
+    :headers optional struct of extra headers to send"
   (let ((parsed (parse-url url)))
     (let ((host (get parsed :host))
           (port-num (get parsed :port))
@@ -206,12 +191,12 @@
                                   :connection "close"}))
               (let ((all-headers (if (nil? extra-headers)
                                      base-headers
-                                     (merge-structs base-headers extra-headers))))
+                                     (merge base-headers extra-headers))))
                 # Add Content-Length if body present
                 (let ((send-headers (if (nil? body)
                                         all-headers
-                                        (merge-structs all-headers
-                                          {:content-length (string (length body))}))))
+                                        (merge all-headers
+                                          {:content-length (string (string/size-of body))}))))
                   (write-headers conn send-headers)
                   (stream/write conn "\r\n")
                   # Write body if present
@@ -235,6 +220,67 @@
   (http-request "POST" url :body body :headers headers))
 
 # ============================================================================
+# Chunk 5: Server API
+# ============================================================================
+
+(defn read-request [conn]
+  "Read a complete HTTP request from a connection port.
+   Returns {:method :path :version :headers :body}."
+  (let ((rl (read-request-line conn)))
+    (let ((headers (read-headers conn)))
+      (let ((body (read-body conn headers)))
+        {:method  (get rl :method)
+         :path    (get rl :path)
+         :version (get rl :version)
+         :headers headers
+         :body    body}))))
+
+(defn write-response [conn response]
+  "Write a complete HTTP response to a connection port and flush.
+   response is {:status :headers :body}."
+  (let ((status  (get response :status))
+        (headers (get response :headers))
+        (body    (get response :body)))
+    (let ((reason (or (get reason-phrases status) "Unknown")))
+      (write-status-line conn status reason)
+      (write-headers conn headers)
+      (stream/write conn "\r\n")
+      (when (not (nil? body))
+        (stream/write conn body))
+      (stream/flush conn))))
+
+(defn http-respond [status body &keys {:headers extra-headers}]
+  "Build a response struct with Content-Type and Content-Length set.
+    Caller can override headers via :headers."
+  (let ((base-headers {:content-type   "text/plain"
+                       :content-length (string (string/size-of body))}))
+    (let ((merged (if (nil? extra-headers)
+                      base-headers
+                      (merge base-headers extra-headers))))
+      {:status status :headers merged :body body})))
+
+(defn http-serve [port-num handler]
+  "Start an HTTP server on port-num. Calls handler for each request.
+   handler: (fn [request]) -> response
+   Runs until killed. Each connection runs in its own fiber.
+   Errors in handler return a 500 response."
+  (let ((listener (tcp/listen "0.0.0.0" port-num)))
+    (ev/run
+      (fn ()
+        (forever
+          (let ((conn (tcp/accept listener)))
+            (ev/spawn
+              (fn ()
+                (defer (port/close conn)
+                  (let ((request (read-request conn)))
+                    (let ((response
+                            (let (([ok? val] (protect (handler request))))
+                              (if ok?
+                                  val
+                                  (http-respond 500 "Internal Server Error")))))
+                      (write-response conn response))))))))))))
+
+# ============================================================================
 # Module export closure
 # ============================================================================
 
@@ -252,4 +298,8 @@
    :reason-phrases       reason-phrases
    :http-request         http-request
    :http-get             http-get
-   :http-post            http-post})
+   :http-post            http-post
+   :read-request         read-request
+   :write-response       write-response
+   :http-respond         http-respond
+   :http-serve           http-serve})

@@ -580,6 +580,73 @@ pub(crate) fn prim_buffer(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::string_mut(bytes))
 }
 
+/// Return the UTF-8 byte length of a string (not grapheme count).
+pub(crate) fn prim_string_size_of(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 1 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("string/size-of: expected 1 argument, got {}", args.len()),
+            ),
+        );
+    }
+    if let Some(byte_len) = args[0].with_string(|s| s.len()) {
+        return (SIG_OK, Value::int(byte_len as i64));
+    }
+    (
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!(
+                "string/size-of: expected string, got {}",
+                args[0].type_name()
+            ),
+        ),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn size_of_ascii() {
+        let (sig, val) = prim_string_size_of(&[Value::string("hello")]);
+        assert_eq!(sig, SIG_OK);
+        assert_eq!(val.as_int(), Some(5));
+    }
+
+    #[test]
+    fn size_of_multibyte_utf8() {
+        // "café" — 'é' is 2 bytes, so total is 5 bytes
+        let (sig, val) = prim_string_size_of(&[Value::string("café")]);
+        assert_eq!(sig, SIG_OK);
+        assert_eq!(val.as_int(), Some(5));
+    }
+
+    #[test]
+    fn size_of_emoji() {
+        // "🎉" is 4 bytes in UTF-8
+        let (sig, val) = prim_string_size_of(&[Value::string("🎉")]);
+        assert_eq!(sig, SIG_OK);
+        assert_eq!(val.as_int(), Some(4));
+    }
+
+    #[test]
+    fn size_of_empty() {
+        let (sig, val) = prim_string_size_of(&[Value::string("")]);
+        assert_eq!(sig, SIG_OK);
+        assert_eq!(val.as_int(), Some(0));
+    }
+
+    #[test]
+    fn size_of_type_error() {
+        let (sig, _val) = prim_string_size_of(&[Value::int(42)]);
+        assert_eq!(sig, SIG_ERROR);
+    }
+}
+
 /// Declarative primitive definitions for string module.
 pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
@@ -712,6 +779,17 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["str"],
         category: "string",
         example: "(uri-encode \"hello world\") ;=> \"hello%20world\"",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "string/size-of",
+        func: prim_string_size_of,
+        effect: Effect::inert(),
+        arity: Arity::Exact(1),
+        doc: "Return the UTF-8 byte length of a string.",
+        params: &["s"],
+        category: "string",
+        example: "(string/size-of \"café\") #=> 5",
         aliases: &[],
     },
 ];

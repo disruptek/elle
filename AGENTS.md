@@ -47,6 +47,7 @@ bytecode. Error messages include file:line:col information.
 | `lint` | Diagnostic types and lint rules |
 | `symbols` | Symbol index types for IDE features |
 | `primitives` | Built-in functions |
+| `stdlib` | Standard library functions (loaded at startup) |
 | `ffi` | C interop via libloading/bindgen |
 | `jit` | JIT compilation via Cranelift |
 | `formatter` | Code formatting for Elle source |
@@ -184,3 +185,50 @@ When in doubt, run the tests.
 
 5. Read [`docs/cookbook.md`](docs/cookbook.md) for step-by-step recipes for common cross-cutting changes.
 6. Read [`tests/AGENTS.md`](tests/AGENTS.md) for test organization and how to add new tests.
+
+## Standard Library Functions
+
+### merge
+
+**Location:** `stdlib.lisp`
+
+**Signature:** `(merge a b)`
+
+**Purpose:** Merges struct `b` into struct `a`, returning the same type as `a`. Keys in `b` override keys in `a`.
+
+**Behavior:**
+- If `a` is an immutable struct `{...}`, returns an immutable struct
+- If `a` is a mutable struct `@{...}`, returns a mutable struct
+- All keys from `a` are preserved
+- All keys from `b` are added or override existing keys in `a`
+- The type of the result matches the type of `a`
+
+**Examples:**
+```lisp
+(merge {:x 1 :y 2} {:y 3 :z 4})
+#=> {:x 1 :y 3 :z 4}
+
+(merge @{:x 1 :y 2} {:y 3 :z 4})
+#=> @{:x 1 :y 3 :z 4}
+
+(merge {:a 1} {})
+#=> {:a 1}
+
+(merge {} {:b 2})
+#=> {:b 2}
+```
+
+**Error cases:**
+
+| Condition | Error kind | Message |
+|-----------|-----------|---------|
+| `a` is not a struct | `type-error` | `"merge: first argument must be struct, got {type}"` |
+| `b` is not a struct | `type-error` | `"merge: second argument must be struct, got {type}"` |
+| Wrong arity | `arity-error` | `"merge: expected 2 arguments, got N"` |
+
+**Invariants:**
+
+1. **Type preservation.** The result type matches the type of the first argument.
+2. **Non-destructive.** Neither `a` nor `b` is modified; a new struct is returned.
+3. **Override semantics.** Keys in `b` take precedence over keys in `a`.
+4. **Immutability respected.** If `a` is immutable, the result is immutable. If `a` is mutable, the result is mutable.
