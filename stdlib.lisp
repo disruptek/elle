@@ -755,12 +755,81 @@
 ## ── Async scheduler ─────────────────────────────────────────────────
 
 (defn make-async-scheduler ()
-  "Create an async scheduler. Returns (scheduler-fn pump-fn).
+  "Create an async scheduler. Returns (scheduler-fn pump-fn shutdown-fn).
    scheduler-fn: (fn [fiber]) — registers fiber for async execution.
-   pump-fn: (fn []) — pumps event loop until all fibers complete."
-  (let ((backend  (io/backend :async))
-        (runnable @[])
-        (pending  @{}))
+   pump-fn: (fn []) — pumps event loop until all fibers complete.
+   shutdown-fn: (fn [timeout-ms]) — signal shutdown; pump-fn executes it."
+  (let ((backend       (io/backend :async))
+        (runnable      @[])
+        (pending       @{})
+        (shutdown-req  @[nil]))  # nil = running, integer = shutdown requested with timeout
+
+    (defn handle-fiber-after-resume [fiber]
+      "Route a fiber to the right place after resume."
+      (case (fiber/status fiber)
+        :dead   nil
+        :error  (fiber/propagate fiber)
+        :paused (cond
+                  ((not (= 0 (bit/and (fiber/bits fiber) 1)))
+                   (fiber/propagate fiber))
+                  ((not (= 0 (bit/and (fiber/bits fiber) 512)))
+                   (let ((id (io/submit backend (fiber/value fiber))))
+                     (put pending id fiber)))
+                  (true
+                   (push runnable fiber)))))
+
+    (defn drain-runnable []
+      "Run all runnable fibers."
+      (while (> (length runnable) 0)
+        (let ((fiber (pop runnable)))
+          (fiber/resume fiber)
+          (handle-fiber-after-resume fiber))))
+
+    (defn process-completions []
+      "Wait for I/O completions and route fibers."
+      (let ((completions (io/wait backend (- 0 1))))
+        (each c in completions
+          (let* ((id    (get c :id))
+                 (fiber (get pending id)))
+            (when (not (nil? fiber))
+              (del pending id)
+              (if (nil? (get c :error))
+                (begin
+                  (fiber/resume fiber (get c :value))
+                  (handle-fiber-after-resume fiber))
+                (error (get c :error))))))))
+
+    (defn do-shutdown [timeout-ms]
+      "Abort all pending fibers, pump for timeout-ms, cancel stragglers."
+      # Phase 1: abort all pending fibers (inject error, let defer run)
+      (each [id fiber] in (pairs (freeze pending))
+        (del pending id)
+        (let [[[ok? _] (protect (fiber/abort fiber {:error :shutdown}))]]
+          (when ok? (handle-fiber-after-resume fiber))))
+      # Phase 2: pump for up to timeout-ms to let aborted fibers unwind
+      (when (> timeout-ms 0)
+        (let [[deadline (+ (clock/monotonic) (/ timeout-ms 1000.0))]]
+          (while (and (> (+ (length runnable) (length pending)) 0)
+                      (< (clock/monotonic) deadline))
+            (drain-runnable)
+            (when (> (length pending) 0)
+              (let [[completions (io/wait backend 10)]]
+                (each c in completions
+                  (let* [[id    (get c :id)]
+                         [fiber (get pending id)]]
+                    (when (not (nil? fiber))
+                      (del pending id)
+                      (when (nil? (get c :error))
+                        (fiber/resume fiber (get c :value))
+                        (handle-fiber-after-resume fiber))))))))))
+      # Phase 3: cancel any stragglers
+      (each [id fiber] in (pairs (freeze pending))
+        (del pending id)
+        (protect (fiber/cancel fiber {:error :shutdown})))
+      (while (> (length runnable) 0)
+        (let [[fiber (pop runnable)]]
+          (protect (fiber/cancel fiber {:error :shutdown})))))
+
     (list
       # scheduler-fn: register fiber
       (fn (fiber)
@@ -770,53 +839,36 @@
       (fn ()
         (block :loop
           (forever
-            # 1. Run all runnable fibers
-            (while (> (length runnable) 0)
-              (let ((fiber (pop runnable)))
-                (fiber/resume fiber)
-                 (case (fiber/status fiber)
-                   :dead      nil
-                   :error     (fiber/propagate fiber)
-                   :paused (cond
-                               ((not (= 0 (bit/and (fiber/bits fiber) 1)))
-                                (fiber/propagate fiber))
-                               ((not (= 0 (bit/and (fiber/bits fiber) 512)))
-                                (let ((id (io/submit backend (fiber/value fiber))))
-                                  (put pending id fiber)))
-                               (true
-                                (push runnable fiber))))))
-            # 2. If nothing pending, done
+            (drain-runnable)
             (when (= (length pending) 0)
               (break :loop nil))
-            # 3. Wait for completions
-            (let ((completions (io/wait backend (- 0 1))))
-              (each c in completions
-                (let* ((id    (get c :id))
-                       (fiber (get pending id)))
-                  (when (not (nil? fiber))
-                    (del pending id)
-                    (if (nil? (get c :error))
-                      (begin
-                        (fiber/resume fiber (get c :value))
-                         (case (fiber/status fiber)
-                           :dead      nil
-                           :error     (fiber/propagate fiber)
-                           :paused (cond
-                                       ((not (= 0 (bit/and (fiber/bits fiber) 1)))
-                                        (fiber/propagate fiber))
-                                       ((not (= 0 (bit/and (fiber/bits fiber) 512)))
-                                        (let ((id2 (io/submit backend (fiber/value fiber))))
-                                          (put pending id2 fiber)))
-                                        (true
-                                         (push runnable fiber)))))
-                      (error (get c :error)))))))))))))
+            # Check for shutdown request
+            (let [[timeout (get shutdown-req 0)]]
+              (unless (nil? timeout)
+                (do-shutdown timeout)
+                (break :loop nil)))
+            (process-completions))))
+      # shutdown-fn: signal shutdown
+      (fn (timeout-ms)
+        (put shutdown-req 0 timeout-ms)))))
 
+(def *shutdown* (make-parameter nil))
+
+(defn ev/shutdown [& args]
+  "Shut down the current event loop. Optional timeout-ms (default 0) gives
+   fibers time to clean up before being hard-killed."
+  (let [[timeout-ms (or (first args) 0)]
+        [shutdown-fn (*shutdown*)]]
+    (when (nil? shutdown-fn)
+      (error {:error :error :message "ev/shutdown: not inside an event loop"}))
+    (shutdown-fn timeout-ms)))
 
 (defn ev/run (& thunks)
   "Run thunks concurrently with async I/O.
    Creates an async scheduler, spawns each thunk as a fiber, pumps until done."
-  (let (((scheduler-fn pump-fn) (make-async-scheduler)))
-    (parameterize ((*scheduler* scheduler-fn))
+  (let (((scheduler-fn pump-fn shutdown-fn) (make-async-scheduler)))
+    (parameterize ((*scheduler* scheduler-fn)
+                   (*shutdown* shutdown-fn))
       (each t in thunks
         (ev/spawn t))
       (pump-fn))))
@@ -848,7 +900,7 @@
    :fn/cfg fn/cfg :fn/cfg-label fn/cfg-label
    :fn/cfg-dot fn/cfg-dot :fn/cfg-mermaid fn/cfg-mermaid
    :*stdin* *stdin* :*stdout* *stdout* :*stderr* *stderr*
-   :sync-scheduler sync-scheduler :*scheduler* *scheduler*
-    :ev/spawn ev/spawn :make-async-scheduler make-async-scheduler
-    :ev/run ev/run
-    :merge merge :inc inc :dec dec})
+    :sync-scheduler sync-scheduler :*scheduler* *scheduler*
+     :ev/spawn ev/spawn :make-async-scheduler make-async-scheduler
+     :ev/run ev/run :ev/shutdown ev/shutdown :*shutdown* *shutdown*
+     :merge merge :inc inc :dec dec})

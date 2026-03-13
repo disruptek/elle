@@ -305,6 +305,119 @@
 # Exports
 # ============================================================================
 
+(defn run-internal-tests []
+  "Sanity checks on internal wire-format helpers. Called via (http:test)."
+
+  # header->kw
+  (assert (= (header->kw "Content-Type") :content-type) "header->kw Content-Type")
+  (assert (= (header->kw "Host") :host)                 "header->kw Host")
+  (assert (= (header->kw "X-Custom-Header") :x-custom-header)
+    "header->kw X-Custom-Header")
+  (assert (= (header->kw "content-type") :content-type) "header->kw lowercase")
+
+  # kw->header
+  (assert (= (kw->header :content-type) "Content-Type")     "kw->header content-type")
+  (assert (= (kw->header :host) "Host")                     "kw->header host")
+  (assert (= (kw->header :x-custom-header) "X-Custom-Header")
+    "kw->header x-custom-header")
+  (assert (= (kw->header :content-length) "Content-Length")  "kw->header content-length")
+
+  # round-trip
+  (assert (= (kw->header (header->kw "Content-Type")) "Content-Type")
+    "header round-trip Content-Type")
+  (assert (= (kw->header (header->kw "Host")) "Host")
+    "header round-trip Host")
+
+  # read-headers via file port
+  (spit "/tmp/elle-http-test-headers"
+    "Content-Type: text/plain\r\nHost: example.com\r\nContent-Length: 42\r\n\r\n")
+  (let [[p (port/open "/tmp/elle-http-test-headers" :read)]]
+    (let [[h (ev/spawn (fn [] (read-headers p)))]]
+      (port/close p)
+      (assert (= (get h :content-type)   "text/plain")  "read-headers content-type")
+      (assert (= (get h :host)           "example.com") "read-headers host")
+      (assert (= (get h :content-length) "42")           "read-headers content-length")))
+
+  # read-headers trims whitespace
+  (spit "/tmp/elle-http-test-headers-ws" "X-Foo:   bar baz   \r\n\r\n")
+  (let [[p (port/open "/tmp/elle-http-test-headers-ws" :read)]]
+    (let [[h (ev/spawn (fn [] (read-headers p)))]]
+      (port/close p)
+      (assert (= (get h :x-foo) "bar baz") "read-headers trims whitespace")))
+
+  # read-headers malformed
+  (spit "/tmp/elle-http-test-headers-bad" "no-colon-here\r\n\r\n")
+  (let [[[ok? _] (protect
+                   (let [[p (port/open "/tmp/elle-http-test-headers-bad" :read)]]
+                     (ev/spawn (fn [] (read-headers p)))))]]
+    (assert (not ok?) "read-headers malformed signals error"))
+
+  # write-headers
+  (let [[p (port/open "/tmp/elle-http-test-write-headers" :write)]]
+    (ev/spawn (fn []
+      (write-headers p {:content-type "text/plain" :content-length "11"})
+      (stream/write p "\r\n")
+      (stream/flush p)))
+    (port/close p))
+  (let [[content (slurp "/tmp/elle-http-test-write-headers")]]
+    (assert (string-contains? content "Content-Type: text/plain")
+      "write-headers content-type")
+    (assert (string-contains? content "Content-Length: 11")
+      "write-headers content-length"))
+
+  # read-request-line
+  (spit "/tmp/elle-http-test-req-line" "GET /path HTTP/1.1\r\n")
+  (let [[p (port/open "/tmp/elle-http-test-req-line" :read)]]
+    (let [[rl (ev/spawn (fn [] (read-request-line p)))]]
+      (port/close p)
+      (assert (= rl:method  "GET")      "request-line method")
+      (assert (= rl:path    "/path")    "request-line path")
+      (assert (= rl:version "HTTP/1.1") "request-line version")))
+
+  # read-status-line
+  (spit "/tmp/elle-http-test-status-200" "HTTP/1.1 200 OK\r\n")
+  (let [[p (port/open "/tmp/elle-http-test-status-200" :read)]]
+    (let [[sl (ev/spawn (fn [] (read-status-line p)))]]
+      (port/close p)
+      (assert (= sl:version "HTTP/1.1") "status-line version")
+      (assert (= sl:status  200)         "status-line status")
+      (assert (= sl:reason  "OK")        "status-line reason")))
+
+  # read-body with Content-Length
+  (spit "/tmp/elle-http-test-body" "hello world")
+  (let [[p (port/open "/tmp/elle-http-test-body" :read)]]
+    (let [[body (ev/spawn (fn [] (read-body p {:content-length "11"})))]]
+      (port/close p)
+      (assert (= body "hello world") "read-body with content-length")))
+
+  # read-body without Content-Length
+  (spit "/tmp/elle-http-test-body-no-cl" "ignored")
+  (let [[p (port/open "/tmp/elle-http-test-body-no-cl" :read)]]
+    (let [[body (ev/spawn (fn [] (read-body p {})))]]
+      (port/close p)
+      (assert (nil? body) "read-body without content-length is nil")))
+
+  # full request parse
+  (spit "/tmp/elle-http-test-full-req"
+    "POST /submit HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4\r\n\r\ndata")
+  (let [[out @[nil nil nil nil]]]
+    (let [[p (port/open "/tmp/elle-http-test-full-req" :read)]]
+      (ev/spawn (fn []
+        (let [[rl (read-request-line p)]]
+          (put out 0 rl:method)
+          (put out 1 rl:path)
+          (let [[h (read-headers p)]]
+            (put out 2 (get h :host))
+            (let [[body (read-body p h)]]
+              (put out 3 body))))))
+      (port/close p))
+    (assert (= (get out 0) "POST")      "full req method")
+    (assert (= (get out 1) "/submit")   "full req path")
+    (assert (= (get out 2) "localhost") "full req host")
+    (assert (= (get out 3) "data")      "full req body"))
+
+  true)
+
 (fn []
   {:parse-url  parse-url
 
@@ -322,4 +435,7 @@
    :close      http-close
 
    # Server
-   :serve      http-serve})
+   :serve      http-serve
+
+   # Internal tests
+   :test       run-internal-tests})

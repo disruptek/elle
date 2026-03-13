@@ -45,7 +45,8 @@
 #   2. ev/run launches two fibers:
 #      - Server: http:serve handles accept loop + connection handling
 #      - Client: exercises keep-alive then one-shot modes
-#   3. Client closes the listener when done, causing http:serve to exit.
+#   3. Client calls ev/shutdown when done, which aborts the server fiber
+#      and gives it a chance to clean up (close listener, connections).
 
 (var request-count 0)
 

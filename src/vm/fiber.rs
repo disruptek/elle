@@ -1,4 +1,4 @@
-//! Fiber execution: resume, propagate, cancel.
+//! Fiber execution: resume, propagate, abort, cancel.
 //!
 //! All fiber operations follow the same swap protocol:
 //! 1. Take child fiber out of its handle
@@ -13,12 +13,16 @@
 //! Status finalization happens in the caller, not in `with_child_fiber`:
 //! - Resume: SIG_ERROR + uncaught by mask → Error (terminal)
 //! - Resume: SIG_ERROR + caught by mask → Suspended (resumable)
-//! - Cancel: always Error (terminal), regardless of mask
+//! - Abort: inject error + resume, result handled like resume (no stomp)
+//! - Cancel: hard kill — set status to Error, drop frames, no resume
+//!
+//! SIG_TERMINAL signals are uncatchable — they pass through mask checks.
 
 use crate::value::error_val;
 use crate::value::fiber::FiberStatus;
 use crate::value::{
     BytecodeFrame, FiberHandle, SignalBits, SuspendedFrame, Value, SIG_ERROR, SIG_HALT, SIG_OK,
+    SIG_TERMINAL,
 };
 use std::rc::Rc;
 
@@ -175,8 +179,9 @@ impl VM {
             self.fiber.child_value = None;
             self.fiber.stack.push(result_value);
             None
-        } else if mask.contains(result_bits) {
-            // Signal is caught by the mask — parent handles it, clear child chain
+        } else if mask.contains(result_bits) && !result_bits.contains(SIG_TERMINAL) {
+            // Signal is caught by the mask — parent handles it, clear child chain.
+            // SIG_TERMINAL signals are uncatchable regardless of mask.
             self.fiber.child = None;
             self.fiber.child_value = None;
             self.fiber.stack.push(result_value);
@@ -256,7 +261,8 @@ impl VM {
             handle.with_mut(|f| f.status = FiberStatus::Dead);
         }
 
-        let caught = result_bits.is_ok() || mask.contains(result_bits);
+        let caught = result_bits.is_ok()
+            || (mask.contains(result_bits) && !result_bits.contains(SIG_TERMINAL));
         if caught {
             self.fiber.child = None;
             self.fiber.child_value = None;
@@ -504,10 +510,14 @@ impl VM {
         }
     }
 
-    // ── SIG_CANCEL: inject error into fiber ───────────────────────
+    // ── SIG_ABORT: inject error into fiber, resume for unwinding ──
 
-    /// Handle SIG_CANCEL from fiber/cancel (Call position).
-    pub(super) fn handle_fiber_cancel_signal(
+    /// Handle SIG_ABORT from fiber/abort (Call position).
+    ///
+    /// Injects an error and resumes the fiber. The result is handled
+    /// identically to fiber/resume — the child's actual outcome (dead,
+    /// error, paused) determines what the parent sees. No status stomp.
+    pub(super) fn handle_fiber_abort_signal(
         &mut self,
         fiber_value: Value,
         _bytecode: &Rc<Vec<u8>>,
@@ -518,33 +528,36 @@ impl VM {
         let handle = match fiber_value.as_fiber() {
             Some(h) => h.clone(),
             None => {
-                set_error(&mut self.fiber, "error", "SIG_CANCEL with non-fiber value");
+                set_error(&mut self.fiber, "error", "SIG_ABORT with non-fiber value");
                 self.fiber.stack.push(Value::NIL);
                 return None;
             }
         };
 
-        let (result_bits, result_value) = self.do_fiber_cancel(&handle, fiber_value);
+        let (result_bits, result_value) = self.do_fiber_abort(&handle, fiber_value);
 
         let mask = handle.with(|fiber| fiber.mask);
-        let caught = result_bits.is_ok() || mask.contains(result_bits);
 
-        // Cancelled fibers are always terminal regardless of mask
-        handle.with_mut(|f| f.status = FiberStatus::Error);
-
-        if caught {
+        if result_bits.is_ok() {
+            self.fiber.child = None;
+            self.fiber.child_value = None;
+            self.fiber.stack.push(result_value);
+            None
+        } else if mask.contains(result_bits) && !result_bits.contains(SIG_TERMINAL) {
             self.fiber.child = None;
             self.fiber.child_value = None;
             self.fiber.stack.push(result_value);
             None
         } else {
-            // Check if we're at root fiber
+            // Uncaught error → terminal
+            if result_bits.contains(SIG_ERROR) {
+                handle.with_mut(|f| f.status = FiberStatus::Error);
+            }
             if self.current_fiber_handle.is_none() && !result_bits.contains(SIG_ERROR) {
-                // At root fiber with non-error signal: no parent to catch it
                 set_error(
                     &mut self.fiber,
                     "error",
-                    "fiber/cancel: cannot propagate signal (no parent fiber to catch it)",
+                    "fiber/abort: cannot propagate signal (no parent fiber to catch it)",
                 );
                 self.fiber.stack.push(Value::NIL);
                 None
@@ -560,36 +573,36 @@ impl VM {
         }
     }
 
-    /// Handle SIG_CANCEL from fiber/cancel (TailCall position).
-    pub(super) fn handle_fiber_cancel_signal_tail(&mut self, fiber_value: Value) -> SignalBits {
+    /// Handle SIG_ABORT from fiber/abort (TailCall position).
+    pub(super) fn handle_fiber_abort_signal_tail(&mut self, fiber_value: Value) -> SignalBits {
         let handle = match fiber_value.as_fiber() {
             Some(h) => h.clone(),
             None => {
-                set_error(&mut self.fiber, "error", "SIG_CANCEL with non-fiber value");
+                set_error(&mut self.fiber, "error", "SIG_ABORT with non-fiber value");
                 return SIG_ERROR;
             }
         };
 
-        let (result_bits, result_value) = self.do_fiber_cancel(&handle, fiber_value);
+        let (result_bits, result_value) = self.do_fiber_abort(&handle, fiber_value);
 
         let mask = handle.with(|fiber| fiber.mask);
-        let caught = result_bits.is_ok() || mask.contains(result_bits);
 
-        // Cancelled fibers are always terminal regardless of mask
-        handle.with_mut(|f| f.status = FiberStatus::Error);
+        let caught = result_bits.is_ok()
+            || (mask.contains(result_bits) && !result_bits.contains(SIG_TERMINAL));
         if caught {
             self.fiber.child = None;
             self.fiber.child_value = None;
             self.fiber.signal = Some((SIG_OK, result_value));
             SIG_OK
         } else {
-            // Check if we're at root fiber
+            if result_bits.contains(SIG_ERROR) {
+                handle.with_mut(|f| f.status = FiberStatus::Error);
+            }
             if self.current_fiber_handle.is_none() && !result_bits.contains(SIG_ERROR) {
-                // At root fiber with non-error signal: no parent to catch it
                 set_error(
                     &mut self.fiber,
                     "error",
-                    "fiber/cancel: cannot propagate signal (no parent fiber to catch it)",
+                    "fiber/abort: cannot propagate signal (no parent fiber to catch it)",
                 );
                 SIG_ERROR
             } else {
@@ -604,7 +617,7 @@ impl VM {
     // These mirror the interpreter-level handlers above but return u64
     // (value bits, TAG_NIL for error, YIELD_SENTINEL for yield) instead
     // of pushing to fiber.stack. Called from jit/dispatch.rs when a
-    // primitive returns SIG_RESUME/SIG_PROPAGATE/SIG_CANCEL in JIT context.
+    // primitive returns SIG_RESUME/SIG_PROPAGATE/SIG_ABORT in JIT context.
 
     /// Handle SIG_RESUME from a fiber primitive in JIT context.
     ///
@@ -631,7 +644,8 @@ impl VM {
             handle.with_mut(|f| f.status = FiberStatus::Dead);
         }
 
-        let caught = result_bits.is_ok() || mask.contains(result_bits);
+        let caught = result_bits.is_ok()
+            || (mask.contains(result_bits) && !result_bits.contains(SIG_TERMINAL));
         if caught {
             self.fiber.child = None;
             self.fiber.child_value = None;
@@ -699,49 +713,53 @@ impl VM {
         }
     }
 
-    /// Handle SIG_CANCEL from fiber/cancel in JIT context.
-    pub(crate) fn handle_fiber_cancel_signal_jit(&mut self, fiber_value: Value) -> u64 {
+    /// Handle SIG_ABORT from fiber/abort in JIT context.
+    pub(crate) fn handle_fiber_abort_signal_jit(&mut self, fiber_value: Value) -> u64 {
         use crate::jit::YIELD_SENTINEL;
         use crate::value::repr::TAG_NIL;
 
         let handle = match fiber_value.as_fiber() {
             Some(h) => h.clone(),
             None => {
-                set_error(&mut self.fiber, "error", "SIG_CANCEL with non-fiber value");
+                set_error(&mut self.fiber, "error", "SIG_ABORT with non-fiber value");
                 return TAG_NIL;
             }
         };
 
-        let (result_bits, result_value) = self.do_fiber_cancel(&handle, fiber_value);
+        let (result_bits, result_value) = self.do_fiber_abort(&handle, fiber_value);
 
         let mask = handle.with(|fiber| fiber.mask);
-        let caught = result_bits.is_ok() || mask.contains(result_bits);
 
-        handle.with_mut(|f| f.status = FiberStatus::Error);
-
+        let caught = result_bits.is_ok()
+            || (mask.contains(result_bits) && !result_bits.contains(SIG_TERMINAL));
         if caught {
             self.fiber.child = None;
             self.fiber.child_value = None;
             result_value.to_bits()
-        } else if self.current_fiber_handle.is_none() && !result_bits.contains(SIG_ERROR) {
-            set_error(
-                &mut self.fiber,
-                "error",
-                "fiber/cancel: cannot propagate signal (no parent fiber to catch it)",
-            );
-            TAG_NIL
         } else {
-            self.fiber.signal = Some((result_bits, result_value));
             if result_bits.contains(SIG_ERROR) {
+                handle.with_mut(|f| f.status = FiberStatus::Error);
+            }
+            if self.current_fiber_handle.is_none() && !result_bits.contains(SIG_ERROR) {
+                set_error(
+                    &mut self.fiber,
+                    "error",
+                    "fiber/abort: cannot propagate signal (no parent fiber to catch it)",
+                );
                 TAG_NIL
             } else {
-                YIELD_SENTINEL
+                self.fiber.signal = Some((result_bits, result_value));
+                if result_bits.contains(SIG_ERROR) {
+                    TAG_NIL
+                } else {
+                    YIELD_SENTINEL
+                }
             }
         }
     }
 
-    /// Execute a fiber cancel: inject error, resume, let error handlers run.
-    fn do_fiber_cancel(
+    /// Execute a fiber abort: inject error, resume, let error handlers run.
+    fn do_fiber_abort(
         &mut self,
         child_handle: &FiberHandle,
         child_value: Value,

@@ -414,7 +414,10 @@ impl VM {
                     let (result_bits, result_value) = self.do_fiber_resume(&handle, fiber_value);
                     let mask = handle.with(|f| f.mask);
 
-                    if result_bits.is_ok() || mask.contains(result_bits) {
+                    if result_bits.is_ok()
+                        || (mask.contains(result_bits)
+                            && !result_bits.contains(crate::value::SIG_TERMINAL))
+                    {
                         // Sub-fiber completed or its signal was caught by mask.
                         // Clear child chain; result flows to next frame.
                         self.fiber.child = None;

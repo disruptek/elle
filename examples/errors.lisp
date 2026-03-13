@@ -9,7 +9,7 @@
 #   defer            — guaranteed cleanup after body
 #   with             — resource management (acquire / use / release)
 #   Error propagation — errors bubble through call stacks
-#   Fiber error handling — mask, terminal vs resumable, fiber/cancel
+#   Fiber error handling — mask, terminal vs resumable, cancel vs abort
 #   Practical patterns — safe wrappers, validation, error inspection
 
 (def {:assert-eq assert-eq :assert-equal assert-equal :assert-true assert-true :assert-false assert-false :assert-list-eq assert-list-eq :assert-not-nil assert-not-nil :assert-string-eq assert-string-eq :assert-err assert-err :assert-err-kind assert-err-kind} ((import-file "./examples/assertions.lisp")))
@@ -269,27 +269,72 @@
 
 
 # ========================================
-# 8. fiber/cancel — injecting errors
+# 8. fiber/cancel vs fiber/abort
 # ========================================
 
-# fiber/cancel injects an error into a suspended fiber, making it
-# terminal (:error) regardless of its mask.
+# fiber/cancel — hard kill, no cleanup
+#
+# cancel sets the fiber to :error immediately. No defer blocks run,
+# no protect handlers execute. The fiber is dead.
 
-(def f2 (fiber/new (fn [] (yield :waiting) :done) 3))
-(fiber/resume f2 nil)
-(assert-eq (fiber/status f2) :paused "cancel target: starts paused")
-(assert-eq (fiber/value f2) :waiting "cancel target: yielded value")
+(def log1 @[])
+(def f-cancel (fiber/new (fn []
+  (defer (push log1 :cleanup)
+    (yield :waiting)
+    (push log1 :body-done)
+    :done)) 3))
+(fiber/resume f-cancel nil)
+(assert-eq (fiber/status f-cancel) :paused "cancel: starts paused")
 
-(fiber/cancel f2 {:error :cancelled :message "externally cancelled"})
-(def status2 (fiber/status f2))
-(display "  cancelled fiber status: ") (print status2)
-(assert-eq status2 :error "cancel: fiber is :error")
+(fiber/cancel f-cancel {:error :cancelled})
+(display "  cancel status: ") (print (fiber/status f-cancel))
+(display "  cancel log: ") (print log1)
+(assert-eq (fiber/status f-cancel) :error "cancel: fiber is :error")
+(assert-eq (length log1) 0 "cancel: no defer ran")
 
-# Resuming a cancelled fiber fails the same way as any errored fiber.
-(def [ok3? err3] (protect (fiber/resume f2)))
-(display "  resume cancelled fiber: ") (print err3)
-(assert-false ok3? "resume cancelled: signals an error")
-(assert-eq (get err3 :error) :error "resume cancelled: error kind is :error")
+# Resuming a cancelled fiber fails.
+(def [ok-c? err-c] (protect (fiber/resume f-cancel)))
+(display "  resume cancelled: ") (print err-c)
+(assert-false ok-c? "resume cancelled: signals error")
+
+# fiber/abort — graceful termination, cleanup runs
+#
+# abort injects an error and resumes the fiber. The fiber's defer
+# blocks and protect handlers execute during unwinding.
+
+(def log2 @[])
+(def f-abort (fiber/new (fn []
+  (defer (push log2 :cleanup)
+    (yield :waiting)
+    (push log2 :body-done)
+    :done)) 3))
+(fiber/resume f-abort nil)
+(assert-eq (fiber/status f-abort) :paused "abort: starts paused")
+
+(fiber/abort f-abort {:error :aborted})
+(display "  abort status: ") (print (fiber/status f-abort))
+(display "  abort log: ") (print log2)
+(assert-eq (fiber/status f-abort) :error "abort: fiber is :error")
+(assert-eq (length log2) 1 "abort: defer ran")
+(assert-eq (get log2 0) :cleanup "abort: cleanup block executed")
+
+# fiber/cancel self — a fiber can cancel itself
+#
+# Self-cancel terminates the fiber immediately without unwinding.
+# The error is uncatchable (SIG_TERMINAL).
+
+(def log3 @[])
+(def f-self (fiber/new (fn []
+  (defer (push log3 :cleanup)
+    (push log3 :before)
+    (fiber/cancel (fiber/self) {:error :self-cancel})
+    (push log3 :after))) 1))
+(fiber/resume f-self)
+(display "  self-cancel status: ") (print (fiber/status f-self))
+(display "  self-cancel log: ") (print log3)
+(assert-eq (fiber/status f-self) :error "self-cancel: fiber is :error")
+(assert-eq (get log3 0) :before "self-cancel: code before cancel ran")
+(assert-eq (length log3) 1 "self-cancel: no defer, no code after cancel")
 
 
 # ========================================

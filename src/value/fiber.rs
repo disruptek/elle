@@ -252,7 +252,7 @@ impl From<SignalBits> for u32 {
 // owner). Re-exported here so existing `use crate::value::fiber::SIG_*`
 // imports continue to work.
 pub use crate::signals::{
-    SIG_CANCEL, SIG_DEBUG, SIG_ERROR, SIG_FFI, SIG_HALT, SIG_IO, SIG_OK, SIG_PROPAGATE, SIG_QUERY,
+    SIG_ABORT, SIG_DEBUG, SIG_ERROR, SIG_FFI, SIG_HALT, SIG_IO, SIG_OK, SIG_PROPAGATE, SIG_QUERY,
     SIG_RESUME, SIG_TERMINAL, SIG_YIELD,
 };
 

@@ -2,12 +2,12 @@
 //!
 //! Routes signal bits returned by NativeFn primitives to the appropriate
 //! handler: stack push for SIG_OK, error storage for SIG_ERROR, fiber
-//! execution for SIG_RESUME/SIG_PROPAGATE/SIG_CANCEL, VM state reads
+//! execution for SIG_RESUME/SIG_PROPAGATE/SIG_ABORT, VM state reads
 //! for SIG_QUERY.
 
 use crate::value::error_val;
 use crate::value::{
-    BytecodeFrame, SignalBits, SuspendedFrame, Value, SIG_CANCEL, SIG_ERROR, SIG_HALT, SIG_OK,
+    BytecodeFrame, SignalBits, SuspendedFrame, Value, SIG_ABORT, SIG_ERROR, SIG_HALT, SIG_OK,
     SIG_PROPAGATE, SIG_QUERY, SIG_RESUME,
 };
 use std::rc::Rc;
@@ -58,8 +58,8 @@ impl VM {
             return self.handle_fiber_propagate_signal(value);
         }
 
-        if bits == SIG_CANCEL {
-            return self.handle_fiber_cancel_signal(value, bytecode, constants, closure_env, ip);
+        if bits == SIG_ABORT {
+            return self.handle_fiber_abort_signal(value, bytecode, constants, closure_env, ip);
         }
 
         if bits == SIG_QUERY {
@@ -149,8 +149,8 @@ impl VM {
             return self.handle_fiber_propagate_signal_tail(value);
         }
 
-        if bits == SIG_CANCEL {
-            return self.handle_fiber_cancel_signal_tail(value);
+        if bits == SIG_ABORT {
+            return self.handle_fiber_abort_signal_tail(value);
         }
 
         if bits == SIG_QUERY {
