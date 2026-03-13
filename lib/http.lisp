@@ -38,17 +38,19 @@
    'Content-Type' -> :content-type"
   (keyword (string/downcase name)))
 
+(defn capitalize-segment [part]
+  "Capitalize first letter of a string segment."
+  (if (= (length part) 0)
+      part
+      (string/format "{}{}"
+        (string/upcase (slice part 0 1))
+        (slice part 1 (length part)))))
+
 (defn keyword->header-name [kw]
   "Convert keyword to HTTP header name with capitalized segments.
    :content-type -> 'Content-Type'"
   (let* [[parts (string/split (string kw) "-")]
-         [capitalize (fn [part]
-                       (if (= (length part) 0)
-                           part
-                           (string/format "{}{}"
-                             (string/upcase (slice part 0 1))
-                             (slice part 1 (length part)))))]
-         [capitalized (map capitalize parts)]]
+         [capitalized (map capitalize-segment parts)]]
     (string/join capitalized "-")))
 
 (defn read-headers [port]
@@ -104,11 +106,9 @@
          [parts (string/split line " ")]]
     (when (< (length parts) 2)
       (error {:error :http-error :message "malformed status line"}))
-    (let* [[version (get parts 0)]
-           [status (integer (get parts 1))]
-           [reason (if (> (length parts) 2)
-                       (string/join (slice parts 2 (length parts)) " ")
-                       "")]]
+    (let* [[[version status-str & reason-parts] parts]
+           [status (integer status-str)]
+           [reason (if (empty? reason-parts) "" (string/join reason-parts " "))]]
       {:version version :status status :reason reason})))
 
 (defn write-status-line [port status reason]
@@ -168,8 +168,7 @@
         (stream/flush conn)
         (let* [[status-line (read-status-line conn)]
                [resp-headers (read-headers conn)]
-               [resp-body (read-body conn resp-headers)]
-
+               [resp-body (read-body conn resp-headers)]]
           {:status status-line:status :headers resp-headers :body resp-body})))))
 
 (defn http-get [url &keys {:headers headers}]
