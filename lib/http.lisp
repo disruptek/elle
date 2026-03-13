@@ -142,6 +142,18 @@
    502 "Bad Gateway"
    503 "Service Unavailable"})
 
+(defn build-request-headers [host extra-headers body]
+  "Build request headers with host, connection, and optional Content-Length."
+  (let* [[base-headers {:host host :connection "close"}]
+         [with-extra (if (nil? extra-headers) base-headers (merge base-headers extra-headers))]]
+    (if (nil? body)
+        with-extra
+        (merge with-extra {:content-length (string (string/size-of body))}))))
+
+(defn send-request-body [conn body]
+  "Write request body if present."
+  (when (not (nil? body)) (stream/write conn body)))
+
 (defn http-request [method url &keys {:body body :headers extra-headers}]
   "Make an HTTP/1.1 request. Returns {:status :headers :body}.
    method: string (\"GET\", \"POST\", etc.)
@@ -149,22 +161,16 @@
    :body optional string body
    :headers optional struct of extra headers to send"
   (let* [[url-parsed (parse-url url)]
-         [host (get url-parsed :host)]
-         [port-num (get url-parsed :port)]
-         [path (get url-parsed :path)]
-         [query (get url-parsed :query)]
-         [request-path (if (nil? query) path (string/format "{}?{}" path query))]
-         [conn (tcp/connect host port-num)]]
+         [request-path (if (nil? url-parsed:query)
+                           url-parsed:path
+                           (string/format "{}?{}" url-parsed:path url-parsed:query))]
+         [conn (tcp/connect url-parsed:host url-parsed:port)]]
     (defer (port/close conn)
       (write-request-line conn method request-path)
-      (let* [[base-headers {:host host :connection "close"}]
-             [all-headers (if (nil? extra-headers) base-headers (merge base-headers extra-headers))]
-             [send-headers (if (nil? body)
-                               all-headers
-                               (merge all-headers {:content-length (string (string/size-of body))}))]]
-        (write-headers conn send-headers)
+      (let* [[headers (build-request-headers url-parsed:host extra-headers body)]]
+        (write-headers conn headers)
         (stream/write conn "\r\n")
-        (when (not (nil? body)) (stream/write conn body))
+        (send-request-body conn body)
         (stream/flush conn)
         (let* [[status-line (read-status-line conn)]
                [resp-headers (read-headers conn)]
