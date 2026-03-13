@@ -214,7 +214,9 @@ impl VM {
                             // cause the caller frame to be appended for resumption.
                             // fiber.signal and fiber.suspended are set by the JIT yield
                             // helpers. Build the interpreter-level caller frame.
-                            if let Some(mut frames) = self.fiber.suspended.take() {
+                            // Use unwrap_or_default() so this works whether the JIT callee
+                            // populated fiber.suspended or not (tail-call-to-native path).
+                            {
                                 let (_, value) = self.fiber.signal.take().unwrap();
                                 let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
                                 let caller_frame = SuspendedFrame {
@@ -227,6 +229,7 @@ impl VM {
                                         crate::value::fiber_heap::save_active_allocator(),
                                     location_map: location_map.clone(),
                                 };
+                                let mut frames = self.fiber.suspended.take().unwrap_or_default();
                                 frames.push(caller_frame);
                                 self.fiber.signal = Some((sig, value));
                                 self.fiber.suspended = Some(frames);
@@ -267,8 +270,13 @@ impl VM {
             } else if !bits.contains(SIG_ERROR) && !bits.contains(SIG_HALT) {
                 // Suspending signal — any bits except SIG_ERROR/SIG_HALT
                 // cause the caller frame to be appended for resumption.
-                // Propagated from a nested call.
-                if let Some(mut frames) = self.fiber.suspended.take() {
+                // Propagated from a nested call (interpreter or tail-call-to-native path).
+                // We must always build the caller frame, whether or not the callee
+                // already populated fiber.suspended. When the callee is a TailCall to
+                // a native yielding primitive, it does NOT create a SuspendedFrame
+                // (TCO), so fiber.suspended may be None here — use unwrap_or_default()
+                // to cover both cases.
+                {
                     let (_, value) = self.fiber.signal.take().unwrap();
 
                     let caller_stack: Vec<Value> = self.fiber.stack.drain(..).collect();
@@ -279,9 +287,10 @@ impl VM {
                         ip: *ip,
                         stack: caller_stack,
                         active_allocator: crate::value::fiber_heap::save_active_allocator(),
-                        location_map: result.location_map.clone(),
+                        location_map: location_map.clone(),
                     };
 
+                    let mut frames = self.fiber.suspended.take().unwrap_or_default();
                     frames.push(caller_frame);
                     self.fiber.signal = Some((bits, value));
                     self.fiber.suspended = Some(frames);

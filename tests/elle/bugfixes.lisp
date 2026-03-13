@@ -168,3 +168,27 @@
         (let ((rest-list (build (- n 1))))
           (cons n rest-list))))
   (assert-eq (length (build 10)) 10 "defn + recursive + list display"))
+
+# ============================================================================
+# Bug 5: Fiber locals corrupted after yield through nested call (tail-call-to-native)
+#
+# When a fiber yields inside a nested function call where the callee uses a
+# TailCall to a native yielding primitive, the caller's frame was not saved
+# because call_inner only saved the caller when fiber.suspended was already
+# Some(_). For TailCall-to-native, no SuspendedFrame is created by the callee,
+# so fiber.suspended was None and the caller frame was silently discarded,
+# losing all stack-based locals.
+# ============================================================================
+
+(begin
+  (defn do-write (port msg)
+    (stream/write port msg))
+
+  (let ((result @[]))
+    (ev/run
+      (fn ()
+        (let ((p (port/open "/tmp/elle_bugfix5_test" :write)))
+          (do-write p "hello")
+          (push result p))))
+    (assert-eq (type (get result 0)) :port
+      "fiber locals not corrupted after yield through nested tail-call-to-native")))
