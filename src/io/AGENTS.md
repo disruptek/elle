@@ -59,6 +59,9 @@ Enum of I/O operations:
 - `RecvFrom { count: usize }` — receive datagram on UDP socket, returns struct `{:data bytes :addr string :port int}`.
 - `Shutdown { how: i32 }` — graceful shutdown of stream socket. `how` is `SHUT_RD` (0), `SHUT_WR` (1), or `SHUT_RDWR` (2). Returns nil.
 
+**Timer operations:**
+- `Sleep { duration: Duration }` — async timer. No port required (uses `IoRequest::portless()`). On io_uring, submitted as a `Timeout` SQE. On thread pool fallback, spawns a thread that calls `std::thread::sleep`. Returns nil on completion.
+
 ### ConnectAddr
 
 Enum for connect target address:
@@ -121,6 +124,7 @@ State machine:
 | `io/submit` | errors | Submit async I/O request, return submission ID |
 | `io/reap` | errors | Non-blocking poll for completions (returns array) |
 | `io/wait` | errors | Blocking wait for completions with timeout (returns array) |
+| `ev/sleep` | error, yield, io | Async sleep — yields `IoOp::Sleep` to scheduler (in `primitives/time.rs`) |
 
 ## Timeout Handling
 

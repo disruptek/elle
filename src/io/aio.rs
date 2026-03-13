@@ -9,7 +9,7 @@ use crate::io::request::{ConnectAddr, IoOp, IoRequest};
 use crate::io::threadpool::{
     StdinOpKind, StdinThread, ThreadPoolBackend, TP_OP_ACCEPT, TP_OP_CONNECT_TCP,
     TP_OP_CONNECT_UNIX, TP_OP_FLUSH, TP_OP_READ, TP_OP_RECV_FROM, TP_OP_SEND_TO, TP_OP_SHUTDOWN,
-    TP_OP_WRITE,
+    TP_OP_SLEEP, TP_OP_WRITE,
 };
 use crate::io::types::{FdState, PortKey};
 use crate::port::{Encoding, Port, PortKind};
@@ -84,13 +84,13 @@ struct AsyncBackendInner {
 // --- Platform backend dispatch ---
 
 pub(crate) enum PlatformBackend {
-    #[cfg(all(target_os = "linux", feature = "io-uring"))]
+    #[cfg(target_os = "linux")]
     Uring(Box<io_uring::IoUring>),
     ThreadPool(ThreadPoolBackend),
 }
 
 /// High bit tag for timeout CQE user_data.
-#[cfg(all(target_os = "linux", feature = "io-uring"))]
+#[cfg(target_os = "linux")]
 pub(crate) const TIMEOUT_USER_DATA_TAG: u64 = 1 << 63;
 
 impl std::fmt::Debug for AsyncBackend {
@@ -120,7 +120,7 @@ impl AsyncBackend {
         })
     }
 
-    #[cfg(all(target_os = "linux", feature = "io-uring"))]
+    #[cfg(target_os = "linux")]
     fn create_platform_backend() -> PlatformBackend {
         match io_uring::IoUring::new(256) {
             Ok(ring) => PlatformBackend::Uring(Box::new(ring)),
@@ -128,17 +128,19 @@ impl AsyncBackend {
         }
     }
 
-    #[cfg(not(all(target_os = "linux", feature = "io-uring")))]
+    #[cfg(not(target_os = "linux"))]
     fn create_platform_backend() -> PlatformBackend {
         PlatformBackend::ThreadPool(ThreadPoolBackend::new())
     }
 
     /// Submit an I/O request. Returns a submission ID.
     pub(crate) fn submit(&self, request: &IoRequest) -> Result<u64, String> {
-        // Handle Connect before port extraction — Connect creates a new port,
-        // so request.port is Value::NIL.
+        // Portless operations — handle before port extraction.
         if let IoOp::Connect { ref addr } = request.op {
             return self.submit_connect(addr, request.timeout);
+        }
+        if let IoOp::Sleep { duration } = request.op {
+            return self.submit_sleep(duration);
         }
 
         let port = request
@@ -238,7 +240,6 @@ impl AsyncBackend {
                 let listener_kind = Some(port.kind());
                 let (op_kind, write_data, read_size) = (TP_OP_ACCEPT, Vec::new(), 0usize);
 
-                #[allow(unused_mut)]
                 let AsyncBackendInner {
                     ref mut platform,
                     ref mut network_pool,
@@ -247,13 +248,12 @@ impl AsyncBackend {
                     ..
                 } = *inner;
 
-                // Try io_uring first if available
                 match platform {
-                    #[cfg(all(target_os = "linux", feature = "io-uring"))]
+                    #[cfg(target_os = "linux")]
                     PlatformBackend::Uring(ring) => {
                         crate::io::uring::submit_uring_accept(ring, id, fd, request.timeout)?;
                     }
-                    _ => {
+                    PlatformBackend::ThreadPool(_) => {
                         network_pool.submit(id, fd, op_kind, write_data, read_size)?;
                     }
                 }
@@ -281,7 +281,6 @@ impl AsyncBackend {
                 let mut payload = format!("{}:{}\0", addr, port_num).into_bytes();
                 payload.extend_from_slice(&bytes);
 
-                #[allow(unused_mut)]
                 let AsyncBackendInner {
                     ref mut platform,
                     ref mut network_pool,
@@ -290,9 +289,8 @@ impl AsyncBackend {
                     ..
                 } = *inner;
 
-                // Try io_uring first if available
                 match platform {
-                    #[cfg(all(target_os = "linux", feature = "io-uring"))]
+                    #[cfg(target_os = "linux")]
                     PlatformBackend::Uring(ring) => {
                         crate::io::uring::submit_uring_sendto(
                             ring,
@@ -303,8 +301,8 @@ impl AsyncBackend {
                             buffer_pool,
                         )?;
                     }
-                    _ => {
-                        let _ = buffer_pool; // Used only in io_uring path
+                    PlatformBackend::ThreadPool(_) => {
+                        let _ = buffer_pool;
                         network_pool.submit(id, fd, TP_OP_SEND_TO, payload, 0)?;
                     }
                 }
@@ -336,9 +334,8 @@ impl AsyncBackend {
                     ..
                 } = *inner;
 
-                // Try io_uring first if available
                 match platform {
-                    #[cfg(all(target_os = "linux", feature = "io-uring"))]
+                    #[cfg(target_os = "linux")]
                     PlatformBackend::Uring(ring) => {
                         crate::io::uring::submit_uring_recvfrom(
                             ring,
@@ -349,8 +346,8 @@ impl AsyncBackend {
                             buffer_pool,
                         )?;
                     }
-                    _ => {
-                        let _ = buffer_pool; // Use buffer_pool to avoid warning
+                    PlatformBackend::ThreadPool(_) => {
+                        let _ = buffer_pool;
                         network_pool.submit(id, fd, TP_OP_RECV_FROM, Vec::new(), *count)?;
                     }
                 }
@@ -378,9 +375,8 @@ impl AsyncBackend {
                     ..
                 } = *inner;
 
-                // Try io_uring first if available
                 match platform {
-                    #[cfg(all(target_os = "linux", feature = "io-uring"))]
+                    #[cfg(target_os = "linux")]
                     PlatformBackend::Uring(ring) => {
                         crate::io::uring::submit_uring_shutdown(
                             ring,
@@ -391,8 +387,8 @@ impl AsyncBackend {
                             buffer_pool,
                         )?;
                     }
-                    _ => {
-                        let _ = buffer_pool; // Use buffer_pool to avoid warning
+                    PlatformBackend::ThreadPool(_) => {
+                        let _ = buffer_pool;
                         network_pool.submit(id, fd, TP_OP_SHUTDOWN, vec![*how as u8], 0)?;
                     }
                 }
@@ -437,7 +433,7 @@ impl AsyncBackend {
                 } = *inner;
 
                 match platform {
-                    #[cfg(all(target_os = "linux", feature = "io-uring"))]
+                    #[cfg(target_os = "linux")]
                     PlatformBackend::Uring(ring) => {
                         crate::io::uring::submit_uring(
                             ring,
@@ -451,7 +447,7 @@ impl AsyncBackend {
                         )?;
                     }
                     PlatformBackend::ThreadPool(pool) => {
-                        let _ = buffer_pool; // Used only in io_uring path
+                        let _ = buffer_pool;
                         pool.submit(id, fd, op_kind, write_data, read_size)?;
                     }
                 }
@@ -503,14 +499,13 @@ impl AsyncBackend {
             ..
         } = *inner;
 
-        // Try io_uring first if available
         match platform {
-            #[cfg(all(target_os = "linux", feature = "io-uring"))]
+            #[cfg(target_os = "linux")]
             PlatformBackend::Uring(ring) => {
                 crate::io::uring::submit_uring_connect(ring, id, addr, timeout, buffer_pool)?;
             }
-            _ => {
-                let _ = buffer_pool; // Use buffer_pool to avoid warning
+            PlatformBackend::ThreadPool(_) => {
+                let _ = buffer_pool;
                 network_pool.submit(id, -1, op_kind, data, 0)?;
             }
         }
@@ -539,6 +534,46 @@ impl AsyncBackend {
                     ConnectAddr::Unix { path } => ConnectAddr::Unix { path: path.clone() },
                 }),
                 timeout,
+            },
+        );
+        Ok(id)
+    }
+
+    /// Submit a Sleep operation. No port — just a timer.
+    fn submit_sleep(&self, duration: Duration) -> Result<u64, String> {
+        let mut inner = self.inner.borrow_mut();
+        let id = inner.next_id;
+        inner.next_id += 1;
+        let buf_handle = inner.buffer_pool.alloc(0);
+
+        let AsyncBackendInner {
+            ref mut platform,
+            ref mut network_pool,
+            ref mut pending,
+            ..
+        } = *inner;
+
+        match platform {
+            #[cfg(target_os = "linux")]
+            PlatformBackend::Uring(ring) => {
+                crate::io::uring::submit_uring_sleep(ring, id, duration)?;
+            }
+            PlatformBackend::ThreadPool(_) => {
+                let nanos = duration.as_nanos() as u64;
+                network_pool.submit(id, -1, TP_OP_SLEEP, nanos.to_le_bytes().to_vec(), 0)?;
+            }
+        }
+
+        pending.insert(
+            id,
+            PendingOp {
+                op: IoOp::Sleep { duration },
+                port_key: PortKey::Fd(-1),
+                port: Value::NIL,
+                buffer_handle: buf_handle,
+                listener_kind: None,
+                connect_addr: None,
+                timeout: None,
             },
         );
         Ok(id)
@@ -585,7 +620,7 @@ impl AsyncBackend {
             } = *inner;
 
             match platform {
-                #[cfg(all(target_os = "linux", feature = "io-uring"))]
+                #[cfg(target_os = "linux")]
                 PlatformBackend::Uring(ring) => {
                     crate::io::uring::wait_uring(
                         ring,
@@ -690,7 +725,7 @@ impl AsyncBackendInner {
     /// Drain completions from the platform backend into self.completions.
     fn drain_platform_completions(&mut self) {
         match &mut self.platform {
-            #[cfg(all(target_os = "linux", feature = "io-uring"))]
+            #[cfg(target_os = "linux")]
             PlatformBackend::Uring(ring) => {
                 for cqe in ring.completion() {
                     let user_data = cqe.user_data();
@@ -829,9 +864,8 @@ impl AsyncBackendInner {
             | IoOp::Connect { .. }
             | IoOp::SendTo { .. }
             | IoOp::RecvFrom { .. }
-            | IoOp::Shutdown { .. } => {
-                return Err("io/submit: unsupported operation on stdin".into())
-            }
+            | IoOp::Shutdown { .. }
+            | IoOp::Sleep { .. } => return Err("io/submit: unsupported operation on stdin".into()),
         };
         stdin_thread.submit(id, op_kind)?;
         // No buffer needed for stdin (thread manages its own)

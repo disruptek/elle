@@ -652,7 +652,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "@string",
         func: prim_buffer,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::AtLeast(0),
         doc: "Create a mutable string from byte arguments.",
         params: &[],
@@ -663,7 +663,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/uppercase",
         func: prim_string_upcase,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Convert string to uppercase.",
         params: &["s"],
@@ -674,7 +674,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/lowercase",
         func: prim_string_downcase,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Convert string to lowercase.",
         params: &["s"],
@@ -685,7 +685,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/find",
         func: prim_string_find,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Range(2, 3),
         doc: "Find the grapheme index of a substring, with optional start offset.",
         params: &["haystack", "needle", "offset"],
@@ -696,7 +696,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/split",
         func: prim_string_split,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Split string by delimiter, returning an array of substrings.",
         params: &["s", "delim"],
@@ -707,7 +707,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/replace",
         func: prim_string_replace,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(3),
         doc: "Replace all occurrences of old substring with new.",
         params: &["s", "old", "new"],
@@ -718,7 +718,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/trim",
         func: prim_string_trim,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Remove leading and trailing whitespace.",
         params: &["s"],
@@ -729,7 +729,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/contains?",
         func: prim_string_contains,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Check if string contains substring.",
         params: &["s", "substr"],
@@ -740,7 +740,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/starts-with?",
         func: prim_string_starts_with,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Check if string starts with prefix.",
         params: &["s", "prefix"],
@@ -751,7 +751,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/ends-with?",
         func: prim_string_ends_with,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Check if string ends with suffix.",
         params: &["s", "suffix"],
@@ -762,7 +762,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "string/join",
         func: prim_string_join,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(2),
         doc: "Join list of strings with separator.",
         params: &["lst", "sep"],
@@ -773,7 +773,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "uri-encode",
         func: prim_uri_encode,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Percent-encode a string per RFC 3986.",
         params: &["str"],

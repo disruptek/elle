@@ -7,5 +7,5 @@ pub(crate) mod pool;
 pub mod request;
 pub(crate) mod threadpool;
 pub(crate) mod types;
-#[cfg(all(target_os = "linux", feature = "io-uring"))]
+#[cfg(target_os = "linux")]
 pub(crate) mod uring;

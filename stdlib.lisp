@@ -845,7 +845,6 @@
    :min-key min-key :max-key max-key :memoize memoize :sort-by sort-by
    :time/stopwatch time/stopwatch :time/elapsed time/elapsed
    :call-count call-count :global? global? :fiber/self fiber/self
-   :arena/allocs arena/allocs
    :fn/cfg fn/cfg :fn/cfg-label fn/cfg-label
    :fn/cfg-dot fn/cfg-dot :fn/cfg-mermaid fn/cfg-mermaid
    :*stdin* *stdin* :*stdout* *stdout* :*stderr* *stderr*

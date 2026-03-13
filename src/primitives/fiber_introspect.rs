@@ -279,7 +279,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/bits",
         func: prim_fiber_bits,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Get the signal bits from the fiber's last signal",
         params: &["fiber"],
@@ -290,7 +290,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/mask",
         func: prim_fiber_mask,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Get the fiber's signal mask",
         params: &["fiber"],
@@ -301,7 +301,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber?",
         func: prim_is_fiber,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Check if a value is a fiber",
         params: &["value"],
@@ -323,7 +323,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/child",
         func: prim_fiber_child,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Get the most recently resumed child fiber, or nil if none",
         params: &["fiber"],
@@ -345,7 +345,10 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/propagate",
         func: prim_fiber_propagate,
-        signal: Signal::yields_errors(),
+        signal: Signal {
+            bits: SignalBits::new(SIG_ERROR.0 | SIG_PROPAGATE.0),
+            propagates: 0,
+        },
         arity: Arity::Exact(1),
         doc: "Propagate a caught signal from a child fiber, preserving the child chain",
         params: &["fiber"],
@@ -356,7 +359,10 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "fiber/cancel",
         func: prim_fiber_cancel,
-        signal: Signal::errors(),
+        signal: Signal {
+            bits: SignalBits::new(SIG_ERROR.0 | SIG_CANCEL.0),
+            propagates: 0,
+        },
         arity: Arity::Range(1, 2),
         doc: "Inject an error into a suspended fiber. Error value defaults to nil.",
         params: &["fiber", "error?"],

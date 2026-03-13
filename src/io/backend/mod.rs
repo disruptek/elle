@@ -61,9 +61,13 @@ impl SyncBackend {
     /// Execute an I/O request synchronously.
     /// Returns `(SIG_OK, result)` on success, `(SIG_ERROR, error)` on failure.
     pub fn execute(&self, request: &IoRequest) -> (SignalBits, Value) {
-        // Connect creates a new port — no existing port required.
+        // Portless operations — no existing port required.
         if let IoOp::Connect { ref addr } = request.op {
             return self.execute_connect(addr);
+        }
+        if let IoOp::Sleep { duration } = request.op {
+            std::thread::sleep(duration);
+            return (SIG_OK, Value::NIL);
         }
 
         // All remaining ops require a valid port.
@@ -123,7 +127,7 @@ impl SyncBackend {
                     SIG_ERROR,
                     error_val("io-error", "accept: port is not a listener"),
                 ),
-                IoOp::Connect { .. } => unreachable!(), // handled above
+                IoOp::Connect { .. } | IoOp::Sleep { .. } => unreachable!(), // handled above
                 IoOp::SendTo { .. } | IoOp::RecvFrom { .. } => (
                     SIG_ERROR,
                     error_val("io-error", "UDP operations require a UDP socket"),

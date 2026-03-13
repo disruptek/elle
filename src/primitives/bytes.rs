@@ -338,7 +338,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "bytes",
         func: prim_bytes,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::AtLeast(0),
         doc: "Create immutable bytes. Accepts integers (0-255), or a single string/keyword.",
         params: &[],
@@ -349,7 +349,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "@bytes",
         func: prim_blob,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::AtLeast(0),
         doc: "Create mutable bytes. Accepts integers (0-255), or a single string/keyword.",
         params: &[],
@@ -360,7 +360,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "bytes->hex",
         func: prim_bytes_to_hex,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Exact(1),
         doc: "Convert bytes or @bytes to a lowercase hex string.",
         params: &["b"],
@@ -371,7 +371,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "slice",
         func: prim_slice,
-        signal: Signal::inert(),
+        signal: Signal::errors(),
         arity: Arity::Range(2, 3),
         doc: "Slice a sequence from start to end index. If end is omitted, slice to end of sequence. Returns same type as input.",
         params: &["coll", "start", "end?"],

@@ -21,6 +21,7 @@ pub(super) const TP_OP_CONNECT_UNIX: u8 = 5;
 pub(super) const TP_OP_SEND_TO: u8 = 6;
 pub(super) const TP_OP_RECV_FROM: u8 = 7;
 pub(super) const TP_OP_SHUTDOWN: u8 = 8;
+pub(super) const TP_OP_SLEEP: u8 = 9;
 
 impl ThreadPoolBackend {
     pub(super) fn new() -> Self {
@@ -318,6 +319,18 @@ impl ThreadPoolBackend {
                     } else {
                         (0, Vec::new())
                     }
+                }
+                TP_OP_SLEEP => {
+                    // Sleep: data = duration as 8 bytes (nanos, LE u64)
+                    let nanos = if data.len() >= 8 {
+                        u64::from_le_bytes([
+                            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+                        ])
+                    } else {
+                        0
+                    };
+                    std::thread::sleep(std::time::Duration::from_nanos(nanos));
+                    (0, Vec::new())
                 }
                 _ => (-1, Vec::new()),
             };

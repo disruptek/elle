@@ -22,6 +22,15 @@ pub(super) fn process_raw_completion(
     // Release the buffer back to the pool
     buffer_pool.release(buf_handle);
 
+    // Sleep completes with -ETIME (62) on io_uring, or 0 on thread pool.
+    // Both are success for a timer.
+    if matches!(pending.op, IoOp::Sleep { .. }) {
+        return Completion {
+            id,
+            result: Ok(Value::NIL),
+        };
+    }
+
     if result_code < 0 {
         // Error
         let errno = -result_code;
@@ -79,7 +88,7 @@ pub(super) fn process_raw_completion(
                 }
             }
             IoOp::Write { .. } | IoOp::SendTo { .. } => Value::int(result_code as i64),
-            IoOp::Flush | IoOp::Shutdown { .. } => Value::NIL,
+            IoOp::Flush | IoOp::Shutdown { .. } | IoOp::Sleep { .. } => Value::NIL,
             IoOp::Accept => {
                 // Accept: result_code is new fd, data is encoded address
                 // Data format: addr_len (4 bytes LE) + sockaddr_storage

@@ -301,6 +301,32 @@ pub(super) fn submit_uring_shutdown(
     Ok(())
 }
 
+/// Submit a standalone Timeout SQE for ev/sleep.
+///
+/// Unlike LinkTimeout (which cancels a linked op), this is a freestanding
+/// timer. The CQE fires after the duration with result_code = -ETIME (62).
+/// We treat -ETIME as success for sleep (the timer expired normally).
+pub(super) fn submit_uring_sleep(
+    ring: &mut io_uring::IoUring,
+    id: u64,
+    duration: Duration,
+) -> Result<(), String> {
+    use io_uring::opcode;
+
+    let ts = io_uring::types::Timespec::new()
+        .sec(duration.as_secs())
+        .nsec(duration.subsec_nanos());
+    let timeout_sqe = opcode::Timeout::new(&ts).build().user_data(id);
+    unsafe {
+        ring.submission()
+            .push(&timeout_sqe)
+            .map_err(|_| "io/submit: io_uring submission queue full".to_string())?;
+    }
+    ring.submit()
+        .map_err(|e| format!("io/submit: io_uring submit failed: {}", e))?;
+    Ok(())
+}
+
 pub(super) fn wait_uring(
     ring: &mut io_uring::IoUring,
     timeout: Option<u64>,
