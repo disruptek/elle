@@ -169,8 +169,8 @@
         (let* [[status-line (read-status-line conn)]
                [resp-headers (read-headers conn)]
                [resp-body (read-body conn resp-headers)]
-               [status (get status-line :status)]]
-          {:status status :headers resp-headers :body resp-body})))))
+
+          {:status status-line:status :headers resp-headers :body resp-body})))))
 
 (defn http-get [url &keys {:headers headers}]
   "Make a GET request. Returns {:status :headers :body}."
@@ -188,25 +188,19 @@
   "Read a complete HTTP request from a connection port.
    Returns {:method :path :version :headers :body}."
   (let* [[req-line (read-request-line conn)]
-         [method (get req-line :method)]
-         [path (get req-line :path)]
-         [version (get req-line :version)]
          [headers (read-headers conn)]
          [body (read-body conn headers)]]
-    {:method method :path path :version version :headers headers :body body}))
+    {:method req-line:method :path req-line:path :version req-line:version
+     :headers headers :body body}))
 
 (defn write-response [conn response]
   "Write a complete HTTP response to a connection port and flush.
    response is {:status :headers :body}."
-  (let* [[status (get response :status)]
-         [headers (get response :headers)]
-         [body (get response :body)]
-         [reason (or (get reason-phrases status) "Unknown")]]
-    (write-status-line conn status reason)
-    (write-headers conn headers)
-    (stream/write conn "\r\n")
-    (when (not (nil? body)) (stream/write conn body))
-    (stream/flush conn)))
+  (write-status-line conn response:status (or (get reason-phrases response:status) "Unknown"))
+  (write-headers conn response:headers)
+  (stream/write conn "\r\n")
+  (when (not (nil? response:body)) (stream/write conn response:body))
+  (stream/flush conn))
 
 (defn http-respond [status body &keys {:headers extra-headers}]
   "Build a response struct with Content-Type and Content-Length set.
