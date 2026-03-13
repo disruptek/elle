@@ -1032,7 +1032,7 @@ fn test_silence_function_ceiling_error_fails_yield() {
 #[test]
 fn test_silence_callsite_concrete_fails() {
     // Compile-time callsite checking is not yet implemented — silence bounds
-    // are enforced at runtime via CheckEffectBound. Use eval_source to verify
+    // are enforced at runtime via CheckSignalBound. Use eval_source to verify
     // the runtime check catches the violation.
     let result = crate::common::eval_source(
         "(begin (def apply-inert (fn (f x) (silence f) (f x))) (apply-inert (fn (x) (yield x)) 42))",
