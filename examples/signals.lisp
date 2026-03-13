@@ -112,7 +112,7 @@
   (emit :log {:level :info :msg "starting"})
   (def step1 (* x 2))   # double the input
   # signal the intermediate value
-  (emit :log {:level :debug :msg (-> "doubled to " (append (string step1)))})
+  (emit :log {:level :debug :msg (string "doubled to " step1)})
   (def step2 (+ step1 10))  # add ten
   # signal completion
   (emit :log {:level :info :msg "done"})
