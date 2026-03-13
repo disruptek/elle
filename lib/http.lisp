@@ -58,7 +58,7 @@
    Header keys are lowercase keywords (:content-type, :host, etc.).
    Stops when it reads an empty line (CRLF-only or LF-only).
    Signals :http-error on malformed header lines."
-  (let ((headers (@struct)))
+  (let [[headers (@struct)]]
     (forever
       (let [[line (stream/read-line port)]]
         (when (= (length line) 0) (break (freeze headers)))
@@ -72,13 +72,8 @@
 (defn write-headers [port headers]
   "Write HTTP headers struct to port. Each header is written as 'Name: value\\r\\n'.
    Keys are keywords converted back to HTTP header name casing."
-  (let ((write-header (fn [k]
-                        (stream/write port
-                          (string/format "{}: {}\r\n"
-                            (keyword->header-name k)
-                            (get headers k))))))
-    (each k in (keys headers)
-      (write-header k))))
+  (each k in (keys headers)
+    (stream/write port (string/format "{}: {}\r\n" (keyword->header-name k) (get headers k)))))
 
 # ============================================================================
 # Chunk 3: Request and response wire format
@@ -144,15 +139,10 @@
 
 (defn build-request-headers [host extra-headers body]
   "Build request headers with host, connection, and optional Content-Length."
-  (let* [[base-headers {:host host :connection "close"}]
-         [with-extra (if (nil? extra-headers) base-headers (merge base-headers extra-headers))]]
+  (let [[headers (merge {:host host :connection "close"} (or extra-headers {}))]]
     (if (nil? body)
-        with-extra
-        (merge with-extra {:content-length (string (string/size-of body))}))))
-
-(defn send-request-body [conn body]
-  "Write request body if present."
-  (when (not (nil? body)) (stream/write conn body)))
+        headers
+        (merge headers {:content-length (string (string/size-of body))}))))
 
 (defn http-request [method url &keys {:body body :headers extra-headers}]
   "Make an HTTP/1.1 request. Returns {:status :headers :body}.
@@ -167,10 +157,10 @@
          [conn (tcp/connect url-parsed:host url-parsed:port)]]
     (defer (port/close conn)
       (write-request-line conn method request-path)
-      (let* [[headers (build-request-headers url-parsed:host extra-headers body)]]
+      (let [[headers (build-request-headers url-parsed:host extra-headers body)]]
         (write-headers conn headers)
         (stream/write conn "\r\n")
-        (send-request-body conn body)
+        (when (not (nil? body)) (stream/write conn body))
         (stream/flush conn)
         (let* [[status-line (read-status-line conn)]
                [resp-headers (read-headers conn)]
