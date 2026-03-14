@@ -128,43 +128,9 @@ pub(super) fn submit_uring_connect(
                 .parse::<std::net::SocketAddr>()
                 .map_err(|e| format!("connect: invalid address: {}", e))?;
 
-            let (domain, sa_bytes, sa_len) = match resolved {
-                std::net::SocketAddr::V4(v4) => {
-                    let mut sin: libc::sockaddr_in = unsafe { std::mem::zeroed() };
-                    sin.sin_family = libc::AF_INET as libc::sa_family_t;
-                    sin.sin_port = v4.port().to_be();
-                    sin.sin_addr.s_addr = u32::from(*v4.ip()).to_be();
-                    let bytes = unsafe {
-                        std::slice::from_raw_parts(
-                            &sin as *const _ as *const u8,
-                            std::mem::size_of::<libc::sockaddr_in>(),
-                        )
-                        .to_vec()
-                    };
-                    (
-                        libc::AF_INET,
-                        bytes,
-                        std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
-                    )
-                }
-                std::net::SocketAddr::V6(v6) => {
-                    let mut sin6: libc::sockaddr_in6 = unsafe { std::mem::zeroed() };
-                    sin6.sin6_family = libc::AF_INET6 as libc::sa_family_t;
-                    sin6.sin6_port = v6.port().to_be();
-                    sin6.sin6_addr.s6_addr = v6.ip().octets();
-                    let bytes = unsafe {
-                        std::slice::from_raw_parts(
-                            &sin6 as *const _ as *const u8,
-                            std::mem::size_of::<libc::sockaddr_in6>(),
-                        )
-                        .to_vec()
-                    };
-                    (
-                        libc::AF_INET6,
-                        bytes,
-                        std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t,
-                    )
-                }
+            let domain = match resolved {
+                std::net::SocketAddr::V4(_) => libc::AF_INET,
+                std::net::SocketAddr::V6(_) => libc::AF_INET6,
             };
 
             let fd = unsafe { libc::socket(domain, libc::SOCK_STREAM | libc::SOCK_NONBLOCK, 0) };
@@ -174,6 +140,8 @@ pub(super) fn submit_uring_connect(
                     std::io::Error::last_os_error()
                 ));
             }
+
+            let (sa_bytes, sa_len) = crate::io::sockaddr::build_inet(&resolved);
             (fd, sa_bytes, sa_len)
         }
         ConnectAddr::Unix { path } => {
@@ -185,38 +153,13 @@ pub(super) fn submit_uring_connect(
                     std::io::Error::last_os_error()
                 ));
             }
-            let mut sun: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-            sun.sun_family = libc::AF_UNIX as libc::sa_family_t;
-            let (addr_len, ok) = if let Some(name) = path.strip_prefix('@') {
-                let max = sun.sun_path.len() - 1;
-                if name.len() > max {
+            let (sun, addr_len) = match crate::io::sockaddr::build_unix(path) {
+                Ok(result) => result,
+                Err(msg) => {
                     unsafe { libc::close(fd) };
-                    return Err("connect: abstract socket name too long".into());
+                    return Err(format!("connect: {}", msg));
                 }
-                sun.sun_path[0] = 0;
-                for (i, b) in name.bytes().enumerate() {
-                    sun.sun_path[i + 1] = b as libc::c_char;
-                }
-                let len = std::mem::size_of::<libc::sa_family_t>() + 1 + name.len();
-                (len as libc::socklen_t, true)
-            } else {
-                let max = sun.sun_path.len() - 1;
-                if path.len() > max {
-                    unsafe { libc::close(fd) };
-                    return Err("connect: unix path too long".into());
-                }
-                for (i, b) in path.bytes().enumerate() {
-                    sun.sun_path[i] = b as libc::c_char;
-                }
-                (
-                    std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t,
-                    true,
-                )
             };
-            if !ok {
-                unsafe { libc::close(fd) };
-                return Err("connect: invalid unix path".into());
-            }
             let bytes = unsafe {
                 std::slice::from_raw_parts(
                     &sun as *const _ as *const u8,
@@ -299,42 +242,7 @@ pub(super) fn submit_uring_sendto(
     // Parse address
     match addr_str.parse::<std::net::SocketAddr>() {
         Ok(dest) => {
-            let (sockaddr_bytes, sockaddr_len) = match dest {
-                std::net::SocketAddr::V4(v4) => {
-                    let mut sin: libc::sockaddr_in = unsafe { std::mem::zeroed() };
-                    sin.sin_family = libc::AF_INET as libc::sa_family_t;
-                    sin.sin_port = v4.port().to_be();
-                    sin.sin_addr.s_addr = u32::from(*v4.ip()).to_be();
-                    let bytes = unsafe {
-                        std::slice::from_raw_parts(
-                            &sin as *const _ as *const u8,
-                            std::mem::size_of::<libc::sockaddr_in>(),
-                        )
-                        .to_vec()
-                    };
-                    (
-                        bytes,
-                        std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
-                    )
-                }
-                std::net::SocketAddr::V6(v6) => {
-                    let mut sin6: libc::sockaddr_in6 = unsafe { std::mem::zeroed() };
-                    sin6.sin6_family = libc::AF_INET6 as libc::sa_family_t;
-                    sin6.sin6_port = v6.port().to_be();
-                    sin6.sin6_addr.s6_addr = v6.ip().octets();
-                    let bytes = unsafe {
-                        std::slice::from_raw_parts(
-                            &sin6 as *const _ as *const u8,
-                            std::mem::size_of::<libc::sockaddr_in6>(),
-                        )
-                        .to_vec()
-                    };
-                    (
-                        bytes,
-                        std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t,
-                    )
-                }
-            };
+            let (sockaddr_bytes, sockaddr_len) = crate::io::sockaddr::build_inet(&dest);
 
             // Pack sockaddr + payload into one buffer so both survive until
             // the CQE completes.  sockaddr at offset 0, payload after it.

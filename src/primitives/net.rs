@@ -188,43 +188,8 @@ fn bind_socket(
     }
 
     // Bind
-    let bind_result = match resolved {
-        std::net::SocketAddr::V4(ref v4) => {
-            let sin = libc::sockaddr_in {
-                sin_family: libc::AF_INET as libc::sa_family_t,
-                sin_port: v4.port().to_be(),
-                sin_addr: libc::in_addr {
-                    s_addr: u32::from_ne_bytes(v4.ip().octets()),
-                },
-                sin_zero: [0; 8],
-            };
-            unsafe {
-                libc::bind(
-                    fd,
-                    &sin as *const libc::sockaddr_in as *const libc::sockaddr,
-                    std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
-                )
-            }
-        }
-        std::net::SocketAddr::V6(ref v6) => {
-            let sin6 = libc::sockaddr_in6 {
-                sin6_family: libc::AF_INET6 as libc::sa_family_t,
-                sin6_port: v6.port().to_be(),
-                sin6_flowinfo: v6.flowinfo(),
-                sin6_addr: libc::in6_addr {
-                    s6_addr: v6.ip().octets(),
-                },
-                sin6_scope_id: v6.scope_id(),
-            };
-            unsafe {
-                libc::bind(
-                    fd,
-                    &sin6 as *const libc::sockaddr_in6 as *const libc::sockaddr,
-                    std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t,
-                )
-            }
-        }
-    };
+    let (sa_bytes, sa_len) = crate::io::sockaddr::build_inet(&resolved);
+    let bind_result = unsafe { libc::bind(fd, sa_bytes.as_ptr() as *const libc::sockaddr, sa_len) };
 
     if bind_result < 0 {
         let err = std::io::Error::last_os_error();
@@ -248,35 +213,7 @@ fn bind_socket(
     }
 
     // Get actual bound address (for port 0)
-    let mut sa_storage: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
-    let mut sa_len = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
-    unsafe {
-        libc::getsockname(
-            fd,
-            &mut sa_storage as *mut libc::sockaddr_storage as *mut libc::sockaddr,
-            &mut sa_len,
-        );
-    }
-
-    let bound_addr = match sa_storage.ss_family as libc::c_int {
-        libc::AF_INET => {
-            let sin = unsafe {
-                &*(&sa_storage as *const libc::sockaddr_storage as *const libc::sockaddr_in)
-            };
-            let ip = std::net::Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr));
-            let p = u16::from_be(sin.sin_port);
-            format!("{}:{}", ip, p)
-        }
-        libc::AF_INET6 => {
-            let sin6 = unsafe {
-                &*(&sa_storage as *const libc::sockaddr_storage as *const libc::sockaddr_in6)
-            };
-            let ip = std::net::Ipv6Addr::from(sin6.sin6_addr.s6_addr);
-            let p = u16::from_be(sin6.sin6_port);
-            format!("[{}]:{}", ip, p)
-        }
-        _ => addr_str,
-    };
+    let bound_addr = crate::io::sockaddr::local_address(fd);
 
     unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) };
     let owned_fd = unsafe { OwnedFd::from_raw_fd(fd) };

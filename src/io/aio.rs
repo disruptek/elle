@@ -6,11 +6,7 @@
 use crate::io::completion;
 use crate::io::pool::{BufferHandle, BufferPool};
 use crate::io::request::{ConnectAddr, IoOp, IoRequest};
-use crate::io::threadpool::{
-    StdinOpKind, StdinThread, ThreadPoolBackend, TP_OP_ACCEPT, TP_OP_CONNECT_TCP,
-    TP_OP_CONNECT_UNIX, TP_OP_FLUSH, TP_OP_READ, TP_OP_RECV_FROM, TP_OP_SEND_TO, TP_OP_SHUTDOWN,
-    TP_OP_SLEEP, TP_OP_WRITE,
-};
+use crate::io::threadpool::{PoolCompletion, PoolOp, StdinOpKind, StdinThread, ThreadPoolBackend};
 use crate::io::types::{FdState, PortKey};
 use crate::port::{Encoding, Port, PortKind};
 use crate::value::heap::TableKey;
@@ -55,15 +51,9 @@ pub(crate) struct PendingOp {
     /// For Accept: which kind of listener (TcpListener or UnixListener).
     /// Used on completion to create the right stream port type.
     pub(crate) listener_kind: Option<PortKind>,
-    /// For Connect: the address being connected to.
-    /// Used on completion to create the right port type.
-    #[allow(dead_code)]
-    pub(crate) connect_addr: Option<ConnectAddr>,
-    /// Per-operation timeout from IoRequest.
-    #[allow(dead_code)]
-    pub(crate) timeout: Option<Duration>,
     /// For io_uring Connect: the socket fd created before submitting.
     /// On CQE success (result_code == 0), this becomes the connected fd.
+    /// For thread pool Connect: set on completion to the fd from TcpStream::connect.
     pub(crate) connect_fd: Option<RawFd>,
 }
 
@@ -242,7 +232,6 @@ impl AsyncBackend {
         match &request.op {
             IoOp::Accept => {
                 let listener_kind = Some(port.kind());
-                let (op_kind, write_data, read_size) = (TP_OP_ACCEPT, Vec::new(), 0usize);
 
                 let AsyncBackendInner {
                     ref mut platform,
@@ -258,7 +247,7 @@ impl AsyncBackend {
                         crate::io::uring::submit_uring_accept(ring, id, fd, request.timeout)?;
                     }
                     PlatformBackend::ThreadPool(_) => {
-                        network_pool.submit(id, fd, op_kind, write_data, read_size)?;
+                        network_pool.submit(id, PoolOp::Accept { fd })?;
                     }
                 }
 
@@ -270,8 +259,6 @@ impl AsyncBackend {
                         port: request.port,
                         buffer_handle: buf_handle,
                         listener_kind,
-                        connect_addr: None,
-                        timeout: request.timeout,
                         connect_fd: None,
                     },
                 );
@@ -283,8 +270,6 @@ impl AsyncBackend {
                 ref data,
             } => {
                 let bytes = Self::extract_write_bytes(data);
-                let mut payload = format!("{}:{}\0", addr, port_num).into_bytes();
-                payload.extend_from_slice(&bytes);
 
                 let AsyncBackendInner {
                     ref mut platform,
@@ -297,18 +282,29 @@ impl AsyncBackend {
                 match platform {
                     #[cfg(target_os = "linux")]
                     PlatformBackend::Uring(ring) => {
+                        let payload = format!("{}:{}\0", addr, port_num).into_bytes();
+                        let mut full_payload = payload;
+                        full_payload.extend_from_slice(&bytes);
                         crate::io::uring::submit_uring_sendto(
                             ring,
                             id,
                             fd,
-                            &payload,
+                            &full_payload,
                             request.timeout,
                             buffer_pool,
                         )?;
                     }
                     PlatformBackend::ThreadPool(_) => {
                         let _ = buffer_pool;
-                        network_pool.submit(id, fd, TP_OP_SEND_TO, payload, 0)?;
+                        network_pool.submit(
+                            id,
+                            PoolOp::SendTo {
+                                fd,
+                                addr: addr.clone(),
+                                port: *port_num,
+                                data: bytes,
+                            },
+                        )?;
                     }
                 }
 
@@ -324,8 +320,7 @@ impl AsyncBackend {
                         port: request.port,
                         buffer_handle: buf_handle,
                         listener_kind: None,
-                        connect_addr: None,
-                        timeout: request.timeout,
+
                         connect_fd: None,
                     },
                 );
@@ -354,7 +349,7 @@ impl AsyncBackend {
                     }
                     PlatformBackend::ThreadPool(_) => {
                         let _ = buffer_pool;
-                        network_pool.submit(id, fd, TP_OP_RECV_FROM, Vec::new(), *count)?;
+                        network_pool.submit(id, PoolOp::RecvFrom { fd, size: *count })?;
                     }
                 }
 
@@ -366,8 +361,7 @@ impl AsyncBackend {
                         port: request.port,
                         buffer_handle: buf_handle,
                         listener_kind: None,
-                        connect_addr: None,
-                        timeout: request.timeout,
+
                         connect_fd: None,
                     },
                 );
@@ -396,7 +390,7 @@ impl AsyncBackend {
                     }
                     PlatformBackend::ThreadPool(_) => {
                         let _ = buffer_pool;
-                        network_pool.submit(id, fd, TP_OP_SHUTDOWN, vec![*how as u8], 0)?;
+                        network_pool.submit(id, PoolOp::Shutdown { fd, how: *how })?;
                     }
                 }
 
@@ -408,8 +402,7 @@ impl AsyncBackend {
                         port: request.port,
                         buffer_handle: buf_handle,
                         listener_kind: None,
-                        connect_addr: None,
-                        timeout: request.timeout,
+
                         connect_fd: None,
                     },
                 );
@@ -417,22 +410,6 @@ impl AsyncBackend {
             }
             // Stream I/O ops (ReadLine, Read, ReadAll, Write, Flush)
             _ => {
-                let (op_kind, write_data) = match &request.op {
-                    IoOp::ReadLine | IoOp::Read { .. } | IoOp::ReadAll => (TP_OP_READ, Vec::new()),
-                    IoOp::Write { data } => {
-                        let bytes = Self::extract_write_bytes(data);
-                        (TP_OP_WRITE, bytes)
-                    }
-                    IoOp::Flush => (TP_OP_FLUSH, Vec::new()),
-                    _ => unreachable!(),
-                };
-
-                let read_size = match &request.op {
-                    IoOp::Read { count } => *count,
-                    IoOp::ReadLine | IoOp::ReadAll => 4096,
-                    _ => 0,
-                };
-
                 let AsyncBackendInner {
                     ref mut platform,
                     ref mut buffer_pool,
@@ -443,6 +420,22 @@ impl AsyncBackend {
                 match platform {
                     #[cfg(target_os = "linux")]
                     PlatformBackend::Uring(ring) => {
+                        let (op_kind, write_data) = match &request.op {
+                            IoOp::ReadLine | IoOp::Read { .. } | IoOp::ReadAll => (0u8, Vec::new()),
+                            IoOp::Write { data } => {
+                                let bytes = Self::extract_write_bytes(data);
+                                (1u8, bytes)
+                            }
+                            IoOp::Flush => (2u8, Vec::new()),
+                            _ => unreachable!(),
+                        };
+
+                        let read_size = match &request.op {
+                            IoOp::Read { count } => *count,
+                            IoOp::ReadLine | IoOp::ReadAll => 4096,
+                            _ => 0,
+                        };
+
                         crate::io::uring::submit_uring(
                             ring,
                             id,
@@ -456,7 +449,23 @@ impl AsyncBackend {
                     }
                     PlatformBackend::ThreadPool(pool) => {
                         let _ = buffer_pool;
-                        pool.submit(id, fd, op_kind, write_data, read_size)?;
+                        let pool_op = match &request.op {
+                            IoOp::ReadLine | IoOp::Read { .. } | IoOp::ReadAll => {
+                                let size = match &request.op {
+                                    IoOp::Read { count } => *count,
+                                    IoOp::ReadLine | IoOp::ReadAll => 4096,
+                                    _ => unreachable!(),
+                                };
+                                PoolOp::Read { fd, size }
+                            }
+                            IoOp::Write { data } => {
+                                let bytes = Self::extract_write_bytes(data);
+                                PoolOp::Write { fd, data: bytes }
+                            }
+                            IoOp::Flush => PoolOp::Flush { fd },
+                            _ => unreachable!(),
+                        };
+                        pool.submit(id, pool_op)?;
                     }
                 }
 
@@ -475,8 +484,7 @@ impl AsyncBackend {
                         port: request.port,
                         buffer_handle: buf_handle,
                         listener_kind: None,
-                        connect_addr: None,
-                        timeout: request.timeout,
+
                         connect_fd: None,
                     },
                 );
@@ -492,13 +500,6 @@ impl AsyncBackend {
         let id = inner.next_id;
         inner.next_id += 1;
         let buf_handle = inner.buffer_pool.alloc(0);
-
-        let (op_kind, data) = match addr {
-            ConnectAddr::Tcp { addr: host, port } => {
-                (TP_OP_CONNECT_TCP, format!("{}:{}", host, port).into_bytes())
-            }
-            ConnectAddr::Unix { path } => (TP_OP_CONNECT_UNIX, path.as_bytes().to_vec()),
-        };
 
         let AsyncBackendInner {
             ref mut platform,
@@ -523,7 +524,13 @@ impl AsyncBackend {
             }
             PlatformBackend::ThreadPool(_) => {
                 let _ = buffer_pool;
-                network_pool.submit(id, -1, op_kind, data, 0)?;
+                let pool_op = match addr {
+                    ConnectAddr::Tcp { addr: host, port } => PoolOp::ConnectTcp {
+                        addr: format!("{}:{}", host, port),
+                    },
+                    ConnectAddr::Unix { path } => PoolOp::ConnectUnix { path: path.clone() },
+                };
+                network_pool.submit(id, pool_op)?;
                 None
             }
         };
@@ -544,14 +551,6 @@ impl AsyncBackend {
                 port: Value::NIL,
                 buffer_handle: buf_handle,
                 listener_kind: None,
-                connect_addr: Some(match addr {
-                    ConnectAddr::Tcp { addr: host, port } => ConnectAddr::Tcp {
-                        addr: host.clone(),
-                        port: *port,
-                    },
-                    ConnectAddr::Unix { path } => ConnectAddr::Unix { path: path.clone() },
-                }),
-                timeout,
                 connect_fd: uring_fd,
             },
         );
@@ -579,7 +578,7 @@ impl AsyncBackend {
             }
             PlatformBackend::ThreadPool(_) => {
                 let nanos = duration.as_nanos() as u64;
-                network_pool.submit(id, -1, TP_OP_SLEEP, nanos.to_le_bytes().to_vec(), 0)?;
+                network_pool.submit(id, PoolOp::Sleep { nanos })?;
             }
         }
 
@@ -591,8 +590,7 @@ impl AsyncBackend {
                 port: Value::NIL,
                 buffer_handle: buf_handle,
                 listener_kind: None,
-                connect_addr: None,
-                timeout: None,
+
                 connect_fd: None,
             },
         );
@@ -721,7 +719,12 @@ impl AsyncBackend {
                         // Neither has in-flight ops — nothing to wait for.
                         Vec::new()
                     };
-                    for (id, result_code, data) in raw_completions {
+                    for PoolCompletion {
+                        id,
+                        result_code,
+                        data,
+                    } in raw_completions
+                    {
                         if let Some(pending_op) = pending.remove(&id) {
                             let c = completion::process_raw_completion(
                                 id,
@@ -784,7 +787,12 @@ impl AsyncBackendInner {
             }
             PlatformBackend::ThreadPool(pool) => {
                 let raw = pool.poll();
-                for (id, result_code, data) in raw {
+                for PoolCompletion {
+                    id,
+                    result_code,
+                    data,
+                } in raw
+                {
                     if let Some(pending) = self.pending.remove(&id) {
                         let c = completion::process_raw_completion(
                             id,
@@ -808,7 +816,12 @@ impl AsyncBackendInner {
     /// The network pool handles Accept, Connect, SendTo, RecvFrom, Shutdown.
     fn drain_network_completions(&mut self) {
         let raw = self.network_pool.poll();
-        for (id, result_code, data) in raw {
+        for PoolCompletion {
+            id,
+            result_code,
+            data,
+        } in raw
+        {
             if let Some(mut pending) = self.pending.remove(&id) {
                 // Thread pool Connect: result_code is the new fd.
                 // Stash it in connect_fd so the completion handler finds it there.
@@ -861,8 +874,7 @@ impl AsyncBackendInner {
                 port: Value::NIL, // stdin has no port Value
                 buffer_handle: buf_handle,
                 listener_kind: None,
-                connect_addr: None,
-                timeout: None,
+
                 connect_fd: None,
             },
         );

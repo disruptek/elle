@@ -108,7 +108,7 @@ pub(super) fn process_raw_completion(
                 // Accept: result_code is the new fd (from both io_uring and thread pool).
                 // Peer address is obtained via getpeername() — works uniformly.
                 let fd = result_code;
-                let peer_addr = peer_address(fd);
+                let peer_addr = crate::io::sockaddr::peer_address(fd);
                 let fd = unsafe { OwnedFd::from_raw_fd(fd) };
                 let new_port = match pending.listener_kind {
                     Some(PortKind::TcpListener) => Port::new_tcp_stream(fd, peer_addr),
@@ -167,7 +167,7 @@ pub(super) fn process_raw_completion(
                     );
                     storage
                 };
-                let (addr_str, port_num) = parse_sockaddr(&addr_storage, addr_len);
+                let (addr_str, port_num) = crate::io::sockaddr::parse(&addr_storage, addr_len);
                 let payload = data[addr_offset..].to_vec();
                 let mut fields = std::collections::BTreeMap::new();
                 fields.insert(TableKey::Keyword("data".into()), Value::bytes(payload));
@@ -182,116 +182,6 @@ pub(super) fn process_raw_completion(
         Completion {
             id,
             result: Ok(value),
-        }
-    }
-}
-
-/// Get peer address string from a connected socket fd via getpeername().
-fn peer_address(fd: i32) -> String {
-    unsafe {
-        let mut storage: libc::sockaddr_storage = std::mem::zeroed();
-        let mut len = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
-        if libc::getpeername(fd, &mut storage as *mut _ as *mut libc::sockaddr, &mut len) == 0 {
-            format_sockaddr(&storage, len)
-        } else {
-            "unknown".to_string()
-        }
-    }
-}
-
-/// Format a sockaddr_storage into a string address.
-pub(super) fn format_sockaddr(addr: &libc::sockaddr_storage, _len: libc::socklen_t) -> String {
-    unsafe {
-        match addr.ss_family as i32 {
-            libc::AF_INET => {
-                let sin = addr as *const _ as *const libc::sockaddr_in;
-                let ip = (*sin).sin_addr.s_addr;
-                let port = u16::from_be((*sin).sin_port);
-                let octets = ip.to_le_bytes();
-                format!(
-                    "{}.{}.{}.{}:{}",
-                    octets[0], octets[1], octets[2], octets[3], port
-                )
-            }
-            libc::AF_INET6 => {
-                let sin6 = addr as *const _ as *const libc::sockaddr_in6;
-                let ip = (*sin6).sin6_addr.s6_addr;
-                let port = u16::from_be((*sin6).sin6_port);
-                let ip_str = format!(
-                    "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
-                    ip[0], ip[1], ip[2], ip[3], ip[4], ip[5], ip[6], ip[7],
-                    ip[8], ip[9], ip[10], ip[11], ip[12], ip[13], ip[14], ip[15]
-                );
-                format!("[{}]:{}", ip_str, port)
-            }
-            libc::AF_UNIX => {
-                let sun = addr as *const _ as *const libc::sockaddr_un;
-                let path_ptr = (*sun).sun_path.as_ptr();
-                if *path_ptr == 0 {
-                    // Abstract socket
-                    let mut name = String::new();
-                    let mut i = 1;
-                    while i < (*sun).sun_path.len() && (*sun).sun_path[i] != 0 {
-                        name.push((*sun).sun_path[i] as u8 as char);
-                        i += 1;
-                    }
-                    format!("@{}", name)
-                } else {
-                    // Regular path
-                    let cstr = std::ffi::CStr::from_ptr(path_ptr);
-                    cstr.to_string_lossy().to_string()
-                }
-            }
-            _ => "unknown".to_string(),
-        }
-    }
-}
-
-/// Parse a sockaddr_storage into (address_string, port_number).
-pub(super) fn parse_sockaddr(
-    addr: &libc::sockaddr_storage,
-    _len: libc::socklen_t,
-) -> (String, u16) {
-    unsafe {
-        match addr.ss_family as i32 {
-            libc::AF_INET => {
-                let sin = addr as *const _ as *const libc::sockaddr_in;
-                let ip = (*sin).sin_addr.s_addr;
-                let port = u16::from_be((*sin).sin_port);
-                let octets = ip.to_le_bytes();
-                let addr_str = format!("{}.{}.{}.{}", octets[0], octets[1], octets[2], octets[3]);
-                (addr_str, port)
-            }
-            libc::AF_INET6 => {
-                let sin6 = addr as *const _ as *const libc::sockaddr_in6;
-                let ip = (*sin6).sin6_addr.s6_addr;
-                let port = u16::from_be((*sin6).sin6_port);
-                let ip_str = format!(
-                    "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
-                    ip[0], ip[1], ip[2], ip[3], ip[4], ip[5], ip[6], ip[7],
-                    ip[8], ip[9], ip[10], ip[11], ip[12], ip[13], ip[14], ip[15]
-                );
-                (format!("[{}]", ip_str), port)
-            }
-            libc::AF_UNIX => {
-                let sun = addr as *const _ as *const libc::sockaddr_un;
-                let path_ptr = (*sun).sun_path.as_ptr();
-                if *path_ptr == 0 {
-                    // Abstract socket
-                    let mut name = String::new();
-                    let mut i = 1;
-                    while i < (*sun).sun_path.len() && (*sun).sun_path[i] != 0 {
-                        name.push((*sun).sun_path[i] as u8 as char);
-                        i += 1;
-                    }
-                    (format!("@{}", name), 0)
-                } else {
-                    // Regular path
-                    let cstr = std::ffi::CStr::from_ptr(path_ptr);
-                    (cstr.to_string_lossy().to_string(), 0)
-                }
-            }
-            _ => ("unknown".to_string(), 0),
         }
     }
 }
