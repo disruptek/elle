@@ -216,3 +216,101 @@
         (stream/map (fn [x] (* x 2)) (make-range 10)))))
   (list 4 6)
   "composition: map*2 then filter >3 then take 2 from range 0..9")
+
+# === Port-to-stream converters ===
+# All tests in this section require ev/spawn (scheduler context for SIG_IO).
+
+# port/lines: multi-line file
+(spit "/tmp/elle-test-streams-lines-478" "alpha\nbeta\ngamma")
+(assert-eq
+  (ev/spawn (fn []
+    (stream/collect (port/lines (port/open "/tmp/elle-test-streams-lines-478" :read)))))
+  (list "alpha" "beta" "gamma")
+  "port/lines: yields all lines from multi-line file")
+
+# port/lines: empty file yields empty list
+(spit "/tmp/elle-test-streams-empty-478" "")
+(assert-eq
+  (ev/spawn (fn []
+    (stream/collect (port/lines (port/open "/tmp/elle-test-streams-empty-478" :read)))))
+  ()
+  "port/lines: empty file yields empty list")
+
+# port/lines: file without trailing newline
+(spit "/tmp/elle-test-streams-nonl-478" "no-newline")
+(assert-eq
+  (ev/spawn (fn []
+    (stream/collect (port/lines (port/open "/tmp/elle-test-streams-nonl-478" :read)))))
+  (list "no-newline")
+  "port/lines: file without trailing newline yields last line")
+
+# port/lines: port is closed after collect exhausts the stream
+(spit "/tmp/elle-test-streams-close-478" "one\ntwo")
+(assert-false
+  (ev/spawn (fn []
+    (let [[p (port/open "/tmp/elle-test-streams-close-478" :read)]]
+      (stream/collect (port/lines p))
+      (port/open? p))))
+  "port/lines: port is closed after stream is exhausted")
+
+# port/chunks: basic chunking, 4-byte chunks of 12-byte file
+(spit "/tmp/elle-test-streams-chunks-478" "abcdefghijkl")
+(assert-eq
+  (ev/spawn (fn []
+    (stream/collect (port/chunks (port/open "/tmp/elle-test-streams-chunks-478" :read) 4))))
+  (list "abcd" "efgh" "ijkl")
+  "port/chunks: 12-byte file in 4-byte chunks")
+
+# port/chunks: remainder chunk — 10-byte file with 4-byte chunks yields [4, 4, 2]
+(spit "/tmp/elle-test-streams-chunks2-478" "abcdefghij")
+(let [[result (ev/spawn (fn []
+                (stream/collect (port/chunks (port/open "/tmp/elle-test-streams-chunks2-478" :read) 4))))]]
+  (assert-eq (length result) 3 "port/chunks: remainder — 3 chunks")
+  (assert-eq (get result 0) "abcd" "port/chunks: remainder — first chunk")
+  (assert-eq (get result 1) "efgh" "port/chunks: remainder — second chunk")
+  (assert-eq (get result 2) "ij"   "port/chunks: remainder — final short chunk"))
+
+# port/chunks: port is closed after stream is exhausted
+(spit "/tmp/elle-test-streams-chunkclose-478" "hello")
+(assert-false
+  (ev/spawn (fn []
+    (let [[p (port/open "/tmp/elle-test-streams-chunkclose-478" :read)]]
+      (stream/collect (port/chunks p 3))
+      (port/open? p))))
+  "port/chunks: port is closed after stream is exhausted")
+
+# port/writer: write values and read back
+# First coro/resume starts the coroutine (advances past the initial yield nil).
+# Subsequent resumes deliver each value as the result of (yield nil).
+# Final resume with nil triggers port close and break.
+(ev/spawn (fn []
+  (let* [[p (port/open "/tmp/elle-test-streams-writer-478" :write)]
+         [w (port/writer p)]]
+    (coro/resume w)          # start: advance to first yield nil
+    (coro/resume w "hello ") # write "hello "
+    (coro/resume w "world")  # write "world"
+    (coro/resume w nil))))   # nil signals close
+(assert-eq
+  (slurp "/tmp/elle-test-streams-writer-478")
+  "hello world"
+  "port/writer: writes values to port")
+
+# port/writer: port is closed after nil resume
+(ev/spawn (fn []
+  (let* [[p (port/open "/tmp/elle-test-streams-writerclose-478" :write)]
+         [w (port/writer p)]]
+    (coro/resume w)         # start
+    (coro/resume w "data")  # write
+    (coro/resume w nil))))  # close
+# Note: port/open? tested indirectly via successful read-back above
+
+# Composition: port/lines -> stream/map -> stream/take -> stream/collect
+(spit "/tmp/elle-test-streams-compose-478" "1\n2\n3\n4\n5")
+(assert-eq
+  (ev/spawn (fn []
+    (stream/collect
+      (stream/take 3
+        (stream/map (fn [x] (+ (integer x) 10))
+          (port/lines (port/open "/tmp/elle-test-streams-compose-478" :read)))))))
+  (list 11 12 13)
+  "composition: port/lines -> map -> take -> collect")

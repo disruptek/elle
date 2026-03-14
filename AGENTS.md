@@ -47,7 +47,7 @@ bytecode. Error messages include file:line:col information.
 | `lint` | Diagnostic types and lint rules |
 | `symbols` | Symbol index types for IDE features |
 | `primitives` | Built-in functions; includes `port/path` and `string/size-of` |
-| `stdlib` | Standard library functions (loaded at startup) |
+| `stdlib` | Standard library functions (loaded at startup); includes stream combinators (`port/lines`, `port/chunks`, `port/writer`, `stream/map`, `stream/filter`, `stream/take`, `stream/drop`, `stream/concat`, `stream/zip`, `stream/for-each`, `stream/fold`, `stream/collect`, `stream/into-array`, `stream/pipe`) |
 | `ffi` | C interop via libloading/bindgen |
 | `jit` | JIT compilation via Cranelift |
 | `formatter` | Code formatting for Elle source |
