@@ -859,52 +859,34 @@
   (fold (fn [s t] (t s)) source transforms))
 
 (defn port/lines [port]
-  "Return a coroutine that yields lines (strings) from port.
-   Reads all content eagerly when called (must be inside a scheduler).
-   Closes port after reading.
-   For streaming without eager-read, use stream/read-line directly."
-  (let [[content (stream/read-all port)]]
-    (port/close port)
-    (let [[lines (if (= content "")
-                   ()
-                   (apply list (string/split content "\n")))]]
-      (coro/new (fn []
-        (var remaining lines)
-        (while (not (empty? remaining))
-          (yield (first remaining))
-          (assign remaining (rest remaining))))))))
+  "Yields lines from port one at a time. Closes port on exhaustion.
+   Must be called inside a scheduler context (ev/spawn or sync-scheduler)."
+  (coro/new (fn []
+    (forever
+      (let [[line (stream/read-line port)]]
+        (if (nil? line)
+          (begin (port/close port) (break))
+          (yield line)))))))
 
 (defn port/chunks [port size]
-  "Return a coroutine that yields byte chunks of at most size bytes from port.
-   The final chunk may be shorter than size if the file size is not divisible.
-   Reads all chunks eagerly when called (must be inside a scheduler).
-   Closes port after reading."
-  (let [[chunks @[]]]
+  "Yields byte chunks of `size` from port. Final chunk may be smaller.
+   Must be called inside a scheduler context."
+  (coro/new (fn []
     (forever
       (let [[chunk (stream/read port size)]]
         (if (nil? chunk)
           (begin (port/close port) (break))
-          (push chunks chunk))))
-    (coro/new (fn []
-      (var i 0)
-      (while (< i (length chunks))
-        (yield (get chunks i))
-        (assign i (+ i 1)))))))
+          (yield chunk)))))))
 
 (defn port/writer [port]
-  "Return a coroutine that collects write values and flushes to port on close.
-   Resume with a string or bytes to buffer; resume with nil to flush all and close.
-   Accumulates writes in memory, then writes atomically via spit on nil.
-   Must be used inside a scheduler (ev/spawn or ev/run)."
-  (let [[path (port/path port)]]
-    (port/close port)
-    (coro/new (fn []
-      (var buf @[])
-      (forever
-        (let [[value (yield nil)]]
-          (if (nil? value)
-            (begin (spit path (string/join buf "")) (break))
-            (push buf value))))))))
+  "Returns a write-stream coroutine. Resume with a string to write it.
+   Resume with nil to close the port. Must be called inside a scheduler context."
+  (coro/new (fn []
+    (forever
+      (let [[val (yield nil)]]
+        (if (nil? val)
+          (begin (port/close port) (break))
+          (stream/write port val)))))))
 
 ## ── Standard port parameters ────────────────────────────────────────
 
