@@ -75,3 +75,144 @@
   (length (stream/into-array (make-range 0)))
   0
   "stream/into-array: empty source yields empty array")
+
+# === Transform combinators ===
+
+# stream/map: identity transform
+(assert-eq
+  (stream/collect (stream/map identity (make-range 3)))
+  (list 0 1 2)
+  "stream/map: identity preserves values")
+
+# stream/map: squaring transform
+(assert-eq
+  (stream/collect (stream/map (fn [x] (* x x)) (make-range 4)))
+  (list 0 1 4 9)
+  "stream/map: squares 0..3")
+
+# stream/map: empty source
+(assert-eq
+  (stream/collect (stream/map (fn [x] (* x 10)) (make-range 0)))
+  ()
+  "stream/map: empty source yields empty")
+
+# stream/filter: keeps matching values
+(assert-eq
+  (stream/collect (stream/filter (fn [x] (= (% x 2) 0)) (make-range 6)))
+  (list 0 2 4)
+  "stream/filter: keeps even values")
+
+# stream/filter: rejects all
+(assert-eq
+  (stream/collect (stream/filter (fn [x] false) (make-range 3)))
+  ()
+  "stream/filter: all rejected yields empty")
+
+# stream/filter: keeps all
+(assert-eq
+  (stream/collect (stream/filter (fn [x] true) (make-range 3)))
+  (list 0 1 2)
+  "stream/filter: all kept")
+
+# stream/take: fewer than available
+(assert-eq
+  (stream/collect (stream/take 3 (make-range 10)))
+  (list 0 1 2)
+  "stream/take: take 3 from 10")
+
+# stream/take: more than available
+(assert-eq
+  (stream/collect (stream/take 10 (make-range 3)))
+  (list 0 1 2)
+  "stream/take: take 10 from 3 yields all 3")
+
+# stream/take: zero
+(assert-eq
+  (stream/collect (stream/take 0 (make-range 5)))
+  ()
+  "stream/take: take 0 yields empty")
+
+# stream/drop: fewer than available
+(assert-eq
+  (stream/collect (stream/drop 2 (make-range 5)))
+  (list 2 3 4)
+  "stream/drop: drop 2 from 5")
+
+# stream/drop: more than available
+(assert-eq
+  (stream/collect (stream/drop 10 (make-range 3)))
+  ()
+  "stream/drop: drop more than available yields empty")
+
+# stream/drop: zero
+(assert-eq
+  (stream/collect (stream/drop 0 (make-range 3)))
+  (list 0 1 2)
+  "stream/drop: drop 0 yields all")
+
+# stream/concat: two non-empty sources
+(assert-eq
+  (stream/collect (stream/concat (make-from-list (list 1 2)) (make-from-list (list 3 4))))
+  (list 1 2 3 4)
+  "stream/concat: two sources concatenated")
+
+# stream/concat: empty source in the middle
+(assert-eq
+  (stream/collect (stream/concat
+    (make-from-list (list 1))
+    (make-range 0)
+    (make-from-list (list 2))))
+  (list 1 2)
+  "stream/concat: empty source in middle is skipped")
+
+# stream/concat: dead (pre-exhausted) coroutine as first argument
+# The dead coroutine must be skipped gracefully, no error.
+(let [[dead (make-range 2)]]
+  # Exhaust it
+  (stream/collect dead)
+  (assert-eq
+    (stream/collect (stream/concat dead (make-from-list (list 99))))
+    (list 99)
+    "stream/concat: dead first source skipped"))
+
+# stream/zip: same-length sources
+(assert-eq
+  (stream/collect (stream/zip (make-from-list (list 1 2 3)) (make-from-list (list 4 5 6))))
+  (list [1 4] [2 5] [3 6])
+  "stream/zip: same-length sources")
+
+# stream/zip: stops at shortest (first exhausted)
+(assert-eq
+  (stream/collect (stream/zip (make-range 2) (make-range 5)))
+  (list [0 0] [1 1])
+  "stream/zip: stops at shortest source")
+
+# stream/zip: one empty source yields empty immediately
+(assert-eq
+  (stream/collect (stream/zip (make-range 0) (make-range 3)))
+  ()
+  "stream/zip: empty source causes immediate stop")
+
+# stream/pipe: single transform
+(assert-eq
+  (stream/collect (stream/pipe (make-range 3) (partial stream/map (fn [x] (* x 2)))))
+  (list 0 2 4)
+  "stream/pipe: single transform")
+
+# stream/pipe: chained transforms
+(assert-eq
+  (stream/collect
+    (stream/pipe (make-range 10)
+      (partial stream/filter (fn [x] (= (% x 2) 0)))
+      (partial stream/take 3)))
+  (list 0 2 4)
+  "stream/pipe: filter then take")
+
+# Composition: map then filter then take
+(assert-eq
+  (stream/collect
+    (stream/take 2
+      (stream/filter (fn [x] (> x 3))
+        (stream/map (fn [x] (* x 2)) (make-range 10)))))
+  (list 4 6)
+  "composition: map*2 then filter >3 then take 2 from range 0..9")

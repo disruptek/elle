@@ -12,6 +12,7 @@
 ## - Transformation: flatten, group-by, partition, take-while, drop-while
 ## - Struct operations: merge
 ## - Stream sinks: stream/for-each, stream/fold, stream/collect, stream/into-array
+## - Stream transforms: stream/map, stream/filter, stream/take, stream/drop, stream/concat, stream/zip, stream/pipe
 
 ## ── Higher-order functions ──────────────────────────────────────────
 
@@ -771,6 +772,91 @@
       (coro/resume source))
     result))
 
+(defn stream/map [f source]
+  "Return a coroutine that yields (f value) for each value from source.
+   Signal: Silent (may error). f is not called at construction time."
+  (coro/new (fn []
+    (forever
+      (coro/resume source)
+      (if (coro/done? source)
+        (break)
+        (yield (f (coro/value source))))))))
+
+(defn stream/filter [pred source]
+  "Return a coroutine that yields values from source where (pred value) is truthy.
+   Signal: Silent (may error). pred is not called at construction time."
+  (coro/new (fn []
+    (forever
+      (coro/resume source)
+      (when (coro/done? source) (break))
+      (when (pred (coro/value source))
+        (yield (coro/value source)))))))
+
+(defn stream/take [n source]
+  "Return a coroutine that yields at most n values from source.
+   Signal: Silent (may error)."
+  (coro/new (fn []
+    (var remaining n)
+    (forever
+      (when (<= remaining 0) (break))
+      (coro/resume source)
+      (when (coro/done? source) (break))
+      (yield (coro/value source))
+      (assign remaining (- remaining 1))))))
+
+(defn stream/drop [n source]
+  "Return a coroutine that skips n values from source, then yields the rest.
+   Signal: Silent (may error)."
+  (coro/new (fn []
+    (var skipped 0)
+    # Skip n values
+    (while (< skipped n)
+      (coro/resume source)
+      (when (coro/done? source) (break))
+      (assign skipped (+ skipped 1)))
+    # Yield the rest
+    (when (not (coro/done? source))
+      (forever
+        (coro/resume source)
+        (when (coro/done? source) (break))
+        (yield (coro/value source)))))))
+
+(defn stream/concat [& sources]
+  "Return a coroutine that yields all values from each source in order.
+   Dead (pre-exhausted) sources are skipped gracefully.
+   Signal: Silent (may error)."
+  (coro/new (fn []
+    (each src in sources
+      # Guard against resuming an already-dead coroutine — coro/resume
+      # on a dead coroutine is an error, not a no-op.
+      (when (not (coro/done? src))
+        (coro/resume src)
+        (while (not (coro/done? src))
+          (yield (coro/value src))
+          (coro/resume src)))))))
+
+(defn stream/zip [& sources]
+  "Return a coroutine that yields immutable arrays of values, one from each source.
+   Stops when any source is exhausted (shortest-wins semantics).
+   Signal: Silent (may error)."
+  (coro/new (fn []
+    (forever
+      (var done false)
+      (let [[vals (map (fn [s]
+                        (coro/resume s)
+                        (when (coro/done? s) (assign done true))
+                        (coro/value s))
+                      sources)]]
+        (when done (break))
+        (yield (apply array vals)))))))
+
+(defn stream/pipe [source & transforms]
+  "Thread source through each transform function in order.
+   Each transform is (fn [stream] -> stream).
+   Example: (stream/pipe src (partial stream/map f) (partial stream/take 10))
+   Signal: polymorphic in transforms."
+  (fold (fn [s t] (t s)) source transforms))
+
 ## ── Standard port parameters ────────────────────────────────────────
 
 (def *stdin*  (parameter (port/stdin)))
@@ -960,4 +1046,8 @@
      :ev/run ev/run :ev/shutdown ev/shutdown :*shutdown* *shutdown*
      :merge merge :inc inc :dec dec
      :stream/for-each stream/for-each :stream/fold stream/fold
-     :stream/collect stream/collect :stream/into-array stream/into-array})
+     :stream/collect stream/collect :stream/into-array stream/into-array
+     :stream/map stream/map :stream/filter stream/filter
+     :stream/take stream/take :stream/drop stream/drop
+     :stream/concat stream/concat :stream/zip stream/zip
+     :stream/pipe stream/pipe})
