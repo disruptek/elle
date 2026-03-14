@@ -801,12 +801,14 @@
 
     (defn do-shutdown [timeout-ms]
       "Abort all pending fibers, pump for timeout-ms, cancel stragglers."
-      # Phase 1: abort all pending fibers (inject error, let defer run)
+      # Phase 1: abort all pending fibers (inject error, let defer run).
+      # Cancel the io_uring SQE for each so the kernel stops waiting.
       (each [id fiber] in (pairs (freeze pending))
         (del pending id)
+        (io/cancel backend id)
         (let [[[ok? _] (protect (fiber/abort fiber {:error :shutdown}))]]
           (when ok? (handle-fiber-after-resume fiber))))
-      # Phase 2: pump for up to timeout-ms to let aborted fibers unwind
+      # Phase 2: drain cancel CQEs and let aborted fibers unwind
       (when (> timeout-ms 0)
         (let [[deadline (+ (clock/monotonic) (/ timeout-ms 1000.0))]]
           (while (and (> (+ (length runnable) (length pending)) 0)
@@ -822,9 +824,10 @@
                       (when (nil? (get c :error))
                         (fiber/resume fiber (get c :value))
                         (handle-fiber-after-resume fiber))))))))))
-      # Phase 3: cancel any stragglers
+      # Phase 3: cancel any stragglers and their pending I/O
       (each [id fiber] in (pairs (freeze pending))
         (del pending id)
+        (io/cancel backend id)
         (protect (fiber/cancel fiber {:error :shutdown})))
       (while (> (length runnable) 0)
         (let [[fiber (pop runnable)]]

@@ -78,29 +78,33 @@
 
         # Client fiber
         (fn []
-          (defer (port/close listener)
 
-            # ── Keep-alive: two requests on one TCP connection ──
+          # ── Keep-alive: two requests on one TCP connection ──
 
-            (let [[session (http:connect
-                             (string/format "http://127.0.0.1:{}/" port-num))]]
-              (let [[r1 (http:send session "GET" "/hello")]]
-                (display "  keep-alive GET /hello: ") (print r1:status)
-                (push results r1))
+          (let [[session (http:connect
+                           (string/format "http://127.0.0.1:{}/" port-num))]]
+            (let [[r1 (http:send session "GET" "/hello")]]
+              (display "  keep-alive GET /hello: ") (print r1:status)
+              (push results r1))
 
-              (let [[r2 (http:send session "POST" "/echo"
-                          :body "ping" :headers {:content-type "text/plain"})]]
-                (display "  keep-alive POST /echo: ") (print r2:status)
-                (push results r2))
+            (let [[r2 (http:send session "POST" "/echo"
+                        :body "ping" :headers {:content-type "text/plain"})]]
+              (display "  keep-alive POST /echo: ") (print r2:status)
+              (push results r2))
 
-              (http:close session))
+            (http:close session))
 
-            # ── One-shot: new TCP connection, connection: close ──
+          # ── One-shot: new TCP connection, connection: close ──
 
-            (let [[r3 (http:get
-                         (string/format "http://127.0.0.1:{}/count" port-num))]]
-              (display "  one-shot GET /count: ") (print r3:body)
-              (push results r3)))))
+          (let [[r3 (http:get
+                       (string/format "http://127.0.0.1:{}/count" port-num))]]
+            (display "  one-shot GET /count: ") (print r3:body)
+            (push results r3))
+
+          # ── Shut down the event loop ─────────────────────────
+          # Aborts the server fiber (cancels pending accept I/O),
+          # lets defer blocks run, then exits ev/run.
+          (ev/shutdown 100)))
 
       # ── Assertions ──────────────────────────────────────────────
 

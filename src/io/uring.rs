@@ -533,6 +533,30 @@ pub(super) fn submit_uring_sleep(
     Ok(())
 }
 
+/// Submit an AsyncCancel SQE to cancel a pending operation.
+///
+/// The cancelled operation will generate a CQE with result = -ECANCELED.
+/// The cancel SQE itself generates a CQE with the high-bit tagged user_data
+/// (same as timeout CQEs), so drain_cqes skips it.
+pub(super) fn submit_uring_cancel(
+    ring: &mut io_uring::IoUring,
+    target_user_data: u64,
+) -> Result<(), String> {
+    use io_uring::opcode;
+
+    let cancel_sqe = opcode::AsyncCancel::new(target_user_data)
+        .build()
+        .user_data(target_user_data | TIMEOUT_USER_DATA_TAG);
+    unsafe {
+        ring.submission()
+            .push(&cancel_sqe)
+            .map_err(|_| "io/cancel: io_uring submission queue full".to_string())?;
+    }
+    ring.submit()
+        .map_err(|e| format!("io/cancel: io_uring submit failed: {}", e))?;
+    Ok(())
+}
+
 /// Drain all available CQEs from the completion ring.
 ///
 /// This is the **single** CQE processing path — used by both poll (non-blocking)

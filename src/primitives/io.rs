@@ -246,6 +246,50 @@ fn prim_io_wait(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
+/// (io/cancel backend submission-id) → nil
+fn prim_io_cancel(args: &[Value]) -> (SignalBits, Value) {
+    if args.len() != 2 {
+        return (
+            SIG_ERROR,
+            error_val(
+                "arity-error",
+                format!("io/cancel: expected 2 arguments, got {}", args.len()),
+            ),
+        );
+    }
+    let backend = match args[0].as_external::<AsyncBackend>() {
+        Some(b) => b,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    "io/cancel: expected async io-backend (created with :async)",
+                ),
+            )
+        }
+    };
+    let id = match args[1].as_int() {
+        Some(n) if n >= 0 => n as u64,
+        _ => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "io/cancel: expected non-negative integer submission ID, got {}",
+                        args[1].type_name()
+                    ),
+                ),
+            )
+        }
+    };
+    match backend.cancel(id) {
+        Ok(()) => (SIG_OK, Value::NIL),
+        Err(msg) => (SIG_ERROR, error_val("io-error", msg)),
+    }
+}
+
 pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
         name: "io-request?",
@@ -322,6 +366,17 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         params: &["backend", "timeout-ms"],
         category: "io",
         example: "(io/wait backend 1000)",
+        aliases: &[],
+    },
+    PrimitiveDef {
+        name: "io/cancel",
+        func: prim_io_cancel,
+        signal: Signal::errors(),
+        arity: Arity::Exact(2),
+        doc: "Cancel a pending async I/O operation by submission ID. Returns nil.",
+        params: &["backend", "id"],
+        category: "io",
+        example: "(io/cancel backend id)",
         aliases: &[],
     },
 ];

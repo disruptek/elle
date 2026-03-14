@@ -538,12 +538,9 @@ impl VM {
 
         let mask = handle.with(|fiber| fiber.mask);
 
-        if result_bits.is_ok() {
-            self.fiber.child = None;
-            self.fiber.child_value = None;
-            self.fiber.stack.push(result_value);
-            None
-        } else if mask.contains(result_bits) && !result_bits.contains(SIG_TERMINAL) {
+        if result_bits.is_ok()
+            || (mask.contains(result_bits) && !result_bits.contains(SIG_TERMINAL))
+        {
             self.fiber.child = None;
             self.fiber.child_value = None;
             self.fiber.stack.push(result_value);
@@ -758,7 +755,15 @@ impl VM {
         }
     }
 
-    /// Execute a fiber abort: inject error, resume, let error handlers run.
+    /// Execute a fiber abort: inject error into the fiber's execution context.
+    ///
+    /// For `FiberResume` frames (protect/defer children blocked on I/O),
+    /// the inner fiber is aborted recursively so that protect/defer sees
+    /// the child error and runs cleanup code.
+    ///
+    /// For `Bytecode` frames (direct bytecode suspension), the error is
+    /// set on `fiber.signal` so the dispatch loop returns it immediately.
+    /// The error then propagates through the caller's protect/defer chain.
     fn do_fiber_abort(
         &mut self,
         child_handle: &FiberHandle,
@@ -769,18 +774,63 @@ impl VM {
             .unwrap_or(Value::NIL);
 
         self.with_child_fiber(child_handle, child_value, |vm| {
-            // Inject the error signal
             vm.fiber.status = FiberStatus::Alive;
-            vm.fiber.signal = Some((SIG_ERROR, error_value));
+            // Clear the signal — prim_fiber_abort pre-set it with the error
+            // value, which we already extracted above. If we leave it set,
+            // the dispatch loop will see SIG_ERROR and bail immediately
+            // when we try to resume remaining bytecode frames.
+            vm.fiber.signal = None;
 
-            // Resume the fiber so error handlers can run
-            if let Some(frames) = vm.fiber.suspended.take() {
-                // Resume from suspended frames — the error signal is already set,
-                // so the dispatch loop will see it on the first instruction check
-                vm.resume_suspended(frames, Value::NIL)
-            } else {
-                // New fiber that was never started — just mark as errored
-                SIG_ERROR
+            let frames = match vm.fiber.suspended.take() {
+                Some(frames) => frames,
+                None => {
+                    // New fiber that was never started — just mark as errored
+                    vm.fiber.signal = Some((SIG_ERROR, error_value));
+                    return SIG_ERROR;
+                }
+            };
+
+            // Check the innermost frame. FiberResume means a protect/defer
+            // child is blocked on I/O — abort it recursively so protect
+            // sees the error. Bytecode means the fiber itself is suspended
+            // — set the error and let the dispatch loop return it.
+            match frames.first() {
+                Some(SuspendedFrame::FiberResume {
+                    handle,
+                    fiber_value,
+                }) => {
+                    let inner_handle = handle.clone();
+                    let inner_value = *fiber_value;
+
+                    // Abort the inner fiber (e.g. protect child blocked on I/O).
+                    // Store the error on the inner fiber so do_fiber_abort picks it up.
+                    inner_handle.with_mut(|f| {
+                        f.signal = Some((SIG_ERROR, error_value));
+                    });
+                    let (inner_bits, inner_result) = vm.do_fiber_abort(&inner_handle, inner_value);
+
+                    // Resume remaining frames so protect/defer cleanup runs.
+                    let remaining: Vec<SuspendedFrame> = frames[1..].to_vec();
+                    if remaining.is_empty() {
+                        vm.fiber.signal = Some((inner_bits, inner_result));
+                        inner_bits
+                    } else {
+                        vm.resume_suspended(remaining, inner_result)
+                    }
+                }
+                Some(SuspendedFrame::Bytecode(_)) => {
+                    // Innermost frame is bytecode — set error and resume
+                    // through the chain. The dispatch loop will see SIG_ERROR
+                    // and return immediately from this frame, then outer
+                    // frames run normally (defer/protect).
+                    vm.fiber.signal = Some((SIG_ERROR, error_value));
+                    vm.resume_suspended(frames, Value::NIL)
+                }
+                None => {
+                    // No frames (shouldn't happen — we checked above)
+                    vm.fiber.signal = Some((SIG_ERROR, error_value));
+                    SIG_ERROR
+                }
             }
         })
     }

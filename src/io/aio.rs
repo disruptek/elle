@@ -599,6 +599,32 @@ impl AsyncBackend {
         Ok(id)
     }
 
+    /// Cancel a pending I/O operation by submission ID.
+    ///
+    /// For io_uring: submits IORING_OP_ASYNC_CANCEL. The original SQE will
+    /// generate a CQE with result = -ECANCELED; the cancel SQE's CQE is
+    /// tagged and skipped by drain_cqes.
+    ///
+    /// For thread pool: no-op (thread pool operations cannot be cancelled
+    /// mid-flight; the scheduler removes the pending entry and the completion
+    /// is discarded when it arrives).
+    pub(crate) fn cancel(&self, id: u64) -> Result<(), String> {
+        let mut inner = self.inner.borrow_mut();
+        match inner.platform {
+            #[cfg(target_os = "linux")]
+            PlatformBackend::Uring(ref mut ring) => {
+                crate::io::uring::submit_uring_cancel(ring, id)?;
+            }
+            PlatformBackend::ThreadPool(_) => {
+                // Thread pool: just remove from pending. The thread will
+                // complete eventually; the completion will be discarded
+                // because the pending entry is gone.
+                inner.pending.remove(&id);
+            }
+        }
+        Ok(())
+    }
+
     /// Non-blocking poll for completions.
     pub(crate) fn poll(&self) -> Vec<Completion> {
         let mut inner = self.inner.borrow_mut();

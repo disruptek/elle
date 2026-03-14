@@ -60,7 +60,9 @@ plugin-tests:  ## Run plugin tests
 		parallel -j $(JOBS) --halt now,fail=1 --tag \
 			'timeout $(TIMEOUT) $(ELLE) {}'
 
-test: smoke  ## Rust unit tests after smoke
+test: smoke  ## Rust unit tests + clippy + fmt after smoke
+	cargo fmt --check
+	cargo clippy --workspace -- -D warnings
 	PROPTEST_CASES=4 cargo test --workspace --lib
 
 # ── Clean ───────────────────────────────────────────────────────────
