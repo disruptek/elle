@@ -415,7 +415,7 @@ impl VM {
                     let mask = handle.with(|f| f.mask);
 
                     if result_bits.is_ok()
-                        || (mask.contains(result_bits)
+                        || (mask.covers(result_bits)
                             && !result_bits.contains(crate::value::SIG_TERMINAL))
                     {
                         // Sub-fiber completed or its signal was caught by mask.
