@@ -62,7 +62,7 @@ plugin-tests:  ## Run plugin tests
 
 test: smoke  ## Rust unit tests + clippy + fmt after smoke
 	cargo fmt --check
-	cargo clippy --workspace -- -D warnings
+	cargo clippy --workspace --all-targets -- -D warnings
 	PROPTEST_CASES=4 cargo test --workspace --lib
 
 # ── Clean ───────────────────────────────────────────────────────────

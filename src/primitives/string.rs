@@ -606,47 +606,6 @@ pub(crate) fn prim_string_size_of(args: &[Value]) -> (SignalBits, Value) {
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn size_of_ascii() {
-        let (sig, val) = prim_string_size_of(&[Value::string("hello")]);
-        assert_eq!(sig, SIG_OK);
-        assert_eq!(val.as_int(), Some(5));
-    }
-
-    #[test]
-    fn size_of_multibyte_utf8() {
-        // "café" — 'é' is 2 bytes, so total is 5 bytes
-        let (sig, val) = prim_string_size_of(&[Value::string("café")]);
-        assert_eq!(sig, SIG_OK);
-        assert_eq!(val.as_int(), Some(5));
-    }
-
-    #[test]
-    fn size_of_emoji() {
-        // "🎉" is 4 bytes in UTF-8
-        let (sig, val) = prim_string_size_of(&[Value::string("🎉")]);
-        assert_eq!(sig, SIG_OK);
-        assert_eq!(val.as_int(), Some(4));
-    }
-
-    #[test]
-    fn size_of_empty() {
-        let (sig, val) = prim_string_size_of(&[Value::string("")]);
-        assert_eq!(sig, SIG_OK);
-        assert_eq!(val.as_int(), Some(0));
-    }
-
-    #[test]
-    fn size_of_type_error() {
-        let (sig, _val) = prim_string_size_of(&[Value::int(42)]);
-        assert_eq!(sig, SIG_ERROR);
-    }
-}
-
 /// Declarative primitive definitions for string module.
 pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
     PrimitiveDef {
@@ -793,3 +752,44 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         aliases: &[],
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn size_of_ascii() {
+        let (sig, val) = prim_string_size_of(&[Value::string("hello")]);
+        assert_eq!(sig, SIG_OK);
+        assert_eq!(val.as_int(), Some(5));
+    }
+
+    #[test]
+    fn size_of_multibyte_utf8() {
+        // "café" — 'é' is 2 bytes, so total is 5 bytes
+        let (sig, val) = prim_string_size_of(&[Value::string("café")]);
+        assert_eq!(sig, SIG_OK);
+        assert_eq!(val.as_int(), Some(5));
+    }
+
+    #[test]
+    fn size_of_emoji() {
+        // "🎉" is 4 bytes in UTF-8
+        let (sig, val) = prim_string_size_of(&[Value::string("🎉")]);
+        assert_eq!(sig, SIG_OK);
+        assert_eq!(val.as_int(), Some(4));
+    }
+
+    #[test]
+    fn size_of_empty() {
+        let (sig, val) = prim_string_size_of(&[Value::string("")]);
+        assert_eq!(sig, SIG_OK);
+        assert_eq!(val.as_int(), Some(0));
+    }
+
+    #[test]
+    fn size_of_type_error() {
+        let (sig, _val) = prim_string_size_of(&[Value::int(42)]);
+        assert_eq!(sig, SIG_ERROR);
+    }
+}
