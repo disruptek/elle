@@ -1,31 +1,59 @@
 //! Mock I/O backend for testing and benchmarking.
 //!
 //! Fulfills `IoRequest`s from in-memory state. No OS resources needed.
-//! Completions are produced instantly on submit (zero-latency by default).
+//! Completions resolve after a configurable latency (zero by default).
 
 use crate::io::request::{IoOp, IoRequest};
 use crate::io::Completion;
 use crate::value::{error_val, Value};
 
 use std::cell::RefCell;
-use std::collections::VecDeque;
+use std::collections::BinaryHeap;
+use std::time::{Duration, Instant};
 
-/// In-memory I/O backend.
+/// In-memory I/O backend with configurable latency.
 ///
-/// Configurable via:
-/// - `seed_read(data)` — pre-seed data returned by ReadLine/Read/ReadAll
-/// - `inject_error(errno)` — make the next N operations fail
-/// - Call log available via `take_log()`
+/// - `set_latency(dur)` — completions become available after `dur`
+/// - `seed_read(data)` — pre-seed data for ReadLine/Read/ReadAll
+/// - `inject_error(errno)` — make the next operation fail
+/// - `take_log()` — retrieve and clear the operation log
 pub(crate) struct MockBackend {
     inner: RefCell<MockInner>,
 }
 
 struct MockInner {
     next_id: u64,
-    completions: VecDeque<Completion>,
-    read_data: VecDeque<Vec<u8>>,
-    error_queue: VecDeque<i32>,
+    latency: Duration,
+    pending: BinaryHeap<Pending>,
+    read_data: Vec<Vec<u8>>,
+    read_cursor: usize,
+    error_queue: Vec<i32>,
+    error_cursor: usize,
     log: Vec<String>,
+}
+
+/// A completion that becomes available at `deadline`.
+struct Pending {
+    deadline: Instant,
+    completion: Completion,
+}
+
+// BinaryHeap is a max-heap; we want earliest deadline first.
+impl Eq for Pending {}
+impl PartialEq for Pending {
+    fn eq(&self, other: &Self) -> bool {
+        self.deadline == other.deadline
+    }
+}
+impl Ord for Pending {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.deadline.cmp(&self.deadline) // reversed for min-heap
+    }
+}
+impl PartialOrd for Pending {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl MockBackend {
@@ -33,29 +61,38 @@ impl MockBackend {
         MockBackend {
             inner: RefCell::new(MockInner {
                 next_id: 1,
-                completions: VecDeque::new(),
-                read_data: VecDeque::new(),
-                error_queue: VecDeque::new(),
+                latency: Duration::ZERO,
+                pending: BinaryHeap::new(),
+                read_data: Vec::new(),
+                read_cursor: 0,
+                error_queue: Vec::new(),
+                error_cursor: 0,
                 log: Vec::new(),
             }),
         }
     }
 
-    /// Pre-seed read data. Each call adds one chunk that will be returned
-    /// by the next ReadLine/Read/ReadAll operation.
-    #[cfg(test)]
-    pub(crate) fn seed_read(&self, data: Vec<u8>) {
-        self.inner.borrow_mut().read_data.push_back(data);
+    /// Set the latency for future completions.
+    #[allow(dead_code)]
+    pub(crate) fn set_latency(&self, latency: Duration) {
+        self.inner.borrow_mut().latency = latency;
     }
 
-    /// Queue an error. The next `n` operations will fail with errno.
-    #[cfg(test)]
+    /// Pre-seed read data. Each call adds one chunk that will be returned
+    /// by the next ReadLine/Read/ReadAll operation.
+    #[allow(dead_code)]
+    pub(crate) fn seed_read(&self, data: Vec<u8>) {
+        self.inner.borrow_mut().read_data.push(data);
+    }
+
+    /// Queue an error. The next operation will fail with the given errno.
+    #[allow(dead_code)]
     pub(crate) fn inject_error(&self, errno: i32) {
-        self.inner.borrow_mut().error_queue.push_back(errno);
+        self.inner.borrow_mut().error_queue.push(errno);
     }
 
     /// Take the call log (clears it).
-    #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn take_log(&self) -> Vec<String> {
         std::mem::take(&mut self.inner.borrow_mut().log)
     }
@@ -83,87 +120,135 @@ impl crate::io::IoBackend for MockBackend {
         inner.log.push(op_name.to_string());
 
         // Check for injected error
-        if let Some(errno) = inner.error_queue.pop_front() {
-            inner.completions.push_back(Completion {
-                id,
-                result: Err(error_val(
-                    "io-error",
-                    format!("mock error: errno {}", errno),
-                )),
-            });
-            return Ok(id);
-        }
-
-        let result = match &request.op {
-            IoOp::ReadLine | IoOp::Read { .. } | IoOp::ReadAll => {
-                if let Some(data) = inner.read_data.pop_front() {
-                    if data.is_empty() {
-                        Ok(Value::NIL) // EOF
+        let result = if inner.error_cursor < inner.error_queue.len() {
+            let errno = inner.error_queue[inner.error_cursor];
+            inner.error_cursor += 1;
+            Err(error_val(
+                "io-error",
+                format!("mock error: errno {}", errno),
+            ))
+        } else {
+            match &request.op {
+                IoOp::ReadLine | IoOp::Read { .. } | IoOp::ReadAll => {
+                    if inner.read_cursor < inner.read_data.len() {
+                        let data = inner.read_data[inner.read_cursor].clone();
+                        inner.read_cursor += 1;
+                        if data.is_empty() {
+                            Ok(Value::NIL) // EOF
+                        } else {
+                            Ok(Value::string(String::from_utf8_lossy(&data).as_ref()))
+                        }
                     } else {
-                        Ok(Value::string(String::from_utf8_lossy(&data).as_ref()))
+                        Ok(Value::NIL) // EOF — no data seeded
                     }
-                } else {
-                    Ok(Value::NIL) // EOF — no data seeded
                 }
-            }
-            IoOp::Write { data } => {
-                let len = data
-                    .with_string(|s| s.len())
-                    .or_else(|| data.as_bytes().map(|b| b.len()))
-                    .unwrap_or(0);
-                Ok(Value::int(len as i64))
-            }
-            IoOp::Flush | IoOp::Shutdown { .. } | IoOp::Sleep { .. } => Ok(Value::NIL),
-            IoOp::Accept => {
-                // Mock accept: no real fd to return.
-                Err(error_val(
-                    "io-error",
-                    "mock: accept not supported (seed connections via mock/configure)",
-                ))
-            }
-            IoOp::Connect { .. } => {
-                // Mock connect: no real socket.
-                Err(error_val(
-                    "io-error",
-                    "mock: connect not supported (seed connections via mock/configure)",
-                ))
-            }
-            IoOp::SendTo { data, .. } => {
-                let len = data
-                    .with_string(|s| s.len())
-                    .or_else(|| data.as_bytes().map(|b| b.len()))
-                    .unwrap_or(0);
-                Ok(Value::int(len as i64))
-            }
-            IoOp::RecvFrom { .. } => {
-                if let Some(data) = inner.read_data.pop_front() {
-                    use crate::value::heap::TableKey;
-                    let mut fields = std::collections::BTreeMap::new();
-                    fields.insert(TableKey::Keyword("data".into()), Value::bytes(data));
-                    fields.insert(TableKey::Keyword("addr".into()), Value::string("127.0.0.1"));
-                    fields.insert(TableKey::Keyword("port".into()), Value::int(0));
-                    Ok(Value::struct_from(fields))
-                } else {
-                    Ok(Value::NIL)
+                IoOp::Write { data } => {
+                    let len = data
+                        .with_string(|s| s.len())
+                        .or_else(|| data.as_bytes().map(|b| b.len()))
+                        .unwrap_or(0);
+                    Ok(Value::int(len as i64))
+                }
+                IoOp::Flush | IoOp::Shutdown { .. } => Ok(Value::NIL),
+                IoOp::Sleep { duration } => {
+                    // Sleep honors its own duration as latency override
+                    let deadline = Instant::now() + *duration;
+                    inner.pending.push(Pending {
+                        deadline,
+                        completion: Completion {
+                            id,
+                            result: Ok(Value::NIL),
+                        },
+                    });
+                    return Ok(id);
+                }
+                IoOp::Accept => Err(error_val("io-error", "mock: accept not supported")),
+                IoOp::Connect { .. } => Err(error_val("io-error", "mock: connect not supported")),
+                IoOp::SendTo { data, .. } => {
+                    let len = data
+                        .with_string(|s| s.len())
+                        .or_else(|| data.as_bytes().map(|b| b.len()))
+                        .unwrap_or(0);
+                    Ok(Value::int(len as i64))
+                }
+                IoOp::RecvFrom { .. } => {
+                    if inner.read_cursor < inner.read_data.len() {
+                        let data = inner.read_data[inner.read_cursor].clone();
+                        inner.read_cursor += 1;
+                        use crate::value::heap::TableKey;
+                        let mut fields = std::collections::BTreeMap::new();
+                        fields.insert(TableKey::Keyword("data".into()), Value::bytes(data));
+                        fields.insert(TableKey::Keyword("addr".into()), Value::string("127.0.0.1"));
+                        fields.insert(TableKey::Keyword("port".into()), Value::int(0));
+                        Ok(Value::struct_from(fields))
+                    } else {
+                        Ok(Value::NIL)
+                    }
                 }
             }
         };
 
-        inner.completions.push_back(Completion { id, result });
+        let deadline = Instant::now() + inner.latency;
+        inner.pending.push(Pending {
+            deadline,
+            completion: Completion { id, result },
+        });
         Ok(id)
     }
 
     fn poll(&self) -> Vec<Completion> {
         let mut inner = self.inner.borrow_mut();
-        inner.completions.drain(..).collect()
+        let now = Instant::now();
+        let mut ready = Vec::new();
+        while let Some(top) = inner.pending.peek() {
+            if top.deadline <= now {
+                ready.push(inner.pending.pop().unwrap().completion);
+            } else {
+                break;
+            }
+        }
+        ready
     }
 
-    fn wait(&self, _timeout_ms: i64) -> Result<Vec<Completion>, String> {
+    fn wait(&self, timeout_ms: i64) -> Result<Vec<Completion>, String> {
+        // Fast path: check for already-ready completions
+        let ready = self.poll();
+        if !ready.is_empty() {
+            return Ok(ready);
+        }
+
+        // Nothing ready — sleep until the earliest deadline or timeout
+        let inner = self.inner.borrow();
+        let earliest = match inner.pending.peek() {
+            Some(p) => p.deadline,
+            None => return Ok(Vec::new()), // nothing pending at all
+        };
+        drop(inner);
+
+        let now = Instant::now();
+        let wait_until = if timeout_ms < 0 {
+            earliest // wait forever → wait until earliest
+        } else {
+            let timeout_deadline = now + Duration::from_millis(timeout_ms as u64);
+            earliest.min(timeout_deadline)
+        };
+
+        if wait_until > now {
+            std::thread::sleep(wait_until - now);
+        }
+
         Ok(self.poll())
     }
 
-    fn cancel(&self, _id: u64) -> Result<(), String> {
-        // Mock: cancel is a no-op (completions are instant)
+    fn cancel(&self, id: u64) -> Result<(), String> {
+        let mut inner = self.inner.borrow_mut();
+        // Remove the pending completion with this ID
+        let old: Vec<Pending> = inner.pending.drain().collect();
+        for p in old {
+            if p.completion.id != id {
+                inner.pending.push(p);
+            }
+        }
         Ok(())
     }
 }
@@ -206,7 +291,6 @@ mod tests {
         let completions = mock.poll();
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].id, id);
-        // Write returns byte count
         let val = completions[0].result.as_ref().unwrap();
         assert_eq!(val.as_int(), Some(9));
     }
@@ -259,7 +343,6 @@ mod tests {
         mock.submit(&req).unwrap();
         let completions = mock.poll();
         assert_eq!(completions.len(), 1);
-        // No seeded data → EOF (NIL)
         assert_eq!(*completions[0].result.as_ref().unwrap(), Value::NIL);
     }
 
@@ -281,5 +364,98 @@ mod tests {
             })
             .unwrap();
         assert!(id2 > id1);
+    }
+
+    #[test]
+    fn test_mock_latency_poll_before_deadline() {
+        let mock = MockBackend::new();
+        mock.set_latency(Duration::from_millis(100));
+
+        mock.submit(&IoRequest {
+            op: IoOp::Flush,
+            port: Value::NIL,
+            timeout: None,
+        })
+        .unwrap();
+
+        // Poll immediately — should be empty (latency not elapsed)
+        let completions = mock.poll();
+        assert!(completions.is_empty());
+    }
+
+    #[test]
+    fn test_mock_latency_wait() {
+        let mock = MockBackend::new();
+        mock.set_latency(Duration::from_millis(10));
+
+        mock.submit(&IoRequest {
+            op: IoOp::Flush,
+            port: Value::NIL,
+            timeout: None,
+        })
+        .unwrap();
+
+        // Wait should sleep until deadline and return the completion
+        let completions = mock.wait(-1).unwrap();
+        assert_eq!(completions.len(), 1);
+    }
+
+    #[test]
+    fn test_mock_latency_wait_timeout() {
+        let mock = MockBackend::new();
+        mock.set_latency(Duration::from_secs(10)); // very long
+
+        mock.submit(&IoRequest {
+            op: IoOp::Flush,
+            port: Value::NIL,
+            timeout: None,
+        })
+        .unwrap();
+
+        // Wait with short timeout — should return empty
+        let completions = mock.wait(5).unwrap();
+        assert!(completions.is_empty());
+    }
+
+    #[test]
+    fn test_mock_cancel() {
+        let mock = MockBackend::new();
+        mock.set_latency(Duration::from_secs(10));
+
+        let id = mock
+            .submit(&IoRequest {
+                op: IoOp::Flush,
+                port: Value::NIL,
+                timeout: None,
+            })
+            .unwrap();
+
+        mock.cancel(id).unwrap();
+
+        // Nothing should be pending
+        let completions = mock.wait(0).unwrap();
+        assert!(completions.is_empty());
+    }
+
+    #[test]
+    fn test_mock_sleep_uses_duration() {
+        let mock = MockBackend::new();
+        // Default latency is zero, but Sleep should use its own duration
+        let req = IoRequest {
+            op: IoOp::Sleep {
+                duration: Duration::from_millis(10),
+            },
+            port: Value::NIL,
+            timeout: None,
+        };
+        mock.submit(&req).unwrap();
+
+        // Poll immediately — Sleep's 10ms hasn't elapsed
+        let completions = mock.poll();
+        assert!(completions.is_empty());
+
+        // Wait should return after the sleep duration
+        let completions = mock.wait(-1).unwrap();
+        assert_eq!(completions.len(), 1);
     }
 }
