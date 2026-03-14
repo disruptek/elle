@@ -404,3 +404,36 @@
        (after-reset (arena/count)))
   (assert-eq (> after-alloc before) true "strings allocated")
   (assert-eq after-reset before "count restored: destructors ran"))
+
+# ── Scope parameter removal regression (issue-525 follow-up) ────────
+# Use apply to bypass compile-time arity checking; the runtime arity-error
+# is what we're asserting against.
+
+# test_arena_count_rejects_scope_arg
+# After removing the scope parameter, passing :global must be an arity-error.
+(assert-err-kind (fn [] (apply arena/count [:global])) :arity-error
+  "arena/count rejects :global after arity reduction")
+(assert-err-kind (fn [] (apply arena/count [:fiber])) :arity-error
+  "arena/count rejects :fiber after arity reduction")
+
+# test_arena_bytes_rejects_scope_arg
+(assert-err-kind (fn [] (apply arena/bytes [:global])) :arity-error
+  "arena/bytes rejects :global after arity reduction")
+(assert-err-kind (fn [] (apply arena/bytes [:fiber])) :arity-error
+  "arena/bytes rejects :fiber after arity reduction")
+
+# test_arena_peak_rejects_scope_arg
+(assert-err-kind (fn [] (apply arena/peak [:global])) :arity-error
+  "arena/peak rejects :global after arity reduction")
+
+# test_arena_reset_peak_rejects_scope_arg
+(assert-err-kind (fn [] (apply arena/reset-peak [:global])) :arity-error
+  "arena/reset-peak rejects :global after arity reduction")
+
+# test_arena_object_limit_rejects_scope_arg
+(assert-err-kind (fn [] (apply arena/object-limit [:global])) :arity-error
+  "arena/object-limit rejects :global after arity reduction")
+
+# test_arena_set_object_limit_rejects_scope_arg
+(assert-err-kind (fn [] (apply arena/set-object-limit [100 :global])) :arity-error
+  "arena/set-object-limit rejects second :global arg after arity reduction")

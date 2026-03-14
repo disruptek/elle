@@ -6,36 +6,20 @@ use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK, SIG_QUERY};
 use crate::value::types::Arity;
 use crate::value::{error_val, Value};
 
-/// (arena/count) or (arena/count :fiber) or (arena/count :global)
+/// (arena/count)
 ///
-/// Return current heap object count. Both :fiber (default) and :global
-/// return the current FiberHeap object count. After issue-525, root fiber
-/// has a FiberHeap, so :global is an alias for :fiber.
+/// Return current heap object count.
 ///
 /// Operates directly on thread-local state (no SIG_QUERY).
 pub(crate) fn prim_arena_count(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() > 1 {
+    if !args.is_empty() {
         return (
             SIG_ERROR,
             error_val(
                 "arity-error",
-                format!("arena/count: expected 0-1 arguments, got {}", args.len()),
+                format!("arena/count: expected 0 arguments, got {}", args.len()),
             ),
         );
-    }
-    if args.len() == 1 {
-        match args[0].as_keyword_name() {
-            Some("global") | Some("fiber") => {}
-            _ => {
-                return (
-                    SIG_ERROR,
-                    error_val(
-                        "value-error",
-                        "arena/count: argument must be :fiber or :global".to_string(),
-                    ),
-                )
-            }
-        }
     }
     let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
     debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
@@ -86,23 +70,22 @@ pub(crate) fn prim_scope_stats(args: &[Value]) -> (SignalBits, Value) {
     )
 }
 
-/// (arena/set-object-limit n) or (arena/set-object-limit n :global)
+/// (arena/set-object-limit n)
 ///
-/// Set max heap object count on the current FiberHeap. Both default
-/// and :global target the same heap (root or child). Pass nil to remove
+/// Set max heap object count on the current FiberHeap. Pass nil to remove
 /// the limit. Returns previous limit as int, or nil if previously unlimited.
 ///
 /// Operates directly on thread-local state (no SIG_QUERY) to avoid allocating
 /// cons cells for the query message — those allocations would themselves be
 /// subject to the limit, creating a chicken-and-egg problem.
 pub(crate) fn prim_arena_set_object_limit(args: &[Value]) -> (SignalBits, Value) {
-    if args.is_empty() || args.len() > 2 {
+    if args.len() != 1 {
         return (
             SIG_ERROR,
             error_val(
                 "arity-error",
                 format!(
-                    "arena/set-object-limit: expected 1-2 arguments, got {}",
+                    "arena/set-object-limit: expected 1 argument, got {}",
                     args.len()
                 ),
             ),
@@ -133,15 +116,6 @@ pub(crate) fn prim_arena_set_object_limit(args: &[Value]) -> (SignalBits, Value)
             ),
         );
     };
-    if args.len() == 2 && args[1].as_keyword_name() != Some("global") {
-        return (
-            SIG_ERROR,
-            error_val(
-                "value-error",
-                "arena/set-object-limit: second argument must be :global".to_string(),
-            ),
-        );
-    }
     let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
     debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
     let prev = unsafe { (*heap_ptr).set_object_limit(limit) };
@@ -152,31 +126,21 @@ pub(crate) fn prim_arena_set_object_limit(args: &[Value]) -> (SignalBits, Value)
     (SIG_OK, result)
 }
 
-/// (arena/object-limit) or (arena/object-limit :global)
+/// (arena/object-limit)
 ///
 /// Get current object limit on the current FiberHeap. Returns int or nil (unlimited).
-/// :global is an alias for the default (same heap after issue-525).
 ///
 /// Operates directly on thread-local state (no SIG_QUERY).
 pub(crate) fn prim_arena_object_limit(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() > 1 {
+    if !args.is_empty() {
         return (
             SIG_ERROR,
             error_val(
                 "arity-error",
                 format!(
-                    "arena/object-limit: expected 0-1 arguments, got {}",
+                    "arena/object-limit: expected 0 arguments, got {}",
                     args.len()
                 ),
-            ),
-        );
-    }
-    if args.len() == 1 && args[0].as_keyword_name() != Some("global") {
-        return (
-            SIG_ERROR,
-            error_val(
-                "value-error",
-                "arena/object-limit: argument must be :global".to_string(),
             ),
         );
     }
@@ -190,35 +154,20 @@ pub(crate) fn prim_arena_object_limit(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, result)
 }
 
-/// (arena/bytes) or (arena/bytes :fiber) or (arena/bytes :global)
+/// (arena/bytes)
 ///
-/// Return bytes consumed by the current FiberHeap. Both :fiber (default)
-/// and :global query real allocated_bytes() from the heap.
+/// Return bytes consumed by the current FiberHeap.
 ///
 /// Operates directly on thread-local state (no SIG_QUERY).
 pub(crate) fn prim_arena_bytes(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() > 1 {
+    if !args.is_empty() {
         return (
             SIG_ERROR,
             error_val(
                 "arity-error",
-                format!("arena/bytes: expected 0-1 arguments, got {}", args.len()),
+                format!("arena/bytes: expected 0 arguments, got {}", args.len()),
             ),
         );
-    }
-    if args.len() == 1 {
-        match args[0].as_keyword_name() {
-            Some("global") | Some("fiber") => {}
-            _ => {
-                return (
-                    SIG_ERROR,
-                    error_val(
-                        "value-error",
-                        "arena/bytes: argument must be :fiber or :global".to_string(),
-                    ),
-                )
-            }
-        }
     }
     let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
     debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
@@ -334,25 +283,14 @@ pub(crate) fn prim_arena_allocs(args: &[Value]) -> (SignalBits, Value) {
     )
 }
 
-/// (arena/peak) or (arena/peak :global) — return peak object count (high-water mark)
-///
-/// :global is an alias for the default (same FiberHeap after issue-525).
+/// (arena/peak) — return peak object count (high-water mark)
 pub(crate) fn prim_arena_peak(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() > 1 {
+    if !args.is_empty() {
         return (
             SIG_ERROR,
             error_val(
                 "arity-error",
-                format!("arena/peak: expected 0-1 arguments, got {}", args.len()),
-            ),
-        );
-    }
-    if args.len() == 1 && args[0].as_keyword_name() != Some("global") {
-        return (
-            SIG_ERROR,
-            error_val(
-                "value-error",
-                "arena/peak: argument must be :global".to_string(),
+                format!("arena/peak: expected 0 arguments, got {}", args.len()),
             ),
         );
     }
@@ -362,28 +300,14 @@ pub(crate) fn prim_arena_peak(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::int(peak as i64))
 }
 
-/// (arena/reset-peak) or (arena/reset-peak :global) — reset peak to current count, return previous peak
-///
-/// :global is an alias for the default (same FiberHeap after issue-525).
+/// (arena/reset-peak) — reset peak to current count, return previous peak
 pub(crate) fn prim_arena_reset_peak(args: &[Value]) -> (SignalBits, Value) {
-    if args.len() > 1 {
+    if !args.is_empty() {
         return (
             SIG_ERROR,
             error_val(
                 "arity-error",
-                format!(
-                    "arena/reset-peak: expected 0-1 arguments, got {}",
-                    args.len()
-                ),
-            ),
-        );
-    }
-    if args.len() == 1 && args[0].as_keyword_name() != Some("global") {
-        return (
-            SIG_ERROR,
-            error_val(
-                "value-error",
-                "arena/reset-peak: argument must be :global".to_string(),
+                format!("arena/reset-peak: expected 0 arguments, got {}", args.len()),
             ),
         );
     }
@@ -427,11 +351,11 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "arena/count",
         func: prim_arena_count,
         signal: Signal::errors(),
-        arity: Arity::Range(0, 1),
-        doc: "Return current heap object count. :fiber (default) and :global both return the current FiberHeap count.",
-        params: &["scope?"],
+        arity: Arity::Exact(0),
+        doc: "Return current heap object count.",
+        params: &[],
         category: "meta",
-        example: "(arena/count) or (arena/count :fiber) or (arena/count :global)",
+        example: "(arena/count)",
         aliases: &["arena-count"],
     },
     PrimitiveDef {
@@ -449,9 +373,9 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "arena/set-object-limit",
         func: prim_arena_set_object_limit,
         signal: Signal::errors(),
-        arity: Arity::Range(1, 2),
+        arity: Arity::Exact(1),
         doc: "Set max heap object count. Pass nil to remove limit. Returns previous limit or nil.",
-        params: &["n", "scope?"],
+        params: &["n"],
         category: "meta",
         example: "(arena/set-object-limit 10000)",
         aliases: &[],
@@ -460,24 +384,24 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "arena/object-limit",
         func: prim_arena_object_limit,
         signal: Signal::errors(),
-        arity: Arity::Range(0, 1),
+        arity: Arity::Exact(0),
         doc: "Get current object limit. Returns int or nil (unlimited).",
-        params: &["scope?"],
+        params: &[],
         category: "meta",
         example: "(arena/object-limit)",
         aliases: &[],
     },
-     PrimitiveDef {
-         name: "arena/bytes",
-         func: prim_arena_bytes,
-         signal: Signal::errors(),
-         arity: Arity::Range(0, 1),
-         doc: "Return bytes consumed by the current FiberHeap. :fiber (default) and :global both return real allocated_bytes().",
-         params: &["scope?"],
-         category: "meta",
-         example: "(arena/bytes) or (arena/bytes :fiber) or (arena/bytes :global)",
-         aliases: &[],
-     },
+    PrimitiveDef {
+        name: "arena/bytes",
+        func: prim_arena_bytes,
+        signal: Signal::errors(),
+        arity: Arity::Exact(0),
+        doc: "Return bytes consumed by the current FiberHeap.",
+        params: &[],
+        category: "meta",
+        example: "(arena/bytes)",
+        aliases: &[],
+    },
     PrimitiveDef {
         name: "arena/checkpoint",
         func: prim_arena_checkpoint,
@@ -515,9 +439,9 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "arena/peak",
         func: prim_arena_peak,
         signal: Signal::errors(),
-        arity: Arity::Range(0, 1),
-        doc: "Return peak object count (high-water mark). Optional :global scope.",
-        params: &["scope?"],
+        arity: Arity::Exact(0),
+        doc: "Return peak object count (high-water mark).",
+        params: &[],
         category: "meta",
         example: "(arena/peak)",
         aliases: &[],
@@ -526,9 +450,9 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         name: "arena/reset-peak",
         func: prim_arena_reset_peak,
         signal: Signal::errors(),
-        arity: Arity::Range(0, 1),
-        doc: "Reset peak to current count. Returns previous peak. Optional :global scope.",
-        params: &["scope?"],
+        arity: Arity::Exact(0),
+        doc: "Reset peak to current count. Returns previous peak.",
+        params: &[],
         category: "meta",
         example: "(arena/reset-peak)",
         aliases: &[],

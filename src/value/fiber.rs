@@ -330,10 +330,22 @@ pub struct Fiber {
     /// the thread-local stores `*mut FiberHeap`, which must survive moves of
     /// the Fiber struct (e.g., during `std::mem::swap` in fiber transitions).
     ///
-    /// **Root fiber**: this field exists for structural uniformity but is
-    /// unused for allocations. The root fiber allocates through the
-    /// `ROOT_HEAP` thread-local (see `src/value/fiber_heap/routing.rs`).
-    /// Child fibers use this field normally.
+    /// **Child fibers**: this is the active allocator for the fiber's lifetime.
+    /// Installed as the current thread-local heap on resume, uninstalled on
+    /// suspend/death.
+    ///
+    /// **Root fiber**: this field is structurally present for uniformity but is
+    /// never installed as the active allocator. The root fiber allocates through
+    /// the `ROOT_HEAP` thread-local in `src/value/fiber_heap/routing.rs`, which
+    /// is a separately leaked `Box<FiberHeap>` that lives for the thread's
+    /// lifetime. The root `Fiber` struct's `heap` field is constructed in
+    /// `Fiber::new()` but immediately superseded by `install_root_heap()` in
+    /// `VM::new()`.
+    ///
+    /// `Option<Box<FiberHeap>>` was considered and rejected: child fibers access
+    /// `self.heap` on every allocation-related path, and wrapping in `Option`
+    /// would require `.as_ref().unwrap()` or `.as_deref_mut().unwrap()` at every
+    /// such call site with no benefit (child fibers always have a heap).
     pub heap: Box<crate::value::fiber_heap::FiberHeap>,
     /// Operand stack (temporaries). SmallVec avoids heap allocation for
     /// fibers with fewer than 256 stack entries.
