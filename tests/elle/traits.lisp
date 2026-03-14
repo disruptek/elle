@@ -37,6 +37,9 @@
 (assert-eq (traits :keyword) nil
   "traits returns nil for keyword (immediate)")
 
+(assert-eq (traits true) nil
+  "traits returns nil for bool (immediate)")
+
 # ============================================================================
 # Falsy / truthy via traits
 # ============================================================================
@@ -47,6 +50,10 @@
 
 (assert-false (traits "hello world")
   "nil from traits on string is falsy")
+
+# the retrieved table is an immutable struct
+(assert-true (struct? (traits (with-traits [1 2] {:a 1})))
+  "traits result is a struct")
 
 # a trait table (immutable struct) is truthy
 (assert-true (traits (with-traits [1 2 3] {:x 1}))
@@ -84,6 +91,9 @@
   (assert-eq (type-of lst) :list
     "type-of returns :list for traited cons"))
 
+(assert-eq (type-of (with-traits (fn (x) x) {:T true})) :closure
+  "type-of returns :closure for traited closure")
+
 # ============================================================================
 # Equality ignores trait tables
 # ============================================================================
@@ -98,7 +108,10 @@
     "arrays with different trait tables are equal if data is same")
   # Traited == untraited with same data
   (assert-eq x [1 2 3]
-    "traited array equals untraited array with same data"))
+    "traited array equals untraited array with same data")
+  # Symmetric: untraited == traited
+  (assert-eq [1 2 3] x
+    "untraited array equals traited array with same data (symmetric)"))
 
 (begin
   (def a (with-traits {:k 1} {:T true}))
@@ -139,6 +152,21 @@
   # The trait table is attached
   (assert-eq (get (traits traited) :tag) :x
     "trait table attached to mutable array copy"))
+
+# Mutations to the original after with-traits do not affect the traited copy
+(begin
+  (def orig @[1 2 3])
+  (def traited (with-traits orig {:tag :x}))
+  (push orig 4)
+  (assert-eq (length traited) 3
+    "mutable array copy is independent: push to original does not affect traited copy"))
+
+(begin
+  (def orig @{:a 1})
+  (def traited (with-traits orig {:tag :x}))
+  (put orig :b 2)
+  (assert-eq (length traited) 1
+    "mutable struct copy is independent: put to original does not affect traited copy"))
 
 # ============================================================================
 # Constructor pattern — shared table, identical? fast path
@@ -291,8 +319,16 @@
 
   # Syntax, ManagedPointer, External, ThreadHandle:
   # These types require FFI, plugins, or thread spawning to construct in Elle
-  # scripts. They are tested in tests/integration/traits.rs instead.
+  # scripts. They are not testable in pure Elle scripts.
 )
+
+# traits returns nil for untraited fiber
+(assert-true (nil? (traits (fiber/new (fn () 1) 0)))
+  "traits returns nil for untraited fiber")
+
+# traits returns nil for untraited parameter
+(assert-true (nil? (traits (make-parameter 0)))
+  "traits returns nil for untraited parameter")
 
 # ============================================================================
 # Validation errors
