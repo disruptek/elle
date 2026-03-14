@@ -108,9 +108,7 @@
 
       # ── Assertions ──────────────────────────────────────────────
 
-      (let [[r1 (get results 0)]
-            [r2 (get results 1)]
-            [r3 (get results 2)]]
+      (let [[[r1 r2 r3] results]]
 
         # Keep-alive GET
         (assert (= r1:status 200)            "keep-alive GET: status 200")
