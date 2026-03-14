@@ -131,7 +131,7 @@ impl LirFunction {
             num_captures: 0,
             lbox_params_mask: 0,
             lbox_locals_mask: 0,
-            signal: Signal::inert(),
+            signal: Signal::silent(),
             doc: None,
             syntax: None,
             vararg_kind: crate::hir::VarargKind::List,

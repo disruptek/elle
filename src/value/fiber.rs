@@ -418,7 +418,7 @@ mod tests {
                 num_captures: 0,
                 num_params: 0,
                 constants: Rc::new(vec![]),
-                signal: Signal::inert(),
+                signal: Signal::silent(),
                 lbox_params_mask: 0,
                 lbox_locals_mask: 0,
                 symbol_names: Rc::new(HashMap::new()),

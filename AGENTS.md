@@ -42,7 +42,7 @@ bytecode. Error messages include file:line:col information.
 | `compiler` | Bytecode instruction definitions, debug formatting |
 | `vm` | Bytecode execution, builtin documentation storage |
 | `value` | Runtime value representation (NaN-boxed) |
-| `signals` | Signal type (`Inert`, `Yields`, `Polymorphic`), signal registry for keyword-to-bit mapping |
+| `signals` | Signal type (`Silent`, `Yields`, `Polymorphic`), signal registry for keyword-to-bit mapping |
 | `io` | I/O request types, backends, timeout handling |
 | `lint` | Diagnostic types and lint rules |
 | `symbols` | Symbol index types for IDE features |
@@ -117,7 +117,7 @@ These must remain true. Violating them breaks the system:
    use `LocalLBox` for indirection. The `lbox_params_mask` on `Closure` tracks
    which parameters need lbox wrapping.
 
-3. **Signals are inferred, not declared — except when `silence` provides explicit bounds.** The `Signal` type (`Inert`, `Yields`, `Polymorphic`) propagates from leaves to root during analysis. The `silence` form constrains inference; it doesn't replace it. The inferred signal must be a subset of the declared bound. When a parameter has a `silence` bound, it is no longer polymorphic — its signal is known to be at most the bound.
+3. **Signals are inferred, not declared — except when `silence` provides explicit bounds.** The `Signal` type (`Silent`, `Yields`, `Polymorphic`) propagates from leaves to root during analysis. The `silence` form constrains inference; it doesn't replace it. The inferred signal must be a subset of the declared bound. When a parameter has a `silence` bound, it is no longer polymorphic — its signal is known to be at most the bound.
 
 4. **The VM is stack-based for operands, register-addressed for locals.**
    Instructions reference registers (locals) by index. Results push to the
