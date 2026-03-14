@@ -1,6 +1,6 @@
 //! Heap arena for temporary value allocation with mark/release semantics.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::heap::HeapObject;
@@ -49,15 +49,6 @@ impl HeapArena {
 
 thread_local! {
     static HEAP_ARENA: RefCell<HeapArena> = RefCell::new(HeapArena::new());
-}
-
-thread_local! {
-    static ALLOC_ERROR: Cell<Option<(usize, usize)>> = const { Cell::new(None) };
-}
-
-/// Take the allocation error flag, clearing it. Returns `(count, limit)` if set.
-pub fn take_alloc_error() -> Option<(usize, usize)> {
-    ALLOC_ERROR.with(|e| e.take())
 }
 
 /// Opaque mark for arena scope management.
@@ -243,11 +234,6 @@ pub fn heap_arena_reset_peak() -> usize {
     })
 }
 
-/// Set the allocation error flag. Called by FiberHeap when its limit is exceeded.
-pub fn set_alloc_error(count: usize, limit: usize) {
-    ALLOC_ERROR.with(|e| e.set(Some((count, limit))));
-}
-
 /// Allocate a heap object on the thread-local arena and return a Value pointing to it.
 ///
 /// Single thread-local read: check the raw pointer once, then dispatch.
@@ -263,7 +249,7 @@ pub fn alloc(obj: HeapObject) -> Value {
         if let Some(limit) = a.object_limit {
             let count = a.objects.len();
             if count >= limit {
-                ALLOC_ERROR.with(|e| e.set(Some((count, limit))));
+                // alloc_error handled by FiberHeap
                 return Value::NIL;
             }
         }

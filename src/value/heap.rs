@@ -485,7 +485,7 @@ pub use super::arena::{
     alloc, alloc_permanent, clone_heap, deref, drop_heap, heap_arena_capacity,
     heap_arena_checkpoint, heap_arena_len, heap_arena_mark, heap_arena_object_limit,
     heap_arena_peak, heap_arena_release, heap_arena_reset, heap_arena_reset_peak,
-    heap_arena_set_object_limit, set_alloc_error, take_alloc_error, ArenaGuard, ArenaMark,
+    heap_arena_set_object_limit, ArenaGuard, ArenaMark,
 };
 
 #[cfg(test)]

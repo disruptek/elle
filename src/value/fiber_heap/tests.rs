@@ -503,6 +503,60 @@ fn test_vm_new_installs_root_heap() {
     uninstall_fiber_heap();
 }
 
+// ── ALLOC_ERROR / FiberHeap.alloc_error tests (Chunk 2) ──────────────────────
+
+#[test]
+fn test_take_alloc_error_initially_none() {
+    let mut heap = FiberHeap::new();
+    heap.init_active_allocator();
+    assert!(heap.take_alloc_error().is_none());
+}
+
+#[test]
+fn test_alloc_error_set_on_limit_exceeded() {
+    let mut heap = FiberHeap::new();
+    heap.init_active_allocator();
+    heap.set_object_limit(Some(2));
+
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    // Third allocation should trigger error
+    let v = heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+
+    assert_eq!(v, Value::NIL); // returned NIL on error
+    let err = heap.take_alloc_error();
+    assert!(err.is_some());
+    let (count, limit) = err.unwrap();
+    assert_eq!(count, 2);
+    assert_eq!(limit, 2);
+}
+
+#[test]
+fn test_take_alloc_error_clears_flag() {
+    let mut heap = FiberHeap::new();
+    heap.init_active_allocator();
+    heap.set_object_limit(Some(0));
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+
+    assert!(heap.take_alloc_error().is_some());
+    // Second take returns None (flag cleared)
+    assert!(heap.take_alloc_error().is_none());
+}
+
+#[test]
+fn test_alloc_error_cleared_by_clear() {
+    let mut heap = FiberHeap::new();
+    heap.init_active_allocator();
+    heap.set_object_limit(Some(0));
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    assert!(heap.take_alloc_error().is_some()); // consume it first
+                                                // Set limit, trigger error again, then clear
+    heap.set_object_limit(Some(0));
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    heap.clear();
+    assert!(heap.take_alloc_error().is_none());
+}
+
 // ── Shared allocator ownership tests ──────────────────────────────
 
 #[test]
