@@ -8,8 +8,9 @@ use crate::value::{error_val, Value};
 
 /// (arena/count) or (arena/count :fiber) or (arena/count :global)
 ///
-/// Return current heap object count. Default is :fiber (bumpalo object count
-/// for child fibers, 0 for root). :global returns HEAP_ARENA object count.
+/// Return current heap object count. Both :fiber (default) and :global
+/// return the current FiberHeap object count. After issue-525, root fiber
+/// has a FiberHeap, so :global is an alias for :fiber.
 ///
 /// Operates directly on thread-local state (no SIG_QUERY).
 pub(crate) fn prim_arena_count(args: &[Value]) -> (SignalBits, Value) {
@@ -22,10 +23,9 @@ pub(crate) fn prim_arena_count(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    let is_global = if args.len() == 1 {
+    if args.len() == 1 {
         match args[0].as_keyword_name() {
-            Some("global") => true,
-            Some("fiber") => false,
+            Some("global") | Some("fiber") => {}
             _ => {
                 return (
                     SIG_ERROR,
@@ -36,17 +36,11 @@ pub(crate) fn prim_arena_count(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
         }
-    } else {
-        false
-    };
-    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
-    if is_global || heap_ptr.is_null() {
-        use crate::value::heap::heap_arena_len;
-        (SIG_OK, Value::int(heap_arena_len() as i64))
-    } else {
-        let count = unsafe { (*heap_ptr).len() };
-        (SIG_OK, Value::int(count as i64))
     }
+    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
+    debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
+    let count = unsafe { (*heap_ptr).len() };
+    (SIG_OK, Value::int(count as i64))
 }
 
 /// (arena/stats) — return heap arena statistics
@@ -71,8 +65,8 @@ pub(crate) fn prim_arena_stats(args: &[Value]) -> (SignalBits, Value) {
 /// (arena/scope-stats) — return scope allocation runtime statistics
 ///
 /// Returns a struct with :enters (RegionEnter count) and :dtors-run
-/// (destructors run by RegionExit). Only non-zero inside child fibers
-/// (root fiber has no FiberHeap). Returns {:enters 0 :dtors-run 0} for root.
+/// (destructors run by RegionExit). Returns live scope stats for the
+/// current fiber (root or child).
 pub(crate) fn prim_scope_stats(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
@@ -94,10 +88,9 @@ pub(crate) fn prim_scope_stats(args: &[Value]) -> (SignalBits, Value) {
 
 /// (arena/set-object-limit n) or (arena/set-object-limit n :global)
 ///
-/// Set max heap object count. Default scope is :fiber (child fiber's FiberHeap).
-/// :global targets HEAP_ARENA (root fiber). On root fiber, :fiber is implicitly :global.
-/// Pass nil as n to remove the limit.
-/// Returns previous limit as int, or nil if previously unlimited.
+/// Set max heap object count on the current FiberHeap. Both default
+/// and :global target the same heap (root or child). Pass nil to remove
+/// the limit. Returns previous limit as int, or nil if previously unlimited.
 ///
 /// Operates directly on thread-local state (no SIG_QUERY) to avoid allocating
 /// cons cells for the query message — those allocations would themselves be
@@ -140,25 +133,18 @@ pub(crate) fn prim_arena_set_object_limit(args: &[Value]) -> (SignalBits, Value)
             ),
         );
     };
-    let is_global = args.len() == 2 && {
-        if args[1].as_keyword_name() == Some("global") {
-            true
-        } else {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "value-error",
-                    "arena/set-object-limit: second argument must be :global".to_string(),
-                ),
-            );
-        }
-    };
+    if args.len() == 2 && args[1].as_keyword_name() != Some("global") {
+        return (
+            SIG_ERROR,
+            error_val(
+                "value-error",
+                "arena/set-object-limit: second argument must be :global".to_string(),
+            ),
+        );
+    }
     let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
-    let prev = if is_global || heap_ptr.is_null() {
-        crate::value::heap::heap_arena_set_object_limit(limit)
-    } else {
-        unsafe { (*heap_ptr).set_object_limit(limit) }
-    };
+    debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
+    let prev = unsafe { (*heap_ptr).set_object_limit(limit) };
     let result = match prev {
         Some(n) => Value::int(n as i64),
         None => Value::NIL,
@@ -168,7 +154,8 @@ pub(crate) fn prim_arena_set_object_limit(args: &[Value]) -> (SignalBits, Value)
 
 /// (arena/object-limit) or (arena/object-limit :global)
 ///
-/// Get current object limit. Returns int or nil (unlimited).
+/// Get current object limit on the current FiberHeap. Returns int or nil (unlimited).
+/// :global is an alias for the default (same heap after issue-525).
 ///
 /// Operates directly on thread-local state (no SIG_QUERY).
 pub(crate) fn prim_arena_object_limit(args: &[Value]) -> (SignalBits, Value) {
@@ -184,25 +171,18 @@ pub(crate) fn prim_arena_object_limit(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    let is_global = args.len() == 1 && {
-        if args[0].as_keyword_name() == Some("global") {
-            true
-        } else {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "value-error",
-                    "arena/object-limit: argument must be :global".to_string(),
-                ),
-            );
-        }
-    };
+    if args.len() == 1 && args[0].as_keyword_name() != Some("global") {
+        return (
+            SIG_ERROR,
+            error_val(
+                "value-error",
+                "arena/object-limit: argument must be :global".to_string(),
+            ),
+        );
+    }
     let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
-    let limit = if is_global || heap_ptr.is_null() {
-        crate::value::heap::heap_arena_object_limit()
-    } else {
-        unsafe { (*heap_ptr).object_limit() }
-    };
+    debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
+    let limit = unsafe { (*heap_ptr).object_limit() };
     let result = match limit {
         Some(n) => Value::int(n as i64),
         None => Value::NIL,
@@ -212,8 +192,8 @@ pub(crate) fn prim_arena_object_limit(args: &[Value]) -> (SignalBits, Value) {
 
 /// (arena/bytes) or (arena/bytes :fiber) or (arena/bytes :global)
 ///
-/// Return bytes consumed. :fiber = bumpalo allocated_bytes() for child fibers
-/// (0 for root). :global = HEAP_ARENA object count × 128 (estimated object size).
+/// Return bytes consumed by the current FiberHeap. Both :fiber (default)
+/// and :global query real allocated_bytes() from the heap.
 ///
 /// Operates directly on thread-local state (no SIG_QUERY).
 pub(crate) fn prim_arena_bytes(args: &[Value]) -> (SignalBits, Value) {
@@ -226,10 +206,9 @@ pub(crate) fn prim_arena_bytes(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    let is_global = if args.len() == 1 {
+    if args.len() == 1 {
         match args[0].as_keyword_name() {
-            Some("global") => true,
-            Some("fiber") => false,
+            Some("global") | Some("fiber") => {}
             _ => {
                 return (
                     SIG_ERROR,
@@ -240,24 +219,20 @@ pub(crate) fn prim_arena_bytes(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
         }
-    } else {
-        false
-    };
-    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
-    if is_global || heap_ptr.is_null() {
-        // Global: estimate from object count × 128 bytes per object
-        let bytes = crate::value::heap::heap_arena_len() * 128;
-        (SIG_OK, Value::int(bytes as i64))
-    } else {
-        let bytes = unsafe { (*heap_ptr).allocated_bytes() };
-        (SIG_OK, Value::int(bytes as i64))
     }
+    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
+    debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
+    let bytes = unsafe { (*heap_ptr).allocated_bytes() };
+    (SIG_OK, Value::int(bytes as i64))
 }
 
-/// (arena/checkpoint) — return an opaque mark for the current root-fiber arena position.
+/// (arena/checkpoint) — return an opaque mark for the current arena position.
 ///
-/// Pass to arena/reset to reclaim all objects allocated after this point.
-/// Dangerous: invalidates all Values allocated after the mark.
+/// Returns an opaque External value wrapping an ArenaMark. Pass only to
+/// arena/reset. Do not inspect or store as an integer.
+///
+/// Dangerous: any Value allocated after this mark becomes invalid after
+/// arena/reset with this mark.
 pub(crate) fn prim_arena_checkpoint(args: &[Value]) -> (SignalBits, Value) {
     if !args.is_empty() {
         return (
@@ -268,16 +243,20 @@ pub(crate) fn prim_arena_checkpoint(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    (
-        SIG_OK,
-        Value::int(crate::value::heap::heap_arena_checkpoint() as i64),
-    )
+    let mark = crate::value::heap::heap_arena_mark();
+    // Wrap in External so the mark survives across VM state without
+    // being mistaken for an integer.
+    (SIG_OK, Value::external("arena/checkpoint", mark))
 }
 
-/// (arena/reset mark) — reclaim all root-fiber arena objects allocated after mark.
+/// (arena/reset mark) — reclaim arena objects allocated after mark.
 ///
-/// Runs Drop for freed objects. Dangerous: any Value pointing into the
-/// freed region is now invalid.
+/// Runs destructors for freed objects. Bump memory is not reclaimed
+/// (bumpalo does not support position-based deallocation without scope
+/// marks). Objects are logically freed: destructors run, alloc_count
+/// decremented.
+///
+/// Dangerous: any Value pointing into the freed region is now invalid.
 pub(crate) fn prim_arena_reset(args: &[Value]) -> (SignalBits, Value) {
     if args.len() != 1 {
         return (
@@ -288,41 +267,49 @@ pub(crate) fn prim_arena_reset(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    let mark = match args[0].as_int() {
-        Some(n) if n >= 0 => n as usize,
-        Some(_) => {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "value-error",
-                    "arena/reset: mark must be non-negative".to_string(),
-                ),
-            );
-        }
+    // Extract the ArenaMark from the External wrapper.
+    let mark: &crate::value::ArenaMark = match args[0].as_external::<crate::value::ArenaMark>() {
+        Some(m) => m,
         None => {
             return (
                 SIG_ERROR,
                 error_val(
                     "type-error",
-                    format!("arena/reset: expected integer, got {}", args[0].type_name()),
+                    format!(
+                        "arena/reset: expected an arena/checkpoint value, got {}",
+                        args[0].type_name()
+                    ),
                 ),
             );
         }
     };
-    let current = crate::value::heap::heap_arena_checkpoint();
-    if mark > current {
-        return (
-            SIG_ERROR,
-            error_val(
-                "value-error",
-                format!(
-                    "arena/reset: mark {} exceeds current arena count {}",
-                    mark, current
+    // Validate that the mark is not in the future.
+    let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
+    debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
+    if !heap_ptr.is_null() {
+        let current_count = unsafe { (*heap_ptr).len() };
+        if mark.position() > current_count {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "value-error",
+                    format!(
+                        "arena/reset: mark position {} exceeds current count {}",
+                        mark.position(),
+                        current_count
+                    ),
                 ),
-            ),
+            );
+        }
+        // Clone the mark because release() takes ownership.
+        let m = crate::value::ArenaMark::new_full(
+            mark.position(),
+            mark.dtor_len(),
+            mark.custom_ptrs_len(),
+            mark.bump_depth(),
         );
+        unsafe { (*heap_ptr).release(m) };
     }
-    crate::value::heap::heap_arena_reset(mark);
     (SIG_OK, Value::NIL)
 }
 
@@ -348,6 +335,8 @@ pub(crate) fn prim_arena_allocs(args: &[Value]) -> (SignalBits, Value) {
 }
 
 /// (arena/peak) or (arena/peak :global) — return peak object count (high-water mark)
+///
+/// :global is an alias for the default (same FiberHeap after issue-525).
 pub(crate) fn prim_arena_peak(args: &[Value]) -> (SignalBits, Value) {
     if args.len() > 1 {
         return (
@@ -358,29 +347,24 @@ pub(crate) fn prim_arena_peak(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    let is_global = args.len() == 1 && {
-        if args[0].as_keyword_name() == Some("global") {
-            true
-        } else {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "value-error",
-                    "arena/peak: argument must be :global".to_string(),
-                ),
-            );
-        }
-    };
+    if args.len() == 1 && args[0].as_keyword_name() != Some("global") {
+        return (
+            SIG_ERROR,
+            error_val(
+                "value-error",
+                "arena/peak: argument must be :global".to_string(),
+            ),
+        );
+    }
     let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
-    let peak = if is_global || heap_ptr.is_null() {
-        crate::value::heap::heap_arena_peak()
-    } else {
-        unsafe { (*heap_ptr).peak_alloc_count() }
-    };
+    debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
+    let peak = unsafe { (*heap_ptr).peak_alloc_count() };
     (SIG_OK, Value::int(peak as i64))
 }
 
 /// (arena/reset-peak) or (arena/reset-peak :global) — reset peak to current count, return previous peak
+///
+/// :global is an alias for the default (same FiberHeap after issue-525).
 pub(crate) fn prim_arena_reset_peak(args: &[Value]) -> (SignalBits, Value) {
     if args.len() > 1 {
         return (
@@ -394,25 +378,18 @@ pub(crate) fn prim_arena_reset_peak(args: &[Value]) -> (SignalBits, Value) {
             ),
         );
     }
-    let is_global = args.len() == 1 && {
-        if args[0].as_keyword_name() == Some("global") {
-            true
-        } else {
-            return (
-                SIG_ERROR,
-                error_val(
-                    "value-error",
-                    "arena/reset-peak: argument must be :global".to_string(),
-                ),
-            );
-        }
-    };
+    if args.len() == 1 && args[0].as_keyword_name() != Some("global") {
+        return (
+            SIG_ERROR,
+            error_val(
+                "value-error",
+                "arena/reset-peak: argument must be :global".to_string(),
+            ),
+        );
+    }
     let heap_ptr = crate::value::fiber_heap::current_heap_ptr();
-    let prev = if is_global || heap_ptr.is_null() {
-        crate::value::heap::heap_arena_reset_peak()
-    } else {
-        unsafe { (*heap_ptr).reset_peak() }
-    };
+    debug_assert!(!heap_ptr.is_null(), "root heap must always be installed");
+    let prev = unsafe { (*heap_ptr).reset_peak() };
     (SIG_OK, Value::int(prev as i64))
 }
 
@@ -451,7 +428,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_arena_count,
         signal: Signal::errors(),
         arity: Arity::Range(0, 1),
-        doc: "Return current heap object count. :fiber (default) = bumpalo count for child fibers (0 for root), :global = HEAP_ARENA count.",
+        doc: "Return current heap object count. :fiber (default) and :global both return the current FiberHeap count.",
         params: &["scope?"],
         category: "meta",
         example: "(arena/count) or (arena/count :fiber) or (arena/count :global)",
@@ -462,7 +439,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_scope_stats,
         signal: Signal { bits: SignalBits::new(SIG_QUERY.0 | SIG_ERROR.0), propagates: 0 },
         arity: Arity::Exact(0),
-        doc: "Return scope allocation runtime stats as {:enters N :dtors-run N}. Only non-zero inside child fibers.",
+        doc: "Return scope allocation runtime stats as {:enters N :dtors-run N}. Returns live scope stats for the current fiber.",
         params: &[],
         category: "meta",
         example: "(arena/scope-stats)",
@@ -495,7 +472,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
          func: prim_arena_bytes,
          signal: Signal::errors(),
          arity: Arity::Range(0, 1),
-         doc: "Return bytes consumed. :fiber (default) = bumpalo bytes, :global = estimated from object count × 128.",
+         doc: "Return bytes consumed by the current FiberHeap. :fiber (default) and :global both return real allocated_bytes().",
          params: &["scope?"],
          category: "meta",
          example: "(arena/bytes) or (arena/bytes :fiber) or (arena/bytes :global)",
@@ -506,10 +483,10 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_arena_checkpoint,
         signal: Signal::errors(),
         arity: Arity::Exact(0),
-        doc: "Return an opaque mark for the current root-fiber arena position. Pass to arena/reset to reclaim all objects allocated after this point. Dangerous: invalidates all Values allocated after the mark.",
+        doc: "Return an opaque checkpoint for the current arena position. Pass to arena/reset only. The return value is an opaque external — do not treat it as an integer. Dangerous: invalidates all Values allocated after the mark.",
         params: &[],
         category: "meta",
-        example: "(arena/checkpoint)",
+        example: "(let ((m (arena/checkpoint))) (cons 1 2) (arena/reset m))",
         aliases: &[],
     },
     PrimitiveDef {
@@ -517,7 +494,7 @@ pub(crate) const PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_arena_reset,
         signal: Signal::errors(),
         arity: Arity::Exact(1),
-        doc: "Reclaim all root-fiber arena objects allocated after mark (from arena/checkpoint). Runs Drop for freed objects. Dangerous: any Value pointing into the freed region is now invalid.",
+        doc: "Reclaim arena objects allocated after checkpoint mark. Runs destructors for freed objects. Bump memory is not reclaimed. Dangerous: any Value pointing into the freed region is now invalid.",
         params: &["mark"],
         category: "meta",
         example: "(let ((m (arena/checkpoint))) (cons 1 2) (arena/reset m))",

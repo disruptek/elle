@@ -370,3 +370,37 @@
 # test_root_fiber_count_nonzero
 # After a full VM startup (stdlib loaded), arena/count on root must be > 0.
 (assert-true (> (arena/count) 0) "root fiber arena/count is positive after stdlib load")
+
+# ── arena/checkpoint (opaque mark) ────────────────────────────────
+
+# test_checkpoint_reset_roundtrip
+# After reset, any allocations after the checkpoint are gone.
+# Note: (arena/checkpoint) itself allocates an External, so snapshot
+# count BEFORE taking the checkpoint, then verify reset returns to that count.
+(let* ((before (arena/count))
+       (m (arena/checkpoint))
+       (_ (list 1 2 3))
+       (after-alloc (arena/count))
+       (_ (arena/reset m))
+       (after-reset (arena/count)))
+  (assert-eq (> after-alloc before) true "count increased after alloc")
+  (assert-eq after-reset before "count restored after reset"))
+
+# test_checkpoint_is_opaque
+# arena/reset should reject integers (old checkpoint format).
+(assert-err-kind (fn [] (arena/reset 42)) :type-error
+  "arena/reset rejects integer (expected opaque checkpoint)")
+
+# test_checkpoint_reset_destructors_run
+# Objects allocated after checkpoint are logically freed (destructors run).
+# We verify via arena/count decreasing after reset.
+# Snapshot count BEFORE taking the checkpoint (checkpoint itself allocates an External).
+(let* ((before (arena/count))
+       (m (arena/checkpoint))
+       (_ (string "hello"))
+       (_ (string "world"))
+       (after-alloc (arena/count))
+       (_ (arena/reset m))
+       (after-reset (arena/count)))
+  (assert-eq (> after-alloc before) true "strings allocated")
+  (assert-eq after-reset before "count restored: destructors ran"))

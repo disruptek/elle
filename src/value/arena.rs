@@ -115,21 +115,6 @@ pub fn heap_arena_release(mark: ArenaMark) {
     unsafe { (*heap_ptr).release(mark) };
 }
 
-/// Return the current arena position as an opaque checkpoint.
-///
-/// Retained for backward compatibility. In chunk 4, primitives
-/// switch to using ArenaMark directly.
-pub fn heap_arena_checkpoint() -> usize {
-    crate::value::fiber_heap::with_current_heap_mut(|h| h.len()).unwrap_or(0)
-}
-
-/// No-op stub — replaced by FiberHeap::release in chunk 4.
-pub fn heap_arena_reset(_mark: usize) {
-    // Intentional no-op: bumpalo does not support position-based
-    // deallocation. This stub exists to keep compilation passing
-    // until chunk 4 rewrites arena/checkpoint and arena/reset.
-}
-
 /// Current number of live objects in the thread-local (root) heap.
 pub fn heap_arena_len() -> usize {
     crate::value::fiber_heap::with_current_heap_mut(|h| h.len()).unwrap_or(0)
