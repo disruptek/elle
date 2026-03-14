@@ -1,10 +1,11 @@
 //! io_uring submission and wait methods for async I/O.
 
-use crate::io::aio::{Completion, PendingOp, TIMEOUT_USER_DATA_TAG};
+use crate::io::aio::{PendingOp, TIMEOUT_USER_DATA_TAG};
 use crate::io::completion::process_raw_completion;
 use crate::io::pool::{BufferHandle, BufferPool};
 use crate::io::request::{ConnectAddr, IoOp};
 use crate::io::types::{FdState, PortKey};
+use crate::io::Completion;
 use std::collections::{HashMap, VecDeque};
 use std::os::unix::io::RawFd;
 use std::time::Duration;

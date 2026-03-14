@@ -1,9 +1,10 @@
 //! Completion processing for async I/O operations.
 
-use crate::io::aio::{Completion, PendingOp};
+use crate::io::aio::PendingOp;
 use crate::io::pool::{BufferHandle, BufferPool};
 use crate::io::request::{ConnectAddr, IoOp};
 use crate::io::types::{FdState, FdStatus, PortKey};
+use crate::io::Completion;
 use crate::port::{Encoding, Port, PortKind};
 use crate::value::heap::TableKey;
 use crate::value::{error_val, Value};

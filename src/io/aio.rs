@@ -1,46 +1,20 @@
 //! AsyncBackend — asynchronous I/O backend.
 //!
 //! Uses io_uring on Linux (feature-gated), thread-pool fallback elsewhere.
-//! Wrapped as ExternalObject with type_name "io-backend" (same as SyncBackend).
 
 use crate::io::completion;
 use crate::io::pool::{BufferHandle, BufferPool};
 use crate::io::request::{ConnectAddr, IoOp, IoRequest};
 use crate::io::threadpool::{PoolCompletion, PoolOp, StdinOpKind, StdinThread, ThreadPoolBackend};
 use crate::io::types::{FdState, PortKey};
+use crate::io::Completion;
 use crate::port::{Encoding, Port, PortKind};
-use crate::value::heap::TableKey;
 use crate::value::{error_val, Value};
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::os::unix::io::RawFd;
 use std::time::Duration;
-
-/// Completion from an async I/O operation.
-pub(crate) struct Completion {
-    pub(crate) id: u64,
-    pub(crate) result: Result<Value, Value>,
-}
-
-impl Completion {
-    /// Convert to an Elle struct: {:id n :value v :error nil} or {:id n :value nil :error e}
-    pub(crate) fn to_value(&self) -> Value {
-        let mut fields = BTreeMap::new();
-        fields.insert(TableKey::Keyword("id".into()), Value::int(self.id as i64));
-        match &self.result {
-            Ok(v) => {
-                fields.insert(TableKey::Keyword("value".into()), *v);
-                fields.insert(TableKey::Keyword("error".into()), Value::NIL);
-            }
-            Err(e) => {
-                fields.insert(TableKey::Keyword("value".into()), Value::NIL);
-                fields.insert(TableKey::Keyword("error".into()), *e);
-            }
-        }
-        Value::struct_from(fields)
-    }
-}
 
 /// Pending async I/O operation.
 ///
@@ -758,6 +732,24 @@ impl AsyncBackend {
     }
 }
 
+impl crate::io::IoBackend for AsyncBackend {
+    fn submit(&self, request: &IoRequest) -> Result<u64, String> {
+        self.submit(request)
+    }
+
+    fn poll(&self) -> Vec<Completion> {
+        self.poll()
+    }
+
+    fn wait(&self, timeout_ms: i64) -> Result<Vec<Completion>, String> {
+        self.wait(timeout_ms)
+    }
+
+    fn cancel(&self, id: u64) -> Result<(), String> {
+        self.cancel(id)
+    }
+}
+
 impl AsyncBackendInner {
     /// Drain completions from the platform backend into self.completions.
     fn drain_platform_completions(&mut self) {
@@ -917,6 +909,7 @@ mod tests {
     use super::*;
     use crate::io::request::{IoOp, IoRequest};
     use crate::port::{Direction, Encoding, Port};
+    use crate::value::heap::TableKey;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
