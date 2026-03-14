@@ -1,7 +1,5 @@
 //! Macro call expansion via VM evaluation
 //!
-//! Macro call expansion via VM evaluation
-//!
 //! On first invocation, the macro body `(fn (params...) template)` is compiled
 //! and stored in `MacroDef.cached_transformer`. Subsequent invocations skip the
 //! full analyze/lower/emit pipeline and call the cached closure directly via
