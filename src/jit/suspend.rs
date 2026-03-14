@@ -228,6 +228,14 @@ mod tests {
         (vm, closure_val)
     }
 
+    /// Extract the BytecodeFrame from a SuspendedFrame::Bytecode variant.
+    fn as_bytecode_frame(frame: &SuspendedFrame) -> &BytecodeFrame {
+        match frame {
+            SuspendedFrame::Bytecode(f) => f,
+            _ => panic!("expected SuspendedFrame::Bytecode"),
+        }
+    }
+
     #[test]
     fn test_jit_yield_builds_correct_suspended_frame() {
         // 2 params, 1 local, 3 operands
@@ -278,7 +286,7 @@ mod tests {
         // Check suspended frame
         let frames = vm.fiber.suspended.as_ref().unwrap();
         assert_eq!(frames.len(), 1);
-        let frame = &frames[0];
+        let frame = as_bytecode_frame(&frames[0]);
 
         assert_eq!(frame.ip, 42);
         assert_eq!(&*frame.bytecode, &bytecode);
@@ -321,7 +329,7 @@ mod tests {
         assert_eq!(result, YIELD_SENTINEL);
 
         let frames = vm.fiber.suspended.as_ref().unwrap();
-        let frame = &frames[0];
+        let frame = as_bytecode_frame(&frames[0]);
         assert_eq!(frame.stack.len(), 0);
         assert_eq!(frame.ip, 0);
     }
@@ -347,7 +355,7 @@ mod tests {
             closure_val.to_bits(),
         );
 
-        let frame = &vm.fiber.suspended.as_ref().unwrap()[0];
+        let frame = as_bytecode_frame(&vm.fiber.suspended.as_ref().unwrap()[0]);
         assert_eq!(frame.stack.len(), 2);
         assert_eq!(frame.stack[0].as_int(), Some(1));
         assert_eq!(frame.stack[1].as_int(), Some(2));
@@ -378,7 +386,7 @@ mod tests {
             closure_val.to_bits(),
         );
 
-        let frame = &vm.fiber.suspended.as_ref().unwrap()[0];
+        let frame = as_bytecode_frame(&vm.fiber.suspended.as_ref().unwrap()[0]);
         assert_eq!(frame.stack.len(), 3);
         assert_eq!(frame.stack[0].as_int(), Some(100));
         assert_eq!(frame.stack[1].as_int(), Some(200));
@@ -409,7 +417,7 @@ mod tests {
             closure_val.to_bits(),
         );
 
-        let frame = &vm.fiber.suspended.as_ref().unwrap()[0];
+        let frame = as_bytecode_frame(&vm.fiber.suspended.as_ref().unwrap()[0]);
         assert_eq!(frame.stack.len(), 30);
         for i in 0..30 {
             assert_eq!(
@@ -457,7 +465,7 @@ mod tests {
             closure_val.to_bits(),
         );
 
-        let frame = &vm.fiber.suspended.as_ref().unwrap()[0];
+        let frame = as_bytecode_frame(&vm.fiber.suspended.as_ref().unwrap()[0]);
         assert_eq!(frame.ip, 20); // resume_ip from yield point 1
         assert_eq!(frame.stack.len(), 4);
     }
@@ -488,7 +496,7 @@ mod tests {
             closure_val.to_bits(),
         );
 
-        let frame = &vm.fiber.suspended.as_ref().unwrap()[0];
+        let frame = as_bytecode_frame(&vm.fiber.suspended.as_ref().unwrap()[0]);
         assert_eq!(frame.stack.len(), 4);
         assert!(frame.stack[0].is_nil());
         assert_eq!(frame.stack[1].as_bool(), Some(true));
