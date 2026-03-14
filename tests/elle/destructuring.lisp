@@ -664,9 +664,13 @@
 (assert-eq ((fn (a &keys {:x x :y y}) (+ x y)) 1 :x 10 :y 20) 30
   "keys destructure")
 
-# test_keys_missing_key_destructure — missing key produces nil (keyword args are optional)
-(assert-eq ((fn (a &keys {:x x :y y}) y) 1 :x 10) nil
-  "keys missing key destructure")
+# test_keys_missing_key_destructure — missing key now signals an error
+(assert-err (fn () ((fn (a &keys {:x x :y y}) y) 1 :x 10))
+  "keys missing key destructure signals error")
+
+# test_keys_all_present — all keys provided, still works
+(assert-eq ((fn (a &keys {:x x :y y}) (+ x y)) 1 :x 10 :y 20) 30
+  "keys destructure all present")
 
 # test_keys_with_opt
 (assert-list-eq ((fn (a &opt b &keys opts) (list a b opts)) 1)
