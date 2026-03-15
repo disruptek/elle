@@ -215,75 +215,111 @@ fn test_save_restore() {
 }
 
 #[test]
-fn test_active_allocator_starts_null() {
+fn test_active_alloc_starts_as_slab() {
     let heap = FiberHeap::new();
-    assert!(heap.active_allocator().is_null());
+    assert!(matches!(heap.active_allocator, ActiveAlloc::Slab));
 }
 
 #[test]
-fn test_init_active_allocator_points_to_bump() {
-    let mut heap = Box::new(FiberHeap::new());
+fn test_init_active_allocator_is_noop() {
+    let mut heap = FiberHeap::new();
     heap.init_active_allocator();
-    let ptr = heap.active_allocator();
-    assert!(!ptr.is_null());
-    // The pointer should target the bump field inside the same FiberHeap.
-    let bump_addr = &heap.bump as *const bumpalo::Bump;
-    assert_eq!(ptr, bump_addr);
+    // Still Slab after init (no scope bumps active).
+    assert!(matches!(heap.active_allocator, ActiveAlloc::Slab));
 }
 
 #[test]
-fn test_active_allocator_survives_clear() {
-    let mut heap = Box::new(FiberHeap::new());
-    heap.init_active_allocator();
-    let ptr_before = heap.active_allocator();
-    heap.alloc(HeapObject::LString {
-        s: "x".into(),
-        traits: Value::NIL,
-    });
-    heap.clear();
-    let ptr_after = heap.active_allocator();
-    // Pointer should still be valid and point to the same bump.
-    assert!(!ptr_after.is_null());
-    assert_eq!(ptr_before, ptr_after);
+fn test_active_alloc_scope_sets_bump_variant() {
+    let mut heap = FiberHeap::new();
+    heap.push_scope_mark();
+    assert!(matches!(heap.active_allocator, ActiveAlloc::Bump(_)));
 }
 
 #[test]
-fn test_save_restore_active_allocator() {
-    let mut heap = Box::new(FiberHeap::new());
-    heap.init_active_allocator();
-    let heap_ptr = &mut *heap as *mut FiberHeap;
+fn test_active_alloc_pop_restores_slab() {
+    let mut heap = FiberHeap::new();
+    heap.push_scope_mark();
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    heap.pop_scope_mark_and_release();
+    assert!(matches!(heap.active_allocator, ActiveAlloc::Slab));
+}
 
-    unsafe { install_fiber_heap(heap_ptr) };
+#[test]
+fn test_root_alloc_tracked_in_root_allocs() {
+    let mut heap = FiberHeap::new();
+    assert_eq!(heap.root_allocs.len(), 0);
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    assert_eq!(heap.root_allocs.len(), 1);
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    assert_eq!(heap.root_allocs.len(), 2);
+}
 
-    let saved = save_active_allocator();
-    assert!(!saved.is_null());
+#[test]
+fn test_scope_alloc_not_tracked_in_root_allocs() {
+    let mut heap = FiberHeap::new();
+    heap.push_scope_mark();
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    // Scope bump allocations must not appear in root_allocs.
+    assert_eq!(heap.root_allocs.len(), 0);
+    heap.pop_scope_mark_and_release();
+}
 
-    // Simulate Package 5: active_allocator changes to something else
-    restore_active_allocator(std::ptr::null());
-    assert!(save_active_allocator().is_null());
+#[test]
+fn test_release_frees_root_slab_slots() {
+    let mut heap = FiberHeap::new();
+    // Alloc 2, mark, alloc 3 more, release mark → live_count back to 2.
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    let mark = heap.mark();
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    assert_eq!(heap.root_slab.live_count(), 5);
+    heap.release(mark);
+    assert_eq!(heap.root_slab.live_count(), 2);
+    assert_eq!(heap.root_allocs.len(), 2);
+}
 
-    // Restore original
-    restore_active_allocator(saved);
-    assert_eq!(save_active_allocator(), saved);
+#[test]
+fn test_memory_stabilizes_after_release() {
+    // Alloc N objects, release all, alloc N more — slab should reuse slots,
+    // so allocated_bytes() (committed chunk memory) must not grow.
+    let mut heap = FiberHeap::new();
+    let mark = heap.mark();
+    for _ in 0..50 {
+        heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    }
+    let bytes_after_first_round = heap.allocated_bytes();
+    heap.release(mark);
+    assert_eq!(heap.root_slab.live_count(), 0);
 
-    uninstall_fiber_heap();
+    let mark2 = heap.mark();
+    for _ in 0..50 {
+        heap.alloc(HeapObject::Cons(Cons::new(Value::NIL, Value::NIL)));
+    }
+    let bytes_after_second_round = heap.allocated_bytes();
+    heap.release(mark2);
+
+    assert_eq!(
+        bytes_after_first_round, bytes_after_second_round,
+        "slab must reuse freed slots: allocated_bytes must not grow"
+    );
 }
 
 #[test]
 fn test_save_active_allocator_no_heap_installed() {
     uninstall_fiber_heap();
-    // No heap installed — returns null, no panic
-    assert!(save_active_allocator().is_null());
+    // No heap installed — returns Slab (the safe default), no panic.
+    assert!(matches!(save_active_allocator(), ActiveAlloc::Slab));
 }
 
 #[test]
 fn test_restore_active_allocator_no_heap_installed() {
     uninstall_fiber_heap();
-    // No heap installed — no-op, no panic
-    let fake_ptr = 0x1234 as *const bumpalo::Bump;
-    restore_active_allocator(fake_ptr);
-    // Still no heap, so save returns null
-    assert!(save_active_allocator().is_null());
+    // No heap installed — no-op, no panic.
+    restore_active_allocator(ActiveAlloc::Slab);
+    assert!(matches!(save_active_allocator(), ActiveAlloc::Slab));
 }
 
 // ── Scope mark stack tests ────────────────────────────────────
@@ -400,6 +436,10 @@ fn test_scope_bump_nested_reclaims_inner_only() {
     let mut heap = FiberHeap::new();
     heap.init_active_allocator();
 
+    // Record the root-slab baseline BEFORE any scope.
+    // No root allocations are made in this test (all allocs go to scope bumps).
+    let bytes_root_baseline = heap.allocated_bytes();
+
     heap.push_scope_mark();
     heap.alloc(HeapObject::LString {
         s: "outer".into(),
@@ -424,8 +464,11 @@ fn test_scope_bump_nested_reclaims_inner_only() {
 
     heap.pop_scope_mark_and_release(); // pops outer
     let bytes_after_outer_pop = heap.allocated_bytes();
-    // Both bumps reclaimed, back to root-only
-    assert_eq!(bytes_after_outer_pop, 0);
+    // Both scope bumps reclaimed. Root slab baseline is unchanged (no root allocs).
+    assert_eq!(
+        bytes_after_outer_pop, bytes_root_baseline,
+        "scope bump memory should be fully reclaimed (root slab unchanged)"
+    );
 }
 
 #[test]
@@ -485,10 +528,10 @@ fn test_ensure_root_heap_idempotent() {
 
 #[test]
 fn test_root_heap_active_allocator_initialized() {
-    // After ensure_root_heap(), active_allocator must be non-null.
+    // After ensure_root_heap(), active_allocator must be Slab.
     let ptr = ensure_root_heap();
     let heap = unsafe { &*ptr };
-    assert!(!heap.active_allocator().is_null());
+    assert!(matches!(heap.active_allocator, ActiveAlloc::Slab));
 }
 
 #[test]
