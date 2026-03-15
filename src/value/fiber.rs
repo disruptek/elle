@@ -133,10 +133,6 @@ pub struct BytecodeFrame {
     pub ip: usize,
     /// Operand stack state (empty for signal suspension)
     pub stack: Vec<Value>,
-    /// Saved `active_allocator` pointer from the FiberHeap at suspension time.
-    /// Null only in test contexts before VM::new() is called. Restored on resume
-    /// via `restore_active_allocator()`.
-    pub active_allocator: *const bumpalo::Bump,
     /// Location map for mapping bytecode offsets to source locations
     pub location_map: Rc<LocationMap>,
 }
@@ -265,8 +261,8 @@ impl From<SignalBits> for u32 {
 // owner). Re-exported here so existing `use crate::value::fiber::SIG_*`
 // imports continue to work.
 pub use crate::signals::{
-    SIG_ABORT, SIG_DEBUG, SIG_ERROR, SIG_FFI, SIG_HALT, SIG_IO, SIG_OK, SIG_PROPAGATE, SIG_QUERY,
-    SIG_RESUME, SIG_TERMINAL, SIG_YIELD,
+    SIG_ABORT, SIG_DEBUG, SIG_ERROR, SIG_EXEC, SIG_FFI, SIG_HALT, SIG_IO, SIG_OK, SIG_PROPAGATE,
+    SIG_QUERY, SIG_RESUME, SIG_TERMINAL, SIG_YIELD,
 };
 
 /// Fiber lifecycle status. Diverges from Janet: caught SIG_ERROR leaves
