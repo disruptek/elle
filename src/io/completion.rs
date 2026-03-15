@@ -220,7 +220,7 @@ pub(super) fn process_raw_completion(
                     // Connect ops use PendingOp::Connect, not PendingOp::Port
                     unreachable!("Connect should use PendingOp::Connect variant")
                 }
-                IoOp::Spawn { .. } | IoOp::ProcessWait => {
+                IoOp::Spawn(_) | IoOp::ProcessWait => {
                     // Subprocess ops are dispatched before the port guard and never
                     // produce a PendingOp::Port entry — they cannot reach this branch.
                     unreachable!("Spawn/ProcessWait should be dispatched before port guard")

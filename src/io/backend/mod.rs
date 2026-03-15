@@ -17,7 +17,9 @@ mod network;
 #[cfg(test)]
 mod tests;
 
-use crate::io::request::{IoOp, IoRequest, ProcessHandle, ProcessState, StdioDisposition};
+use crate::io::request::{
+    IoOp, IoRequest, ProcessHandle, ProcessState, SpawnRequest, StdioDisposition,
+};
 use crate::io::types::{FdState, FdStatus, PortKey};
 use crate::port::{Direction, Encoding, Port, PortKind};
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
@@ -73,25 +75,8 @@ impl SyncBackend {
         // Subprocess ops — dispatched before the port guard.
         // Spawn: request.port is Value::NIL (no port needed).
         // ProcessWait: request.port carries a ProcessHandle (not a Port).
-        if let IoOp::Spawn {
-            ref program,
-            ref args,
-            ref env,
-            ref cwd,
-            stdin,
-            stdout,
-            stderr,
-        } = request.op
-        {
-            return self.execute_spawn(
-                program,
-                args,
-                env.as_deref(),
-                cwd.as_deref(),
-                stdin,
-                stdout,
-                stderr,
-            );
+        if let IoOp::Spawn(ref req) = request.op {
+            return self.execute_spawn(req);
         }
         if let IoOp::ProcessWait = request.op {
             return self.execute_process_wait(&request.port);
@@ -154,7 +139,7 @@ impl SyncBackend {
                     SIG_ERROR,
                     error_val("io-error", "accept: port is not a listener"),
                 ),
-                IoOp::Connect { .. } | IoOp::Sleep { .. } | IoOp::Spawn { .. } | IoOp::ProcessWait => unreachable!(), // handled above
+                IoOp::Connect { .. } | IoOp::Sleep { .. } | IoOp::Spawn(_) | IoOp::ProcessWait => unreachable!(), // handled above
                 IoOp::SendTo { .. } | IoOp::RecvFrom { .. } => (
                     SIG_ERROR,
                     error_val("io-error", "UDP operations require a UDP socket"),
@@ -520,41 +505,32 @@ impl SyncBackend {
         Self::bytes_to_value(port, data)
     }
 
-    fn execute_spawn(
-        &self,
-        program: &str,
-        args: &[String],
-        env: Option<&[(String, String)]>,
-        cwd: Option<&str>,
-        stdin_disp: StdioDisposition,
-        stdout_disp: StdioDisposition,
-        stderr_disp: StdioDisposition,
-    ) -> (SignalBits, Value) {
+    fn execute_spawn(&self, req: &SpawnRequest) -> (SignalBits, Value) {
         use crate::value::heap::TableKey;
         use std::process::{Command, Stdio};
 
-        let mut cmd = Command::new(program);
-        cmd.args(args);
-        if let Some(env_pairs) = env {
+        let mut cmd = Command::new(&req.program);
+        cmd.args(&req.args);
+        if let Some(ref env_pairs) = req.env {
             cmd.env_clear();
             for (k, v) in env_pairs {
                 cmd.env(k, v);
             }
         }
-        if let Some(dir) = cwd {
+        if let Some(ref dir) = req.cwd {
             cmd.current_dir(dir);
         }
-        cmd.stdin(match stdin_disp {
+        cmd.stdin(match req.stdin {
             StdioDisposition::Pipe => Stdio::piped(),
             StdioDisposition::Inherit => Stdio::inherit(),
             StdioDisposition::Null => Stdio::null(),
         });
-        cmd.stdout(match stdout_disp {
+        cmd.stdout(match req.stdout {
             StdioDisposition::Pipe => Stdio::piped(),
             StdioDisposition::Inherit => Stdio::inherit(),
             StdioDisposition::Null => Stdio::null(),
         });
-        cmd.stderr(match stderr_disp {
+        cmd.stderr(match req.stderr {
             StdioDisposition::Pipe => Stdio::piped(),
             StdioDisposition::Inherit => Stdio::inherit(),
             StdioDisposition::Null => Stdio::null(),
@@ -592,7 +568,7 @@ impl SyncBackend {
             }
             Err(e) => (
                 SIG_ERROR,
-                error_val("exec-error", format!("sys/exec: {}: {}", program, e)),
+                error_val("exec-error", format!("sys/exec: {}: {}", req.program, e)),
             ),
         }
     }

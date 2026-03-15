@@ -20,6 +20,18 @@ pub(crate) enum StdioDisposition {
     Null,
 }
 
+/// Subprocess configuration, shared between IoOp::Spawn and the backend helpers.
+#[derive(Debug)]
+pub(crate) struct SpawnRequest {
+    pub program: String,
+    pub args: Vec<String>,
+    pub env: Option<Vec<(String, String)>>,
+    pub cwd: Option<String>,
+    pub stdin: StdioDisposition,
+    pub stdout: StdioDisposition,
+    pub stderr: StdioDisposition,
+}
+
 /// I/O operation descriptor.
 #[derive(Debug)]
 pub(crate) enum IoOp {
@@ -51,15 +63,7 @@ pub(crate) enum IoOp {
     Sleep { duration: Duration },
     /// Spawn a subprocess. Returns a struct:
     /// {:pid int :stdin port|nil :stdout port|nil :stderr port|nil :process <external:process>}
-    Spawn {
-        program: String,
-        args: Vec<String>,
-        env: Option<Vec<(String, String)>>, // None = inherit parent environment
-        cwd: Option<String>,                // None = inherit parent cwd
-        stdin: StdioDisposition,
-        stdout: StdioDisposition,
-        stderr: StdioDisposition,
-    },
+    Spawn(SpawnRequest),
     /// Wait for a subprocess to exit. Returns exit code (int).
     /// The request.port field carries the ProcessHandle value.
     ProcessWait,

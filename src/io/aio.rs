@@ -5,7 +5,7 @@
 use crate::io::completion;
 use crate::io::pool::{BufferHandle, BufferPool};
 use crate::io::request::{
-    ConnectAddr, IoOp, IoRequest, ProcessHandle, ProcessState, StdioDisposition,
+    ConnectAddr, IoOp, IoRequest, ProcessHandle, ProcessState, SpawnRequest, StdioDisposition,
 };
 use crate::io::threadpool::{PoolCompletion, PoolOp, StdinOpKind, StdinThread, ThreadPoolBackend};
 use crate::io::types::{FdState, PortKey};
@@ -147,17 +147,8 @@ impl AsyncBackend {
         }
 
         // Subprocess ops: portless (Spawn) or ProcessHandle-in-port (ProcessWait).
-        if let IoOp::Spawn {
-            ref program,
-            ref args,
-            ref env,
-            ref cwd,
-            stdin,
-            stdout,
-            stderr,
-        } = request.op
-        {
-            return self.submit_spawn(program, args, env, cwd, stdin, stdout, stderr);
+        if let IoOp::Spawn(ref req) = request.op {
+            return self.submit_spawn(req);
         }
         if let IoOp::ProcessWait = request.op {
             return self.submit_process_wait(&request.port);
@@ -586,16 +577,7 @@ impl AsyncBackend {
         Ok(id)
     }
 
-    fn submit_spawn(
-        &self,
-        program: &str,
-        args: &[String],
-        env: &Option<Vec<(String, String)>>,
-        cwd: &Option<String>,
-        stdin_disp: StdioDisposition,
-        stdout_disp: StdioDisposition,
-        stderr_disp: StdioDisposition,
-    ) -> Result<u64, String> {
+    fn submit_spawn(&self, req: &SpawnRequest) -> Result<u64, String> {
         use crate::value::heap::TableKey;
 
         let mut inner = self.inner.borrow_mut();
@@ -603,20 +585,20 @@ impl AsyncBackend {
         inner.next_id += 1;
         let buf_handle = inner.buffer_pool.alloc(0);
 
-        let mut cmd = std::process::Command::new(program);
-        cmd.args(args);
-        if let Some(ref env_pairs) = env {
+        let mut cmd = std::process::Command::new(&req.program);
+        cmd.args(&req.args);
+        if let Some(ref env_pairs) = req.env {
             cmd.env_clear();
             for (k, v) in env_pairs {
                 cmd.env(k, v);
             }
         }
-        if let Some(ref dir) = cwd {
+        if let Some(ref dir) = req.cwd {
             cmd.current_dir(dir);
         }
-        cmd.stdin(stdio_to_std(stdin_disp));
-        cmd.stdout(stdio_to_std(stdout_disp));
-        cmd.stderr(stdio_to_std(stderr_disp));
+        cmd.stdin(stdio_to_std(req.stdin));
+        cmd.stdout(stdio_to_std(req.stdout));
+        cmd.stderr(stdio_to_std(req.stderr));
 
         let result = match cmd.spawn() {
             Ok(mut child) => {
@@ -674,7 +656,7 @@ impl AsyncBackend {
             }
             Err(e) => Err(error_val(
                 "exec-error",
-                format!("sys/exec: {}: {}", program, e),
+                format!("sys/exec: {}: {}", req.program, e),
             )),
         };
 
@@ -1043,7 +1025,7 @@ impl AsyncBackendInner {
             | IoOp::RecvFrom { .. }
             | IoOp::Shutdown { .. }
             | IoOp::Sleep { .. }
-            | IoOp::Spawn { .. }
+            | IoOp::Spawn(_)
             | IoOp::ProcessWait => return Err("io/submit: unsupported operation on stdin".into()),
         };
         stdin_thread.submit(id, op_kind)?;
@@ -1550,10 +1532,10 @@ mod tests {
 
     #[test]
     fn test_async_submit_spawn_echo() {
-        use crate::io::request::StdioDisposition;
+        use crate::io::request::{SpawnRequest, StdioDisposition};
         let backend = AsyncBackend::new().unwrap();
         let req = IoRequest {
-            op: IoOp::Spawn {
+            op: IoOp::Spawn(SpawnRequest {
                 program: "/bin/echo".to_string(),
                 args: vec!["hello-async".to_string()],
                 env: None,
@@ -1561,7 +1543,7 @@ mod tests {
                 stdin: StdioDisposition::Null,
                 stdout: StdioDisposition::Pipe,
                 stderr: StdioDisposition::Null,
-            },
+            }),
             port: Value::NIL,
             timeout: None,
         };
@@ -1605,7 +1587,6 @@ mod tests {
         match id {
             Err(e) if e.contains("thread-pool") => {
                 // Thread-pool backend: ProcessWait not supported. Skip.
-                return;
             }
             Err(e) => panic!("submit failed unexpectedly: {}", e),
             Ok(id) => {

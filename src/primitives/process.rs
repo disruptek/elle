@@ -1,5 +1,5 @@
 //! Process-related primitives
-use crate::io::request::{IoOp, IoRequest, ProcessHandle, StdioDisposition};
+use crate::io::request::{IoOp, IoRequest, ProcessHandle, SpawnRequest, StdioDisposition};
 use crate::primitives::def::PrimitiveDef;
 use crate::signals::{Signal, SIG_EXEC};
 use crate::value::fiber::{SignalBits, SIG_ERROR, SIG_HALT, SIG_IO, SIG_OK, SIG_YIELD};
@@ -82,20 +82,18 @@ pub(crate) fn prim_sys_args(_args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::array(args))
 }
 
+/// Parsed subprocess options: (env, cwd, stdin, stdout, stderr).
+type ExecOpts = (
+    Option<Vec<(String, String)>>,
+    Option<String>,
+    StdioDisposition,
+    StdioDisposition,
+    StdioDisposition,
+);
+
 /// Parse the optional opts struct for sys/exec.
 /// Returns (env, cwd, stdin, stdout, stderr) or an error tuple.
-fn parse_exec_opts(
-    opts: &Value,
-) -> Result<
-    (
-        Option<Vec<(String, String)>>,
-        Option<String>,
-        StdioDisposition,
-        StdioDisposition,
-        StdioDisposition,
-    ),
-    (SignalBits, Value),
-> {
+fn parse_exec_opts(opts: &Value) -> Result<ExecOpts, (SignalBits, Value)> {
     let fields = match opts.as_struct() {
         Some(f) => f,
         None => {
@@ -310,7 +308,7 @@ fn prim_sys_exec(args: &[Value]) -> (SignalBits, Value) {
         )
     };
 
-    let request = IoRequest::portless(IoOp::Spawn {
+    let request = IoRequest::portless(IoOp::Spawn(SpawnRequest {
         program,
         args: exec_args,
         env,
@@ -318,7 +316,7 @@ fn prim_sys_exec(args: &[Value]) -> (SignalBits, Value) {
         stdin: stdin_disp,
         stdout: stdout_disp,
         stderr: stderr_disp,
-    });
+    }));
     (SIG_YIELD | SIG_IO | SIG_EXEC, request)
 }
 

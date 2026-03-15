@@ -535,10 +535,10 @@ fn test_bytes_to_value_binary_port() {
 
 #[test]
 fn test_execute_spawn_echo() {
-    use crate::io::request::StdioDisposition;
+    use crate::io::request::{SpawnRequest, StdioDisposition};
     let backend = SyncBackend::new();
     let request = IoRequest {
-        op: IoOp::Spawn {
+        op: IoOp::Spawn(SpawnRequest {
             program: "/bin/echo".to_string(),
             args: vec!["hello".to_string()],
             env: None,
@@ -546,7 +546,7 @@ fn test_execute_spawn_echo() {
             stdin: StdioDisposition::Null,
             stdout: StdioDisposition::Pipe,
             stderr: StdioDisposition::Null,
-        },
+        }),
         port: Value::NIL,
         timeout: None,
     };
@@ -584,10 +584,10 @@ fn test_execute_spawn_echo() {
 
 #[test]
 fn test_execute_spawn_nonexistent() {
-    use crate::io::request::StdioDisposition;
+    use crate::io::request::{SpawnRequest, StdioDisposition};
     let backend = SyncBackend::new();
     let request = IoRequest {
-        op: IoOp::Spawn {
+        op: IoOp::Spawn(SpawnRequest {
             program: "/nonexistent/command".to_string(),
             args: vec![],
             env: None,
@@ -595,7 +595,7 @@ fn test_execute_spawn_nonexistent() {
             stdin: StdioDisposition::Null,
             stdout: StdioDisposition::Null,
             stderr: StdioDisposition::Null,
-        },
+        }),
         port: Value::NIL,
         timeout: None,
     };
