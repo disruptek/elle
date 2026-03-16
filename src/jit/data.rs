@@ -95,6 +95,55 @@ pub extern "C" fn elle_jit_is_set_mut(a: u64) -> u64 {
     Value::bool(val.is_set_mut()).to_bits()
 }
 
+/// Car with silent nil: returns car if cons, NIL otherwise.
+#[no_mangle]
+pub extern "C" fn elle_jit_car_or_nil(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    match val.as_cons() {
+        Some(cons) => cons.first.to_bits(),
+        None => Value::NIL.to_bits(),
+    }
+}
+
+/// Cdr with silent empty-list: returns cdr if cons, EMPTY_LIST otherwise.
+#[no_mangle]
+pub extern "C" fn elle_jit_cdr_or_nil(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    match val.as_cons() {
+        Some(cons) => cons.rest.to_bits(),
+        None => Value::EMPTY_LIST.to_bits(),
+    }
+}
+
+/// Array length: returns length as int for array or @array, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn elle_jit_array_len(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    let len = if let Some(arr) = val.as_array_mut() {
+        arr.borrow().len() as i64
+    } else if let Some(arr) = val.as_array() {
+        arr.len() as i64
+    } else {
+        0
+    };
+    Value::int(len).to_bits()
+}
+
+/// Array ref with silent nil: returns element at index, NIL if out of bounds or not array.
+#[no_mangle]
+pub extern "C" fn elle_jit_array_ref_or_nil(a: u64, index: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    let idx = index as usize;
+    let result = if let Some(arr) = val.as_array_mut() {
+        arr.borrow().get(idx).copied()
+    } else if let Some(arr) = val.as_array() {
+        arr.get(idx).copied()
+    } else {
+        None
+    };
+    result.unwrap_or(Value::NIL).to_bits()
+}
+
 // =============================================================================
 // Box Operations
 // =============================================================================

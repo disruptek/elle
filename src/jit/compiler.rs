@@ -78,6 +78,13 @@ pub(crate) struct RuntimeHelpers {
     pub(crate) is_struct_mut: FuncId,
     pub(crate) is_set: FuncId,
     pub(crate) is_set_mut: FuncId,
+    pub(crate) car_or_nil: FuncId,
+    pub(crate) cdr_or_nil: FuncId,
+    pub(crate) array_len: FuncId,
+    pub(crate) array_ref_or_nil: FuncId,
+    pub(crate) array_push: FuncId,
+    pub(crate) array_extend: FuncId,
+    pub(crate) push_param_frame: FuncId,
     #[allow(dead_code)]
     pub(crate) is_truthy: FuncId,
     pub(crate) make_lbox: FuncId,
@@ -176,6 +183,34 @@ impl JitCompiler {
         builder.symbol(
             "elle_jit_is_set_mut",
             dispatch::elle_jit_is_set_mut as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_car_or_nil",
+            dispatch::elle_jit_car_or_nil as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_cdr_or_nil",
+            dispatch::elle_jit_cdr_or_nil as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_array_len",
+            dispatch::elle_jit_array_len as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_array_ref_or_nil",
+            dispatch::elle_jit_array_ref_or_nil as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_array_push",
+            dispatch::elle_jit_array_push as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_array_extend",
+            dispatch::elle_jit_array_extend as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_push_param_frame",
+            dispatch::elle_jit_push_param_frame as *const u8,
         );
         builder.symbol(
             "elle_jit_make_lbox",
@@ -341,6 +376,13 @@ impl JitCompiler {
             is_struct_mut: declare(module, "elle_jit_is_struct_mut", &unary_sig)?,
             is_set: declare(module, "elle_jit_is_set", &unary_sig)?,
             is_set_mut: declare(module, "elle_jit_is_set_mut", &unary_sig)?,
+            car_or_nil: declare(module, "elle_jit_car_or_nil", &unary_sig)?,
+            cdr_or_nil: declare(module, "elle_jit_cdr_or_nil", &unary_sig)?,
+            array_len: declare(module, "elle_jit_array_len", &unary_sig)?,
+            array_ref_or_nil: declare(module, "elle_jit_array_ref_or_nil", &binary_sig)?,
+            array_push: declare(module, "elle_jit_array_push", &ternary_sig)?,
+            array_extend: declare(module, "elle_jit_array_extend", &ternary_sig)?,
+            push_param_frame: declare(module, "elle_jit_push_param_frame", &ternary_sig)?,
             is_truthy: declare(module, "elle_jit_is_truthy", &unary_sig)?,
             make_lbox: declare(module, "elle_jit_make_lbox", &unary_sig)?,
             load_lbox: declare(module, "elle_jit_load_lbox", &unary_sig)?,

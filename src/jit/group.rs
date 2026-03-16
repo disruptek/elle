@@ -150,19 +150,12 @@ fn has_unsupported_instructions(lir: &LirFunction) -> bool {
                 | LirInstr::CdrDestructure { .. }
                 | LirInstr::ArrayMutRefDestructure { .. }
                 | LirInstr::ArrayMutSliceFrom { .. }
-                | LirInstr::ArrayMutLen { .. }
                 | LirInstr::TableGetOrNil { .. }
                 | LirInstr::TableGetDestructure { .. }
                 | LirInstr::StructRest { .. }
-                | LirInstr::CarOrNil { .. }
-                | LirInstr::CdrOrNil { .. }
-                | LirInstr::ArrayMutRefOrNil { .. }
                 | LirInstr::Eval { .. }
-                | LirInstr::ArrayMutExtend { .. }
-                | LirInstr::ArrayMutPush { .. }
                 | LirInstr::CallArrayMut { .. }
                 | LirInstr::TailCallArrayMut { .. }
-                | LirInstr::PushParamFrame { .. }
                 | LirInstr::CheckSignalBound { .. } => return true,
                 _ => {}
             }

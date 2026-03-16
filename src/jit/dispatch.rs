@@ -367,6 +367,120 @@ pub extern "C" fn elle_jit_pop_param_frame(vm: *mut ()) -> u64 {
     TAG_NIL
 }
 
+/// Push a value onto a mutable @array. Returns new @array or TAG_NIL on error.
+#[no_mangle]
+pub extern "C" fn elle_jit_array_push(array: u64, value: u64, vm: *mut ()) -> u64 {
+    let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
+    let array_val = unsafe { Value::from_bits(array) };
+    let value_val = unsafe { Value::from_bits(value) };
+    if let Some(arr) = array_val.as_array_mut() {
+        let mut vec = arr.borrow().to_vec();
+        vec.push(value_val);
+        Value::array_mut(vec).to_bits()
+    } else {
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "splice: expected array as accumulator, got {}",
+                    array_val.type_name()
+                ),
+            ),
+        ));
+        TAG_NIL
+    }
+}
+
+/// Extend a mutable @array with elements from another array/list. Returns new @array or TAG_NIL on error.
+#[no_mangle]
+pub extern "C" fn elle_jit_array_extend(array: u64, source: u64, vm: *mut ()) -> u64 {
+    let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
+    let array_val = unsafe { Value::from_bits(array) };
+    let source_val = unsafe { Value::from_bits(source) };
+
+    let source_elems: Vec<Value> = if let Some(arr) = source_val.as_array_mut() {
+        arr.borrow().to_vec()
+    } else if let Some(arr) = source_val.as_array() {
+        arr.to_vec()
+    } else if source_val.as_cons().is_some() || source_val.is_empty_list() {
+        match source_val.list_to_vec() {
+            Ok(v) => v,
+            Err(_) => {
+                vm.fiber.signal = Some((
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        "splice: list is not a proper list (dotted pair)",
+                    ),
+                ));
+                return TAG_NIL;
+            }
+        }
+    } else {
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "splice: expected array, tuple, or list, got {}",
+                    source_val.type_name()
+                ),
+            ),
+        ));
+        return TAG_NIL;
+    };
+
+    if let Some(arr) = array_val.as_array_mut() {
+        let mut vec = arr.borrow().to_vec();
+        vec.extend(source_elems);
+        Value::array_mut(vec).to_bits()
+    } else {
+        vm.fiber.signal = Some((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "splice: expected array as accumulator, got {}",
+                    array_val.type_name()
+                ),
+            ),
+        ));
+        TAG_NIL
+    }
+}
+
+/// Push a dynamic parameter frame. pairs_ptr points to alternating [param, value, param, value, ...]
+/// Returns TAG_NIL on success, TAG_NIL with signal set on error.
+#[no_mangle]
+pub extern "C" fn elle_jit_push_param_frame(pairs_ptr: u64, count: u64, vm: *mut ()) -> u64 {
+    let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
+    let count = count as usize;
+    let pairs = unsafe { std::slice::from_raw_parts(pairs_ptr as *const u64, count * 2) };
+
+    let mut frame = Vec::with_capacity(count);
+    for i in 0..count {
+        let param_bits = pairs[i * 2];
+        let val_bits = pairs[i * 2 + 1];
+        let param = unsafe { Value::from_bits(param_bits) };
+        let val = unsafe { Value::from_bits(val_bits) };
+        if let Some((id, _default)) = param.as_parameter() {
+            frame.push((id, val));
+        } else {
+            vm.fiber.signal = Some((
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!("parameterize: {} is not a parameter", param.type_name()),
+                ),
+            ));
+            return TAG_NIL;
+        }
+    }
+    vm.fiber.param_frames.push(frame);
+    TAG_NIL
+}
+
 /// Convert an ExecResult from execute_bytecode_saving_stack to a JIT return value.
 /// Handles SIG_OK, SIG_HALT (both return the value), SIG_YIELD (returns
 /// YIELD_SENTINEL), and errors (signal already set, returns TAG_NIL).
