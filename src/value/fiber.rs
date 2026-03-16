@@ -389,6 +389,11 @@ pub struct Fiber {
     pub call_depth: usize,
     /// Call stack for stack traces (name + ip + frame_base)
     pub call_stack: Vec<CallFrame>,
+    /// Instruction budget. `None` = unlimited (default). `Some(n)` = `n` units
+    /// remaining. Decremented at backward jumps and call instructions. When it
+    /// reaches zero the VM emits `SIG_FUEL`, pausing the fiber. Refuel via
+    /// `fiber/set-fuel` then call `fiber/resume` to continue.
+    pub fuel: Option<u32>,
 }
 
 impl Fiber {
@@ -410,6 +415,7 @@ impl Fiber {
             suspended: None,
             call_depth: 0,
             call_stack: Vec::new(),
+            fuel: None,
         }
     }
 }
