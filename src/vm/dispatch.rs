@@ -560,6 +560,9 @@ impl VM {
             ip,
             stack: saved_stack,
             location_map: location_map.clone(),
+            // Yield: on resume, the resume argument becomes the result of
+            // the (yield ...) expression — push it onto the restored stack.
+            push_resume_value: true,
         });
 
         self.fiber.signal = Some((SIG_YIELD, yielded_value));

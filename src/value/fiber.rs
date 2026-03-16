@@ -118,9 +118,12 @@ impl std::fmt::Debug for WeakFiberHandle {
 /// stack state. Used for both signal-based suspension (`fiber/signal`) and
 /// yield-based suspension (`yield` instruction).
 ///
-/// For signal suspension, `stack` is empty (the fiber's own stack is
-/// preserved). For yield suspension, `stack` captures the operand stack
-/// at the point of yield.
+/// `stack` always captures the full operand stack at the moment of suspension.
+/// For yield suspension, `ip` points past the `Yield` instruction and the
+/// resume value needs to be pushed as the result of the `(yield ...)` expression.
+/// For instruction-pause suspension (fuel, signal), `ip` points at the paused
+/// instruction and the stack is already complete — no extra value is pushed.
+/// The `push_resume_value` field encodes which case applies.
 #[derive(Debug, Clone)]
 pub struct BytecodeFrame {
     /// Bytecode to resume executing
@@ -131,10 +134,18 @@ pub struct BytecodeFrame {
     pub env: Rc<Vec<Value>>,
     /// Instruction pointer to resume at
     pub ip: usize,
-    /// Operand stack state (empty for signal suspension)
+    /// Operand stack state at suspension
     pub stack: Vec<Value>,
     /// Location map for mapping bytecode offsets to source locations
     pub location_map: Rc<LocationMap>,
+    /// Whether to push `current_value` onto the stack before resuming.
+    ///
+    /// `true` for yield frames and caller frames: the resume value is the
+    /// "return value" of the suspended operation (the yield expression result,
+    /// or the return value of a call).  `false` for fuel-pause and
+    /// signal-pause frames: the instruction at `ip` re-executes from scratch
+    /// with the stack exactly as saved — no extra value is injected.
+    pub push_resume_value: bool,
 }
 
 /// A suspended execution step — either a bytecode frame or a sub-fiber resume.

@@ -16,16 +16,14 @@
 # The fiber mask |:fuel| ensures the signal is caught by the fiber itself
 # so we can observe :paused status directly without a wrapper.
 
-(let ([counter @[0]]
-      [f (fiber/new
+(let ((f (fiber/new
             (fn []
-              (let loop ([n 0])
-                (if (< n 100)
-                    (do
-                      (@array/set counter 0 n)
-                      (loop (+ n 1)))
-                    n)))
-            |:fuel|)])
+              (letrec ((loop (fn (n)
+                               (if (< n 100)
+                                   (loop (+ n 1))
+                                   n))))
+                (loop 0)))
+            |:fuel|)))
   (fiber/set-fuel f 5)
   (fiber/resume f)
   (assert-eq (fiber/status f) :paused "backward-jump: fiber paused on fuel exhaustion")
@@ -43,14 +41,14 @@
 # don't consume fuel. Only Call/TailCall instructions (calls to closures or
 # native functions) consume fuel.
 
-(let ([f (fiber/new
+(let ((f (fiber/new
             (fn []
               (defn count-calls [n]
                 (if (= n 0)
                     "done"
                     (count-calls (- n 1))))
               (count-calls 100))
-            |:fuel|)])
+            |:fuel|)))
   (fiber/set-fuel f 3)
   (fiber/resume f)
   (assert-eq (fiber/status f) :paused "call-exhaustion: fiber paused"))
@@ -66,12 +64,12 @@
 # If this test fails with :paused instead of :dead, a forward Jump is
 # incorrectly decrementing fuel.
 
-(let ([f (fiber/new
+(let ((f (fiber/new
             (fn []
               (if true
                   42
                   0))
-            |:fuel|)])
+            |:fuel|)))
   (fiber/set-fuel f 1)
   (fiber/resume f)
   (assert-eq (fiber/status f) :dead "forward-jump: fiber completes with fuel=1")
@@ -84,13 +82,14 @@
 # Exhaust fuel mid-loop, refuel with enough to finish, resume, verify the
 # fiber continues from where it paused and produces the correct final value.
 
-(let ([f (fiber/new
+(let ((f (fiber/new
             (fn []
-              (let loop ([n 0] [acc 0])
-                (if (< n 10)
-                    (loop (+ n 1) (+ acc n))
-                    acc)))
-            |:fuel|)])
+              (letrec ((loop (fn (n acc)
+                               (if (< n 10)
+                                   (loop (+ n 1) (+ acc n))
+                                   acc))))
+                (loop 0 0)))
+            |:fuel|)))
   (fiber/set-fuel f 3)
   (fiber/resume f)
   (assert-eq (fiber/status f) :paused "refuel: initially paused")
@@ -106,13 +105,14 @@
 # A fiber without fuel set (mask=0, no fuel) runs a loop to completion.
 # This verifies that the default unlimited path is unaffected.
 
-(let ([f (fiber/new
+(let ((f (fiber/new
             (fn []
-              (let loop ([n 0] [acc 0])
-                (if (< n 100)
-                    (loop (+ n 1) (+ acc n))
-                    acc)))
-            0)])
+              (letrec ((loop (fn (n acc)
+                               (if (< n 100)
+                                   (loop (+ n 1) (+ acc n))
+                                   acc))))
+                (loop 0 0)))
+            0)))
   (fiber/resume f)
   (assert-eq (fiber/status f) :dead "unlimited: fiber completes")
   (assert-eq (fiber/value f) 4950 "unlimited: correct sum (0+...+99=4950)"))
@@ -124,11 +124,11 @@
 # Setting fuel to 0 means the very first fuel checkpoint fires immediately.
 # An infinite loop with fuel=0 pauses before executing a single iteration.
 
-(let ([f (fiber/new
+(let ((f (fiber/new
             (fn []
-              (let loop ([n 0])
-                (loop (+ n 1))))
-            |:fuel|)])
+              (letrec ((loop (fn (n) (loop (+ n 1)))))
+                (loop 0)))
+            |:fuel|)))
   (fiber/set-fuel f 0)
   (fiber/resume f)
   (assert-eq (fiber/status f) :paused "zero-fuel: pauses immediately"))
@@ -140,12 +140,13 @@
 # When the fiber's mask includes :fuel, fiber/resume returns the signal's
 # payload (nil) to the parent and the fiber becomes :paused.
 
-(let ([f (fiber/new
+(let ((f (fiber/new
             (fn []
-              (let loop () (loop)))
-            |:fuel|)])
+              (letrec ((loop (fn () (loop))))
+                (loop)))
+            |:fuel|)))
   (fiber/set-fuel f 2)
-  (let ([result (fiber/resume f)])
+  (let ((result (fiber/resume f)))
     (assert-eq (fiber/status f) :paused "mask-catch: fiber is paused")
     (assert-eq result nil "mask-catch: caught signal delivers nil to parent")))
 
@@ -161,14 +162,15 @@
 #   outer.mask=|:fuel| → outer's parent (root) DOES catch :fuel from outer
 #   outer.status = :paused, inner.status = :paused
 
-(let ([inner (fiber/new
+(let ((inner (fiber/new
                 (fn []
-                  (let loop () (loop)))
-                0)])
+                  (letrec ((loop (fn () (loop))))
+                    (loop)))
+                 0)))
   (fiber/set-fuel inner 2)
-  (let ([outer (fiber/new
+  (let ((outer (fiber/new
                   (fn [] (fiber/resume inner))
-                  |:fuel|)])
+                  |:fuel|)))
     (fiber/resume outer)
     (assert-eq (fiber/status outer) :paused "propagate: outer paused by propagated fuel signal")
     (assert-eq (fiber/status inner) :paused "propagate: inner also paused")))
@@ -181,11 +183,11 @@
 # After exhaustion, fiber/fuel returns 0 — the check fires when fuel==0
 # (before decrement), so the stored value at exhaustion is 0.
 
-(let ([f (fiber/new
+(let ((f (fiber/new
             (fn []
-              (let loop ([n 0])
-                (loop (+ n 1))))
-            |:fuel|)])
+              (letrec ((loop (fn (n) (loop (+ n 1)))))
+                (loop 0)))
+            |:fuel|)))
   (fiber/set-fuel f 10)
   (assert-eq (fiber/fuel f) 10 "fuel-read: reads 10 before resume")
   (fiber/resume f)
@@ -198,13 +200,14 @@
 # Set fuel, exhaust it, clear it, then resume — the fiber should run to
 # completion because clear-fuel restores unlimited execution.
 
-(let ([f (fiber/new
+(let ((f (fiber/new
             (fn []
-              (let loop ([n 0] [acc 0])
-                (if (< n 50)
-                    (loop (+ n 1) (+ acc n))
-                    acc)))
-            |:fuel|)])
+              (letrec ((loop (fn (n acc)
+                               (if (< n 50)
+                                   (loop (+ n 1) (+ acc n))
+                                   acc))))
+                (loop 0 0)))
+            |:fuel|)))
   (fiber/set-fuel f 5)
   (fiber/resume f)
   (assert-eq (fiber/status f) :paused "clear-fuel: paused initially")
@@ -220,21 +223,21 @@
 # Inner and outer fibers each have their own fuel counter. Exhausting inner's
 # fuel does not affect outer's fuel — outer continues and completes normally.
 
-(let ([inner (fiber/new
+(let ((inner (fiber/new
                 (fn []
-                  (let loop ([n 0])
-                    (loop (+ n 1))))
-                |:fuel|)]
-      [outer (fiber/new
-                (fn []
-                  (fiber/set-fuel inner 3)
-                  (fiber/resume inner)
-                  # inner is now paused; outer continues unaffected
-                  (assert-eq (fiber/status inner) :paused "nested: inner paused")
-                  42)
-                |:fuel|)])
-  (fiber/set-fuel outer 1000)
-  (fiber/resume outer)
-  (assert-eq (fiber/status outer) :dead "nested: outer completes independently")
-  (assert-eq (fiber/value outer) 42 "nested: outer return value correct")
-  (assert-eq (fiber/status inner) :paused "nested: inner remains paused"))
+                  (letrec ((loop (fn (n) (loop (+ n 1)))))
+                    (loop 0)))
+                |:fuel|)))
+  (let ((outer (fiber/new
+                  (fn []
+                    (fiber/set-fuel inner 3)
+                    (fiber/resume inner)
+                    # inner is now paused; outer continues unaffected
+                    (assert-eq (fiber/status inner) :paused "nested: inner paused")
+                    42)
+                  |:fuel|)))
+    (fiber/set-fuel outer 1000)
+    (fiber/resume outer)
+    (assert-eq (fiber/status outer) :dead "nested: outer completes independently")
+    (assert-eq (fiber/value outer) 42 "nested: outer return value correct")
+    (assert-eq (fiber/status inner) :paused "nested: inner remains paused")))
