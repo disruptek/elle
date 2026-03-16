@@ -481,6 +481,152 @@ pub extern "C" fn elle_jit_push_param_frame(pairs_ptr: u64, count: u64, vm: *mut
     TAG_NIL
 }
 
+/// Struct/table get with silent nil: returns value for key, NIL if missing or wrong type.
+#[no_mangle]
+pub extern "C" fn elle_jit_table_get_or_nil(src: u64, key: u64, _vm: *mut ()) -> u64 {
+    let val = unsafe { Value::from_bits(src) };
+    let key_val = unsafe { Value::from_bits(key) };
+    let key = match crate::value::heap::TableKey::from_value(&key_val) {
+        Some(k) => k,
+        None => return TAG_NIL,
+    };
+    if let Some(struct_map) = val.as_struct() {
+        if let Some(v) = struct_map.get(&key) {
+            return v.to_bits();
+        }
+    }
+    if let Some(table_ref) = val.as_struct_mut() {
+        if let Some(v) = table_ref.borrow().get(&key) {
+            return v.to_bits();
+        }
+    }
+    TAG_NIL
+}
+
+/// Struct/table get for destructuring: returns value for key, signals error if missing or wrong type.
+#[no_mangle]
+pub extern "C" fn elle_jit_table_get_destructure(src: u64, key: u64, vm: *mut ()) -> u64 {
+    let val = unsafe { Value::from_bits(src) };
+    let key_val = unsafe { Value::from_bits(key) };
+    let vm_ref = unsafe { &mut *(vm as *mut crate::vm::VM) };
+    let key = match crate::value::heap::TableKey::from_value(&key_val) {
+        Some(k) => k,
+        None => {
+            vm_ref.fiber.signal = Some((
+                SIG_ERROR,
+                error_val("type-error", "destructuring: invalid key type"),
+            ));
+            return TAG_NIL;
+        }
+    };
+    if let Some(struct_map) = val.as_struct() {
+        return match struct_map.get(&key) {
+            Some(v) => v.to_bits(),
+            None => {
+                vm_ref.fiber.signal = Some((
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!("destructuring: key {} not found", key_val),
+                    ),
+                ));
+                TAG_NIL
+            }
+        };
+    }
+    if let Some(table_ref) = val.as_struct_mut() {
+        return match table_ref.borrow().get(&key) {
+            Some(v) => v.to_bits(),
+            None => {
+                vm_ref.fiber.signal = Some((
+                    SIG_ERROR,
+                    error_val(
+                        "type-error",
+                        format!("destructuring: key {} not found", key_val),
+                    ),
+                ));
+                TAG_NIL
+            }
+        };
+    }
+    vm_ref.fiber.signal = Some((
+        SIG_ERROR,
+        error_val(
+            "type-error",
+            format!("destructuring: expected struct, got {}", val.type_name()),
+        ),
+    ));
+    TAG_NIL
+}
+
+/// Struct rest: collect all keys from src NOT in exclude_keys into a new immutable struct.
+/// exclude_ptr points to an array of count u64 NaN-boxed keyword Values.
+#[no_mangle]
+pub extern "C" fn elle_jit_struct_rest(
+    src: u64,
+    exclude_ptr: u64,
+    count: u64,
+    _vm: *mut (),
+) -> u64 {
+    let val = unsafe { Value::from_bits(src) };
+    let count = count as usize;
+    let exclude_bits = unsafe { std::slice::from_raw_parts(exclude_ptr as *const u64, count) };
+
+    let mut exclude = std::collections::BTreeSet::new();
+    for &bits in exclude_bits {
+        let key_val = unsafe { Value::from_bits(bits) };
+        if let Some(k) = crate::value::heap::TableKey::from_value(&key_val) {
+            exclude.insert(k);
+        }
+    }
+
+    let mut result = std::collections::BTreeMap::new();
+    if let Some(struct_map) = val.as_struct() {
+        for (k, v) in struct_map.iter() {
+            if !exclude.contains(k) {
+                result.insert(k.clone(), *v);
+            }
+        }
+    } else if let Some(table_ref) = val.as_struct_mut() {
+        for (k, v) in table_ref.borrow().iter() {
+            if !exclude.contains(k) {
+                result.insert(k.clone(), *v);
+            }
+        }
+    }
+    Value::struct_from(result).to_bits()
+}
+
+/// Check that a closure's signal bits are a subset of allowed_bits.
+/// Signals error if not. Non-closure values pass silently.
+#[no_mangle]
+pub extern "C" fn elle_jit_check_signal_bound(src: u64, allowed_bits: u64, vm: *mut ()) -> u64 {
+    let val = unsafe { Value::from_bits(src) };
+    let allowed = allowed_bits as u32;
+    if let Some(closure) = val.as_closure() {
+        let signal_bits = closure.signal().bits.0;
+        let excess = signal_bits & !allowed;
+        if excess != 0 {
+            let vm_ref = unsafe { &mut *(vm as *mut crate::vm::VM) };
+            let registry = crate::signals::registry::global_registry().lock().unwrap();
+            let excess_str = registry.format_signal_bits(crate::value::fiber::SignalBits(excess));
+            let allowed_str = registry.format_signal_bits(crate::value::fiber::SignalBits(allowed));
+            drop(registry);
+            vm_ref.fiber.signal = Some((
+                SIG_ERROR,
+                error_val(
+                    "signal-violation",
+                    format!(
+                        "restrict: closure may emit {} but parameter is restricted to {}",
+                        excess_str, allowed_str
+                    ),
+                ),
+            ));
+        }
+    }
+    TAG_NIL
+}
+
 /// Convert an ExecResult from execute_bytecode_saving_stack to a JIT return value.
 /// Handles SIG_OK, SIG_HALT (both return the value), SIG_YIELD (returns
 /// YIELD_SENTINEL), and errors (signal already set, returns TAG_NIL).

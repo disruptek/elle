@@ -657,18 +657,73 @@ impl<'a> FunctionTranslator<'a> {
                 let result = self.call_helper_unary(builder, self.helpers.array_len, src_val)?;
                 builder.def_var(var(dst.0), result);
             }
-            LirInstr::TableGetOrNil { .. } => {
-                return Err(JitError::UnsupportedInstruction(
-                    "TableGetOrNil".to_string(),
-                ));
+            LirInstr::TableGetOrNil { dst, src, key } => {
+                let src_val = builder.use_var(var(src.0));
+                let key_val = self.translate_const(builder, key);
+                let vm = self.vm_ptr.ok_or_else(|| {
+                    JitError::InvalidLir("TableGetOrNil without vm pointer".to_string())
+                })?;
+                let result = self.call_helper_ternary(
+                    builder,
+                    self.helpers.table_get_or_nil,
+                    src_val,
+                    key_val,
+                    vm,
+                )?;
+                builder.def_var(var(dst.0), result);
             }
-            LirInstr::TableGetDestructure { .. } => {
-                return Err(JitError::UnsupportedInstruction(
-                    "TableGetDestructure".to_string(),
-                ));
+            LirInstr::TableGetDestructure { dst, src, key } => {
+                let src_val = builder.use_var(var(src.0));
+                let key_val = self.translate_const(builder, key);
+                let vm = self.vm_ptr.ok_or_else(|| {
+                    JitError::InvalidLir("TableGetDestructure without vm pointer".to_string())
+                })?;
+                let result = self.call_helper_ternary(
+                    builder,
+                    self.helpers.table_get_destructure,
+                    src_val,
+                    key_val,
+                    vm,
+                )?;
+                self.emit_exception_check_after_call(builder)?;
+                builder.def_var(var(dst.0), result);
             }
-            LirInstr::StructRest { .. } => {
-                return Err(JitError::UnsupportedInstruction("StructRest".to_string()));
+            LirInstr::StructRest {
+                dst,
+                src,
+                exclude_keys,
+            } => {
+                let src_val = builder.use_var(var(src.0));
+                let vm = self.vm_ptr.ok_or_else(|| {
+                    JitError::InvalidLir("StructRest without vm pointer".to_string())
+                })?;
+                let count = exclude_keys.len();
+                let (exclude_ptr, count_val) = if count == 0 {
+                    (builder.ins().iconst(I64, 0), builder.ins().iconst(I64, 0))
+                } else {
+                    let slot =
+                        builder.create_sized_stack_slot(cranelift_codegen::ir::StackSlotData::new(
+                            cranelift_codegen::ir::StackSlotKind::ExplicitSlot,
+                            (count * 8) as u32,
+                            0,
+                        ));
+                    for (i, key) in exclude_keys.iter().enumerate() {
+                        let key_val = self.translate_const(builder, key);
+                        builder.ins().stack_store(key_val, slot, (i * 8) as i32);
+                    }
+                    let ptr = builder.ins().stack_addr(I64, slot, 0);
+                    let cnt = builder.ins().iconst(I64, count as i64);
+                    (ptr, cnt)
+                };
+                let result = self.call_helper_quaternary(
+                    builder,
+                    self.helpers.struct_rest,
+                    src_val,
+                    exclude_ptr,
+                    count_val,
+                    vm,
+                )?;
+                builder.def_var(var(dst.0), result);
             }
             LirInstr::CarOrNil { dst, src } => {
                 let src_val = builder.use_var(var(src.0));
@@ -797,10 +852,21 @@ impl<'a> FunctionTranslator<'a> {
                 let result = self.call_helper_unary(builder, self.helpers.is_set_mut, src_val)?;
                 builder.def_var(var(dst.0), result);
             }
-            LirInstr::CheckSignalBound { .. } => {
-                return Err(JitError::UnsupportedInstruction(
-                    "CheckSignalBound".to_string(),
-                ));
+            LirInstr::CheckSignalBound { src, allowed_bits } => {
+                let src_val = builder.use_var(var(src.0));
+                let allowed_val = builder.ins().iconst(I64, *allowed_bits as i64);
+                let vm = self.vm_ptr.ok_or_else(|| {
+                    JitError::InvalidLir("CheckSignalBound without vm pointer".to_string())
+                })?;
+                self.call_helper_ternary(
+                    builder,
+                    self.helpers.check_signal_bound,
+                    src_val,
+                    allowed_val,
+                    vm,
+                )?;
+                self.emit_exception_check_after_call(builder)?;
+                // No dst — side-effect only
             }
         }
         Ok(false)
