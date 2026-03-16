@@ -232,8 +232,7 @@ impl<'a> Analyzer<'a> {
         let declared_ceiling = self.current_declared_ceiling.take();
 
         // Check function-level constraint if present.
-        // silence (whitelist): excess = inferred & !ceiling  — any excess is an error.
-        // squelch (blacklist): violation = inferred & forbidden — any forbidden is an error.
+        // silence (whitelist): excess = inferred & !ceiling — any excess is an error.
         if let Some((ceiling, kind)) = declared_ceiling {
             match kind {
                 BoundKind::Silence => {
@@ -246,19 +245,6 @@ impl<'a> Analyzer<'a> {
                             span,
                             reg.format_signal_bits(ceiling.bits),
                             reg.format_signal_bits(excess),
-                        ));
-                    }
-                }
-                BoundKind::Squelch => {
-                    let violation_bits = inferred_signals.bits.0 & ceiling.bits.0;
-                    if violation_bits != 0 {
-                        let reg = registry::global_registry().lock().unwrap();
-                        let violation = crate::value::fiber::SignalBits(violation_bits);
-                        return Err(format!(
-                            "{}: function body may emit {} but {} is squelched",
-                            span,
-                            reg.format_signal_bits(violation),
-                            reg.format_signal_bits(violation),
                         ));
                     }
                 }
