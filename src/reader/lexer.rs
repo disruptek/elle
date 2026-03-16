@@ -172,7 +172,6 @@ impl<'a> Lexer<'a> {
 
         // Step 2: detect base prefix (0x, 0o, 0b and uppercase variants)
         let mut base: u32 = 10;
-        let base_name;
         if self.current() == Some('0') {
             let next = self.peek(1);
             match next {
@@ -192,7 +191,7 @@ impl<'a> Lexer<'a> {
                 _ => {}
             }
         }
-        base_name = match base {
+        let base_name = match base {
             16 => "hexadecimal",
             8 => "octal",
             2 => "binary",
@@ -691,7 +690,7 @@ mod tests {
 
     #[test]
     fn hex_mixed_case_digits() {
-        assert!(matches!(lex_single("0x1A2b"), Token::Integer(0x1A2b)));
+        assert!(matches!(lex_single("0x1A2b"), Token::Integer(0x1A2B)));
     }
 
     #[test]
@@ -823,7 +822,7 @@ mod tests {
 
     #[test]
     fn decimal_plain_float() {
-        assert!(matches!(lex_single("3.14"), Token::Float(f) if (f - 3.14).abs() < 1e-9));
+        assert!(matches!(lex_single("2.71"), Token::Float(f) if (f - 2.71_f64).abs() < 1e-9));
     }
 
     #[test]
