@@ -717,3 +717,46 @@
 # syntax->datum on a non-syntax value returns it unchanged.
 (begin
   (assert-eq (syntax->datum 42) 42 "test_syntax_to_datum_non_syntax_passthrough"))
+
+# ============================================================================
+# Syntax predicate tests (issue #581)
+# ============================================================================
+#
+# Note: Atom macro arguments (nil, bool, int, float, string, keyword) are
+# passed to macro transformer closures as plain Values, NOT as syntax objects.
+# Only symbols and compound forms (lists, arrays, structs) arrive as syntax
+# objects. This is intentional — wrapping atoms in syntax objects would change
+# their runtime semantics (e.g., false wrapped as syntax is truthy).
+#
+# So syntax-pair?, syntax-list?, syntax-symbol? can be tested via macros, but
+# syntax-keyword? and syntax-nil? will always receive plain values and return
+# false in the macro context tested here.
+
+# syntax-pair? — compound args arrive as syntax objects
+(defmacro test-pair? (x) (syntax-pair? x))
+(assert-true  (test-pair? (a b c))  "syntax-pair? on list")
+(assert-false (test-pair? ())       "syntax-pair? on empty list")
+(assert-false (test-pair? 42)       "syntax-pair? on int")
+
+# syntax-list?
+(defmacro test-list? (x) (syntax-list? x))
+(assert-true  (test-list? (a b))    "syntax-list? on list")
+(assert-true  (test-list? ())       "syntax-list? on empty list")
+(assert-false (test-list? 42)       "syntax-list? on int")
+
+# syntax-symbol? — symbols arrive as syntax objects; keywords arrive as plain values
+(defmacro test-sym? (x) (syntax-symbol? x))
+(assert-true  (test-sym? foo)       "syntax-symbol? on symbol")
+(assert-false (test-sym? 42)        "syntax-symbol? on int")
+# :kw arrives as plain Value::keyword (not syntax), so syntax-symbol? returns false
+(assert-false (test-sym? :kw)       "syntax-symbol? on keyword (plain value)")
+
+# syntax-keyword? — keywords arrive as plain Value::keyword, not syntax objects,
+# so this always returns false in macro context
+(defmacro test-kw? (x) (syntax-keyword? x))
+(assert-false (test-kw? :foo)       "syntax-keyword? on plain keyword (not syntax)")
+(assert-false (test-kw? foo)        "syntax-keyword? on symbol — is syntax, not keyword")
+
+# syntax-nil? on non-syntax returns false
+(defmacro test-nil? (x) (syntax-nil? x))
+(assert-false (test-nil? 42)        "syntax-nil? on non-nil non-syntax")
