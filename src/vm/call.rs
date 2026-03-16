@@ -476,6 +476,7 @@ impl VM {
                 constants: closure.template.constants.clone(),
                 env: new_env_rc,
                 location_map: closure.template.location_map.clone(),
+                squelch_mask: closure.squelch_mask,
             });
 
             self.fiber.signal = Some((SIG_OK, Value::NIL));

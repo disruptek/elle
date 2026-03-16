@@ -74,11 +74,10 @@
   "silence runtime: yielding closure is signal-violation")
 
 # squelch with :yield fails for yielding closure (blacklist: :yield is forbidden)
-# Use let to force the squelched call into non-tail position so squelch enforcement fires.
-# (Squelch enforcement fires in call_inner after execute_bytecode_saving_stack; tail calls
-# bypass this. The let binding puts the call in non-tail position.)
+# Called directly in tail position — squelch enforcement now fires in the
+# tail-call trampoline loop (accumulated_squelch_mask), not just in call_inner.
 (signal :rt_c5b2)
-(def [ok5? err5] (protect (let ((r ((squelch (fn () (yield 1)) :yield)))) r)))
+(def [ok5? err5] (protect ((squelch (fn () (yield 1)) :yield))))
 (assert-false ok5? "squelch runtime: :yield forbidden — yielding closure fails")
 (assert-eq (get err5 :error) :signal-violation
   "squelch runtime: :yield forbidden is signal-violation")
@@ -278,3 +277,20 @@
     "squelch composable runtime: yield is rejected even with multi-signal squelch")
   (assert-eq (get err-comp-rt :error) :signal-violation
     "squelch composable runtime: rejection is :signal-violation"))
+
+# ============================================================================
+# squelch tail-position enforcement (issue-583)
+# ============================================================================
+
+# squelch enforcement fires when a squelched closure is called in tail position
+# by the callee. The trampoline loop accumulates the squelch mask and enforces
+# it when the signal exits, even though call_inner is never reached.
+(begin
+  (defn outer-tc (f) (f))
+  (def yielding (fn () (yield 42)))
+  (def squelched-yielding (squelch yielding :yield))
+  (def [ok-tc-outer? err-tc-outer] (protect (outer-tc squelched-yielding)))
+  (assert-false ok-tc-outer?
+    "squelch tail position via argument: yielding callback is rejected")
+  (assert-eq (get err-tc-outer :error) :signal-violation
+    "squelch tail position via argument: rejection is :signal-violation"))
