@@ -322,6 +322,7 @@ impl Emitter {
                 let closure = Closure {
                     template: Rc::new(template),
                     env: Rc::new(vec![]),
+                    squelch_mask: 0,
                 };
 
                 // Add closure template to constants
