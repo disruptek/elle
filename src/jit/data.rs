@@ -53,6 +53,48 @@ pub extern "C" fn elle_jit_is_pair(a: u64) -> u64 {
     Value::bool(val.is_cons()).to_bits()
 }
 
+/// Check if value is an immutable array
+#[no_mangle]
+pub extern "C" fn elle_jit_is_array(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    Value::bool(val.is_array()).to_bits()
+}
+
+/// Check if value is a mutable @array
+#[no_mangle]
+pub extern "C" fn elle_jit_is_array_mut(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    Value::bool(val.is_array_mut()).to_bits()
+}
+
+/// Check if value is an immutable struct
+#[no_mangle]
+pub extern "C" fn elle_jit_is_struct(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    Value::bool(val.is_struct()).to_bits()
+}
+
+/// Check if value is a mutable @struct
+#[no_mangle]
+pub extern "C" fn elle_jit_is_struct_mut(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    Value::bool(val.is_struct_mut()).to_bits()
+}
+
+/// Check if value is an immutable set
+#[no_mangle]
+pub extern "C" fn elle_jit_is_set(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    Value::bool(val.is_set()).to_bits()
+}
+
+/// Check if value is a mutable @set
+#[no_mangle]
+pub extern "C" fn elle_jit_is_set_mut(a: u64) -> u64 {
+    let val = unsafe { Value::from_bits(a) };
+    Value::bool(val.is_set_mut()).to_bits()
+}
+
 // =============================================================================
 // Box Operations
 // =============================================================================

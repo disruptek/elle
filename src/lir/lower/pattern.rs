@@ -363,7 +363,7 @@ impl Lowerer {
             }
             Constructor::Table(_) => {
                 let dst = self.fresh_reg();
-                self.emit(LirInstr::IsTable {
+                self.emit(LirInstr::IsStructMut {
                     dst,
                     src: value_reg,
                 });
@@ -1243,7 +1243,7 @@ impl Lowerer {
 
                 // Type guard: reject non-@struct values
                 let is_table_reg = self.fresh_reg();
-                self.emit(LirInstr::IsTable {
+                self.emit(LirInstr::IsStructMut {
                     dst: is_table_reg,
                     src: value_reg,
                 });

@@ -337,8 +337,8 @@ impl VM {
                 Instruction::IsStruct => {
                     types::handle_is_struct(self);
                 }
-                Instruction::IsTable => {
-                    types::handle_is_table(self);
+                Instruction::IsStructMut => {
+                    types::handle_is_struct_mut(self);
                 }
                 Instruction::ArrayMutLen => {
                     types::handle_array_len(self);

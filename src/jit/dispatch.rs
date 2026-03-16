@@ -358,6 +358,15 @@ pub extern "C" fn elle_jit_call_depth_exit(vm: *mut ()) -> u64 {
     TAG_NIL
 }
 
+/// Pop one dynamic parameter frame from the fiber.
+/// Pairs with PushParamFrame. Returns TAG_NIL (ignored by caller).
+#[no_mangle]
+pub extern "C" fn elle_jit_pop_param_frame(vm: *mut ()) -> u64 {
+    let vm = unsafe { &mut *(vm as *mut crate::vm::VM) };
+    vm.fiber.param_frames.pop();
+    TAG_NIL
+}
+
 /// Convert an ExecResult from execute_bytecode_saving_stack to a JIT return value.
 /// Handles SIG_OK, SIG_HALT (both return the value), SIG_YIELD (returns
 /// YIELD_SENTINEL), and errors (signal already set, returns TAG_NIL).

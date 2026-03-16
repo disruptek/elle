@@ -667,9 +667,9 @@ impl Emitter {
                 self.push_reg(*dst);
             }
 
-            LirInstr::IsTable { dst, src } => {
+            LirInstr::IsStructMut { dst, src } => {
                 self.ensure_on_top(*src);
-                self.bytecode.emit(Instruction::IsTable);
+                self.bytecode.emit(Instruction::IsStructMut);
                 self.pop();
                 self.push_reg(*dst);
             }

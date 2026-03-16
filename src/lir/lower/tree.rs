@@ -344,7 +344,7 @@ impl Lowerer {
             }
             Constructor::Table(_) => {
                 let dst = self.fresh_reg();
-                self.emit(LirInstr::IsTable {
+                self.emit(LirInstr::IsStructMut {
                     dst,
                     src: value_reg,
                 });

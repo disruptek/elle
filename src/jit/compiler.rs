@@ -72,6 +72,12 @@ pub(crate) struct RuntimeHelpers {
     pub(crate) make_array: FuncId,
     pub(crate) is_nil: FuncId,
     pub(crate) is_pair: FuncId,
+    pub(crate) is_array: FuncId,
+    pub(crate) is_array_mut: FuncId,
+    pub(crate) is_struct: FuncId,
+    pub(crate) is_struct_mut: FuncId,
+    pub(crate) is_set: FuncId,
+    pub(crate) is_set_mut: FuncId,
     #[allow(dead_code)]
     pub(crate) is_truthy: FuncId,
     pub(crate) make_lbox: FuncId,
@@ -85,6 +91,7 @@ pub(crate) struct RuntimeHelpers {
     pub(crate) resolve_tail_call: FuncId,
     pub(crate) call_depth_enter: FuncId,
     pub(crate) call_depth_exit: FuncId,
+    pub(crate) pop_param_frame: FuncId,
     pub(crate) jit_yield: FuncId,
     pub(crate) jit_yield_through_call: FuncId,
     pub(crate) has_signal: FuncId,
@@ -150,6 +157,27 @@ impl JitCompiler {
         );
         builder.symbol("elle_jit_is_pair", dispatch::elle_jit_is_pair as *const u8);
         builder.symbol(
+            "elle_jit_is_array",
+            dispatch::elle_jit_is_array as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_is_array_mut",
+            dispatch::elle_jit_is_array_mut as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_is_struct",
+            dispatch::elle_jit_is_struct as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_is_struct_mut",
+            dispatch::elle_jit_is_struct_mut as *const u8,
+        );
+        builder.symbol("elle_jit_is_set", dispatch::elle_jit_is_set as *const u8);
+        builder.symbol(
+            "elle_jit_is_set_mut",
+            dispatch::elle_jit_is_set_mut as *const u8,
+        );
+        builder.symbol(
             "elle_jit_make_lbox",
             dispatch::elle_jit_make_lbox as *const u8,
         );
@@ -189,6 +217,10 @@ impl JitCompiler {
         builder.symbol(
             "elle_jit_call_depth_exit",
             dispatch::elle_jit_call_depth_exit as *const u8,
+        );
+        builder.symbol(
+            "elle_jit_pop_param_frame",
+            dispatch::elle_jit_pop_param_frame as *const u8,
         );
         builder.symbol("elle_jit_yield", dispatch::elle_jit_yield as *const u8);
         builder.symbol(
@@ -303,6 +335,12 @@ impl JitCompiler {
             make_array: declare(module, "elle_jit_make_array", &make_array_sig)?,
             is_nil: declare(module, "elle_jit_is_nil", &unary_sig)?,
             is_pair: declare(module, "elle_jit_is_pair", &unary_sig)?,
+            is_array: declare(module, "elle_jit_is_array", &unary_sig)?,
+            is_array_mut: declare(module, "elle_jit_is_array_mut", &unary_sig)?,
+            is_struct: declare(module, "elle_jit_is_struct", &unary_sig)?,
+            is_struct_mut: declare(module, "elle_jit_is_struct_mut", &unary_sig)?,
+            is_set: declare(module, "elle_jit_is_set", &unary_sig)?,
+            is_set_mut: declare(module, "elle_jit_is_set_mut", &unary_sig)?,
             is_truthy: declare(module, "elle_jit_is_truthy", &unary_sig)?,
             make_lbox: declare(module, "elle_jit_make_lbox", &unary_sig)?,
             load_lbox: declare(module, "elle_jit_load_lbox", &unary_sig)?,
@@ -315,6 +353,7 @@ impl JitCompiler {
             resolve_tail_call: declare(module, "elle_jit_resolve_tail_call", &binary_sig)?,
             call_depth_enter: declare(module, "elle_jit_call_depth_enter", &unary_sig)?,
             call_depth_exit: declare(module, "elle_jit_call_depth_exit", &unary_sig)?,
+            pop_param_frame: declare(module, "elle_jit_pop_param_frame", &unary_sig)?,
             jit_yield: declare(module, "elle_jit_yield", &yield_sig)?,
             jit_yield_through_call: declare(module, "elle_jit_yield_through_call", &ytc_sig)?,
             has_signal: declare(module, "elle_jit_has_signal", &unary_sig)?,

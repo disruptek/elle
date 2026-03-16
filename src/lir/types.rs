@@ -263,7 +263,7 @@ pub enum LirInstr {
     /// Check if value is a struct (for pattern matching)
     IsStruct { dst: Reg, src: Reg },
     /// Check if value is an @struct (for pattern matching)
-    IsTable { dst: Reg, src: Reg },
+    IsStructMut { dst: Reg, src: Reg },
     /// Check if value is an immutable set (for pattern matching)
     IsSet { dst: Reg, src: Reg },
     /// Check if value is a mutable set (for pattern matching)

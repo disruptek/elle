@@ -599,17 +599,26 @@ impl<'a> FunctionTranslator<'a> {
                     "ArrayMutSliceFrom".to_string(),
                 ));
             }
-            LirInstr::IsArray { .. } => {
-                return Err(JitError::UnsupportedInstruction("IsArray".to_string()));
+            LirInstr::IsArray { dst, src } => {
+                let src_val = builder.use_var(var(src.0));
+                let result = self.call_helper_unary(builder, self.helpers.is_array, src_val)?;
+                builder.def_var(var(dst.0), result);
             }
-            LirInstr::IsArrayMut { .. } => {
-                return Err(JitError::UnsupportedInstruction("IsArrayMut".to_string()));
+            LirInstr::IsArrayMut { dst, src } => {
+                let src_val = builder.use_var(var(src.0));
+                let result = self.call_helper_unary(builder, self.helpers.is_array_mut, src_val)?;
+                builder.def_var(var(dst.0), result);
             }
-            LirInstr::IsStruct { .. } => {
-                return Err(JitError::UnsupportedInstruction("IsStruct".to_string()));
+            LirInstr::IsStruct { dst, src } => {
+                let src_val = builder.use_var(var(src.0));
+                let result = self.call_helper_unary(builder, self.helpers.is_struct, src_val)?;
+                builder.def_var(var(dst.0), result);
             }
-            LirInstr::IsTable { .. } => {
-                return Err(JitError::UnsupportedInstruction("IsTable".to_string()));
+            LirInstr::IsStructMut { dst, src } => {
+                let src_val = builder.use_var(var(src.0));
+                let result =
+                    self.call_helper_unary(builder, self.helpers.is_struct_mut, src_val)?;
+                builder.def_var(var(dst.0), result);
             }
             LirInstr::ArrayMutLen { .. } => {
                 return Err(JitError::UnsupportedInstruction("ArrayMutLen".to_string()));
@@ -660,16 +669,26 @@ impl<'a> FunctionTranslator<'a> {
             LirInstr::RegionEnter | LirInstr::RegionExit => {
                 // No-op in JIT (allocation regions not yet active)
             }
-            LirInstr::PushParamFrame { .. } | LirInstr::PopParamFrame => {
+            LirInstr::PushParamFrame { .. } => {
                 return Err(JitError::UnsupportedInstruction(
-                    "PushParamFrame/PopParamFrame".to_string(),
+                    "PushParamFrame".to_string(),
                 ));
             }
-            LirInstr::IsSet { .. } | LirInstr::IsSetMut { .. } => {
-                return Err(JitError::UnsupportedInstruction(format!(
-                    "JIT does not support set type checks: {:?}",
-                    instr
-                )));
+            LirInstr::PopParamFrame => {
+                let vm = self.vm_ptr.ok_or_else(|| {
+                    JitError::InvalidLir("PopParamFrame without vm pointer".to_string())
+                })?;
+                self.call_helper_unary(builder, self.helpers.pop_param_frame, vm)?;
+            }
+            LirInstr::IsSet { dst, src } => {
+                let src_val = builder.use_var(var(src.0));
+                let result = self.call_helper_unary(builder, self.helpers.is_set, src_val)?;
+                builder.def_var(var(dst.0), result);
+            }
+            LirInstr::IsSetMut { dst, src } => {
+                let src_val = builder.use_var(var(src.0));
+                let result = self.call_helper_unary(builder, self.helpers.is_set_mut, src_val)?;
+                builder.def_var(var(dst.0), result);
             }
             LirInstr::CheckSignalBound { .. } => {
                 return Err(JitError::UnsupportedInstruction(

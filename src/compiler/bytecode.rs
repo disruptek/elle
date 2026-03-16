@@ -179,7 +179,7 @@ pub enum Instruction {
     /// Type check: is value a struct?
     IsStruct,
     /// Type check: is value a @struct?
-    IsTable,
+    IsStructMut,
     /// Get array length as integer
     ArrayMutLen,
     /// Table/struct get with silent nil (for destructuring): returns nil if key missing or wrong type.

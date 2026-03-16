@@ -150,8 +150,6 @@ fn has_unsupported_instructions(lir: &LirFunction) -> bool {
                 | LirInstr::CdrDestructure { .. }
                 | LirInstr::ArrayMutRefDestructure { .. }
                 | LirInstr::ArrayMutSliceFrom { .. }
-                | LirInstr::IsArrayMut { .. }
-                | LirInstr::IsTable { .. }
                 | LirInstr::ArrayMutLen { .. }
                 | LirInstr::TableGetOrNil { .. }
                 | LirInstr::TableGetDestructure { .. }
@@ -159,7 +157,13 @@ fn has_unsupported_instructions(lir: &LirFunction) -> bool {
                 | LirInstr::CarOrNil { .. }
                 | LirInstr::CdrOrNil { .. }
                 | LirInstr::ArrayMutRefOrNil { .. }
-                | LirInstr::Eval { .. } => return true,
+                | LirInstr::Eval { .. }
+                | LirInstr::ArrayMutExtend { .. }
+                | LirInstr::ArrayMutPush { .. }
+                | LirInstr::CallArrayMut { .. }
+                | LirInstr::TailCallArrayMut { .. }
+                | LirInstr::PushParamFrame { .. }
+                | LirInstr::CheckSignalBound { .. } => return true,
                 _ => {}
             }
         }
