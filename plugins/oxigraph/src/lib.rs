@@ -9,7 +9,10 @@ use elle::value::fiber::{SignalBits, SIG_ERROR, SIG_OK};
 use elle::value::types::Arity;
 use elle::value::{error_val, TableKey, Value};
 
-use oxigraph::model::{BlankNode, GraphName, Literal, NamedNode, Quad, Subject, Term};
+use oxigraph::io::{RdfFormat, RdfSerializer};
+use oxigraph::model::{
+    BlankNode, GraphName, GraphNameRef, Literal, NamedNode, Quad, Subject, Term,
+};
 use oxigraph::sparql::QueryResults;
 use oxigraph::store::Store;
 
@@ -715,18 +718,103 @@ fn prim_update(args: &[Value]) -> (SignalBits, Value) {
     }
 }
 
-fn prim_load(_args: &[Value]) -> (SignalBits, Value) {
-    (
-        SIG_ERROR,
-        error_val("not-implemented", "oxigraph/load: not yet implemented"),
-    )
+/// Map a keyword value to an `RdfFormat`, or return a type-error.
+fn keyword_to_format(val: Value, prim: &str) -> Result<RdfFormat, (SignalBits, Value)> {
+    let kw = val.as_keyword_name().ok_or_else(|| {
+        (
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "{}: expected format keyword (:turtle :ntriples :nquads :rdfxml), got {}",
+                    prim,
+                    val.type_name()
+                ),
+            ),
+        )
+    })?;
+    match kw {
+        "turtle" => Ok(RdfFormat::Turtle),
+        "ntriples" => Ok(RdfFormat::NTriples),
+        "nquads" => Ok(RdfFormat::NQuads),
+        "rdfxml" => Ok(RdfFormat::RdfXml),
+        _ => Err((
+            SIG_ERROR,
+            error_val(
+                "type-error",
+                format!(
+                    "{}: unknown format keyword :{}, expected :turtle :ntriples :nquads :rdfxml",
+                    prim, kw
+                ),
+            ),
+        )),
+    }
 }
 
-fn prim_dump(_args: &[Value]) -> (SignalBits, Value) {
-    (
-        SIG_ERROR,
-        error_val("not-implemented", "oxigraph/dump: not yet implemented"),
-    )
+fn prim_load(args: &[Value]) -> (SignalBits, Value) {
+    const PRIM: &str = "oxigraph/load";
+    let store = match get_store(args, PRIM) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+    let data = match args[1].with_string(|s| s.to_string()) {
+        Some(s) => s,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "{}: expected string data, got {}",
+                        PRIM,
+                        args[1].type_name()
+                    ),
+                ),
+            );
+        }
+    };
+    let format = match keyword_to_format(args[2].clone(), PRIM) {
+        Ok(f) => f,
+        Err(e) => return e,
+    };
+    match store.load_from_reader(format, data.as_bytes()) {
+        Ok(()) => (SIG_OK, Value::NIL),
+        Err(e) => oxigraph_err(PRIM, e),
+    }
+}
+
+fn prim_dump(args: &[Value]) -> (SignalBits, Value) {
+    const PRIM: &str = "oxigraph/dump";
+    let store = match get_store(args, PRIM) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+    let format = match keyword_to_format(args[1].clone(), PRIM) {
+        Ok(f) => f,
+        Err(e) => return e,
+    };
+    // Dataset formats (NQuads, TriG) dump all graphs via dump_to_writer.
+    // Graph formats (NTriples, Turtle, RdfXml) can only serialize a single
+    // graph — we serialize the default graph.
+    let buf: Vec<u8> = if format.supports_datasets() {
+        match store.dump_to_writer(RdfSerializer::from_format(format), Vec::new()) {
+            Ok(b) => b,
+            Err(e) => return oxigraph_err(PRIM, e),
+        }
+    } else {
+        match store.dump_graph_to_writer(
+            GraphNameRef::DefaultGraph,
+            RdfSerializer::from_format(format),
+            Vec::new(),
+        ) {
+            Ok(b) => b,
+            Err(e) => return oxigraph_err(PRIM, e),
+        }
+    };
+    match String::from_utf8(buf) {
+        Ok(s) => (SIG_OK, Value::string(s)),
+        Err(e) => oxigraph_err(PRIM, e),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -860,7 +948,8 @@ static PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_load,
         signal: Signal::errors(),
         arity: Arity::Exact(3),
-        doc: "Load RDF data from a string into the store. (not yet implemented)",
+        doc:
+            "Load RDF data from a string into the store. Format: :turtle :ntriples :nquads :rdfxml.",
         params: &["store", "data", "format"],
         category: "oxigraph",
         example: r#"(oxigraph/load store "<http://ex.org/a> <http://ex.org/b> \"hello\" .\n" :ntriples)"#,
@@ -871,7 +960,7 @@ static PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_dump,
         signal: Signal::errors(),
         arity: Arity::Exact(2),
-        doc: "Serialize all store data to a string. (not yet implemented)",
+        doc: "Serialize store to a string. Dataset formats (:nquads) dump all graphs; graph formats dump the default graph.",
         params: &["store", "format"],
         category: "oxigraph",
         example: "(oxigraph/dump store :nquads)",

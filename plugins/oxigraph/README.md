@@ -94,7 +94,11 @@ SELECT queries return an array of structs. Each struct has keyword keys matching
 | Name | Args | Returns | Description |
 |------|------|---------|-------------|
 | `oxigraph/load` | store, data, format | nil | Load RDF data (`:turtle`, `:ntriples`, `:nquads`, `:rdfxml`) |
-| `oxigraph/dump` | store, format | string | Serialize all quads to string |
+| `oxigraph/dump` | store, format | string | Serialize store to string |
+
+**`oxigraph/dump` format behavior:**
+- `:nquads` — dumps all graphs (named and default). Use this to preserve named graph information.
+- `:turtle`, `:ntriples`, `:rdfxml` — dumps the **default graph only**. Named graphs are omitted. These are triple-only formats that do not support multiple graphs.
 
 ### Term constructors
 

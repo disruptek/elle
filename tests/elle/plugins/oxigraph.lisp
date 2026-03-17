@@ -425,3 +425,92 @@
   (fn () (update update-store "THIS IS NOT SPARQL"))
   :sparql-error
   "malformed SPARQL UPDATE signals sparql-error")
+
+## ── Scenario 8: Load/dump roundtrip ───────────────────────────────
+
+(def load (get plugin :load))
+(def dump (get plugin :dump))
+
+## Load N-Triples data into a fresh store, dump as N-Triples, verify content
+(def nt-store (store-new))
+(def nt-data "<http://example.org/s> <http://example.org/p> \"hello\" .\n")
+(load nt-store nt-data :ntriples)
+(def nt-dumped (dump nt-store :ntriples))
+
+(assert-true
+  (string/contains? nt-dumped "<http://example.org/s>")
+  "dump :ntriples output contains subject IRI")
+
+(assert-true
+  (string/contains? nt-dumped "\"hello\"")
+  "dump :ntriples output contains literal value")
+
+## Load N-Triples data, verify quads are present via query
+(def nt-store2 (store-new))
+(load nt-store2 "<http://example.org/alice> <http://xmlns.com/foaf/0.1/name> \"Alice\" .\n" :ntriples)
+
+(assert-true
+  (query nt-store2 "ASK { <http://example.org/alice> <http://xmlns.com/foaf/0.1/name> \"Alice\" }")
+  "loaded N-Triples triple is queryable via ASK")
+
+## Load N-Quads data with a named graph, verify graph-name comes back from quads
+(def nq-store (store-new))
+(def nq-data "<http://example.org/s> <http://example.org/p> <http://example.org/o> <http://example.org/graph1> .\n")
+(load nq-store nq-data :nquads)
+(def nq-quads (quads nq-store))
+
+(assert-eq
+  (length nq-quads)
+  1
+  "loaded N-Quads store has 1 quad")
+
+(def nq-quad (get nq-quads 0))
+(assert-eq
+  (get nq-quad 3)
+  [:iri "http://example.org/graph1"]
+  "loaded N-Quads quad has correct graph-name")
+
+## Unknown format keyword signals type-error
+(def fmt-store (store-new))
+(assert-err-kind
+  (fn () (load fmt-store "<http://example.org/s> <http://example.org/p> \"x\" .\n" :unknown-format))
+  :type-error
+  "unknown format keyword signals type-error on load")
+
+(assert-err-kind
+  (fn () (dump fmt-store :unknown-format))
+  :type-error
+  "unknown format keyword signals type-error on dump")
+
+## ── Scenario 9: Error cases ────────────────────────────────────────
+
+## Wrong type for store argument (pass a string instead)
+(assert-err-kind
+  (fn () (quads "not-a-store"))
+  :type-error
+  "wrong type for store argument signals type-error")
+
+## Wrong type for quad argument (pass a string instead of array)
+(def err-store (store-new))
+(assert-err-kind
+  (fn () (insert err-store "not-a-quad"))
+  :type-error
+  "wrong type for quad argument signals type-error")
+
+## Quad array with wrong length (3 elements)
+(assert-err-kind
+  (fn () (insert err-store [(iri "http://example.org/s") (iri "http://example.org/p") (literal "o")]))
+  :type-error
+  "quad array with wrong length signals type-error")
+
+## Malformed SPARQL query signals sparql-error
+(assert-err-kind
+  (fn () (query err-store "THIS IS NOT SPARQL"))
+  :sparql-error
+  "malformed SPARQL query signals sparql-error")
+
+## Malformed IRI in quad signals oxigraph-error
+(assert-err-kind
+  (fn () (insert err-store [[:iri "not-an-iri"] (iri "http://example.org/p") (literal "o") nil]))
+  :oxigraph-error
+  "malformed IRI in quad signals oxigraph-error")
