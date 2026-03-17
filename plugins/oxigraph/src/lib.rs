@@ -10,6 +10,7 @@ use elle::value::types::Arity;
 use elle::value::{error_val, TableKey, Value};
 
 use oxigraph::model::{BlankNode, GraphName, Literal, NamedNode, Quad, Subject, Term};
+use oxigraph::sparql::QueryResults;
 use oxigraph::store::Store;
 
 // ---------------------------------------------------------------------------
@@ -598,18 +599,120 @@ fn prim_quads(args: &[Value]) -> (SignalBits, Value) {
     (SIG_OK, Value::array(result))
 }
 
-fn prim_query(_args: &[Value]) -> (SignalBits, Value) {
-    (
-        SIG_ERROR,
-        error_val("not-implemented", "oxigraph/query: not yet implemented"),
-    )
+fn prim_query(args: &[Value]) -> (SignalBits, Value) {
+    const PRIM: &str = "oxigraph/query";
+    let store = match get_store(args, PRIM) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+    let sparql = match args[1].with_string(|s| s.to_string()) {
+        Some(s) => s,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "{}: expected string sparql, got {}",
+                        PRIM,
+                        args[1].type_name()
+                    ),
+                ),
+            );
+        }
+    };
+    let results = match store.query(sparql.as_str()) {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                SIG_ERROR,
+                error_val("sparql-error", format!("{}: {}", PRIM, e)),
+            )
+        }
+    };
+    match results {
+        QueryResults::Solutions(solutions) => {
+            let mut rows: Vec<Value> = Vec::new();
+            for solution in solutions {
+                let solution = match solution {
+                    Ok(s) => s,
+                    Err(e) => {
+                        return (
+                            SIG_ERROR,
+                            error_val("sparql-error", format!("{}: {}", PRIM, e)),
+                        )
+                    }
+                };
+                let mut fields = BTreeMap::new();
+                for (variable, term) in solution.iter() {
+                    fields.insert(
+                        TableKey::Keyword(variable.as_str().into()),
+                        term_to_elle(term),
+                    );
+                }
+                rows.push(Value::struct_from(fields));
+            }
+            (SIG_OK, Value::array(rows))
+        }
+        QueryResults::Boolean(b) => (SIG_OK, Value::bool(b)),
+        QueryResults::Graph(triples) => {
+            let mut rows: Vec<Value> = Vec::new();
+            for triple in triples {
+                let triple = match triple {
+                    Ok(t) => t,
+                    Err(e) => {
+                        return (
+                            SIG_ERROR,
+                            error_val("sparql-error", format!("{}: {}", PRIM, e)),
+                        )
+                    }
+                };
+                let subject_val = match &triple.subject {
+                    Subject::NamedNode(n) => iri_to_elle(n),
+                    Subject::BlankNode(b) => bnode_to_elle(b),
+                    Subject::Triple(_) => Value::NIL,
+                };
+                rows.push(Value::array(vec![
+                    subject_val,
+                    iri_to_elle(&triple.predicate),
+                    term_to_elle(&triple.object),
+                    Value::NIL, // CONSTRUCT produces triples; graph-name is nil
+                ]));
+            }
+            (SIG_OK, Value::array(rows))
+        }
+    }
 }
 
-fn prim_update(_args: &[Value]) -> (SignalBits, Value) {
-    (
-        SIG_ERROR,
-        error_val("not-implemented", "oxigraph/update: not yet implemented"),
-    )
+fn prim_update(args: &[Value]) -> (SignalBits, Value) {
+    const PRIM: &str = "oxigraph/update";
+    let store = match get_store(args, PRIM) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+    let sparql = match args[1].with_string(|s| s.to_string()) {
+        Some(s) => s,
+        None => {
+            return (
+                SIG_ERROR,
+                error_val(
+                    "type-error",
+                    format!(
+                        "{}: expected string sparql-update, got {}",
+                        PRIM,
+                        args[1].type_name()
+                    ),
+                ),
+            );
+        }
+    };
+    match store.update(sparql.as_str()) {
+        Ok(()) => (SIG_OK, Value::NIL),
+        Err(e) => (
+            SIG_ERROR,
+            error_val("sparql-error", format!("{}: {}", PRIM, e)),
+        ),
+    }
 }
 
 fn prim_load(_args: &[Value]) -> (SignalBits, Value) {
@@ -735,7 +838,7 @@ static PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_query,
         signal: Signal::errors(),
         arity: Arity::Exact(2),
-        doc: "Execute a SPARQL query against the store. (not yet implemented)",
+        doc: "Execute a SPARQL query against the store.",
         params: &["store", "sparql"],
         category: "oxigraph",
         example: r#"(oxigraph/query store "SELECT ?s ?p ?o WHERE { ?s ?p ?o }")"#,
@@ -746,7 +849,7 @@ static PRIMITIVES: &[PrimitiveDef] = &[
         func: prim_update,
         signal: Signal::errors(),
         arity: Arity::Exact(2),
-        doc: "Execute a SPARQL UPDATE against the store. (not yet implemented)",
+        doc: "Execute a SPARQL UPDATE against the store.",
         params: &["store", "sparql-update"],
         category: "oxigraph",
         example: r#"(oxigraph/update store "INSERT DATA { ... }")"#,

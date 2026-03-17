@@ -264,3 +264,164 @@
   (get q 3)
   nil
   "quad element 3 (graph-name) is nil for default graph")
+
+## ── Scenario 4: SPARQL SELECT ──────────────────────────────────────
+
+(def query  (get plugin :query))
+(def update (get plugin :update))
+
+## Set up a store with a few quads for SPARQL tests
+(def sparql-store (store-new))
+(def alice (iri "http://example.org/alice"))
+(def bob   (iri "http://example.org/bob"))
+(def name  (iri "http://xmlns.com/foaf/0.1/name"))
+(def knows (iri "http://xmlns.com/foaf/0.1/knows"))
+(insert sparql-store [alice name (literal "Alice") nil])
+(insert sparql-store [bob   name (literal "Bob")   nil])
+(insert sparql-store [alice knows bob nil])
+
+## SELECT returns an array of binding structs
+(def select-results
+  (query sparql-store "SELECT ?s ?o WHERE { ?s <http://xmlns.com/foaf/0.1/name> ?o }"))
+
+(assert-true
+  (> (length select-results) 0)
+  "SELECT returns at least one row")
+
+## Each row is a struct with keyword keys; check the first row has :s and :o
+(def first-row (get select-results 0))
+
+(assert-true
+  (not (nil? (get first-row :s)))
+  "SELECT row has :s binding")
+
+(assert-true
+  (not (nil? (get first-row :o)))
+  "SELECT row has :o binding")
+
+## Binding values are term arrays: subject should be an [:iri ...] or [:bnode ...]
+(assert-eq
+  (get (get first-row :s) 0)
+  :iri
+  "SELECT binding :s is an IRI term")
+
+## Binding values for literal: object should be [:literal ...]
+(def row-with-alice
+  (letrec ((find-alice (fn (i)
+    (if (>= i (length select-results))
+        nil
+        (let ((row (get select-results i)))
+          (if (= (get (get row :s) 1) "http://example.org/alice")
+              row
+              (find-alice (+ i 1))))))))
+    (find-alice 0)))
+
+(assert-not-nil
+  row-with-alice
+  "SELECT result contains row for alice")
+
+(assert-eq
+  (get (get row-with-alice :o) 0)
+  :literal
+  "SELECT binding :o for alice is a literal term")
+
+(assert-eq
+  (get (get row-with-alice :o) 1)
+  "Alice"
+  "SELECT binding :o for alice has value 'Alice'")
+
+## Unbound variables are omitted (not nil): use OPTIONAL to get an unbound var
+(def optional-results
+  (query sparql-store
+    "SELECT ?s ?missing WHERE { ?s <http://xmlns.com/foaf/0.1/name> ?o . OPTIONAL { ?s <http://example.org/noSuchProp> ?missing } }"))
+
+(assert-true
+  (> (length optional-results) 0)
+  "SELECT with OPTIONAL returns rows")
+
+## The unbound :missing key should be absent (nil? returns true when key not present)
+(def first-optional-row (get optional-results 0))
+(assert-true
+  (nil? (get first-optional-row :missing))
+  "Unbound variable is absent from binding struct")
+
+## ── Scenario 5: SPARQL ASK ─────────────────────────────────────────
+
+## ASK returns true when matching quads exist
+(assert-true
+  (query sparql-store "ASK { <http://example.org/alice> <http://xmlns.com/foaf/0.1/name> \"Alice\" }")
+  "ASK returns true when triple exists")
+
+## ASK returns false when no match
+(assert-false
+  (query sparql-store "ASK { <http://example.org/alice> <http://xmlns.com/foaf/0.1/name> \"Nobody\" }")
+  "ASK returns false when triple does not exist")
+
+## ── Scenario 6: SPARQL CONSTRUCT ───────────────────────────────────
+
+## CONSTRUCT returns array of quad arrays (with nil graph-name)
+(def construct-results
+  (query sparql-store "CONSTRUCT { ?s <http://xmlns.com/foaf/0.1/name> ?o } WHERE { ?s <http://xmlns.com/foaf/0.1/name> ?o }"))
+
+(assert-true
+  (> (length construct-results) 0)
+  "CONSTRUCT returns at least one quad")
+
+## Each element is a 4-element array
+(def first-construct-quad (get construct-results 0))
+(assert-eq
+  (length first-construct-quad)
+  4
+  "CONSTRUCT result element is a 4-element array")
+
+## Subject is an IRI term
+(assert-eq
+  (get (get first-construct-quad 0) 0)
+  :iri
+  "CONSTRUCT quad subject is an IRI")
+
+## Predicate is an IRI term
+(assert-eq
+  (get (get first-construct-quad 1) 0)
+  :iri
+  "CONSTRUCT quad predicate is an IRI")
+
+## Graph-name is nil (CONSTRUCT produces triples, default graph)
+(assert-eq
+  (get first-construct-quad 3)
+  nil
+  "CONSTRUCT quad graph-name is nil")
+
+## ── Scenario 7: SPARQL UPDATE ──────────────────────────────────────
+
+(def update-store (store-new))
+
+## INSERT DATA inserts quads, verify with contains
+(update update-store
+  "INSERT DATA { <http://example.org/x> <http://example.org/p> \"hello\" }")
+
+(assert-true
+  (contains update-store
+    [(iri "http://example.org/x")
+     (iri "http://example.org/p")
+     (literal "hello")
+     nil])
+  "INSERT DATA via update inserts triple")
+
+## DELETE DATA removes quads, verify removal
+(update update-store
+  "DELETE DATA { <http://example.org/x> <http://example.org/p> \"hello\" }")
+
+(assert-false
+  (contains update-store
+    [(iri "http://example.org/x")
+     (iri "http://example.org/p")
+     (literal "hello")
+     nil])
+  "DELETE DATA via update removes triple")
+
+## Malformed SPARQL UPDATE signals sparql-error
+(assert-err-kind
+  (fn () (update update-store "THIS IS NOT SPARQL"))
+  :sparql-error
+  "malformed SPARQL UPDATE signals sparql-error")
