@@ -51,8 +51,8 @@ pub(crate) fn prim_json_parse(args: &[Value]) -> (SignalBits, Value) {
     };
 
     let use_keyword_keys = if args.len() == 3 {
-        let opt_key_ok = args[1].as_keyword_name() == Some("keys");
-        let opt_val_ok = args[2].as_keyword_name() == Some("keyword");
+        let opt_key_ok = args[1].as_keyword_name().as_deref() == Some("keys");
+        let opt_val_ok = args[2].as_keyword_name().as_deref() == Some("keyword");
         if opt_key_ok && opt_val_ok {
             true
         } else {
