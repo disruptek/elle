@@ -61,7 +61,7 @@
 (assert-eq v 42 "ffi/managed pointer normal use")
 
 (def ptr (ffi/malloc 8))
-(def r (pointer? ptr))
+(def r (ptr? ptr))
 (ffi/free ptr)
 (assert-true r "ffi/pointer predicate managed")
 
@@ -386,7 +386,7 @@
 # ptr/add returns raw pointer (not managed — cannot double-free)
 (def buf (ffi/malloc 64))
 (def p2 (ptr/add buf 8))
-(assert-true (pointer? p2) "ptr/add result is pointer")
+(assert-true (ptr? p2) "ptr/add result is pointer")
 (ffi/free buf)
 
 # ptr/add error: null pointer
@@ -419,7 +419,7 @@
 (assert-true (integer? addr) "ptr/to-int returns integer")
 (assert-true (> addr 0) "ptr/to-int positive address")
 (def p2 (ptr/from-int addr))
-(assert-true (pointer? p2) "ptr/from-int returns pointer")
+(assert-true (ptr? p2) "ptr/from-int returns pointer")
 (ffi/write p2 :i32 123)
 (assert-eq (ffi/read buf :i32) 123 "ptr/from-int roundtrip")
 (ffi/free buf)
