@@ -640,6 +640,39 @@
 (assert-err (fn () (concat |1| @|1|)) "concat set/@set mismatch")
 (assert-err (fn () (concat {:a 1} @{:a 1})) "concat struct/@struct mismatch")
 
+## === merge - mutability matching ===
+
+(assert-eq (merge {:a 1} {:b 2}) {:a 1 :b 2}
+  "merge: immutable + immutable")
+(assert-eq (merge {:a 1 :b 2} {:b 3 :c 4}) {:a 1 :b 3 :c 4}
+  "merge: immutable right overrides left")
+(assert-eq (merge @{:a 1} @{:b 2}) @{:a 1 :b 2}
+  "merge: mutable + mutable")
+(assert-eq (merge @{:a 1 :b 2} @{:b 3 :c 4}) @{:a 1 :b 3 :c 4}
+  "merge: mutable right overrides left")
+(assert-eq (merge {} {:a 1}) {:a 1}
+  "merge: empty immutable left")
+(assert-eq (merge {:a 1} {}) {:a 1}
+  "merge: empty immutable right")
+(assert-eq (merge @{} @{:a 1}) @{:a 1}
+  "merge: empty mutable left")
+(assert-eq (merge @{:a 1} @{}) @{:a 1}
+  "merge: empty mutable right")
+
+## merge - mutability mismatch errors
+(assert-err-kind (fn () (merge {:a 1} @{:b 2})) :type-error
+  "merge: struct/@struct mismatch")
+(assert-err-kind (fn () (merge @{:a 1} {:b 2})) :type-error
+  "merge: @struct/struct mismatch")
+
+## merge - non-struct errors
+(assert-err-kind (fn () (merge 42 {:a 1})) :type-error
+  "merge: non-struct first arg")
+(assert-err-kind (fn () (merge {:a 1} 42)) :type-error
+  "merge: non-struct second arg")
+(assert-err-kind (fn () (merge {:a 1} [1 2])) :type-error
+  "merge: array second arg")
+
 ## === get on lists ===
 
 (assert-eq (get (list 10 20 30) 0) 10 "get list by index")
