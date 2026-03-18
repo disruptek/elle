@@ -1063,7 +1063,9 @@ impl AsyncBackendInner {
             | IoOp::Sleep { .. }
             | IoOp::Spawn(_)
             | IoOp::ProcessWait
-            | IoOp::Open { .. } => return Err("io/submit: unsupported operation on stdin".into()),
+            | IoOp::Open { .. }
+            | IoOp::Seek { .. }
+            | IoOp::Tell => return Err("io/submit: unsupported operation on stdin".into()),
         };
         stdin_thread.submit(id, op_kind)?;
         // No buffer needed for stdin (thread manages its own)

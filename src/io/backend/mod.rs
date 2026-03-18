@@ -154,6 +154,7 @@ impl SyncBackend {
                     SIG_ERROR,
                     error_val("io-error", "accept: port is not a listener"),
                 ),
+                IoOp::Seek { .. } | IoOp::Tell => unreachable!(), // implemented in Chunk 2
                 IoOp::Connect { .. }
                 | IoOp::Sleep { .. }
                 | IoOp::Spawn(_)
