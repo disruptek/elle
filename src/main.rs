@@ -435,7 +435,7 @@ fn main() {
         .position(|a| a == "-" || !a.starts_with('-'))
     {
         let source_arg = &all_args[idx];
-        vm.user_args = all_args[idx + 1..].iter().cloned().collect();
+        vm.user_args = all_args[idx + 1..].to_vec();
         if source_arg == "-" {
             read_stdin = true;
         } else {
