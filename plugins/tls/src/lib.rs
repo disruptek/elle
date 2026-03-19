@@ -47,6 +47,10 @@ pub struct TlsState {
     outgoing: RefCell<Vec<u8>>,
     plaintext: RefCell<Vec<u8>>,
     handshake_complete: Cell<bool>,
+    /// When true, the next WriteTraffic state encountered in the drive loop
+    /// will encode a close_notify alert into the outgoing buffer and clear
+    /// this flag. Set by prim_tls_close_notify before driving.
+    close_notify_pending: Cell<bool>,
 }
 
 /// ExternalObject wrapping a rustls ServerConfig.
@@ -223,7 +227,7 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
 /// This macro is used by `drive_state_machine` to handle the per-Data-type
 /// `ConnectionState` variants without duplicating the match body.
 macro_rules! handle_conn_state {
-    ($conn_state:expr, $outgoing:expr, $plaintext:expr, $handshake_done:expr) => {{
+    ($conn_state:expr, $outgoing:expr, $plaintext:expr, $handshake_done:expr, $state:expr) => {{
         match $conn_state {
             ConnectionState::EncodeTlsData(mut encode) => {
                 let start = $outgoing.len();
@@ -254,8 +258,22 @@ macro_rules! handle_conn_state {
                 }
                 Some("has-data")
             }
-            ConnectionState::WriteTraffic(_) => {
+            ConnectionState::WriteTraffic(mut wt) => {
                 $handshake_done.set(true);
+                // If a close_notify was requested, encode it now into the outgoing
+                // buffer. The flag is set by prim_tls_close_notify before it calls
+                // drive_state_machine. WriteTraffic is the only state where we have
+                // a mutable connection handle that can call queue_close_notify.
+                if $state.close_notify_pending.get() {
+                    $state.close_notify_pending.set(false);
+                    let start = $outgoing.len();
+                    // A close_notify alert is a 31-byte TLS record.
+                    $outgoing.resize(start + 64, 0u8);
+                    match wt.queue_close_notify(&mut $outgoing[start..]) {
+                        Ok(written) => $outgoing.truncate(start + written),
+                        Err(_) => $outgoing.truncate(start),
+                    }
+                }
                 Some("ready")
             }
             ConnectionState::PeerClosed => Some("peer-closed"),
@@ -313,7 +331,8 @@ fn drive_state_machine(
                             conn_state,
                             outgoing,
                             plaintext,
-                            state.handshake_complete
+                            state.handshake_complete,
+                            state
                         );
                         if discard > 0 {
                             incoming.drain(..discard);
@@ -410,6 +429,7 @@ fn prim_tls_client_state(args: &[Value]) -> (SignalBits, Value) {
         outgoing: RefCell::new(Vec::new()),
         plaintext: RefCell::new(Vec::new()),
         handshake_complete: Cell::new(false),
+        close_notify_pending: Cell::new(false),
     };
 
     (SIG_OK, Value::external("tls-state", state))
@@ -569,6 +589,38 @@ fn prim_tls_handshake_complete(args: &[Value]) -> (SignalBits, Value) {
         Err(e) => return e,
     };
     (SIG_OK, Value::bool(state.handshake_complete.get()))
+}
+
+/// tls/close-notify tls-state → {:outgoing bytes}
+///
+/// Arity: 1. Signal: errors.
+///
+/// Queues a TLS close_notify alert and drives the state machine to encode it.
+/// Returns {:outgoing bytes} — the encoded alert bytes to send over TCP before
+/// closing the connection. Callers MUST send the outgoing bytes before calling
+/// port/close on the TCP port.
+///
+/// Only meaningful after the handshake is complete. Calling before handshake
+/// returns {:outgoing (bytes)} (empty bytes); no error is raised.
+fn prim_tls_close_notify(args: &[Value]) -> (SignalBits, Value) {
+    let name = "tls/close-notify";
+    let state = match get_tls_state(args, 0, name) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+
+    // Set the flag so the next WriteTraffic state in the drive loop will
+    // encode the alert. Then drive with empty input to trigger the transition.
+    state.close_notify_pending.set(true);
+    if let Err(e) = drive_state_machine(state, &[]) {
+        return e;
+    }
+
+    // Drain whatever was produced (may be empty if handshake not complete).
+    let outgoing: Vec<u8> = std::mem::take(&mut *state.outgoing.borrow_mut());
+    let mut fields = BTreeMap::new();
+    fields.insert(TableKey::Keyword("outgoing".into()), Value::bytes(outgoing));
+    (SIG_OK, Value::struct_from(fields))
 }
 
 /// tls/write-plaintext tls-state plaintext → {:status :ok :outgoing bytes} or error struct
@@ -897,6 +949,7 @@ fn prim_tls_server_state(args: &[Value]) -> (SignalBits, Value) {
         outgoing: RefCell::new(Vec::new()),
         plaintext: RefCell::new(Vec::new()),
         handshake_complete: Cell::new(false),
+        close_notify_pending: Cell::new(false),
     };
 
     (SIG_OK, Value::external("tls-state", state))
@@ -1017,6 +1070,17 @@ static PRIMITIVES: &[PrimitiveDef] = &[
         example: r#"(tls/server-state config)"#,
         aliases: &[],
     },
+    PrimitiveDef {
+        name: "tls/close-notify",
+        func: prim_tls_close_notify,
+        signal: Signal::errors(),
+        arity: Arity::Exact(1),
+        doc: "Queue a TLS close_notify alert and encode it.\nReturns {:outgoing bytes} to send before closing the TCP port.",
+        params: &["tls-state"],
+        category: "tls",
+        example: r#"(tls/close-notify state)"#,
+        aliases: &[],
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1046,6 +1110,7 @@ mod tests {
             outgoing: RefCell::new(Vec::new()),
             plaintext: RefCell::new(Vec::new()),
             handshake_complete: Cell::new(false),
+            close_notify_pending: Cell::new(false),
         }
     }
 

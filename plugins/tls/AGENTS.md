@@ -18,11 +18,12 @@ entirely in Elle, with native I/O primitives handling the network.
 
 ```rust
 pub struct TlsState {
-    conn: RefCell<TlsConnection>,      // Client or Server UnbufferedConnection
-    incoming: RefCell<Vec<u8>>,        // ciphertext from network, not yet processed
-    outgoing: RefCell<Vec<u8>>,        // ciphertext ready to send to network
-    plaintext: RefCell<Vec<u8>>,       // decrypted app data, not yet consumed
+    conn: RefCell<TlsConnection>,          // Client or Server UnbufferedConnection
+    incoming: RefCell<Vec<u8>>,            // ciphertext from network, not yet processed
+    outgoing: RefCell<Vec<u8>>,            // ciphertext ready to send to network
+    plaintext: RefCell<Vec<u8>>,           // decrypted app data, not yet consumed
     handshake_complete: Cell<bool>,
+    close_notify_pending: Cell<bool>,      // set by tls/close-notify, cleared by drive loop
 }
 ```
 
@@ -41,14 +42,14 @@ pub struct TlsServerConfig {
 | `tls/client-state` | 1-2 | errors | tls-state | Create client state machine |
 | `tls/server-config` | 2-3 | errors | tls-server-config | Build server config from PEM files |
 | `tls/server-state` | 1 | errors | tls-state | Create server state machine |
-| `tls/process` | 2 | errors | keyword | Feed bytes, return status |
-| `tls/encrypt` | 2 | errors | int | Encrypt plaintext |
-| `tls/get-outgoing` | 1 | silent | bytes | Drain outgoing buffer |
-| `tls/get-plaintext` | 1 | silent | bytes | Drain all plaintext buffer |
-| `tls/read-plaintext` | 2 | silent | bytes | Drain up to N bytes |
+| `tls/process` | 2 | errors | keyword | Feed bytes, return status keyword |
+| `tls/write-plaintext` | 2 | errors | `{:status :ok/:error :outgoing bytes}` | Encrypt plaintext after handshake |
+| `tls/get-outgoing` | 1 | silent | bytes | Drain outgoing ciphertext buffer |
+| `tls/get-plaintext` | 1 | silent | bytes | Drain entire plaintext buffer |
+| `tls/read-plaintext` | 2 | silent | bytes | Drain up to N bytes from plaintext buffer |
 | `tls/plaintext-indexof` | 2 | silent | int or nil | Scan for byte without draining |
 | `tls/handshake-complete?` | 1 | silent | bool | Check handshake status |
-| `tls/close-notify` | 1 | errors | nil | Queue close_notify alert |
+| `tls/close-notify` | 1 | errors | `{:outgoing bytes}` | Encode close_notify alert bytes |
 
 ## Status keywords from `tls/process`
 
@@ -68,7 +69,7 @@ pub struct TlsServerConfig {
 | Empty hostname | `:tls-error` | `"tls/client-state: hostname must not be empty"` |
 | System CA load failure | `:tls-error` | `"tls/client-state: ..."` |
 | rustls protocol error | `:tls-error` | `"tls/process: ..."` |
-| Encrypt before handshake | `:tls-error` | `"tls/encrypt: handshake not complete"` |
+| Write before handshake | — (returns `{:status :error :message string}`) | `"tls/write-plaintext: handshake not complete"` |
 | Cert file not found | `:io-error` | `"tls/server-config: reading cert-path '...'..."` |
 | Key file not found | `:io-error` | `"tls/server-config: reading key-path '...'..."` |
 | No certs in PEM file | `:tls-error` | `"tls/server-config: no certificates found in '...'"` |
@@ -84,16 +85,21 @@ pub struct TlsServerConfig {
    the `TlsState` Rust struct. Elle code feeds and drains them via primitives.
    Elle never holds a direct reference to these buffers.
 
-3. **Outgoing data invariant.** After every `tls/process` or `tls/encrypt`
-   call, the caller MUST drain and send outgoing bytes via `tls/get-outgoing`
-   and `stream/write`. TLS 1.3 may produce post-handshake messages at any time.
-   Failing to send them will stall the connection.
+3. **Outgoing data invariant.** After every `tls/process` call, the caller
+   MUST drain and send any outgoing bytes via `tls/get-outgoing` and
+   `stream/write`. TLS 1.3 may produce post-handshake messages at any time.
+   Failing to send them will stall the connection. `tls/write-plaintext`
+   returns outgoing bytes directly in its result struct — no separate drain
+   needed for writes.
 
-4. **Handshake-before-encrypt.** `tls/encrypt` fails with `:tls-error` if
-   called before `tls/handshake-complete?` returns true.
+4. **Handshake-before-write.** `tls/write-plaintext` returns
+   `{:status :error :message "tls/write-plaintext: handshake not complete"}`
+   if called before `tls/handshake-complete?` returns true.
 
-5. **close_notify must be sent before closing TCP.** Call `tls/close-notify`,
-   drain outgoing, send it, then call `port/close` on the TCP port.
+5. **close_notify must be sent before closing TCP.** Call `tls/close-notify`
+   to get the encoded alert bytes, send them via `stream/write`, then call
+   `port/close` on the TCP port. `lib/tls.lisp`'s `tls/close` does this
+   automatically.
 
 6. **Crypto provider is global.** `ring::default_provider().install_default()`
    is called in `elle_plugin_init`. The second call (if the plugin is loaded

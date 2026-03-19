@@ -165,10 +165,11 @@
   ## ── Private: additional plugin primitives ──────────────────────────────
   ## Extracted here so data-transfer functions close over them without
   ## reaching into `plugin` at each call site.
-  (def read-plaintext-fn   (get plugin :read-plaintext))
-  (def get-plaintext-fn    (get plugin :get-plaintext))
-  (def write-plaintext-fn  (get plugin :write-plaintext))
+  (def read-plaintext-fn    (get plugin :read-plaintext))
+  (def get-plaintext-fn     (get plugin :get-plaintext))
+  (def write-plaintext-fn   (get plugin :write-plaintext))
   (def plaintext-indexof-fn (get plugin :plaintext-indexof))
+  (def close-notify-fn      (get plugin :close-notify))
 
   ## ── Public: data transfer ─────────────────────────────────────────────────
 
@@ -275,9 +276,14 @@
       (length plaintext)))
 
   (defn tls/close [conn]
-    "Close a TLS connection. Closes the TCP port.
-     Returns nil."
-    (port/close conn:tcp)
+    "Close a TLS connection. Sends a TLS close_notify alert then closes the TCP port.
+     Complies with RFC 8446 §6.1: each party must send close_notify before
+     closing its write side. Returns nil."
+    (let* [[notify-result (close-notify-fn conn:tls)]
+           [outgoing notify-result:outgoing]]
+      (when (> (length outgoing) 0)
+        (stream/write conn:tcp outgoing))
+      (port/close conn:tcp))
     nil)
 
   ## ── Public: stream constructors ───────────────────────────────────────────
