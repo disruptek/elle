@@ -148,3 +148,81 @@
         (assert (get loopback-ok 0) "tls loopback: client fiber must complete and verify response")
         (port/close listener)
         (print "tls chunk 6: loopback echo test PASSED\n")))))
+
+## ── Chunk 7: error cases ─────────────────────────────────────────────────────
+##
+## Tests that bad inputs fail with correct error kinds, not silently or with panics.
+## Plugin primitives accessed via the tls-plugin struct.
+
+## Extract primitives we need to call directly for error-path testing.
+(def client-state-fn   (get tls-plugin :client-state))
+(def process-fn        (get tls-plugin :process))
+(def write-plaintext-fn (get tls-plugin :write-plaintext))
+(def server-config-fn  (get tls-plugin :server-config))
+
+## Error 1: empty hostname → :tls-error signal
+(let [[[ok? err] (protect (client-state-fn ""))]]
+  (assert (not ok?) "empty hostname: must signal an error")
+  (assert (= (get err :error) :tls-error)
+          (concat "empty hostname: error kind must be :tls-error, got: "
+                  (string (get err :error)))))
+
+(print "tls chunk 7: empty hostname rejected ✓\n")
+
+## Error 2: wrong type for tls/process (string instead of bytes) → :type-error signal
+(let [[state (client-state-fn "example.com")]]
+  (let [[[ok? err] (protect (process-fn state "not-bytes"))]]
+    (assert (not ok?) "tls/process with string: must signal an error")
+    (assert (= (get err :error) :type-error)
+            (concat "tls/process with string: must be :type-error, got: "
+                    (string (get err :error))))))
+
+(print "tls chunk 7: tls/process type-check ✓\n")
+
+## Error 3: tls/write-plaintext before handshake → {:status :error} (SIG_OK, error in struct)
+(let [[state (client-state-fn "example.com")]]
+  (let [[result (write-plaintext-fn state (bytes "hello"))]]
+    (assert (= result:status :error)
+            (concat "write-plaintext before handshake: result:status must be :error, got: "
+                    (string result:status)))))
+
+(print "tls chunk 7: write-plaintext before handshake returns error struct ✓\n")
+
+## Error 4: tls/server-config with non-existent cert path → :io-error signal
+(let [[[ok? err] (protect (server-config-fn "/nonexistent/cert.pem" "/nonexistent/key.pem"))]]
+  (assert (not ok?) "invalid cert path: must signal an error")
+  (assert (= (get err :error) :io-error)
+          (concat "invalid cert path: must be :io-error, got: "
+                  (string (get err :error)))))
+
+(print "tls chunk 7: invalid cert path rejected ✓\n")
+
+## Error 5: tls/connect to a closed port → :io-error or :connect-error
+## Port 19999 on 127.0.0.1 should have nothing listening.
+## ev/run propagates errors out, so protect wraps the ev/run call.
+(let [[[ok? err] (protect (ev/run (fn []
+                                    (tls:connect "127.0.0.1" 19999))))]]
+  (assert (not ok?) "connect to closed port: must signal an error")
+  (assert (or (= (get err :error) :io-error)
+              (= (get err :error) :connect-error)
+              (= (get err :error) :tls-error))
+          (concat "connect to closed port: must be :io-error or :connect-error, got: "
+                  (string (get err :error)))))
+
+(print "tls chunk 7: connect to closed port rejected ✓\n")
+
+## Error 6: tls/connect to a plain-HTTP port → :tls-error (handshake fails on non-TLS data)
+## example.com:80 speaks plain HTTP — rustls will see a non-TLS record and reject it.
+## If the connection is refused or times out this test still passes (io-error accepted too).
+(let [[[ok? err] (protect (ev/run (fn []
+                                    (tls:connect "example.com" 80))))]]
+  (assert (not ok?) "connect to plain HTTP port: must signal an error")
+  (assert (or (= (get err :error) :tls-error)
+              (= (get err :error) :io-error)
+              (= (get err :error) :connect-error))
+          (concat "connect to plain HTTP port: must be :tls-error or :io-error, got: "
+                  (string (get err :error)))))
+
+(print "tls chunk 7: connect to plain-HTTP port rejected ✓\n")
+
+(print "tls chunk 7: all error cases PASSED\n")
