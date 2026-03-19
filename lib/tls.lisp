@@ -79,6 +79,7 @@
   (def handshake-complete?-fn (get plugin :handshake-complete?))
   (def client-state-fn        (get plugin :client-state))
   (def server-state-fn        (get plugin :server-state))
+  (def server-config-fn       (get plugin :server-config))
 
   ## ── Private: handshake driver ───────────────────────────────────────────
 
@@ -321,13 +322,14 @@
             (tls/write conn val)))))))
 
   ## ── Export struct ──────────────────────────────────────────────────────
-  {:connect     tls/connect
-   :accept      tls/accept
-   :read        tls/read
-   :read-line   tls/read-line
-   :read-all    tls/read-all
-   :write       tls/write
-   :close       tls/close
-   :lines       tls/lines
-   :chunks      tls/chunks
-   :writer      tls/writer})
+  {:connect       tls/connect
+   :accept        tls/accept
+   :server-config server-config-fn
+   :read          tls/read
+   :read-line     tls/read-line
+   :read-all      tls/read-all
+   :write         tls/write
+   :close         tls/close
+   :lines         tls/lines
+   :chunks        tls/chunks
+   :writer        tls/writer})

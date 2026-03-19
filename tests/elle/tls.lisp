@@ -86,3 +86,65 @@
         (assert (> sz 0) "tls: each chunk must be non-empty"))))))
 
 (print "tls chunk 5c: tls/chunks with stream/map PASSED\n")
+
+## ── Chunk 6: loopback echo server/client ──────────────────────────────────
+##
+## Generates a self-signed cert via openssl, starts a TLS echo server and a
+## TLS client in the same ev/run, verifies the full round-trip.
+
+## Generate test certificates. If openssl is not available or fails, skip.
+(let [[cert-path "/tmp/elle-tls-test.cert.pem"]
+      [key-path  "/tmp/elle-tls-test.key.pem"]]
+
+  (let [[gen-result
+          (subprocess/system "openssl"
+            ["req" "-x509" "-newkey" "rsa:2048"
+             "-keyout" key-path
+             "-out" cert-path
+             "-days" "1" "-nodes"
+             "-subj" "/CN=localhost"])]]
+    (if (not (= gen-result:exit 0))
+      (print "tls chunk 6: SKIPPED (openssl not available)\n")
+
+      (begin
+        ## Shared mutable cell: the client fiber writes true here when done.
+        ## Checked after ev/run to confirm the client fiber actually completed.
+        (def loopback-ok @[false])
+
+        ## Set up the listener before spawning fibers so the port is bound
+        ## and the address is known before either fiber runs.
+        (def listener (tcp/listen "127.0.0.1" 0))
+        (def server-addr (port/path listener))
+
+        ## Parse the ephemeral port from "127.0.0.1:PORT".
+        (def server-port
+          (let [[parts (string/split server-addr ":")]]
+            (int (get parts (- (length parts) 1)))))
+
+        (def server-config (tls:server-config cert-path key-path))
+
+        (ev/run
+          ## Server fiber: accept one connection, echo one line prefixed with "echo: ".
+          (fn []
+            (let [[conn (tls:accept listener server-config)]]
+              (defer (tls:close conn)
+                (let [[msg (tls:read-line conn)]]
+                  (when (not (nil? msg))
+                    ## Strip trailing newline, prepend "echo: ", append newline.
+                    (let [[trimmed (string/trim msg)]]
+                      (tls:write conn (concat "echo: " trimmed "\n"))))))))
+
+          ## Client fiber: connect, write, read response, verify.
+          (fn []
+            (let [[conn (tls:connect "127.0.0.1" server-port {:no-verify true})]]
+              (defer (tls:close conn)
+                (tls:write conn "hello\n")
+                (let [[response (tls:read-line conn)]]
+                  (assert (= response "echo: hello\n")
+                          (concat "tls loopback: expected \"echo: hello\\n\", got: "
+                                  (string response)))
+                  (put loopback-ok 0 true))))))
+
+        (assert (get loopback-ok 0) "tls loopback: client fiber must complete and verify response")
+        (port/close listener)
+        (print "tls chunk 6: loopback echo test PASSED\n")))))
