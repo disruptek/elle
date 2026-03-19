@@ -1,0 +1,1 @@
+rd_("CiWhether the character has the Unicode property XID_Start.Algithub\xe2\x80\x82crates-io\xe2\x80\x82docs-rsCeWhether the character has the Unicode property XID\xe2\x80\xa6")
