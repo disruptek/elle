@@ -280,7 +280,6 @@ fn test_list_pattern_as_cons_chain() {
     // (match x ((a b) ...) (_ ...))
     // A 2-element list pattern should decompose as Cons at the top level.
     use crate::hir::arena::{BindingArena, BindingScope};
-    use crate::hir::Binding;
     use crate::value::SymbolId;
 
     let mut arena = BindingArena::new();
@@ -596,7 +595,6 @@ fn test_or_pattern_in_matrix() {
 fn test_var_binding_collected() {
     // A variable pattern should produce a binding in the Leaf.
     use crate::hir::arena::{BindingArena, BindingScope};
-    use crate::hir::Binding;
     use crate::value::SymbolId;
 
     let mut arena = BindingArena::new();
