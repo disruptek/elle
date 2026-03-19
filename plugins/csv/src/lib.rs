@@ -210,7 +210,7 @@ fn prim_csv_parse_rows(args: &[Value]) -> (SignalBits, Value) {
                 )
             }
         };
-        let fields: Vec<Value> = record.iter().map(|f| Value::string(f)).collect();
+        let fields: Vec<Value> = record.iter().map(Value::string).collect();
         rows.push(Value::array(fields));
     }
     (SIG_OK, Value::array(rows))
