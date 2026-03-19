@@ -8,4 +8,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 elle = { path = "../.." }
-fastrand = "2.3"
+rand = "0.9"
+rand_chacha = "0.9"
