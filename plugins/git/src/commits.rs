@@ -117,10 +117,7 @@ pub fn prim_git_commit(args: &[Value]) -> (SignalBits, Value) {
 
     // Get HEAD commit as parent (None for initial commit)
     let parent_commit: Option<git2::Commit<'_>> = match repo.head() {
-        Ok(head) => match head.peel_to_commit() {
-            Ok(c) => Some(c),
-            Err(_) => None,
-        },
+        Ok(head) => head.peel_to_commit().ok(),
         Err(_) => None,
     };
     let parents: Vec<&git2::Commit<'_>> = parent_commit.iter().collect();

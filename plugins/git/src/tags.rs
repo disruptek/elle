@@ -13,10 +13,8 @@ pub fn prim_git_tags(args: &[Value]) -> (SignalBits, Value) {
     let mut tag_names: Vec<Value> = Vec::new();
     match repo.tag_names(None) {
         Ok(names) => {
-            for name_opt in names.iter() {
-                if let Some(n) = name_opt {
-                    tag_names.push(Value::string(n.to_string()));
-                }
+            for n in names.iter().flatten() {
+                tag_names.push(Value::string(n.to_string()));
             }
         }
         Err(e) => return git_err(name, e),
