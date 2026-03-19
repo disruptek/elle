@@ -536,13 +536,10 @@ fn prim_clap_parse(args: &[Value]) -> (SignalBits, Value) {
         Err(e) => return e,
     };
 
-    // Prepend a dummy argv[0] (the program name). clap's try_get_matches_from
-    // treats the first element of the iterator as argv[0] (the program name),
-    // not as a flag or positional argument. The Elle API accepts argv without
-    // the program name (matching sys/args semantics), so we add it here.
-    let mut full_argv = Vec::with_capacity(argv_strings.len() + 1);
-    full_argv.push("elle-clap".to_string());
-    full_argv.extend(argv_strings);
+    // clap's try_get_matches_from treats argv[0] as the program name.
+    // Callers must pass (sys/argv) or an equivalent list with the program
+    // name as element 0. This matches standard CLI convention.
+    let full_argv = argv_strings;
 
     // Run the parser.
     // disable_help_flag / disable_version_flag are NOT set to true here —
@@ -577,9 +574,9 @@ static PRIMITIVES: &[PrimitiveDef] = &[PrimitiveDef {
     func: prim_clap_parse,
     signal: Signal::errors(),
     arity: Arity::Exact(2),
-    doc: "Parse CLI arguments against a command spec. Returns a struct of parsed values.",
+    doc: "Parse CLI arguments against a command spec. Returns a struct of parsed values. argv must include the program name as element 0 — pass (sys/argv) for the idiomatic usage.",
     params: &["spec", "argv"],
     category: "clap",
-    example: r#"(clap/parse {:name "app" :args [{:name "verbose" :long "verbose" :action :flag}]} ["--verbose"])"#,
+    example: r#"(clap/parse {:name "app" :args [{:name "verbose" :long "verbose" :action :flag}]} (sys/argv))"#,
     aliases: &[],
 }];

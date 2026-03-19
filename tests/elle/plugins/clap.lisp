@@ -20,67 +20,67 @@
 # ── Happy paths ─────────────────────────────────────────────────────────────
 
 ## Simple long flag → true
-(let ((result (parse-fn {:name "app" :args [{:name "verbose" :long "verbose" :action :flag}]} ["--verbose"])))
+(let ((result (parse-fn {:name "app" :args [{:name "verbose" :long "verbose" :action :flag}]} ["myapp" "--verbose"])))
   (assert-true (get result :verbose) "long flag true"))
 
 ## Simple short flag → true
-(let ((result (parse-fn {:name "app" :args [{:name "verbose" :short "v" :action :flag}]} ["-v"])))
+(let ((result (parse-fn {:name "app" :args [{:name "verbose" :short "v" :action :flag}]} ["myapp" "-v"])))
   (assert-true (get result :verbose) "short flag true"))
 
 ## String option with long
-(let ((result (parse-fn {:name "app" :args [{:name "output" :long "output"}]} ["--output" "foo"])))
+(let ((result (parse-fn {:name "app" :args [{:name "output" :long "output"}]} ["myapp" "--output" "foo"])))
   (assert-eq (get result :output) "foo" "string option long"))
 
 ## String option with short
-(let ((result (parse-fn {:name "app" :args [{:name "output" :short "o"}]} ["-o" "foo"])))
+(let ((result (parse-fn {:name "app" :args [{:name "output" :short "o"}]} ["myapp" "-o" "foo"])))
   (assert-eq (get result :output) "foo" "string option short"))
 
 ## String option with = syntax
-(let ((result (parse-fn {:name "app" :args [{:name "output" :long "output"}]} ["--output=foo"])))
+(let ((result (parse-fn {:name "app" :args [{:name "output" :long "output"}]} ["myapp" "--output=foo"])))
   (assert-eq (get result :output) "foo" "string option with ="))
 
 ## Required positional arg
-(let ((result (parse-fn {:name "app" :args [{:name "input" :required true}]} ["file.txt"])))
+(let ((result (parse-fn {:name "app" :args [{:name "input" :required true}]} ["myapp" "file.txt"])))
   (assert-eq (get result :input) "file.txt" "required positional"))
 
 ## Multiple positional args in order
 (let ((result (parse-fn {:name "cp"
                           :args [{:name "src" :required true}
                                  {:name "dst" :required true}]}
-                        ["foo.txt" "bar.txt"])))
+                        ["myapp" "foo.txt" "bar.txt"])))
   (assert-eq (get result :src) "foo.txt" "multi-positional src")
   (assert-eq (get result :dst) "bar.txt" "multi-positional dst"))
 
 ## Default value when arg absent
-(let ((result (parse-fn {:name "app" :args [{:name "count" :long "count" :default "1"}]} [])))
+(let ((result (parse-fn {:name "app" :args [{:name "count" :long "count" :default "1"}]} ["myapp"])))
   (assert-eq (get result :count) "1" "default value used"))
 
 ## Absent optional → nil (no default)
-(let ((result (parse-fn {:name "app" :args [{:name "output" :long "output"}]} [])))
+(let ((result (parse-fn {:name "app" :args [{:name "output" :long "output"}]} ["myapp"])))
   (assert-true (nil? (get result :output)) "absent optional is nil"))
 
 ## Flag absent → false
-(let ((result (parse-fn {:name "app" :args [{:name "verbose" :long "verbose" :action :flag}]} [])))
+(let ((result (parse-fn {:name "app" :args [{:name "verbose" :long "verbose" :action :flag}]} ["myapp"])))
   (assert-false (get result :verbose) "flag absent is false"))
 
 ## Count flag -vvv → 3
-(let ((result (parse-fn {:name "app" :args [{:name "verbose" :short "v" :action :count}]} ["-vvv"])))
+(let ((result (parse-fn {:name "app" :args [{:name "verbose" :short "v" :action :count}]} ["myapp" "-vvv"])))
   (assert-eq (get result :verbose) 3 "count flag three"))
 
 ## Count absent → 0
-(let ((result (parse-fn {:name "app" :args [{:name "verbose" :short "v" :action :count}]} [])))
+(let ((result (parse-fn {:name "app" :args [{:name "verbose" :short "v" :action :count}]} ["myapp"])))
   (assert-eq (get result :verbose) 0 "count absent is zero"))
 
 ## Append action: multiple -I → array
 (let ((result (parse-fn {:name "app" :args [{:name "include" :short "I" :action :append}]}
-                        ["-I" "/usr/include" "-I" "/opt/include"])))
+                        ["myapp" "-I" "/usr/include" "-I" "/opt/include"])))
   (let ((arr (get result :include)))
     (assert-eq (length arr) 2 "append length 2")
     (assert-eq (get arr 0) "/usr/include" "append first element")
     (assert-eq (get arr 1) "/opt/include" "append second element")))
 
 ## Append absent → empty array
-(let ((result (parse-fn {:name "app" :args [{:name "include" :short "I" :action :append}]} [])))
+(let ((result (parse-fn {:name "app" :args [{:name "include" :short "I" :action :append}]} ["myapp"])))
   (assert-eq (length (get result :include)) 0 "append absent is empty array"))
 
 ## Subcommand matched
@@ -89,7 +89,7 @@
                                       :args [{:name "release" :long "release" :action :flag}]}
                                      {:name "test"
                                       :args [{:name "name" :long "name"}]}]}
-                        ["build" "--release"])))
+                        ["myapp" "build" "--release"])))
   (assert-eq (get result :command) "build" "subcommand name")
   (assert-true (get (get result :command-args) :release) "subcommand arg"))
 
@@ -99,14 +99,14 @@
                                       :args [{:name "release" :long "release" :action :flag}]}
                                      {:name "test"
                                       :args [{:name "name" :long "name"}]}]}
-                        ["test" "--name" "mytest"])))
+                        ["myapp" "test" "--name" "mytest"])))
   (assert-eq (get result :command) "test" "subcommand test name")
   (assert-eq (get (get result :command-args) :name) "mytest" "subcommand test arg"))
 
 ## No subcommand matched → :command nil, :command-args nil
 (let ((result (parse-fn {:name "cargo"
                           :commands [{:name "build" :args []}]}
-                        [])))
+                        ["myapp"])))
   (assert-true (nil? (get result :command)) "no subcommand :command nil")
   (assert-true (nil? (get result :command-args)) "no subcommand :command-args nil"))
 
@@ -114,7 +114,7 @@
 (let ((result (parse-fn {:name "app"
                           :args [{:name "input" :required true}
                                  {:name "verbose" :long "verbose" :action :flag}]}
-                        ["--verbose" "file.txt"])))
+                        ["myapp" "--verbose" "file.txt"])))
   (assert-eq (get result :input) "file.txt" "mixed positional")
   (assert-true (get result :verbose) "mixed flag"))
 
@@ -122,33 +122,33 @@
 (let ((result (parse-fn {:name "app"
                           :args [{:name "verbose" :long "verbose" :action :flag}
                                  {:name "output" :long "output"}]}
-                        [])))
+                        ["myapp"])))
   (assert-false (get result :verbose) "empty argv flag false")
   (assert-true (nil? (get result :output)) "empty argv string nil"))
 
 ## List input for argv (not array)
 (let ((result (parse-fn {:name "app" :args [{:name "verbose" :long "verbose" :action :flag}]}
-                        (list "--verbose"))))
+                        (list "myapp" "--verbose"))))
   (assert-true (get result :verbose) "list argv works"))
 
 ## Arg name with hyphens
 (let ((result (parse-fn {:name "app" :args [{:name "dry-run" :long "dry-run" :action :flag}]}
-                        ["--dry-run"])))
+                        ["myapp" "--dry-run"])))
   (assert-true (get result :dry-run) "hyphenated arg name"))
 
 ## Empty :args array
-(let ((result (parse-fn {:name "app" :args []} [])))
+(let ((result (parse-fn {:name "app" :args []} ["myapp"])))
   (assert-not-nil result "empty args array returns struct"))
 
 ## Empty :commands array treated same as absent
 (let ((result (parse-fn {:name "app" :args [{:name "v" :long "verbose" :action :flag}]
                           :commands []}
-                        ["--verbose"])))
+                        ["myapp" "--verbose"])))
   (assert-true (get result :v) "empty commands array ignored"))
 
 ## :version in spec (just verify parsing still works; --version causes clap error, not crash)
 (let ((result (parse-fn {:name "app" :version "1.0.0" :args [{:name "v" :long "verbose" :action :flag}]}
-                        [])))
+                        ["myapp"])))
   (assert-false (get result :v) "spec with version parses ok"))
 
 # ── Error paths ──────────────────────────────────────────────────────────────
@@ -170,11 +170,11 @@
   :clap-error "spec missing :name")
 
 ## unknown flag in argv → clap-error
-(assert-err-kind (fn () (parse-fn {:name "app" :args []} ["--unknown-flag"]))
+(assert-err-kind (fn () (parse-fn {:name "app" :args []} ["myapp" "--unknown-flag"]))
   :clap-error "unknown flag in argv")
 
 ## missing required arg → clap-error
-(assert-err-kind (fn () (parse-fn {:name "app" :args [{:name "input" :long "input" :required true}]} []))
+(assert-err-kind (fn () (parse-fn {:name "app" :args [{:name "input" :long "input" :required true}]} ["myapp"]))
   :clap-error "missing required arg")
 
 ## unknown :action keyword → clap-error
