@@ -134,6 +134,11 @@ This prevents accidental capture in macros while allowing intentional capture vi
 - **Changing signal bounds**: Update `special.rs` for `analyze_silence`, update `lambda.rs` for ceiling checks, update `call.rs` for call-site checking
 - **Changing pattern matching**: Update `special.rs` and `destructure.rs`
 - **Changing scope resolution**: Update `mod.rs::lookup()` and `bind()`
+- **Changing `(doc name)` resolution**: The `doc` special-form arm in `forms.rs`
+  (`analyze_expr`) decides whether to evaluate the symbol as a closure or rewrite
+  it to a string for `vm.docs` lookup. Closures (both user-defined and stdlib) pass
+  through; NativeFn, Parameter, and unresolved symbols (special forms) are rewritten.
+  The critical field is `primitive_values: HashMap<Binding, Value>` on `Analyzer`.
 
 ## Common pitfalls
 
