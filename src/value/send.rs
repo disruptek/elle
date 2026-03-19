@@ -364,9 +364,6 @@ fn from_value_inner(value: Value, ctx: &mut SerContext) -> Result<SendValue, Str
         // Unsafe: syntax objects (contain Rc)
         HeapObject::Syntax { .. } => Err("Cannot send syntax object".to_string()),
 
-        // Unsafe: bindings (compile-time only)
-        HeapObject::Binding(_) => Err("Cannot send binding".to_string()),
-
         // Unsafe: FFI signatures (contain non-Send types like Cif)
         HeapObject::FFISignature(_, _) => Err("Cannot send FFI signature".to_string()),
 

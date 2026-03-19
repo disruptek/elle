@@ -153,11 +153,6 @@ impl fmt::Display for Value {
             return write!(f, "<parameter:{}>", id);
         }
 
-        // Binding
-        if self.is_binding() {
-            return write!(f, "#<binding>");
-        }
-
         // @string
         if let Some(buf_ref) = self.as_string_mut() {
             let borrowed = buf_ref.borrow();

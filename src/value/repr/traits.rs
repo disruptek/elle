@@ -103,11 +103,6 @@ impl PartialEq for Value {
                     std::rc::Rc::ptr_eq(s1, s2)
                 }
 
-                // Binding comparison (by reference — same heap allocation)
-                (HeapObject::Binding(_), HeapObject::Binding(_)) => {
-                    std::ptr::eq(self_obj as *const _, other_obj as *const _)
-                }
-
                 // FFI signature comparison (structural equality, skip CIF cache)
                 (HeapObject::FFISignature(s1, _), HeapObject::FFISignature(s2, _)) => s1 == s2,
 
@@ -297,7 +292,6 @@ fn type_rank(v: &Value) -> u8 {
             HeapTag::ThreadHandle => 21,
             HeapTag::Fiber => 22,
             HeapTag::Syntax => 23,
-            HeapTag::Binding => 24,
             HeapTag::FFISignature => 25,
             HeapTag::FFIType => 26,
             HeapTag::ManagedPointer => 27,

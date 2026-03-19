@@ -3,10 +3,10 @@
 use std::any::Any;
 
 use super::{
-    Value, TAG_ARRAY, TAG_ARRAY_MUT, TAG_BINDING, TAG_BYTES, TAG_BYTES_MUT, TAG_CLOSURE, TAG_CONS,
-    TAG_EXTERNAL, TAG_FALSE, TAG_FFI_SIG, TAG_FFI_TYPE, TAG_FIBER, TAG_LBOX, TAG_LIB_HANDLE,
-    TAG_MANAGED_PTR, TAG_NATIVE_FN, TAG_PARAMETER, TAG_SET, TAG_SET_MUT, TAG_STRING,
-    TAG_STRING_MUT, TAG_STRUCT, TAG_STRUCT_MUT, TAG_SYNTAX, TAG_THREAD, TAG_TRUE,
+    Value, TAG_ARRAY, TAG_ARRAY_MUT, TAG_BYTES, TAG_BYTES_MUT, TAG_CLOSURE, TAG_CONS, TAG_EXTERNAL,
+    TAG_FALSE, TAG_FFI_SIG, TAG_FFI_TYPE, TAG_FIBER, TAG_LBOX, TAG_LIB_HANDLE, TAG_MANAGED_PTR,
+    TAG_NATIVE_FN, TAG_PARAMETER, TAG_SET, TAG_SET_MUT, TAG_STRING, TAG_STRING_MUT, TAG_STRUCT,
+    TAG_STRUCT_MUT, TAG_SYNTAX, TAG_THREAD, TAG_TRUE,
 };
 
 impl Value {
@@ -205,12 +205,6 @@ impl Value {
     #[inline]
     pub fn is_set_mut(&self) -> bool {
         self.tag == TAG_SET_MUT
-    }
-
-    /// Check if this is a binding.
-    #[inline]
-    pub fn is_binding(&self) -> bool {
-        self.tag == TAG_BINDING
     }
 
     /// Check if this is a parameter.
@@ -693,19 +687,6 @@ impl Value {
                 HeapObject::External { obj, .. } => Some(obj.type_name),
                 _ => None,
             }
-        }
-    }
-
-    /// Extract as binding inner if this is a binding.
-    #[inline]
-    pub fn as_binding(&self) -> Option<&std::cell::RefCell<crate::value::heap::BindingInner>> {
-        use crate::value::heap::{deref, HeapObject};
-        if !self.is_binding() {
-            return None;
-        }
-        match unsafe { deref(*self) } {
-            HeapObject::Binding(inner) => Some(inner),
-            _ => None,
         }
     }
 

@@ -618,7 +618,6 @@ pub(crate) fn needs_drop(tag: HeapTag) -> bool {
         HeapTag::NativeFn => false,
         HeapTag::LibHandle => false,
         HeapTag::ManagedPointer => false,
-        HeapTag::Binding => false,
         // Inner heap allocations (Box<str>, Vec, Rc, BTreeMap, Arc, Cif, etc.)
         HeapTag::LString => true,
         HeapTag::LArrayMut => true,

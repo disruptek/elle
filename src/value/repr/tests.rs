@@ -478,7 +478,6 @@ fn test_tag_constants_distinct() {
         super::TAG_LBOX,
         super::TAG_FIBER,
         super::TAG_SYNTAX,
-        super::TAG_BINDING,
         super::TAG_NATIVE_FN,
         super::TAG_FFI_SIG,
         super::TAG_FFI_TYPE,

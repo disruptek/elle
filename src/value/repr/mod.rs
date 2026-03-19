@@ -49,9 +49,6 @@ pub const TAG_SET_MUT: u64 = 21;
 pub const TAG_LBOX: u64 = 22;
 pub const TAG_FIBER: u64 = 23;
 pub const TAG_SYNTAX: u64 = 24;
-/// TAG 25: compile-time binding metadata. Allocated during HIR analysis,
-/// never present in values seen by the VM at execution time.
-pub const TAG_BINDING: u64 = 25;
 pub const TAG_NATIVE_FN: u64 = 26;
 pub const TAG_FFI_SIG: u64 = 27;
 pub const TAG_FFI_TYPE: u64 = 28;

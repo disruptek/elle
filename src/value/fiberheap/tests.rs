@@ -70,7 +70,6 @@ fn test_fiber_heap_needs_drop_exhaustive() {
     assert!(!needs_drop(HeapTag::NativeFn));
     assert!(!needs_drop(HeapTag::LibHandle));
     assert!(!needs_drop(HeapTag::ManagedPointer));
-    assert!(!needs_drop(HeapTag::Binding));
     assert!(!needs_drop(HeapTag::Parameter));
 
     assert!(needs_drop(HeapTag::LString));
