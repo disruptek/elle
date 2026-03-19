@@ -622,6 +622,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "elle-xml"
+version = "1.0.0"
+dependencies = [
+ "elle",
+ "quick-xml",
+]
+
+[[package]]
 name = "endian-type"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
