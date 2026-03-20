@@ -113,7 +113,7 @@
 (let ((parts (split-fn (compile-fn "[,;]+") "a,b;;c")))
   (assert (= (length parts) 3) "regex/split count")
   (assert (= (first parts) "a") "regex/split first")
-  (assert (= (nth parts 2) "c") "regex/split last"))
+  (assert (= (last parts) "c") "regex/split last"))
 
 (assert (= (length (split-fn (compile-fn ",") "abc")) 1) "regex/split no delimiter")
 
