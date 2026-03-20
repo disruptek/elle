@@ -487,11 +487,11 @@ fn span_fields(s: &jiff::Span) -> [i64; 10] {
         s.get_weeks() as i64,
         s.get_days() as i64,
         s.get_hours() as i64,
-        s.get_minutes() as i64,
-        s.get_seconds() as i64,
-        s.get_milliseconds() as i64,
-        s.get_microseconds() as i64,
-        s.get_nanoseconds() as i64,
+        s.get_minutes(),
+        s.get_seconds(),
+        s.get_milliseconds(),
+        s.get_microseconds(),
+        s.get_nanoseconds(),
     ]
 }
 

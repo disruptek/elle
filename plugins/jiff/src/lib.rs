@@ -61,7 +61,7 @@ pub fn jiff_val(v: JiffValue) -> Value {
 }
 
 /// Extract the JiffValue from an elle Value, or return a type error.
-pub fn as_jiff<'a>(v: &'a Value) -> Option<&'a JiffValue> {
+pub fn as_jiff(v: &Value) -> Option<&JiffValue> {
     v.as_external::<JiffValue>()
 }
 

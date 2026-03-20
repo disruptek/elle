@@ -11,9 +11,8 @@ use elle::value::{error_val, Value};
 
 /// (now) → zoned (current wall-clock time with system timezone)
 fn prim_now(_args: &[Value]) -> (SignalBits, Value) {
-    match jiff::Zoned::now() {
-        z => (SIG_OK, jiff_val(JiffValue::Zoned(Box::new(z)))),
-    }
+    let z = jiff::Zoned::now();
+    (SIG_OK, jiff_val(JiffValue::Zoned(Box::new(z))))
 }
 
 /// (timestamp) → timestamp (current UTC instant)
