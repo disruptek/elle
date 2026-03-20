@@ -446,8 +446,7 @@ impl VM {
 
                     // Save remaining outer frames for later resumption.
                     if i + 1 < frames.len() {
-                        self.fiber.suspended =
-                            Some(frames[i + 1..].iter().cloned().collect());
+                        self.fiber.suspended = Some(frames[i + 1..].to_vec());
                     }
 
                     self.fiber.signal = Some((SIG_SWITCH, Value::NIL));
@@ -482,13 +481,16 @@ impl VM {
                         if std::env::var("ELLE_DEBUG_RESUME").is_ok() {
                             eprintln!(
                                 "[resume_suspended] frame {} OK: val_type={} total_frames={}",
-                                i, v.type_name(), frames.len(),
+                                i,
+                                v.type_name(),
+                                frames.len(),
                             );
                         }
                         current_value = v;
                     } else {
                         if std::env::var("ELLE_DEBUG_RESUME").is_ok() {
-                            let susp_len = self.fiber.suspended.as_ref().map(|v| v.len()).unwrap_or(0);
+                            let susp_len =
+                                self.fiber.suspended.as_ref().map(|v| v.len()).unwrap_or(0);
                             let remaining = frames.len() - i - 1;
                             eprintln!(
                                 "[resume_suspended] frame {} non-OK: bits=0x{:x} susp_frames={} remaining={}",

@@ -110,8 +110,7 @@ impl VM {
                 let (_, value) = self.fiber.signal.take().unwrap();
                 return Ok(value);
             } else if bits.contains(SIG_ERROR) {
-                let (_, err_value) =
-                    self.fiber.signal.take().unwrap_or((SIG_ERROR, Value::NIL));
+                let (_, err_value) = self.fiber.signal.take().unwrap_or((SIG_ERROR, Value::NIL));
                 return Err(self.format_error_with_location(err_value));
             } else if bits == SIG_SWITCH {
                 bits = self.handle_sig_switch();
@@ -156,8 +155,7 @@ impl VM {
         }
 
         let caught = result_bits.is_ok()
-            || (mask.covers(result_bits)
-                && !result_bits.contains(crate::value::SIG_TERMINAL));
+            || (mask.covers(result_bits) && !result_bits.contains(crate::value::SIG_TERMINAL));
 
         if caught {
             self.fiber.child = None;

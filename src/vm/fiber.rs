@@ -155,6 +155,17 @@ impl VM {
     /// Calls do_fiber_resume directly. The trampoline inside do_fiber_resume
     /// handles nested fiber/resume iteratively (via the FiberResume frame
     /// path in resume_suspended returning SIG_SWITCH).
+    ///
+    /// TODO(trampoline): This should return SIG_SWITCH instead of calling
+    /// do_fiber_resume, to unwind the Rust call stack. See height.md and
+    /// the plan at .claude/plans/resilient-percolating-bubble.md.
+    /// The blocker: when SIG_SWITCH propagates out of execute_bytecode_from_ip
+    /// (inside resume_suspended) after a TailCall changed the bytecode,
+    /// the frame chain in resume_suspended's Bytecode arm loses the
+    /// continuation context because exec.stack is empty (vec![]).
+    /// Fix: make execute_bytecode_from_ip capture the inner stack on
+    /// non-OK exit (like execute_bytecode_saving_stack does), then use
+    /// that stack in the exec frame that resume_suspended builds.
     pub(super) fn handle_fiber_resume_signal(
         &mut self,
         fiber_value: Value,
@@ -184,12 +195,9 @@ impl VM {
             handle.with_mut(|f| f.status = FiberStatus::Dead);
         }
 
-        if result_bits.is_ok() {
-            self.fiber.child = None;
-            self.fiber.child_value = None;
-            self.fiber.stack.push(result_value);
-            None
-        } else if mask.covers(result_bits) && !result_bits.contains(SIG_TERMINAL) {
+        let caught = result_bits.is_ok()
+            || (mask.covers(result_bits) && !result_bits.contains(SIG_TERMINAL));
+        if caught {
             self.fiber.child = None;
             self.fiber.child_value = None;
             self.fiber.stack.push(result_value);
@@ -301,8 +309,7 @@ impl VM {
         child_handle: &FiberHandle,
         child_value: Value,
     ) -> (SignalBits, Value) {
-        let (mut bits, mut value) =
-            self.do_fiber_resume_single(child_handle, child_value);
+        let (mut bits, mut value) = self.do_fiber_resume_single(child_handle, child_value);
 
         // Fast path: no nested fiber/resume — return directly.
         if bits != SIG_SWITCH {
@@ -341,8 +348,7 @@ impl VM {
                     current_handle.with_mut(|f| f.status = FiberStatus::Dead);
                 }
 
-                let caught = bits.is_ok()
-                    || (mask.covers(bits) && !bits.contains(SIG_TERMINAL));
+                let caught = bits.is_ok() || (mask.covers(bits) && !bits.contains(SIG_TERMINAL));
 
                 if caught {
                     self.fiber.child = None;
