@@ -13,13 +13,16 @@ TIMEOUT ?= 10s
 
 PLUGINS := \
     base64 \
+    clap \
     compress \
     crypto \
     csv \
     git \
     glob \
+    jiff \
     msgpack \
     oxigraph \
+    protobuf \
     random \
     regex \
     selkie \
@@ -28,6 +31,7 @@ PLUGINS := \
     syn \
     tls \
     toml \
+    tree-sitter \
     uuid \
     xml \
     yaml

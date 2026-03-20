@@ -20,13 +20,16 @@ jobs:
       matrix:
         plugin:
           - base64
+          - clap
           - compress
           - crypto
           - csv
           - git
           - glob
+          - jiff
           - msgpack
           - oxigraph
+          - protobuf
           - random
           - regex
           - selkie
@@ -35,6 +38,7 @@ jobs:
           - syn
           - tls
           - toml
+          - tree-sitter
           - uuid
           - xml
           - yaml
