@@ -73,6 +73,14 @@ Plugins are Rust cdylib crates that export an `elle_plugin_init` function. The p
 4. Implement primitives and register them
 5. Build: `cargo build --release`
 6. Load: `(import-file "target/release/libelle_myplugin.so")`
+7. Add `"plugins/myplugin"` to the workspace `members` list in
+   the root `Cargo.toml`
+8. Add `myplugin` to the `PLUGINS` variable in the `Makefile`
+   (the CI plugin matrix and `check-plugin-list` target derive from this)
+9. Write tests in `tests/elle/plugins/myplugin.lisp`
+
+Run `make check-plugin-list` to verify the `Makefile` and `Cargo.toml`
+stay in sync. CI runs this check on every PR and merge.
 
 See [`crypto/`](crypto/) for a complete example.
 

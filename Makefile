@@ -1,4 +1,4 @@
-.PHONY: all elle dev plugins docs docgen examples smoke test plugin-tests test-git clean help
+.PHONY: all elle dev plugins docs docgen examples smoke test plugin-tests test-git check-plugin-list clean help
 
 ifdef GITHUB_ACTIONS
   JOBS    ?= 4
@@ -11,8 +11,26 @@ else
 endif
 TIMEOUT ?= 10s
 
-PLUGINS := base64 compress crypto csv glob oxigraph random regex selkie \
-    semver sqlite syn toml uuid xml yaml
+PLUGINS := \
+    base64 \
+    compress \
+    crypto \
+    csv \
+    git \
+    glob \
+    msgpack \
+    oxigraph \
+    random \
+    regex \
+    selkie \
+    semver \
+    sqlite \
+    syn \
+    tls \
+    toml \
+    uuid \
+    xml \
+    yaml
 
 all: elle plugins docs  ## Build everything
 
@@ -67,6 +85,24 @@ plugin-tests:  ## Run plugin tests
 test-git:  ## Run git plugin integration tests (requires git, no network)
 	cargo build -p elle-git
 	$(ELLE) tests/git.lisp
+
+check-plugin-list:  ## Assert every workspace plugin is in PLUGINS
+	@workspace=$$(grep -oP 'plugins/\K[^"]+' Cargo.toml | sort); \
+	makefile=$$(echo '$(PLUGINS)' | tr ' ' '\n' | sort); \
+	missing=$$(comm -23 <(echo "$$workspace") <(echo "$$makefile")); \
+	extra=$$(comm -13 <(echo "$$workspace") <(echo "$$makefile")); \
+	ok=true; \
+	if [ -n "$$missing" ]; then \
+		echo "ERROR: plugins in Cargo.toml but not in Makefile PLUGINS:"; \
+		echo "$$missing" | sed 's/^/  /'; \
+		ok=false; \
+	fi; \
+	if [ -n "$$extra" ]; then \
+		echo "ERROR: plugins in Makefile PLUGINS but not in Cargo.toml:"; \
+		echo "$$extra" | sed 's/^/  /'; \
+		ok=false; \
+	fi; \
+	$$ok && echo "✓ PLUGINS list matches Cargo.toml workspace members"
 
 test: smoke  ## Rust unit tests + clippy + fmt after smoke
 	cargo fmt --check
