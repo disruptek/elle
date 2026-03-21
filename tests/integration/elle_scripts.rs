@@ -53,3 +53,8 @@ fn file_stat() {
 fn errors() {
     run_elle_script("errors");
 }
+
+#[test]
+fn fiber_stress() {
+    run_elle_script("fiber_stress");
+}
