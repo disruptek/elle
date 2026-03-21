@@ -309,4 +309,12 @@ println(getmetatable(d).speak)         -- shows the function
 -- Drop into s-expressions for any Elle feature
 `(println "from s-expr land")
 
+-- ============================================================================
+-- Modules (require)
+-- ============================================================================
+
+-- require("path") loads path.lisp and returns its value
+local contract = require("lib/contract")
+println(lua_type(contract))      -- function (it's a module closure)
+
 println "done!"
