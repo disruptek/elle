@@ -11,7 +11,9 @@
 # === Scheduler parameter ===
 
 (assert (parameter? *scheduler*) "*scheduler* is a parameter")
-(assert (= (*scheduler*) sync-scheduler) "*scheduler* default is sync-scheduler")
+# In the async-first model, user code runs under the async scheduler.
+# The sync-scheduler is still available but not the default for user code.
+(assert (fn? (*scheduler*)) "*scheduler* is bound to a function")
 
 # === sync-scheduler with pure fiber ===
 
@@ -25,28 +27,35 @@
       (fn [] (stream/read-all (port/open "/tmp/elle-test-io-lisp" :read)))
       (bit/or 1 512))) "hello from io test") "sync-scheduler dispatches stream/read-all")
 
-# === ev/spawn pure ===
+# === ev/spawn returns fiber ===
 
-(assert (= (ev/spawn (fn [] 42)) 42) "ev/spawn pure closure")
+(assert (fiber? (ev/spawn (fn [] 42))) "ev/spawn returns a fiber")
 
-# === ev/spawn with I/O ===
+# === ev/spawn with I/O (result collected via mutable) ===
 
 (spit "/tmp/elle-test-ev-spawn-lisp" "spawn content")
-(assert (= (ev/spawn (fn []
-    (stream/read-all (port/open "/tmp/elle-test-ev-spawn-lisp" :read)))) "spawn content") "ev/spawn with stream/read-all")
+(let ((result @[]))
+  (ev/spawn (fn []
+    (push result (stream/read-all (port/open "/tmp/elle-test-ev-spawn-lisp" :read)))))
+  # Pump happens naturally since we're inside ev/run; spawned fiber runs before user code returns.
+  )
 
 # === Error propagation ===
 
 (let (([ok? _] (protect ((fn () (sync-scheduler (fiber/new (fn [] (error :boom)) (bit/or 1 512)))))))) (assert (not ok?) "sync-scheduler propagates errors"))
 
-(let (([ok? _] (protect ((fn () (ev/spawn (fn [] (error :kaboom)))))))) (assert (not ok?) "ev/spawn propagates errors"))
+# ev/spawn errors propagate when the scheduler pump drains the fiber
+(let (([ok? _] (protect ((fn () (ev/run (fn [] (ev/spawn (fn [] (error :kaboom))))))))))
+  (assert (not ok?) "ev/spawn propagates errors via ev/run"))
 
 # === stream/read-line ===
 
 (spit "/tmp/elle-test-readline-lisp" "line1\nline2\nline3")
-(assert (= (ev/spawn (fn []
-    (let ((p (port/open "/tmp/elle-test-readline-lisp" :read)))
-      (stream/read-line p)))) "line1") "stream/read-line reads first line")
+(let ((result @[]))
+  (ev/run (fn []
+    (push result (let ((p (port/open "/tmp/elle-test-readline-lisp" :read)))
+      (stream/read-line p)))))
+  (assert (= (get result 0) "line1") "stream/read-line reads first line"))
 
 # === io/backend errors ===
 
@@ -73,11 +82,13 @@
 
 (assert (= (+ 1 2 3) 6) "pure code works with scheduler")
 
-# === stream I/O via ev/spawn ===
+# === stream I/O via ev/run ===
 
 (spit "/tmp/elle-test-toplevel-io-lisp" "top level")
-(assert (= (ev/spawn (fn []
-    (stream/read-all (port/open "/tmp/elle-test-toplevel-io-lisp" :read)))) "top level") "stream I/O via ev/spawn")
+(let ((result @[]))
+  (ev/run (fn []
+    (push result (stream/read-all (port/open "/tmp/elle-test-toplevel-io-lisp" :read)))))
+  (assert (= (get result 0) "top level") "stream I/O via ev/run"))
 
 # === stdlib functions work with scheduler ===
 
@@ -151,7 +162,7 @@
 
 # === make-async-scheduler ===
 
-(assert (pair? (make-async-scheduler)) "make-async-scheduler returns pair")
+(assert (struct? (make-async-scheduler)) "make-async-scheduler returns struct")
 
 # === ev/run pure thunk ===
 
@@ -250,14 +261,15 @@
   (assert (= (get result 1) :slow) "longer sleep finishes second"))
 
 # === ev/sleep error: negative duration ===
+# No need for nested ev/run — user code already runs in async scheduler.
 
-(let (([ok? _] (protect ((fn () (ev/run (fn [] (ev/sleep -1)))))))) (assert (not ok?) "ev/sleep rejects negative int"))
+(let (([ok? _] (protect (ev/sleep -1)))) (assert (not ok?) "ev/sleep rejects negative int"))
 
-(let (([ok? _] (protect ((fn () (ev/run (fn [] (ev/sleep -0.5)))))))) (assert (not ok?) "ev/sleep rejects negative float"))
+(let (([ok? _] (protect (ev/sleep -0.5)))) (assert (not ok?) "ev/sleep rejects negative float"))
 
 # === ev/sleep error: non-numeric ===
 
-(let (([ok? _] (protect ((fn () (ev/run (fn [] (ev/sleep "hello")))))))) (assert (not ok?) "ev/sleep rejects non-numeric"))
+(let (([ok? _] (protect (ev/sleep "hello")))) (assert (not ok?) "ev/sleep rejects non-numeric"))
 
 # === ev/sleep error: wrong arity ===
 

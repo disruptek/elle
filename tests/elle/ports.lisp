@@ -50,9 +50,8 @@
 
 # === Error cases ===
 
-# port/open on nonexistent path must use ev/spawn because the error arrives
-# asynchronously (port/open yields SIG_IO; the backend returns the ENOENT error).
-(let (([ok? _] (protect ((fn () (ev/spawn (fn [] (port/open "/tmp/elle-nonexistent-dir-474/file" :read)))))))) (assert (not ok?) "port/open on nonexistent path errors"))
+# port/open on nonexistent path — I/O error propagates through protect.
+(let (([ok? _] (protect (port/open "/tmp/elle-nonexistent-dir-474/file" :read)))) (assert (not ok?) "port/open on nonexistent path errors"))
 
 (let (([ok? _] (protect ((fn () (port/open "/tmp/elle-test-474" :badmode)))))) (assert (not ok?) "port/open with bad mode errors"))
 

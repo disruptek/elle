@@ -996,16 +996,16 @@
 (def ev/spawn
   (fn [closure]
     "Spawn a closure in a new fiber managed by the current scheduler."
-    (let ((fiber (fiber/new closure (bit/or 1 512 2048))))
+    (let ((fiber (fiber/new closure |:error :io :exec|)))
       ((*scheduler*) fiber))))
 
 ## ── Async scheduler ─────────────────────────────────────────────────
 
 (defn make-async-scheduler ()
-  "Create an async scheduler. Returns (scheduler-fn pump-fn shutdown-fn).
-   scheduler-fn: (fn [fiber]) — registers fiber for async execution.
-   pump-fn: (fn []) — pumps event loop until all fibers complete.
-   shutdown-fn: (fn [timeout-ms]) — signal shutdown; pump-fn executes it."
+  "Create an async scheduler. Returns {:spawn fn :pump fn :shutdown fn}.
+   :spawn — (fn [fiber]) registers fiber for async execution.
+   :pump — (fn []) pumps event loop until all fibers complete.
+   :shutdown — (fn [timeout-ms]) signal shutdown; pump-fn executes it."
   (let ((backend       (io/backend :async))
         (runnable      @[])
         (pending       @{})
@@ -1044,7 +1044,12 @@
                 (begin
                   (fiber/resume fiber (get c :value))
                   (handle-fiber-after-resume fiber))
-                (error (get c :error))))))))
+                # I/O error: inject error into the fiber so it propagates
+                # through protect/defer correctly (same as sync backend
+                # returning SIG_ERROR from io/execute).
+                (begin
+                  (fiber/abort fiber (get c :error))
+                  (handle-fiber-after-resume fiber))))))))
 
     (defn do-shutdown [timeout-ms]
       "Abort all pending fibers, pump for timeout-ms, cancel stragglers."
@@ -1080,11 +1085,12 @@
         (let [[fiber (pop runnable)]]
           (protect (fiber/cancel fiber {:error :shutdown})))))
 
-    (list
+    {:spawn
       # scheduler-fn: register fiber
       (fn (fiber)
         (push runnable fiber)
         fiber)
+     :pump
       # pump-fn: event loop
       (fn ()
         (block :loop
@@ -1098,9 +1104,10 @@
                 (do-shutdown timeout)
                 (break :loop nil)))
             (process-completions))))
+     :shutdown
       # shutdown-fn: signal shutdown
       (fn (timeout-ms)
-        (put shutdown-req 0 timeout-ms)))))
+        (put shutdown-req 0 timeout-ms))}))
 
 (def *shutdown* (make-parameter nil))
 
@@ -1116,12 +1123,12 @@
 (defn ev/run (& thunks)
   "Run thunks concurrently with async I/O.
    Creates an async scheduler, spawns each thunk as a fiber, pumps until done."
-  (let (((scheduler-fn pump-fn shutdown-fn) (make-async-scheduler)))
-    (parameterize ((*scheduler* scheduler-fn)
-                   (*shutdown* shutdown-fn))
+  (let ((sched (make-async-scheduler)))
+    (parameterize ((*scheduler* (get sched :spawn))
+                   (*shutdown* (get sched :shutdown)))
       (each t in thunks
         (ev/spawn t))
-      (pump-fn))))
+      ((get sched :pump)))))
 
 (defn inc [x]
   "Return x + 1."
