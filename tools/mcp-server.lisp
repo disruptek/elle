@@ -1,4 +1,3 @@
-(elle/epoch 1)
 #!/usr/bin/env elle
 
 ## mcp-server.lisp — MCP server for RDF knowledge graph via SPARQL
@@ -44,9 +43,7 @@
 # ── Logging (to stderr via stream/write — must be called inside ev/run) ──
 
 (defn log [err & parts]
-  (each part in parts
-    (stream/write err (string part)))
-  (stream/write err "\n")
+  (stream/write err (string (apply string parts) "\n"))
   (stream/flush err))
 
 # ── Tool definitions (MCP schema) ─────────────────────────────────────
@@ -197,15 +194,14 @@
 
 (defn send-response [out response]
   "Write a JSON-RPC response as a single line to stdout and flush."
-  (stream/write out (json/serialize response))
-  (stream/write out "\n")
+  (stream/write out (string (json/serialize response) "\n"))
   (stream/flush out))
 
 (ev/run
   (fn []
-    (let [[in  (port/stdin)]
-          [out (port/stdout)]
-          [err (port/stderr)]]
+    (let [[in  (*stdin*)]
+          [out (*stdout*)]
+          [err (*stderr*)]]
       (log err "elle-mcp-oxigraph server starting")
       (forever
         (let [[line (stream/read-line in)]]
