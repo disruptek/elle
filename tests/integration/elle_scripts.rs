@@ -58,3 +58,8 @@ fn errors() {
 fn fiber_stress() {
     run_elle_script("fiber_stress");
 }
+
+#[test]
+fn fiber_io_stress() {
+    run_elle_script("fiber_io_stress");
+}

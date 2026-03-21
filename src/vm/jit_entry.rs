@@ -60,7 +60,8 @@ impl VM {
                         }
                         Err(e) => match &e {
                             crate::jit::JitError::UnsupportedInstruction(_)
-                            | crate::jit::JitError::Polymorphic => {
+                            | crate::jit::JitError::Polymorphic
+                            | crate::jit::JitError::Yielding => {
                                 // Expected rejection — record and fall back to interpreter.
                                 self.record_jit_rejection(bytecode_ptr, closure, e);
                             }
