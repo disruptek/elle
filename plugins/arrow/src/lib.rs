@@ -103,7 +103,7 @@ fn arrow_to_elle_values(arr: &dyn Array) -> Vec<Value> {
         } else {
             match arr.data_type() {
                 DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
-                    let a = arr.as_any().downcast_ref::<Int64Array>().or_else(|| None);
+                    let a = arr.as_any().downcast_ref::<Int64Array>().or(None);
                     if let Some(a) = a {
                         out.push(Value::int(a.value(i)));
                     } else {
@@ -178,10 +178,10 @@ fn batch_to_elle(batch: &RecordBatch) -> Value {
 
     for row_idx in 0..num_rows {
         let mut fields = BTreeMap::new();
-        for (col_idx, field) in schema.fields().iter().enumerate() {
+        for (col_vals, field) in columns.iter().zip(schema.fields().iter()) {
             fields.insert(
                 TableKey::Keyword(field.name().clone()),
-                columns[col_idx][row_idx],
+                col_vals[row_idx],
             );
         }
         rows.push(Value::struct_from(fields));
@@ -343,7 +343,7 @@ fn prim_display(args: &[Value]) -> (SignalBits, Value) {
         Ok(b) => b,
         Err(e) => return e,
     };
-    match pretty_format_batches(&[batch.0.clone()]) {
+    match pretty_format_batches(std::slice::from_ref(&batch.0)) {
         Ok(table) => (SIG_OK, Value::string(table.to_string())),
         Err(e) => (
             SIG_ERROR,
