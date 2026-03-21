@@ -610,7 +610,7 @@ Signals are the unified mechanism for all non-local control flow. Every signal i
 
 ### Async I/O and the Event Loop
 
-`stream/write` and `stream/flush` are **async** — they yield and require a
+`port/write` and `port/flush` are **async** — they yield and require a
 fiber context. For network servers and any code doing concurrent I/O, use
 `ev/run` to start the event loop and `ev/spawn` to create fibers:
 
@@ -636,13 +636,13 @@ Key primitives:
 (tcp/accept listener)       # yields until connection, returns port
 (tcp/connect host port)     # yields until connected, returns port
 
-(stream/write port data)    # async write (yields) — use inside ev/run
-(stream/flush port)         # async flush (yields) — use inside ev/run
-(stream/read port n)        # async read N bytes (yields)
-(stream/read-line port)     # async read until \n (yields), nil on EOF
+(port/write port data)    # async write (yields) — use inside ev/run
+(port/flush port)         # async flush (yields) — use inside ev/run
+(port/read port n)        # async read N bytes (yields)
+(port/read-line port)     # async read until \n (yields), nil on EOF
 ```
 
-**Important:** `stream/write` and `stream/flush` signal `:yield`. Outside an
+**Important:** `port/write` and `port/flush` signal `:yield`. Outside an
 event loop they work for small amounts of I/O but will fail with "yield outside
 coroutine context" in tight loops. For synchronous output, use `print`/`println`
 (stdout) or `eprint`/`eprintln` (stderr) — these internally spawn a fiber and
@@ -838,7 +838,7 @@ elle greet.lisp -- Alice   # => Hello, Alice!
 
 Elle's API has three layers:
 
-1. **VM primitives** — native functions implemented in Rust (`+`, `get`, `stream/write`, etc.)
+1. **VM primitives** — native functions implemented in Rust (`+`, `get`, `port/write`, etc.)
 2. **stdlib.lisp** — standard library closures and macros (`map`, `filter`, `fold`, etc.)
 3. **prelude.lisp** — higher-level abstractions (`ev/run`, `ev/spawn`, `each`, `match`, etc.)
 
@@ -940,7 +940,7 @@ These are things agents commonly reach for that Elle does not have:
 | `lambda` | `fn` |
 | `begin` as scoped sequencing | `block` (`begin` shares surrounding scope) |
 | `display` | `print` (epoch 3 renamed `display` to `print`) |
-| `write` (literal form) | `pp` for pretty-print, or `stream/write` for port I/O |
+| `write` (literal form) | `pp` for pretty-print, or `port/write` for port I/O |
 | Mutable struct field update | `put` on `@struct` |
 | `null` | `nil` |
 | `char` type | `string` and `@string` are grapheme-indexed; use `get` to extract a grapheme cluster as a string |

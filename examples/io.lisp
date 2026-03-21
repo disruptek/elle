@@ -162,18 +162,18 @@
 
 (let ((p (port/open "/tmp/elle-example-seek-tell" :read-write)))
   # Write 10 bytes
-  (stream/write p "0123456789")
+  (port/write p "0123456789")
   (print "  wrote 10 bytes\n")
 
   # Seek to start and read
   (port/seek p 0 :from :start)
-  (let ((first (stream/read p 1)))
+  (let ((first (port/read p 1)))
     (print "  seek to start, read: ") (print first) (print "\n")
     (assert (= first "0") "byte at position 0 is '0'"))
 
   # Seek to position 5
   (port/seek p 5 :from :start)
-  (let ((mid (stream/read p 1)))
+  (let ((mid (port/read p 1)))
     (print "  seek to 5, read: ") (print mid) (print "\n")
     (assert (= mid "5") "byte at position 5 is '5'"))
 
@@ -191,7 +191,7 @@
 
   # Seek from end
   (port/seek p -2 :from :end)
-  (let ((last (stream/read p 1)))
+  (let ((last (port/read p 1)))
     (print "  seek to -2 from end, read: ") (print last) (print "\n")
     (assert (= last "8") "byte at -2 from end of 10-byte file is '8'"))
 

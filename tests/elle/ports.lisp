@@ -143,7 +143,7 @@
 
 (let ((p (port/open seek-test-path :read-write)))
   # Write 10 bytes
-  (stream/write p "0123456789")
+  (port/write p "0123456789")
   # Seek to start
   (assert (= (port/seek p 0 :from :start) 0) "seek to start returns 0")
   (assert (= (port/tell p) 0) "tell at start returns 0")
@@ -169,9 +169,9 @@
 # --- Seek + read coherence ---
 
 (let ((p (port/open seek-test-path :read-write)))
-  (stream/write p "hello")
+  (port/write p "hello")
   (port/seek p 0 :from :start)
-  (assert (= (stream/read p 5) "hello") "read after seek to start returns written data")
+  (assert (= (port/read p 5) "hello") "read after seek to start returns written data")
   (port/close p))
 
 # --- Seek clears buffered data ---
@@ -180,10 +180,10 @@
 (spit seek-test-path "0123456789")
 (let ((p (port/open seek-test-path :read)))
   # This read may buffer more than one character
-  (stream/read p 1)
+  (port/read p 1)
   # Seek back to 0 must discard buffer so next read starts from byte 0
   (port/seek p 0 :from :start)
-  (assert (= (stream/read p 1) "0") "first char after seek to 0 is '0'")
+  (assert (= (port/read p 1) "0") "first char after seek to 0 is '0'")
   (port/close p))
 
 # --- Error cases ---

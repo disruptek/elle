@@ -77,13 +77,13 @@ updated). These need one of:
 ### 2. Sequential SIG_IO from coroutines breaks
 
 `port/lines`, `port/chunks` use coroutines internally. The coroutine
-yields values, and when the stream consumer calls `stream/read-line`
+yields values, and when the stream consumer calls `port/read-line`
 (which yields SIG_IO), there's a coroutine yield nested inside an
 I/O yield. After ~10 such operations, the signal propagation breaks
-with "stream/flush: expected port, got integer".
+with "port/flush: expected port, got integer".
 
-The simplified print functions (directly calling stream/write +
-stream/flush without sync-scheduler wrapping) trigger the same bug
+The simplified print functions (directly calling port/write +
+port/flush without sync-scheduler wrapping) trigger the same bug
 after ~10 calls. Print functions are currently kept with
 sync-scheduler wrapping as a workaround.
 

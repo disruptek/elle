@@ -15,16 +15,16 @@
 
 # subprocess/exec: stdout is binary by default (bytes, not string)
 (let [[raw (let [[proc (subprocess/exec "echo" ["hello"])]]
-             (stream/read-all (get proc :stdout)))]]
+             (port/read-all (get proc :stdout)))]]
   (assert (bytes? raw) "subprocess/exec: stdout is bytes"))
 
 # subprocess/exec: decode bytes to string
 (assert (= (let [[proc (subprocess/exec "echo" ["hello"])]]
-             (string (stream/read-all (get proc :stdout)))) "hello\n") "subprocess/exec: stdout bytes decode to string")
+             (string (port/read-all (get proc :stdout)))) "hello\n") "subprocess/exec: stdout bytes decode to string")
 
 # subprocess/exec: binary output (head -c 4 /dev/urandom)
 (let [[raw (let [[proc (subprocess/exec "head" ["-c" "4" "/dev/urandom"])]]
-             (stream/read-all (get proc :stdout)))]]
+             (port/read-all (get proc :stdout)))]]
   (assert (bytes? raw) "subprocess/exec: binary output is bytes")
   (assert (= (length raw) 4) "subprocess/exec: binary output is 4 bytes"))
 
@@ -84,9 +84,9 @@
 
 # Write to subprocess stdin, read from stdout
 (assert (= (let [[proc (subprocess/exec "cat" [])]]
-             (stream/write (get proc :stdin) "hello from stdin")
+             (port/write (get proc :stdin) "hello from stdin")
              (port/close (get proc :stdin))
-             (string (stream/read-all (get proc :stdout)))) "hello from stdin") "write stdin -> read stdout via cat")
+             (string (port/read-all (get proc :stdout)))) "hello from stdin") "write stdin -> read stdout via cat")
 
 # ── subprocess/system ────────────────────────────────────────────────────────────
 
@@ -122,14 +122,14 @@
 
 # subprocess/exec accepts cons list args
 (assert (= (let [[proc (subprocess/exec "echo" (list "hello"))]]
-             (string (stream/read-all (get proc :stdout)))) "hello\n") "subprocess/exec: list args work")
+             (string (port/read-all (get proc :stdout)))) "hello\n") "subprocess/exec: list args work")
 
 # subprocess/exec accepts empty list (no args)
 (assert (= (subprocess/wait (subprocess/exec "true" ())) 0) "subprocess/exec: empty list args work")
 
 # subprocess/exec accepts @array args
 (assert (= (let [[proc (subprocess/exec "echo" @["world"])]]
-             (string (stream/read-all (get proc :stdout)))) "world\n") "subprocess/exec: @array args work")
+             (string (port/read-all (get proc :stdout)))) "world\n") "subprocess/exec: @array args work")
 
 # subprocess/exec rejects non-sequence args with type-error
 (let (([ok? err] (protect (subprocess/exec "echo" "not-a-sequence")))) (assert (not ok?) "subprocess/exec: string args gives type-error") (assert (= (get err :error) :type-error) "subprocess/exec: string args gives type-error"))

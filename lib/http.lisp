@@ -73,7 +73,7 @@
    Signals :http-error on malformed header lines."
   (def headers @{})
   (forever
-    (let [[line (stream/read-line port)]]
+    (let [[line (port/read-line port)]]
       (when (or (nil? line) (empty? line))
         (break (freeze headers)))
       (let [[colon-pos (string/find line ":")]]
@@ -88,7 +88,7 @@
   "Write HTTP headers struct to port. Each header is written as 'Name: value\\r\\n'.
    Keys are keywords converted back to HTTP header name casing."
   (each [key value] in (pairs headers)
-    (stream/write port (string/format "{}: {}\r\n" (kw->header key) value))))
+    (port/write port (string/format "{}: {}\r\n" (kw->header key) value))))
 
 # ============================================================================
 # Request and response wire format
@@ -97,7 +97,7 @@
 (defn read-request-line [port]
   "Read and parse HTTP request line: 'GET /path HTTP/1.1'.
    Returns {:method :path :version} or nil on EOF."
-  (let [[line (stream/read-line port)]]
+  (let [[line (port/read-line port)]]
     (if (nil? line)
       nil
       (let [[parts (string/split line " ")]]
@@ -112,13 +112,13 @@
 
 (defn write-request-line [port method path]
   "Write HTTP request line: 'METHOD path HTTP/1.1\\r\\n'."
-  (stream/write port (string/format "{} {} HTTP/1.1\r\n" method path)))
+  (port/write port (string/format "{} {} HTTP/1.1\r\n" method path)))
 
 (defn read-status-line [port]
   "Read and parse HTTP status line: 'HTTP/1.1 200 OK'.
    Returns {:version :status :reason} where :status is an integer.
    Signals :http-error on malformed input."
-  (let* [[line (stream/read-line port)]
+  (let* [[line (port/read-line port)]
          [parts (string/split line " ")]]
     (when (< (length parts) 2)
       (error {:error :http-error :message "malformed status line"
@@ -130,13 +130,13 @@
 
 (defn write-status-line [port status reason]
   "Write HTTP status line: 'HTTP/1.1 status reason\\r\\n'."
-  (stream/write port (string/format "HTTP/1.1 {} {}\r\n" status reason)))
+  (port/write port (string/format "HTTP/1.1 {} {}\r\n" status reason)))
 
 (defn read-body [port headers]
   "Read request/response body based on Content-Length header.
    Returns body string, or nil if Content-Length is absent."
   (let [[cl headers:content-length]]
-    (and cl (string (stream/read port (integer cl))))))
+    (and cl (string (port/read port (integer cl))))))
 
 # ============================================================================
 # Reason phrases
@@ -198,9 +198,9 @@
   (write-request-line conn method path)
   (let [[headers (build-request-headers host extra-headers body keep-alive)]]
     (write-headers conn headers)
-    (stream/write conn "\r\n")
-    (unless (nil? body) (stream/write conn body))
-    (stream/flush conn)
+    (port/write conn "\r\n")
+    (unless (nil? body) (port/write conn body))
+    (port/flush conn)
     (let* [[status-line (read-status-line conn)]
            [resp-headers (read-headers conn)]
            [resp-body (read-body conn resp-headers)]]
@@ -268,10 +268,10 @@
   (write-status-line conn response:status
                      (or (get reason-phrases response:status) "Unknown"))
   (write-headers conn response:headers)
-  (stream/write conn "\r\n")
+  (port/write conn "\r\n")
   (unless (nil? response:body)
-    (stream/write conn response:body))
-  (stream/flush conn))
+    (port/write conn response:body))
+  (port/flush conn))
 
 (defn connection-loop [conn handler on-error]
   "Handle HTTP requests on a connection until it closes or either side
@@ -299,7 +299,7 @@
 
 (defn default-on-error [request err]
   "Default error handler: print to stderr."
-  (stream/write (port/stderr)
+  (port/write (port/stderr)
     (string/format "http: handler error on {} {}: {}\n"
                    request:method request:path err)))
 
@@ -369,8 +369,8 @@
   # write-headers
   (let [[p (port/open "/tmp/elle-http-test-write-headers" :write)]]
     (write-headers p {:content-type "text/plain" :content-length "11"})
-    (stream/write p "\r\n")
-    (stream/flush p)
+    (port/write p "\r\n")
+    (port/flush p)
     (port/close p))
   (let [[content (slurp "/tmp/elle-http-test-write-headers")]]
     (assert (string-contains? content "Content-Type: text/plain")

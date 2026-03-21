@@ -909,7 +909,7 @@
    Must be called inside a scheduler context (ev/spawn or sync-scheduler)."
   (coro/new (fn []
     (forever
-      (let [[line (stream/read-line port)]]
+      (let [[line (port/read-line port)]]
         (if (nil? line)
           (begin (port/close port) (break))
           (yield line)))))))
@@ -919,7 +919,7 @@
    Must be called inside a scheduler context."
   (coro/new (fn []
     (forever
-      (let [[chunk (stream/read port size)]]
+      (let [[chunk (port/read port size)]]
         (if (nil? chunk)
           (begin (port/close port) (break))
           (yield chunk)))))))
@@ -932,7 +932,7 @@
       (let [[val (yield nil)]]
         (if (nil? val)
           (begin (port/close port) (break))
-          (stream/write port val)))))))
+          (port/write port val)))))))
 
 ## ── Standard port parameters ────────────────────────────────────────
 
@@ -966,29 +966,29 @@
 (defn print (& args)
   "Write values to *stdout*, no newline. Respects *stdout* rebinding."
   (sync-scheduler
-    (fiber/new (fn [] (stream/write (*stdout*) (apply string args))
-                      (stream/flush (*stdout*)))
+    (fiber/new (fn [] (port/write (*stdout*) (apply string args))
+                      (port/flush (*stdout*)))
       |:error :io|)))
 
 (defn println (& args)
   "Write values to *stdout* with trailing newline. Respects *stdout* rebinding."
   (sync-scheduler
-    (fiber/new (fn [] (stream/write (*stdout*) (string (apply string args) "\n"))
-                      (stream/flush (*stdout*)))
+    (fiber/new (fn [] (port/write (*stdout*) (string (apply string args) "\n"))
+                      (port/flush (*stdout*)))
       |:error :io|)))
 
 (defn eprint (& args)
   "Write values to *stderr*, no newline. Respects *stderr* rebinding."
   (sync-scheduler
-    (fiber/new (fn [] (stream/write (*stderr*) (apply string args))
-                      (stream/flush (*stderr*)))
+    (fiber/new (fn [] (port/write (*stderr*) (apply string args))
+                      (port/flush (*stderr*)))
       |:error :io|)))
 
 (defn eprintln (& args)
   "Write values to *stderr* with trailing newline. Respects *stderr* rebinding."
   (sync-scheduler
-    (fiber/new (fn [] (stream/write (*stderr*) (string (apply string args) "\n"))
-                      (stream/flush (*stderr*)))
+    (fiber/new (fn [] (port/write (*stderr*) (string (apply string args) "\n"))
+                      (port/flush (*stderr*)))
       |:error :io|)))
 
 ## ── Spawn ───────────────────────────────────────────────────────────
@@ -1172,12 +1172,15 @@
                        (merge {:stdin :null} (freeze (first opts)))))
          (proc         (subprocess/exec program args exec-opts))
          # Drain pipes BEFORE subprocess/wait (deadlock invariant — see docstring).
+         # port/read-all returns nil on immediate EOF (empty pipe) — coerce to empty bytes.
          (stdout-bytes (if (nil? (get proc :stdout))
                          (bytes)
-                         (stream/read-all (get proc :stdout))))
+                         (let ((raw (port/read-all (get proc :stdout))))
+                           (if (nil? raw) (bytes) raw))))
          (stderr-bytes (if (nil? (get proc :stderr))
                          (bytes)
-                         (stream/read-all (get proc :stderr))))
+                         (let ((raw (port/read-all (get proc :stderr))))
+                           (if (nil? raw) (bytes) raw))))
          (exit-code    (subprocess/wait proc)))
     (when (not (nil? (get proc :stdout))) (port/close (get proc :stdout)))
     (when (not (nil? (get proc :stderr))) (port/close (get proc :stderr)))

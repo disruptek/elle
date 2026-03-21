@@ -67,7 +67,7 @@ test gets its own async scheduler for I/O isolation.
 
 `subprocess/system "echo" ["hello"]` returns non-empty stderr. The
 `subprocess/system` stdlib function reads stdout/stderr via
-`stream/read-line` inside fibers. With the signal fix, these functions
+`port/read-line` inside fibers. With the signal fix, these functions
 are now recognized as yielding, which changes how the scheduler
 dispatches their I/O. The deep stack trace (19+ frames at `<stdlib>:1106`
 = pump loop's `process-completions`) suggests the subprocess I/O isn't

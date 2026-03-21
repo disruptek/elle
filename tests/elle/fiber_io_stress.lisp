@@ -11,10 +11,10 @@
 
 (ev/run (fn []
   (let ((p (port/open "/tmp/elle-test-io-stress-eof" :read)))
-    (assert (= (stream/read-line p) "alpha") "readline eof: first line")
-    (assert (= (stream/read-line p) "beta") "readline eof: second line")
-    (assert (= (stream/read-line p) "gamma") "readline eof: unterminated last line")
-    (assert (= (stream/read-line p) nil) "readline eof: nil after EOF"))))
+    (assert (= (port/read-line p) "alpha") "readline eof: first line")
+    (assert (= (port/read-line p) "beta") "readline eof: second line")
+    (assert (= (port/read-line p) "gamma") "readline eof: unterminated last line")
+    (assert (= (port/read-line p) nil) "readline eof: nil after EOF"))))
 
 (ev/run (fn []
   (let ((lines (stream/collect (port/lines (port/open "/tmp/elle-test-io-stress-eof" :read)))))
@@ -50,16 +50,16 @@
       (assign i (+ i 1))))))
 
 # ============================================================================
-# Sustained stream/write + stream/flush
+# Sustained port/write + port/flush
 # ============================================================================
 
 (ev/run (fn []
   (let ((p (port/open "/tmp/elle-test-io-stress-write" :write)))
     (let ((i 0))
       (while (< i 20)
-        (stream/write p (string "line " i "\n"))
+        (port/write p (string "line " i "\n"))
         (assign i (+ i 1))))
-    (stream/flush p)
+    (port/flush p)
     (port/close p))))
 
 (ev/run (fn []

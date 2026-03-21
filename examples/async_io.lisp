@@ -11,10 +11,10 @@
 (let ((results @[]))
   (ev/run
     (fn ()
-      (let ((content (stream/read-all (port/open "/tmp/elle-async-example-1" :read))))
+      (let ((content (port/read-all (port/open "/tmp/elle-async-example-1" :read))))
         (push results content)))
     (fn ()
-      (let ((content (stream/read-all (port/open "/tmp/elle-async-example-2" :read))))
+      (let ((content (port/read-all (port/open "/tmp/elle-async-example-2" :read))))
         (push results content))))
   (assert (= (length results) 2) "both async reads completed")
   (assert (> (length (get results 0)) 0) "first read got content")
