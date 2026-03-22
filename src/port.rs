@@ -235,6 +235,7 @@ impl Port {
         self.path.as_deref()
     }
 
+    #[cfg(test)]
     pub fn timeout_ms(&self) -> Option<u64> {
         self.timeout.get()
     }
