@@ -1249,14 +1249,21 @@
     ((get sched :pump))))
 
 (defn ev/run (& thunks)
-  "Create an async scheduler and run thunks under it."
+  "Create an async scheduler, run thunks, return the last thunk's result.
+   Used internally by the compiler to wrap top-level code in a scheduler.
+   User code should not need this — the scheduler is already active."
   (let ([sched (make-async-scheduler)])
     (parameterize ((*scheduler* sched)
                    (*spawn* (get sched :spawn))
                    (*shutdown* (get sched :shutdown)))
+      (var result nil)
+      (var last-fiber nil)
       (each t in thunks
-        (ev/spawn t))
-      ((get sched :pump)))))
+        (assign last-fiber (ev/spawn t)))
+      ((get sched :pump))
+      (when (not (nil? last-fiber))
+        (assign result (fiber/value last-fiber)))
+      result)))
 
 ## ── Structured concurrency primitives ───────────────────────────────
 

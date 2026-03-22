@@ -94,7 +94,6 @@ pub(super) fn get_cached_expander_and_meta() -> (Expander, PrimitiveMeta) {
 /// Look up a stdlib-exported value by SymbolId from the compilation cache.
 ///
 /// Returns the value if the symbol was registered via `update_cache_with_stdlib`.
-/// Used by `execute_scheduled` to find `ev/run` at runtime.
 pub fn lookup_stdlib_value(sym_id: crate::value::SymbolId) -> Option<crate::value::Value> {
     COMPILATION_CACHE.with(|cache| {
         cache

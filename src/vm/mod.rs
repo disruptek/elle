@@ -187,21 +187,17 @@ impl VM {
 
     /// Execute user bytecode under the async scheduler.
     ///
-    /// Looks up `ev/run` from stdlib, wraps the user bytecode in a
-    /// zero-arg thunk, and calls `(ev/run thunk)`. The async scheduler
-    /// (written in Elle) creates a fiber for the user code, pumps
-    /// I/O, and handles all signals. All user code runs in a fiber
-    /// from the start.
+    /// Wraps the bytecode in a thunk and calls `(ev/run thunk)` to
+    /// install the async scheduler. The thunk carries the bytecode's
+    /// inferred signal so fiber scheduling and shared allocator
+    /// provisioning work correctly.
     ///
-    /// If stdlib hasn't loaded yet (no `ev/run` symbol), falls back
-    /// to `vm.execute` (direct execution without I/O).
+    /// Falls back to direct execution if stdlib isn't loaded yet.
     pub fn execute_scheduled(
         &mut self,
         bytecode: &Bytecode,
         symbols: &SymbolTable,
     ) -> Result<Value, String> {
-        // Gate: if ev/run isn't available yet (stdlib not loaded),
-        // fall back to direct execution.
         let ev_run_id = match symbols.get("ev/run") {
             Some(id) => id,
             None => return self.execute(bytecode),
@@ -211,7 +207,6 @@ impl VM {
             None => return self.execute(bytecode),
         };
 
-        // Build a zero-arg thunk wrapping the user's bytecode.
         let thunk = Value::closure(crate::value::Closure {
             template: Rc::new(crate::value::ClosureTemplate {
                 bytecode: Rc::new(bytecode.instructions.to_vec()),
@@ -220,7 +215,7 @@ impl VM {
                 num_captures: 0,
                 num_params: 0,
                 constants: Rc::new(bytecode.constants.to_vec()),
-                signal: crate::signals::Signal::silent(),
+                signal: bytecode.signal,
                 lbox_params_mask: 0,
                 lbox_locals_mask: 0,
                 symbol_names: Rc::new(std::collections::HashMap::new()),
@@ -236,17 +231,16 @@ impl VM {
             squelch_mask: 0,
         });
 
-        // Build synthetic bytecode: (ev/run thunk)
         let synthetic_bc = vec![
             Instruction::LoadConst as u8,
             0,
-            0, // LoadConst idx=0 (thunk) — arg
+            0,
             Instruction::LoadConst as u8,
             0,
-            1, // LoadConst idx=1 (ev/run) — func
+            1,
             Instruction::Call as u8,
-            1,                         // Call with 1 arg
-            Instruction::Return as u8, // Return
+            1,
+            Instruction::Return as u8,
         ];
         let synthetic_constants = vec![thunk, ev_run];
 
