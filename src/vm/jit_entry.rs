@@ -52,7 +52,11 @@ impl VM {
 
                 // Solo compilation — pass self_sym for direct self-calls
                 match JitCompiler::new() {
-                    Ok(compiler) => match compiler.compile(lir_func, self_sym, (*closure.template.symbol_names).clone()) {
+                    Ok(compiler) => match compiler.compile(
+                        lir_func,
+                        self_sym,
+                        (*closure.template.symbol_names).clone(),
+                    ) {
                         Ok(jit_code) => {
                             let jit_code = Rc::new(jit_code);
                             self.jit_cache.insert(bytecode_ptr, jit_code.clone());
@@ -233,22 +237,23 @@ impl VM {
             return None;
         }
 
-        let results = match compiler.compile_batch(&members, (*closure.template.symbol_names).clone()) {
-            Ok(r) => r,
-            Err(e) => match &e {
-                crate::jit::JitError::UnsupportedInstruction(_)
-                | crate::jit::JitError::Yielding => {
-                    return None;
-                }
-                _ => {
-                    panic!(
-                        "Batch JIT compilation failed: {}. \
+        let results =
+            match compiler.compile_batch(&members, (*closure.template.symbol_names).clone()) {
+                Ok(r) => r,
+                Err(e) => match &e {
+                    crate::jit::JitError::UnsupportedInstruction(_)
+                    | crate::jit::JitError::Yielding => {
+                        return None;
+                    }
+                    _ => {
+                        panic!(
+                            "Batch JIT compilation failed: {}. \
                          This is a bug — all members were pre-validated as JIT-compilable.",
-                        e
-                    );
-                }
-            },
-        };
+                            e
+                        );
+                    }
+                },
+            };
 
         // Insert all compiled functions into cache and find the hot one
         let mut hot_jit_code = None;

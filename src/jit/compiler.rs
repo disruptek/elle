@@ -148,8 +148,13 @@ impl JitCompiler {
         ctx.func.name = UserFuncName::user(0, func_id.as_u32());
 
         // Translate LIR to Cranelift IR
-        let closure_constants =
-            self.translate_function(lir, &mut ctx.func, scc_peers.as_ref(), self_sym, symbol_names)?;
+        let closure_constants = self.translate_function(
+            lir,
+            &mut ctx.func,
+            scc_peers.as_ref(),
+            self_sym,
+            symbol_names,
+        )?;
 
         // Compile the function
         self.module
@@ -224,7 +229,13 @@ impl JitCompiler {
         ctx.func.signature = sig;
         ctx.func.name = UserFuncName::user(0, func_id.as_u32());
 
-        self.translate_function(lir, &mut ctx.func, scc_peers.as_ref(), self_sym, HashMap::new())?;
+        self.translate_function(
+            lir,
+            &mut ctx.func,
+            scc_peers.as_ref(),
+            self_sym,
+            HashMap::new(),
+        )?;
         // closure_constants from clif_text are discarded — diagnostic only
 
         let text = format!("{}", ctx.func);
@@ -679,7 +690,9 @@ mod tests {
     fn test_compile_identity() {
         let lir = make_simple_lir();
         let compiler = JitCompiler::new().expect("Failed to create compiler");
-        let code = compiler.compile(&lir, None, HashMap::new()).expect("Failed to compile");
+        let code = compiler
+            .compile(&lir, None, HashMap::new())
+            .expect("Failed to compile");
 
         // Call the compiled function with self_tag=0, self_payload=0 (no self-tail-call)
         let args = [crate::value::Value::int(42)];
@@ -701,7 +714,9 @@ mod tests {
     fn test_compile_add() {
         let lir = make_add_lir();
         let compiler = JitCompiler::new().expect("Failed to create compiler");
-        let code = compiler.compile(&lir, None, HashMap::new()).expect("Failed to compile");
+        let code = compiler
+            .compile(&lir, None, HashMap::new())
+            .expect("Failed to compile");
 
         // Call the compiled function with self_tag=0, self_payload=0
         let args = [crate::value::Value::int(10), crate::value::Value::int(32)];
