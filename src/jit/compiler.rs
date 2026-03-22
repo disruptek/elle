@@ -104,13 +104,10 @@ impl JitCompiler {
         self_sym: Option<SymbolId>,
         symbol_names: HashMap<u32, String>,
     ) -> Result<JitCode, JitError> {
+        // Only reject polymorphic signals (signal depends on arguments).
+        // Yielding functions are now supported via side-exit.
         if lir.signal.propagates != 0 {
             return Err(JitError::Polymorphic);
-        }
-        // Reject yielding functions — side-exit is disabled pending
-        // correctness fixes for yield-through-call frame reconstruction.
-        if lir.signal.may_suspend() {
-            return Err(JitError::Yielding);
         }
 
         // Variadic functions with struct/named varargs require fiber access
