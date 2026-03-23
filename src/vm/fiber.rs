@@ -43,7 +43,7 @@ impl VM {
     /// parent/child chain, swap fibers, run the closure, update status,
     /// extract result, swap back, put child back.
     ///
-    /// `child_value` is the NaN-boxed Value wrapping the child's FiberHandle,
+    /// `child_value` is the cached Value wrapping the child's FiberHandle,
     /// cached on the parent so `fiber/child` can return it without re-allocating.
     ///
     /// Returns `(signal_bits, signal_value)` from the child's execution.
