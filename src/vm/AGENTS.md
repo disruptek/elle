@@ -146,7 +146,7 @@ On resume, the VM wires up the parent/child chain (Janet semantics):
 |-------|-------|---------|
 | `fiber` | `Fiber` | Root fiber: stack, call frames, signal state |
 | `current_fiber_handle` | `Option<FiberHandle>` | Handle for current fiber (`None` for root) |
-| `current_fiber_value` | `Option<Value>` | Cached NaN-boxed Value for current fiber (`None` for root) |
+| `current_fiber_value` | `Option<Value>` | Cached Value for current fiber (`None` for root) |
 | `globals` | `Vec<Value>` | Global bindings by SymbolId |
 | `defined_globals` | `Vec<bool>` | Tracks which global slots have been assigned (shadows `globals`) |
 | `jit_cache` | `FxHashMap<*const u8, Rc<JitCode>>` | JIT code cache (FxHash for pointer keys) |
@@ -171,9 +171,9 @@ On resume, the VM wires up the parent/child chain (Janet semantics):
 | `signal_mask` | `SignalBits` | Which signals this fiber catches |
 | `param_frames` | `Vec<Vec<(Value, Value)>>` | Parameter binding frames (stack of frames, each frame is vec of (param, value) pairs) |
 | `parent` | `Option<WeakFiberHandle>` | Weak back-pointer to parent fiber |
-| `parent_value` | `Option<Value>` | Cached NaN-boxed Value for parent (identity-preserving) |
+| `parent_value` | `Option<Value>` | Cached Value for parent (identity-preserving) |
 | `child` | `Option<FiberHandle>` | Strong pointer to child fiber |
-| `child_value` | `Option<Value>` | Cached NaN-boxed Value for child (identity-preserving) |
+| `child_value` | `Option<Value>` | Cached Value for child (identity-preserving) |
 
 ## Re-entrancy
 
